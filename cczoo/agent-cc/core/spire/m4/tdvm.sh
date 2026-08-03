@@ -38,9 +38,10 @@ running_pid() {
             return
         fi
     fi
-    ps -eo pid=,args= | awk -v name="" '
-        index(-e, "qemu-system-x86_64") && index(-e, "-name " name) {
-            print            found = 1
+    ps -eo pid=,args= | awk -v name="$TDVM_NAME" '
+        index($0, "qemu-system-x86_64") && index($0, "-name " name) {
+            print $1
+            found = 1
             exit
         }
         END { exit(found ? 0 : 1) }

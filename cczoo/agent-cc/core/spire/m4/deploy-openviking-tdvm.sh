@@ -62,26 +62,45 @@ resolve_image() {
 }
 
 install_docker_if_needed() {
-    if remote_sudo test -x /usr/local/bin/docker \
-        && remote_sudo test -x /usr/local/bin/dockerd \
-        && remote_sudo test -x /usr/local/bin/docker-proxy; then
+    local binary runtime_complete=1
+    local required_binaries=(
+        docker
+        dockerd
+        containerd
+        containerd-shim-runc-v2
+        ctr
+        runc
+        docker-proxy
+    )
+
+    for binary in "${required_binaries[@]}"; do
+        if ! remote_sudo test -x "/usr/local/bin/$binary"; then
+            runtime_complete=0
+            break
+        fi
+    done
+    if [[ "$runtime_complete" == "1" ]] \
+        && remote_sudo test -f /etc/systemd/system/docker-offline.service \
+        && remote_sudo systemctl is-active --quiet docker-offline.service; then
         return
     fi
-    [[ -n "$DOCKER_RUNTIME_ARCHIVE" ]] || fail 'DOCKER_RUNTIME_ARCHIVE is required when the Guest has no Docker runtime'
-    [[ -r "$DOCKER_RUNTIME_ARCHIVE" ]] || fail "Docker runtime archive is unreadable: $DOCKER_RUNTIME_ARCHIVE"
-    case "$DOCKER_RUNTIME_ARCHIVE" in
-        *.tgz|*.tar.gz) ;;
-        *) fail 'DOCKER_RUNTIME_ARCHIVE must be the official static Docker .tgz archive' ;;
-    esac
-    for binary in docker dockerd containerd containerd-shim-runc-v2 ctr runc docker-proxy; do
-        tar -tzf "$DOCKER_RUNTIME_ARCHIVE" "docker/$binary" >/dev/null \
-            || fail "Docker runtime archive is missing docker/$binary"
-    done
 
-    gzip -dc "$DOCKER_RUNTIME_ARCHIVE" \
-        | remote_sudo tar -x -C /usr/local/bin --strip-components=1 \
-            docker/docker docker/dockerd docker/containerd \
-            docker/containerd-shim-runc-v2 docker/ctr docker/runc docker/docker-proxy
+    if [[ "$runtime_complete" == "0" ]]; then
+        [[ -n "$DOCKER_RUNTIME_ARCHIVE" ]] || fail 'DOCKER_RUNTIME_ARCHIVE is required when the Guest Docker runtime is incomplete'
+        [[ -r "$DOCKER_RUNTIME_ARCHIVE" ]] || fail "Docker runtime archive is unreadable: $DOCKER_RUNTIME_ARCHIVE"
+        case "$DOCKER_RUNTIME_ARCHIVE" in
+            *.tgz|*.tar.gz) ;;
+            *) fail 'DOCKER_RUNTIME_ARCHIVE must be the official static Docker .tgz archive' ;;
+        esac
+        for binary in "${required_binaries[@]}"; do
+            tar -tzf "$DOCKER_RUNTIME_ARCHIVE" "docker/$binary" >/dev/null \
+                || fail "Docker runtime archive is missing docker/$binary"
+        done
+
+        gzip -dc "$DOCKER_RUNTIME_ARCHIVE" \
+            | remote_sudo tar -x -C /usr/local/bin --strip-components=1 \
+                "${required_binaries[@]/#/docker/}"
+    fi
     remote_sudo tee /etc/systemd/system/docker-offline.service >/dev/null <<'UNIT'
 [Unit]
 Description=Offline Docker Engine for OpenViking TD VM
