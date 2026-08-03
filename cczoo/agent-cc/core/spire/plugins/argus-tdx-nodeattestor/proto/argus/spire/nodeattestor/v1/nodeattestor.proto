@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package argus.spire.nodeattestor.v1;
+
+option go_package = "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor/v1;nodeattestorv1";
+
+message AgentHello {
+  uint32 protocol_version = 1;
+  bytes attestation_public_key = 2;
+  bytes agent_nonce = 3;
+  string instance_hint = 4;
+  repeated string capabilities = 5;
+}
+
+message ServerChallenge {
+  uint32 protocol_version = 1;
+  bytes session_id = 2;
+  bytes nonce = 3;
+  int64 issued_at_unix = 4;
+  int64 expires_at_unix = 5;
+  string policy_id = 6;
+  bytes evidence_request_json = 7;
+}
+
+message EvidenceResponse {
+  uint32 protocol_version = 1;
+  bytes session_id = 2;
+  bytes evidence_json = 3;
+  bytes transcript_signature = 4;
+}

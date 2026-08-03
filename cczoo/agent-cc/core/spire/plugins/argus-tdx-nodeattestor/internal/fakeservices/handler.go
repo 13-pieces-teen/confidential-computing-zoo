@@ -1,0 +1,374 @@
+package fakeservices
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/trustee"
+)
+
+const trusteeProtocolVersion = 1
+
+type Config struct {
+	InstanceID     string
+	TCBStatus      string
+	MRTD           string
+	RTMR           map[string]*string
+	DebugEnabled   bool
+	ReplayEvidence bool
+	EvidenceStatus int
+	TrusteeStatus  int
+	TrusteeDelay   time.Duration
+	Now            func() time.Time
+}
+
+type Handler struct {
+	config           Config
+	mu               sync.Mutex
+	replayedEvidence []byte
+	counters         map[counterKey]uint64
+}
+
+type counterKey struct {
+	service string
+	result  string
+}
+
+type evidenceDocument struct {
+	ProtocolVersion int                    `json:"protocol_version"`
+	BindingClaims   protocol.BindingClaims `json:"binding_claims"`
+	Quote           fakeQuote              `json:"quote"`
+}
+
+type fakeQuote struct {
+	Type         string             `json:"type"`
+	ReportData   string             `json:"report_data"`
+	TCBStatus    string             `json:"tcb_status"`
+	MRTD         string             `json:"mrtd"`
+	RTMR         map[string]*string `json:"rtmr"`
+	DebugEnabled bool               `json:"debug_enabled"`
+}
+
+type verifyRequest struct {
+	ProtocolVersion       int             `json:"protocol_version"`
+	SessionID             string          `json:"session_id"`
+	Evidence              json.RawMessage `json:"evidence"`
+	EvidenceRequest       json.RawMessage `json:"evidence_request"`
+	EvidenceRequestDigest string          `json:"evidence_request_digest"`
+	AttestationKeyDigest  string          `json:"attestation_key_digest"`
+	PolicyID              string          `json:"policy_id"`
+	PolicyDigest          string          `json:"policy_digest"`
+}
+
+type verifyResponse struct {
+	ProtocolVersion       int                         `json:"protocol_version"`
+	SessionID             string                      `json:"session_id"`
+	Decision              string                      `json:"decision"`
+	StableErrorCode       string                      `json:"stable_error_code"`
+	VerifiedClaims        *trustee.VerifiedNodeClaims `json:"verified_claims"`
+	EvidenceRequestDigest string                      `json:"evidence_request_digest"`
+	AttestationKeyDigest  string                      `json:"attestation_key_digest"`
+	PolicyID              string                      `json:"policy_id"`
+	PolicyDigest          string                      `json:"policy_digest"`
+	IssuedAt              string                      `json:"issued_at"`
+	ExpiresAt             string                      `json:"expires_at"`
+}
+
+func NewHandler(config Config) (*Handler, error) {
+	if config.InstanceID == "" || config.TCBStatus == "" || config.MRTD == "" {
+		return nil, fmt.Errorf("instance ID, TCB status, and MRTD are required")
+	}
+	if len(config.RTMR) != 4 {
+		return nil, fmt.Errorf("RTMR map must contain indexes 0 through 3")
+	}
+	for _, index := range []string{"0", "1", "2", "3"} {
+		if _, ok := config.RTMR[index]; !ok {
+			return nil, fmt.Errorf("RTMR map is missing index %s", index)
+		}
+	}
+	if config.Now == nil {
+		config.Now = time.Now
+	}
+	return &Handler{config: config, counters: make(map[counterKey]uint64)}, nil
+}
+
+func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	switch request.URL.Path {
+	case "/ra/v1/evidence":
+		handler.handleEvidence(writer, request)
+	case "/v1/verify/tdx-node":
+		handler.handleVerify(writer, request)
+	case "/healthz":
+		writer.WriteHeader(http.StatusNoContent)
+	case "/metrics":
+		handler.handleMetrics(writer, request)
+	default:
+		http.NotFound(writer, request)
+	}
+}
+
+func (handler *Handler) handleEvidence(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		handler.record("evidence", "error")
+		writeError(writer, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
+		return
+	}
+	if handler.config.EvidenceStatus != 0 {
+		handler.record("evidence", "error")
+		writeError(writer, handler.config.EvidenceStatus, "EVIDENCE_PROVIDER_FAULT")
+		return
+	}
+	if evidence := handler.cachedEvidence(); evidence != nil {
+		handler.record("evidence", "replay")
+		writeBytes(writer, http.StatusOK, evidence)
+		return
+	}
+	var requestBody json.RawMessage
+	if err := decodeJSON(request, &requestBody); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_EVIDENCE_REQUEST")
+		return
+	}
+	canonicalRequest, _, err := protocol.CanonicalEvidenceRequest(requestBody)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_EVIDENCE_REQUEST")
+		return
+	}
+	claims := handler.bindingClaims()
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
+	reportData, err := protocol.BindingReportData(canonicalRequest, claimsJSON)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
+	document, err := json.Marshal(evidenceDocument{
+		ProtocolVersion: trusteeProtocolVersion,
+		BindingClaims:   claims,
+		Quote: fakeQuote{
+			Type: "tdx", ReportData: hex.EncodeToString(reportData[:]),
+			TCBStatus: handler.config.TCBStatus, MRTD: handler.config.MRTD,
+			RTMR: cloneRTMR(handler.config.RTMR), DebugEnabled: handler.config.DebugEnabled,
+		},
+	})
+	if err != nil {
+		handler.record("evidence", "error")
+		writeError(writer, http.StatusInternalServerError, "INTERNAL_ERROR")
+		return
+	}
+	handler.cacheEvidence(document)
+	handler.record("evidence", "ok")
+	writeBytes(writer, http.StatusOK, document)
+}
+
+func (handler *Handler) handleVerify(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		handler.record("trustee", "error")
+		writeError(writer, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
+		return
+	}
+	if handler.config.TrusteeDelay > 0 {
+		timer := time.NewTimer(handler.config.TrusteeDelay)
+		defer timer.Stop()
+		select {
+		case <-request.Context().Done():
+			handler.record("trustee", "timeout")
+			return
+		case <-timer.C:
+		}
+	}
+	if handler.config.TrusteeStatus != 0 {
+		handler.record("trustee", "error")
+		writeError(writer, handler.config.TrusteeStatus, "TRUSTEE_FAULT")
+		return
+	}
+	var input verifyRequest
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_VERIFY_REQUEST")
+		return
+	}
+	claims, err := handler.verify(input)
+	if err != nil {
+		handler.record("trustee", "denied")
+		writeError(writer, http.StatusUnprocessableEntity, "EVIDENCE_REJECTED")
+		return
+	}
+	handler.record("trustee", "ok")
+	now := handler.config.Now().UTC().Truncate(time.Second)
+	issuedAt := now.Add(-time.Second).Format(time.RFC3339)
+	expiresAt := now.Add(time.Minute).Format(time.RFC3339)
+	claims.VerifiedAt = issuedAt
+	claims.ExpiresAt = expiresAt
+	writeJSON(writer, http.StatusOK, verifyResponse{
+		ProtocolVersion: trusteeProtocolVersion, SessionID: input.SessionID,
+		Decision: "allow", StableErrorCode: "OK", VerifiedClaims: &claims,
+		EvidenceRequestDigest: input.EvidenceRequestDigest, AttestationKeyDigest: input.AttestationKeyDigest,
+		PolicyID: input.PolicyID, PolicyDigest: input.PolicyDigest, IssuedAt: issuedAt, ExpiresAt: expiresAt,
+	})
+}
+
+func (handler *Handler) verify(input verifyRequest) (trustee.VerifiedNodeClaims, error) {
+	if input.ProtocolVersion != trusteeProtocolVersion || input.PolicyID == "" || input.PolicyDigest == "" {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("invalid protocol or policy")
+	}
+	sessionID, err := base64.RawURLEncoding.DecodeString(input.SessionID)
+	if err != nil || len(sessionID) != protocol.SessionIDSize {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("invalid session ID")
+	}
+	canonicalRequest, parsedRequest, err := protocol.CanonicalEvidenceRequest(input.EvidenceRequest)
+	if err != nil {
+		return trustee.VerifiedNodeClaims{}, err
+	}
+	requestDigest, err := protocol.EvidenceRequestDigest(canonicalRequest)
+	if err != nil || requestDigest != input.EvidenceRequestDigest {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("evidence request digest mismatch")
+	}
+	if parsedRequest.ProfileDigest != input.PolicyDigest {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("policy digest mismatch")
+	}
+	keyID, ok := strings.CutPrefix(input.AttestationKeyDigest, "sha256:")
+	if !ok || parsedRequest.Target.TargetURI != "argus-node:"+keyID {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("attestation key target mismatch")
+	}
+	var evidence evidenceDocument
+	if err := decodeBytes(input.Evidence, &evidence); err != nil || evidence.ProtocolVersion != trusteeProtocolVersion || evidence.Quote.Type != "tdx" {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("invalid evidence document")
+	}
+	claimsJSON, err := json.Marshal(evidence.BindingClaims)
+	if err != nil {
+		return trustee.VerifiedNodeClaims{}, err
+	}
+	canonicalClaims, claims, err := protocol.CanonicalBindingClaims(claimsJSON)
+	if err != nil {
+		return trustee.VerifiedNodeClaims{}, err
+	}
+	reportData, err := protocol.BindingReportData(canonicalRequest, canonicalClaims)
+	if err != nil || !strings.EqualFold(evidence.Quote.ReportData, hex.EncodeToString(reportData[:])) {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("report data mismatch")
+	}
+	if claims.ServiceIdentity.InstanceID != handler.config.InstanceID {
+		return trustee.VerifiedNodeClaims{}, fmt.Errorf("instance ID mismatch")
+	}
+	return trustee.VerifiedNodeClaims{
+		QuoteVerified: true, ReportDataVerified: true,
+		TCBStatus: evidence.Quote.TCBStatus, MRTD: evidence.Quote.MRTD,
+		RTMR: cloneRTMR(evidence.Quote.RTMR), DebugEnabled: evidence.Quote.DebugEnabled,
+		InstanceID: claims.ServiceIdentity.InstanceID, PolicyID: input.PolicyID, PolicyDigest: input.PolicyDigest,
+		AttestationKeyDigest: input.AttestationKeyDigest, EvidenceRequestDigest: input.EvidenceRequestDigest,
+	}, nil
+}
+
+func (handler *Handler) cachedEvidence() []byte {
+	if !handler.config.ReplayEvidence {
+		return nil
+	}
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	return append([]byte(nil), handler.replayedEvidence...)
+}
+
+func (handler *Handler) cacheEvidence(evidence []byte) {
+	if !handler.config.ReplayEvidence {
+		return
+	}
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	if handler.replayedEvidence == nil {
+		handler.replayedEvidence = append([]byte(nil), evidence...)
+	}
+}
+
+func (handler *Handler) record(service, result string) {
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	handler.counters[counterKey{service: service, result: result}]++
+}
+
+func (handler *Handler) handleMetrics(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writeError(writer, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
+		return
+	}
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	for key, value := range handler.counters {
+		_, _ = fmt.Fprintf(writer, "argus_m4_fake_requests_total{service=%q,result=%q} %d\n", key.service, key.result, value)
+	}
+}
+
+func (handler *Handler) bindingClaims() protocol.BindingClaims {
+	instanceID := handler.config.InstanceID
+	cgroupPath := "/system.slice/spire-agent.service"
+	return protocol.BindingClaims{
+		AssuranceLevel: "L2",
+		ServiceIdentity: protocol.ServiceIdentity{
+			ServiceName: "argus-tdx-node", InstanceID: instanceID, InstanceScope: "vm",
+		},
+		RuntimeBinding: protocol.RuntimeBinding{
+			Endpoint: "fake://argus-evidence", OwningPID: 1,
+			ProcessStartTime: "2026-01-01T00:00:00Z", VMInstanceID: &instanceID, CgroupPath: &cgroupPath,
+		},
+		ClaimSupport: map[string][]string{
+			"instance_id": {"quote", "runtime"}, "service_name": {"config"},
+		},
+		VerifierValidatedSupport: nil,
+		ProviderClaimAssurance: map[string]string{
+			"instance_id": "L2", "service_name": "L1",
+		},
+	}
+}
+
+func decodeJSON(request *http.Request, target any) error {
+	if request.Header.Get("Content-Type") != "application/json" {
+		return fmt.Errorf("content type must be application/json")
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(nil, request.Body, protocol.MaxEvidenceSize))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(target)
+}
+
+func decodeBytes(input []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(input))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(target)
+}
+
+func cloneRTMR(input map[string]*string) map[string]*string {
+	output := make(map[string]*string, len(input))
+	for index, measurement := range input {
+		if measurement == nil {
+			output[index] = nil
+			continue
+		}
+		value := *measurement
+		output[index] = &value
+	}
+	return output
+}
+
+func writeBytes(writer http.ResponseWriter, status int, value []byte) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(status)
+	_, _ = writer.Write(value)
+}
+
+func writeJSON(writer http.ResponseWriter, status int, value any) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(status)
+	_ = json.NewEncoder(writer).Encode(value)
+}
+
+func writeError(writer http.ResponseWriter, status int, code string) {
+	writeJSON(writer, status, map[string]string{"error": code})
+}
