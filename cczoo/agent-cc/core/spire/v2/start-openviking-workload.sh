@@ -2,4 +2,4 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "$SCRIPT_DIR/../v2/verify-svid.sh" "$@"
+exec "$SCRIPT_DIR/deploy-v2-guest.sh" start-workload

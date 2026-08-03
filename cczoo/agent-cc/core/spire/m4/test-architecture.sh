@@ -55,7 +55,7 @@ if [[ "$RUN_MOCK_V2_MATRIX" == "1" ]]; then
     "$SCRIPT_DIR/test-failures.sh"
 fi
 
-printf 'v2 architecture validation passed\n'
+printf 'M4 pre-dual-Agent integration validation passed\n'
 printf 'Business path: real OpenClaw -> real OpenViking v0.4.8 at %s\n' "$OPENVIKING_URL"
 printf 'TD VM placement: Guest TDX device/module and Guest-local health passed\n'
 printf 'Attestation path: mock Evidence Provider and mock Trustee\n'

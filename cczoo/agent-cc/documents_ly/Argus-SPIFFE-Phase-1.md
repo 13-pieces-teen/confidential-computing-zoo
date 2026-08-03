@@ -1,5 +1,10 @@
 # Argus-SPIFFE Phase 1 本机执行与实现记录
 
+> 历史文档：本文件记录已移除的单 Agent Join Token阶段。文中的
+> `core/spire/conf/agent.conf`、`server.conf` 和相关启动命令不再是可执行
+> 入口。正式实现请使用
+> [`core/spire/v2/README.md`](../core/spire/v2/README.md)。
+
 ## 1. 文档说明
 
 本文档记录 2026-07-13 在当前 Argus 主机上实际完成的 SPIFFE/SPIRE Phase 1 集成，包括本机环境、与初始方案的差异、真实代码改动、运行时操作、验证结果、回滚方式和已知问题。

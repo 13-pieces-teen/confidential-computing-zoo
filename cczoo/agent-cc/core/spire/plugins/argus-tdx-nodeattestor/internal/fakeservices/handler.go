@@ -25,6 +25,7 @@ type Config struct {
 	DebugEnabled   bool
 	ReplayEvidence bool
 	EvidenceStatus int
+	EvidenceDelay  time.Duration
 	TrusteeStatus  int
 	TrusteeDelay   time.Duration
 	Now            func() time.Time
@@ -115,11 +116,56 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 	}
 }
 
+// EvidenceHTTPHandler exposes only the Evidence Provider API. It is used by
+// the split v2 deployment so the service-side process cannot accidentally
+// serve Trustee verification requests.
+func (handler *Handler) EvidenceHTTPHandler() http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/ra/v1/evidence":
+			handler.handleEvidence(writer, request)
+		case "/healthz":
+			writer.WriteHeader(http.StatusNoContent)
+		case "/metrics":
+			handler.handleMetrics(writer, request)
+		default:
+			http.NotFound(writer, request)
+		}
+	})
+}
+
+// TrusteeHTTPHandler exposes only the Trustee API. It is used by the split v2
+// deployment so the center-side process cannot act as an Evidence Provider.
+func (handler *Handler) TrusteeHTTPHandler() http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/verify/tdx-node":
+			handler.handleVerify(writer, request)
+		case "/healthz":
+			writer.WriteHeader(http.StatusNoContent)
+		case "/metrics":
+			handler.handleMetrics(writer, request)
+		default:
+			http.NotFound(writer, request)
+		}
+	})
+}
+
 func (handler *Handler) handleEvidence(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		handler.record("evidence", "error")
 		writeError(writer, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
 		return
+	}
+	if handler.config.EvidenceDelay > 0 {
+		timer := time.NewTimer(handler.config.EvidenceDelay)
+		defer timer.Stop()
+		select {
+		case <-request.Context().Done():
+			handler.record("evidence", "timeout")
+			return
+		case <-timer.C:
+		}
 	}
 	if handler.config.EvidenceStatus != 0 {
 		handler.record("evidence", "error")

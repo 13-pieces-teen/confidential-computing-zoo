@@ -125,6 +125,11 @@ export ARGUS_WORKLOAD_IDENTITY=openviking-cmem
 
 `ARGUS_WORKLOAD_IDENTITY` is now the recommended way to inject a real, stable workload identity for the Evidence Provider. `ARGUS_SERVICE_NAME`, `SERVICE_NAME`, and `K_SERVICE` remain accepted as compatibility inputs, but `HOSTNAME` is no longer accepted as a service-identity source.
 
+`argus-guard` defaults to `GUARD_MODE=evidence`. The Argus-SPIFFE v2 mock
+connectivity runtime can explicitly set `GUARD_MODE=mock_allow`; that mode
+bypasses evidence retrieval and verification, returns no verified claims, and
+must not be treated as remote-attestation or production authorization.
+
 To exercise the full multi-service flow (Argus + TC-API + OpenViking + OpenClaw) with real TDX quotes over Docker Compose, see [adapters/OpenViking/examples/README.md](../../adapters/OpenViking/examples/README.md) and run `run_openclaw_openviking_e2e.sh`.
 
 ## Security Guarantees

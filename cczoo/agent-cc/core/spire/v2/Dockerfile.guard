@@ -1,0 +1,14 @@
+FROM rust:1.85-bookworm AS builder
+
+WORKDIR /workspace
+COPY argus/ ./argus/
+COPY tdx-quote/ ./tdx-quote/
+RUN cargo build --release --manifest-path ./argus/Cargo.toml --bin argus-guard
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /workspace/argus/target/release/argus-guard /usr/local/bin/argus-guard
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/argus-guard"]

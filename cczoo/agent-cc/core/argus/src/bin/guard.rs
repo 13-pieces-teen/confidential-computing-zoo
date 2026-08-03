@@ -45,6 +45,7 @@ struct GuardAppState {
     evidence_fetcher: Arc<EvidenceFetcherHttp>,
     ra_adapter: Arc<RaAdapter>,
     policy_evaluator: Arc<dyn PolicyEvaluatorTrait>,
+    mode: GuardMode,
     /// Optional TC-API client for Agent-side metadata (when Agent is also a TDX workload)
     tc_api_client: Option<Arc<TcApiClient>>,
 }
@@ -54,6 +55,7 @@ struct GuardAppState {
 struct HealthResponse {
     status: String,
     version: String,
+    mode: &'static str,
 }
 
 /// Verification request from caller
@@ -72,6 +74,7 @@ pub struct VerifyResponse {
     pub decision: String,
     pub reason: Option<String>,
     pub claims: Option<VerifiedClaims>,
+    pub verification_mode: &'static str,
 }
 
 /// Guard context from request
@@ -86,10 +89,66 @@ impl From<&VerifyRequest> for GuardContext {
 }
 
 /// Health check handler
-async fn health_handler() -> Json<HealthResponse> {
+async fn health_handler(State(state): State<GuardAppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "OK".to_string(),
         version: "v1".to_string(),
+        mode: state.mode.as_str(),
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum GuardMode {
+    Evidence,
+    MockAllow,
+}
+
+impl GuardMode {
+    fn from_environment() -> Result<Self> {
+        match std::env::var("GUARD_MODE")
+            .unwrap_or_else(|_| "evidence".to_string())
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "evidence" => Ok(Self::Evidence),
+            "mock_allow" => Ok(Self::MockAllow),
+            value => anyhow::bail!(
+                "unsupported GUARD_MODE {value:?}; expected evidence or mock_allow"
+            ),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Evidence => "evidence",
+            Self::MockAllow => "mock_allow",
+        }
+    }
+}
+
+fn validate_mock_request(request: &VerifyRequest) -> Result<(), StatusCode> {
+    if request.caller_id.trim().is_empty()
+        || request.target.service_name.trim().is_empty()
+        || request.target.target_uri.trim().is_empty()
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
+fn mock_allow_response(request: &VerifyRequest) -> Result<VerifyResponse, StatusCode> {
+    validate_mock_request(request)?;
+    tracing::warn!(
+        caller_id = %request.caller_id,
+        target_service = %request.target.service_name,
+        target_uri = %request.target.target_uri,
+        "Guard returned mock ALLOW without fetching or verifying evidence"
+    );
+    Ok(VerifyResponse {
+        decision: "ALLOW".to_string(),
+        reason: Some("mock_allow connectivity mode; no evidence was fetched".to_string()),
+        claims: None,
+        verification_mode: GuardMode::MockAllow.as_str(),
     })
 }
 
@@ -98,6 +157,10 @@ async fn verify_handler(
     State(state): State<GuardAppState>,
     Json(request): Json<VerifyRequest>,
 ) -> Result<Json<VerifyResponse>, StatusCode> {
+    if state.mode == GuardMode::MockAllow {
+        return mock_allow_response(&request).map(Json);
+    }
+
     // Build guard context from request
     let context = GuardContext::from(&request);
 
@@ -150,11 +213,13 @@ async fn verify_handler(
             decision: "ALLOW".to_string(),
             reason: None,
             claims: Some(claims),
+            verification_mode: GuardMode::Evidence.as_str(),
         },
         GuardDecision::Deny { reason, claims } => VerifyResponse {
             decision: "DENY".to_string(),
             reason: Some(format!("{:?}", reason)),
             claims,
+            verification_mode: GuardMode::Evidence.as_str(),
         },
     };
 
@@ -181,6 +246,19 @@ async fn batch_verify_handler(
     let mut results = Vec::with_capacity(request.requests.len());
 
     for req in request.requests {
+        if state.mode == GuardMode::MockAllow {
+            match mock_allow_response(&req) {
+                Ok(response) => results.push(response),
+                Err(_) => results.push(VerifyResponse {
+                    decision: "ERROR".to_string(),
+                    reason: Some("caller_id, service_name, and target_uri are required".to_string()),
+                    claims: None,
+                    verification_mode: GuardMode::MockAllow.as_str(),
+                }),
+            }
+            continue;
+        }
+
         // Build guard context from request
         let context = GuardContext::from(&req);
 
@@ -203,6 +281,7 @@ async fn batch_verify_handler(
                     decision: "ERROR".to_string(),
                     reason: Some(format!("Evidence fetch failed: {}", e)),
                     claims: None,
+                    verification_mode: GuardMode::Evidence.as_str(),
                 });
                 continue;
             }
@@ -228,6 +307,7 @@ async fn batch_verify_handler(
                     decision: "ERROR".to_string(),
                     reason: Some(format!("Verification failed: {}", e)),
                     claims: None,
+                    verification_mode: GuardMode::Evidence.as_str(),
                 });
                 continue;
             }
@@ -245,11 +325,13 @@ async fn batch_verify_handler(
                 decision: "ALLOW".to_string(),
                 reason: None,
                 claims: Some(claims),
+                verification_mode: GuardMode::Evidence.as_str(),
             },
             GuardDecision::Deny { reason, claims } => VerifyResponse {
                 decision: "DENY".to_string(),
                 reason: Some(format!("{:?}", reason)),
                 claims,
+                verification_mode: GuardMode::Evidence.as_str(),
             },
         };
 
@@ -287,6 +369,7 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "8007".to_string())
         .parse()
         .unwrap_or(8007);
+    let guard_mode = GuardMode::from_environment()?;
     let evidence_endpoint = std::env::var("EVIDENCE_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:8006".to_string());
     
@@ -328,6 +411,7 @@ async fn main() -> Result<()> {
         evidence_fetcher,
         ra_adapter,
         policy_evaluator,
+        mode: guard_mode,
         tc_api_client,
     };
 
@@ -354,7 +438,14 @@ async fn main() -> Result<()> {
     tracing::info!("Verification endpoint: POST /ra/v1/verify");
     tracing::info!("Batch verification endpoint: POST /ra/v1/verify/batch");
     tracing::info!("Health endpoint: GET /health");
-    tracing::info!("Evidence endpoint: {}", evidence_endpoint);
+    tracing::info!("Guard mode: {}", guard_mode.as_str());
+    if guard_mode == GuardMode::Evidence {
+        tracing::info!("Evidence endpoint: {}", evidence_endpoint);
+    } else {
+        tracing::warn!(
+            "mock_allow is connectivity-only: Evidence Provider and verifier are bypassed"
+        );
+    }
     
     if agent_tc_api_url.is_some() {
         tracing::info!("Agent-side TC-API: enabled (Agent is a TDX workload)");

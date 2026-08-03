@@ -31,6 +31,7 @@ type options struct {
 	debugEnabled   bool
 	replayEvidence bool
 	evidenceStatus int
+	evidenceDelay  time.Duration
 	trusteeStatus  int
 	trusteeDelay   time.Duration
 }
@@ -51,7 +52,7 @@ func run() error {
 		},
 		DebugEnabled: options.debugEnabled, ReplayEvidence: options.replayEvidence,
 		EvidenceStatus: options.evidenceStatus, TrusteeStatus: options.trusteeStatus,
-		TrusteeDelay: options.trusteeDelay,
+		EvidenceDelay: options.evidenceDelay, TrusteeDelay: options.trusteeDelay,
 	})
 	if err != nil {
 		return fmt.Errorf("configure fake services: %w", err)
@@ -115,6 +116,7 @@ func parseFlags() options {
 	flag.BoolVar(&result.debugEnabled, "debug", false, "report a debug-enabled TD")
 	flag.BoolVar(&result.replayEvidence, "replay-evidence", false, "replay the first evidence response for later requests")
 	flag.IntVar(&result.evidenceStatus, "evidence-status", 0, "force the Evidence Provider HTTP status")
+	flag.DurationVar(&result.evidenceDelay, "evidence-delay", 0, "delay Evidence Provider responses")
 	flag.IntVar(&result.trusteeStatus, "trustee-status", 0, "force the Trustee HTTP status")
 	flag.DurationVar(&result.trusteeDelay, "trustee-delay", 0, "delay Trustee responses")
 	flag.Parse()

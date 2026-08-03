@@ -1,8 +1,12 @@
-# M4 validation
+# M4 historical validation
+
+M4 predates the formal dual-Agent runtime under `../v2/`. It is retained as a
+historical business-path and custom NodeAttestor failure fixture; it is not the
+formal v2 startup, rollback, or architecture acceptance path.
 
 M4 has two separate validation profiles:
 
-- **v2 architecture validation** uses the real OpenClaw and OpenViking business
+- **Pre-dual-Agent integration validation** uses the real OpenClaw and OpenViking business
   path, runs OpenViking inside a TD VM, and permits a mock Evidence Provider and
   mock Trustee. This profile validates placement, connectivity, protocol failure
   handling, and application authentication without requiring a real Quote.
@@ -10,7 +14,7 @@ M4 has two separate validation profiles:
   verifying Trustee. It remains a separate, stricter profile and is not implied
   by successful mock validation.
 
-## v2 architecture profile
+## Pre-dual-Agent integration profile
 
 The validated topology is:
 
@@ -167,7 +171,7 @@ matrix can run.
 
 ## Current host result
 
-On 2026-07-29 the v2 architecture profile passed with real OpenClaw and
+On 2026-07-29 the pre-dual-Agent integration profile passed with real OpenClaw and
 OpenViking v0.4.8 running inside the TD VM. Both `/health` and `/ready` returned
 HTTP 200 through the loopback forward, the OpenViking plugin reported a valid
 `user_key`, and the authenticated sessions request from OpenClaw returned HTTP

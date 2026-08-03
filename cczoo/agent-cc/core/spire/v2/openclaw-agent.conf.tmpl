@@ -1,0 +1,41 @@
+agent {
+    data_dir = "/opt/spire/data/openclaw-agent"
+    log_level = "DEBUG"
+    server_address = "spire-server"
+    server_port = 8081
+    socket_path = "/opt/spire/run/openclaw/agent.sock"
+    trust_bundle_path = "/opt/spire/conf/certs/upstream-ca.pem"
+    trust_domain = "argus.local"
+}
+
+telemetry {
+    Prometheus {
+        host = "0.0.0.0"
+        port = 9990
+    }
+}
+
+plugins {
+    NodeAttestor "x509pop" {
+        plugin_data {
+            private_key_path = "/opt/spire/conf/x509pop/openclaw-agent-key.pem"
+            certificate_path = "/opt/spire/conf/x509pop/openclaw-agent.pem"
+        }
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            directory = "/opt/spire/data/openclaw-agent"
+        }
+    }
+
+    WorkloadAttestor "docker" {
+        plugin_data {
+            docker_socket_path = "unix:///var/run/docker.sock"
+        }
+    }
+
+    WorkloadAttestor "unix" {
+        plugin_data {}
+    }
+}

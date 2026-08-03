@@ -1,85 +1,33 @@
-# Argus SPIRE Phase 1
+# Argus SPIFFE v2
 
-This directory deploys a host-level SPIRE Server and Agent for the single-host
-Argus Phase 1 topology. It does not change Argus quote generation or policy
-evaluation.
+The formal configuration is `v2/`. It directly replaces the former single-Agent
+Join Token bootstrap; there is no runtime profile that switches back to it.
 
-## Local prerequisites
+The topology is:
 
-- SPIRE 1.15.1 is installed at `/opt/spire` (override with `SPIRE_HOME`).
-- Docker is available through `/var/run/docker.sock`.
-- Commands are run as root on the Docker host.
+- one SPIRE Server supporting both `x509pop` and `argus_tdx`;
+- an OpenClaw Agent using `x509pop`, its own Docker daemon, data directory, and
+  Workload API;
+- an OpenViking Agent inside the TDVM using `argus_tdx`, the TDVM Docker daemon,
+  a different data directory, and a different Workload API;
+- one Guest-local mock Evidence Provider used only by the OpenViking
+  `argus_tdx` Agent plugin;
+- one independent center-side mock Trustee used only by the SPIRE Server
+  `argus_tdx` plugin;
+- a real Argus Guard process in explicit `mock_allow` connectivity mode;
+- direct SPIFFE mTLS between the two workload identities.
 
-The release archive must be verified with
-`spire-1.15.1-linux-amd64-musl_sha256sum.txt` before installation.
+See `v2/README.md` for the remote-host execution sequence. The compatibility
+scripts in `scripts/` now delegate to v2 and do not generate Join Tokens.
 
-## Bootstrap and registration
+`m3/` and the original M4 failure matrix remain historical test fixtures for the
+custom NodeAttestor. They are not formal startup or rollback paths.
 
-```bash
-sudo core/spire/scripts/bootstrap-agent.sh
-sudo core/spire/scripts/register-workloads.sh
-```
+Current mock boundary:
 
-Both commands are idempotent and can be rerun after a host reboot. Runtime state
-is kept outside the repository:
-
-- `/var/lib/spire/server`
-- `/var/lib/spire/agent`
-- `/etc/spire/bootstrap.crt`
-- `/run/spire/sockets/agent.sock`
-- `/var/log/spire`
-
-SPIRE assigns a join-token Agent ID under
-`spiffe://argus.local/spire/agent/join_token/`. The registration script reads the
-single attested Agent ID from the Server and uses it as the workload parent. If
-more than one Agent is present, set `ARGUS_AGENT_PARENT` explicitly.
-
-The workload entries issue:
-
-- `spiffe://argus.local/agent/openclaw`
-- `spiffe://argus.local/service/openviking-cmem`
-
-## Verification
-
-After recreating both workload containers with the SPIRE label, socket, binary,
-and environment variable, run:
-
-```bash
-sudo core/spire/scripts/verify-svid.sh
-```
-
-The script fetches each X.509-SVID from inside its actual workload container,
-checks that the identities are distinct, and confirms that an incorrectly
-labeled temporary container receives no identity.
-
-After the OpenViking mTLS listener on port 1943 and the OpenClaw local proxy on
-port 1934 are running, verify identity issuance and the protected application
-path together:
-
-```bash
-sudo core/spire/scripts/verify-mtls.sh
-```
-
-The application plugin uses `http://127.0.0.1:1934`; the local proxy obtains the
-OpenClaw SVID and connects to `127.0.0.1:1943`. The OpenViking proxy requires the
-OpenClaw SPIFFE ID and forwards authenticated traffic to the real service on
-container-local port 1933. Port 1943 rejects plaintext HTTP.
-
-To observe rotation of the 600-second workload SVID:
-
-```bash
-docker exec agentcc-openclaw-sbx-gateway \
-  spire-agent api watch -socketPath /run/spire/sockets/agent.sock
-```
-
-Health checks:
-
-```bash
-/opt/spire/bin/spire-server healthcheck \
-  -socketPath /tmp/spire-server/private/api.sock
-/opt/spire/bin/spire-agent healthcheck \
-  -socketPath /run/spire/sockets/agent.sock
-```
-
-The development CA key, join tokens, datastore, Agent keys, and issued private
-keys must never be copied into this repository or an image.
+- Evidence Provider: mock, OpenViking side only;
+- Trustee: independent mock;
+- Argus Guard: real process with explicit mock allow;
+- Quote/QGS: deferred;
+- unbypassable same-request Guard-to-mTLS gate: deferred;
+- Envoy/service mesh: deferred.

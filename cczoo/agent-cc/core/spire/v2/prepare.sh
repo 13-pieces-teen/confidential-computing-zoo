@@ -1,0 +1,238 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGENT_CC_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+CORE_DIR="$AGENT_CC_ROOT/core"
+PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-nodeattestor"
+MTLS_MODULE_DIR="$SCRIPT_DIR/mtls-smoke"
+RUNTIME_DIR="${V2_RUNTIME_DIR:-$SCRIPT_DIR/runtime}"
+GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-spire-v2-go-cache}"
+GO_PROXY="${ARGUS_GO_PROXY:-https://proxy.golang.org,direct}"
+MTLS_GO_PROXY="${ARGUS_MTLS_GO_PROXY:-$GO_PROXY}"
+TDVM_SPIRE_SERVER_ADDRESS="${V2_TDVM_SPIRE_SERVER_ADDRESS:-10.0.2.2}"
+SPIRE_SERVER_PORT="${V2_SPIRE_SERVER_PORT:-18081}"
+TDVM_INSTANCE_ID="${V2_TDVM_INSTANCE_ID:-tdvm-v2-0001}"
+
+fail() {
+    printf 'v2 prepare: FAIL: %s\n' "$1" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"
+}
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    fail "run as root so the bind-mounted SPIRE runtime can be owned by uid 1000"
+fi
+
+for command_name in docker openssl sed sha256sum awk; do
+    require_command "$command_name"
+done
+
+install -d -m 0755 \
+    "$RUNTIME_DIR/plugins" \
+    "$RUNTIME_DIR/conf" \
+    "$RUNTIME_DIR/server-run" \
+    "$RUNTIME_DIR/openclaw-agent-run"
+install -d -m 0700 \
+    "$RUNTIME_DIR/certs" \
+    "$RUNTIME_DIR/server-data" \
+    "$RUNTIME_DIR/openclaw-agent-data"
+install -d -m 0755 "$GO_CACHE_DIR"
+
+build_go_binary() {
+    local module_dir="$1"
+    local package_path="$2"
+    local output_name="$3"
+    local go_proxy="$4"
+    local module_mode="$5"
+
+    docker run --rm \
+        -e "GOPROXY=$go_proxy" \
+        -e GOSUMDB=sum.golang.org \
+        -e GOMODCACHE=/gomodcache \
+        -e CGO_ENABLED=0 \
+        -v "$module_dir:/source:ro" \
+        -v "$GO_CACHE_DIR:/gomodcache" \
+        -v "$RUNTIME_DIR/plugins:/out" \
+        golang:1.24-bookworm sh -ceu "
+            mkdir -p /workspace
+            cp -a /source/. /workspace/
+            cd /workspace
+            go build -mod='$module_mode' -trimpath -ldflags='-s -w' \
+                -o '/out/$output_name' '$package_path'
+        "
+}
+
+build_go_binary \
+    "$PLUGIN_MODULE_DIR" \
+    ./cmd/agent \
+    argus-tdx-nodeattestor-agent \
+    "$GO_PROXY" \
+    readonly
+build_go_binary \
+    "$PLUGIN_MODULE_DIR" \
+    ./cmd/server \
+    argus-tdx-nodeattestor-server \
+    "$GO_PROXY" \
+    readonly
+build_go_binary \
+    "$PLUGIN_MODULE_DIR" \
+    ./cmd/mock-evidence-provider \
+    mock-evidence-provider \
+    "$GO_PROXY" \
+    readonly
+build_go_binary \
+    "$PLUGIN_MODULE_DIR" \
+    ./cmd/mock-trustee \
+    mock-trustee \
+    "$GO_PROXY" \
+    readonly
+build_go_binary \
+    "$MTLS_MODULE_DIR" \
+    . \
+    spire-mtls \
+    "$MTLS_GO_PROXY" \
+    mod
+chmod 0755 "$RUNTIME_DIR/plugins"/*
+
+generate_ca() {
+    local name="$1"
+    local common_name="$2"
+    local key_path="$RUNTIME_DIR/certs/$name-key.pem"
+    local cert_path="$RUNTIME_DIR/certs/$name.pem"
+
+    if [[ -f "$key_path" && -f "$cert_path" ]]; then
+        return
+    fi
+    rm -f "$key_path" "$cert_path"
+    openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 30 \
+        -subj "/O=Argus/CN=$common_name" \
+        -addext "basicConstraints=critical,CA:TRUE" \
+        -addext "keyUsage=critical,keyCertSign,cRLSign" \
+        -keyout "$key_path" \
+        -out "$cert_path" >/dev/null 2>&1
+}
+
+issue_certificate() {
+    local ca_name="$1"
+    local name="$2"
+    local common_name="$3"
+    local extended_key_usage="$4"
+    local subject_alt_name="$5"
+    local key_path="$RUNTIME_DIR/certs/$name-key.pem"
+    local cert_path="$RUNTIME_DIR/certs/$name.pem"
+    local csr_path="$RUNTIME_DIR/certs/$name.csr"
+    local ext_path="$RUNTIME_DIR/certs/$name.ext"
+
+    if [[ -f "$key_path" && -f "$cert_path" ]]; then
+        return
+    fi
+    rm -f "$key_path" "$cert_path" "$csr_path" "$ext_path"
+    openssl req -newkey rsa:2048 -nodes -sha256 \
+        -subj "/O=Argus/CN=$common_name" \
+        -keyout "$key_path" \
+        -out "$csr_path" >/dev/null 2>&1
+    {
+        printf '%s\n' \
+            'basicConstraints=critical,CA:FALSE' \
+            'keyUsage=critical,digitalSignature,keyEncipherment' \
+            "extendedKeyUsage=$extended_key_usage" \
+            "subjectAltName=$subject_alt_name"
+    } >"$ext_path"
+    openssl x509 -req -sha256 -days 30 \
+        -in "$csr_path" \
+        -CA "$RUNTIME_DIR/certs/$ca_name.pem" \
+        -CAkey "$RUNTIME_DIR/certs/$ca_name-key.pem" \
+        -CAcreateserial \
+        -extfile "$ext_path" \
+        -out "$cert_path" >/dev/null 2>&1
+    rm -f "$csr_path" "$ext_path"
+}
+
+generate_ca upstream-ca "Argus v2 SPIRE Upstream CA"
+generate_ca trustee-ca "Argus v2 Mock Trustee CA"
+generate_ca openclaw-agent-ca "Argus v2 OpenClaw x509pop CA"
+
+issue_certificate \
+    trustee-ca \
+    trustee-server \
+    trustee.argus.local \
+    serverAuth \
+    "DNS:trustee.argus.local,URI:spiffe://argus.local/service/trustee"
+issue_certificate \
+    trustee-ca \
+    trustee-client \
+    "Argus v2 SPIRE Server" \
+    clientAuth \
+    "URI:spiffe://argus.local/spire/server"
+issue_certificate \
+    openclaw-agent-ca \
+    openclaw-agent \
+    "Argus v2 OpenClaw Agent" \
+    clientAuth \
+    "URI:x509pop://argus.local/role/openclaw"
+
+chmod 0600 "$RUNTIME_DIR/certs"/*-key.pem
+chmod 0644 "$RUNTIME_DIR/certs"/*.pem
+chown -R 1000:1000 \
+    "$RUNTIME_DIR/certs" \
+    "$RUNTIME_DIR/server-data" \
+    "$RUNTIME_DIR/server-run" \
+    "$RUNTIME_DIR/openclaw-agent-data" \
+    "$RUNTIME_DIR/openclaw-agent-run"
+
+server_checksum="$(
+    sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-server" |
+        awk '{print $1}'
+)"
+agent_checksum="$(
+    sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" |
+        awk '{print $1}'
+)"
+
+sed \
+    "s/__SERVER_CHECKSUM__/$server_checksum/g" \
+    "$SCRIPT_DIR/server.conf.tmpl" \
+    >"$RUNTIME_DIR/conf/server.conf"
+cp "$SCRIPT_DIR/openclaw-agent.conf.tmpl" "$RUNTIME_DIR/conf/openclaw-agent.conf"
+sed \
+    -e "s/__SPIRE_SERVER_ADDRESS__/$TDVM_SPIRE_SERVER_ADDRESS/g" \
+    -e "s/__SPIRE_SERVER_PORT__/$SPIRE_SERVER_PORT/g" \
+    -e "s/__AGENT_CHECKSUM__/$agent_checksum/g" \
+    -e "s/__TDVM_INSTANCE_ID__/$TDVM_INSTANCE_ID/g" \
+    "$SCRIPT_DIR/openviking-agent.conf.tmpl" \
+    >"$RUNTIME_DIR/conf/openviking-agent.conf"
+cp "$SCRIPT_DIR/policy.yaml" "$RUNTIME_DIR/conf/policy.yaml"
+chmod 0644 "$RUNTIME_DIR/conf"/*
+
+docker build -q \
+    -f "$SCRIPT_DIR/Dockerfile.mock-evidence-provider" \
+    -t argus-spire-v2-mock-evidence-provider:local \
+    "$RUNTIME_DIR" >/dev/null
+docker build -q \
+    -f "$SCRIPT_DIR/Dockerfile.mock-trustee" \
+    -t argus-spire-v2-mock-trustee:local \
+    "$RUNTIME_DIR" >/dev/null
+docker build -q \
+    -f "$SCRIPT_DIR/Dockerfile.mtls" \
+    -t argus-spire-v2-mtls:local \
+    "$RUNTIME_DIR" >/dev/null
+
+if [[ "${V2_BUILD_GUARD:-1}" == "1" ]]; then
+    docker build -q \
+        -f "$SCRIPT_DIR/Dockerfile.guard" \
+        -t argus-spire-v2-guard:local \
+        "$CORE_DIR" >/dev/null
+fi
+
+printf '%s\n' \
+    "Argus SPIFFE v2 runtime prepared: $RUNTIME_DIR" \
+    "OpenClaw NodeAttestor: x509pop" \
+    "OpenViking NodeAttestor: argus_tdx" \
+    "OpenViking Agent endpoint: $TDVM_SPIRE_SERVER_ADDRESS:$SPIRE_SERVER_PORT" \
+    "Agent plugin checksum: $agent_checksum" \
+    "Server plugin checksum: $server_checksum" \
+    "Next: $SCRIPT_DIR/start-server.sh"
