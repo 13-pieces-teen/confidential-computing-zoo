@@ -62,7 +62,9 @@ resolve_image() {
 }
 
 install_docker_if_needed() {
-    if remote_sudo test -x /usr/local/bin/docker && remote_sudo test -x /usr/local/bin/dockerd; then
+    if remote_sudo test -x /usr/local/bin/docker \
+        && remote_sudo test -x /usr/local/bin/dockerd \
+        && remote_sudo test -x /usr/local/bin/docker-proxy; then
         return
     fi
     [[ -n "$DOCKER_RUNTIME_ARCHIVE" ]] || fail 'DOCKER_RUNTIME_ARCHIVE is required when the Guest has no Docker runtime'
@@ -71,7 +73,7 @@ install_docker_if_needed() {
         *.tgz|*.tar.gz) ;;
         *) fail 'DOCKER_RUNTIME_ARCHIVE must be the official static Docker .tgz archive' ;;
     esac
-    for binary in docker dockerd containerd containerd-shim-runc-v2 ctr runc; do
+    for binary in docker dockerd containerd containerd-shim-runc-v2 ctr runc docker-proxy; do
         tar -tzf "$DOCKER_RUNTIME_ARCHIVE" "docker/$binary" >/dev/null \
             || fail "Docker runtime archive is missing docker/$binary"
     done
@@ -79,7 +81,7 @@ install_docker_if_needed() {
     gzip -dc "$DOCKER_RUNTIME_ARCHIVE" \
         | remote_sudo tar -x -C /usr/local/bin --strip-components=1 \
             docker/docker docker/dockerd docker/containerd \
-            docker/containerd-shim-runc-v2 docker/ctr docker/runc
+            docker/containerd-shim-runc-v2 docker/ctr docker/runc docker/docker-proxy
     remote_sudo tee /etc/systemd/system/docker-offline.service >/dev/null <<'UNIT'
 [Unit]
 Description=Offline Docker Engine for OpenViking TD VM
@@ -88,7 +90,7 @@ Wants=network-online.target
 
 [Service]
 Type=notify
-ExecStart=/usr/local/bin/dockerd --host=unix:///run/docker.sock --bridge=none --iptables=false --ip-forward=false --ip-masq=false --storage-driver=overlay2
+ExecStart=/usr/local/bin/dockerd --host=unix:///run/docker.sock --bridge=none --iptables=false --ip-forward=false --ip-masq=false --storage-driver=overlay2 --userland-proxy-path=/usr/local/bin/docker-proxy
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=on-failure
 RestartSec=2
