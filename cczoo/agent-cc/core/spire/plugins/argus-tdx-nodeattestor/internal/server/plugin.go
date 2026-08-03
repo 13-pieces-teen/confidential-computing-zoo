@@ -41,13 +41,9 @@ type TrusteeVerifier interface {
 type VerifierFactory func(*Config) (TrusteeVerifier, error)
 
 type runtimeState struct {
-	config   *Config
-	verifier TrusteeVerifier
-}
-
-type instanceBinding struct {
-	instanceID string
-	launchID   string
+	config       *Config
+	verifier     TrusteeVerifier
+	bindingStore *bindingStore
 }
 
 type Plugin struct {
@@ -58,9 +54,6 @@ type Plugin struct {
 	state   *runtimeState
 	logger  hclog.Logger
 
-	bindingMu sync.Mutex
-	bindings  map[string]instanceBinding
-
 	random          io.Reader
 	now             func() time.Time
 	verifierFactory VerifierFactory
@@ -69,9 +62,8 @@ type Plugin struct {
 
 func New() *Plugin {
 	return &Plugin{
-		bindings: make(map[string]instanceBinding),
-		random:   rand.Reader,
-		now:      time.Now,
+		random: rand.Reader,
+		now:    time.Now,
 		verifierFactory: func(config *Config) (TrusteeVerifier, error) {
 			return trustee.NewClient(
 				config.TrusteeURL,
@@ -193,7 +185,7 @@ func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (e
 	if hello.InstanceHint != "" && hello.InstanceHint != claims.InstanceID {
 		return status.Error(codes.PermissionDenied, "instance hint does not match verified instance ID")
 	}
-	if err := plugin.recordInstanceBinding(keyID, claims); err != nil {
+	if err := recordInstanceBinding(state.bindingStore, keyID, claims); err != nil {
 		return status.Errorf(codes.PermissionDenied, "attestation key conflict: %v", err)
 	}
 	attributes, err := deriveAgentAttributes(state.config, hello.AttestationPublicKey, claims)
@@ -228,8 +220,12 @@ func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRe
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "configure Trustee verifier: %v", err)
 	}
+	bindingStore, err := newBindingStore(config.BindingStateDir)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "configure binding store: %v", err)
+	}
 	plugin.stateMu.Lock()
-	plugin.state = &runtimeState{config: config, verifier: verifier}
+	plugin.state = &runtimeState{config: config, verifier: verifier, bindingStore: bindingStore}
 	plugin.stateMu.Unlock()
 	return &configv1.ConfigureResponse{}, nil
 }
@@ -252,19 +248,15 @@ func (plugin *Plugin) getState() (*runtimeState, error) {
 	return plugin.state, nil
 }
 
-func (plugin *Plugin) recordInstanceBinding(keyID string, claims trustee.VerifiedNodeClaims) error {
+func recordInstanceBinding(store *bindingStore, keyID string, claims trustee.VerifiedNodeClaims) error {
+	if store == nil {
+		return fmt.Errorf("binding store is not configured")
+	}
 	launchID := ""
 	if claims.LaunchID != nil {
 		launchID = *claims.LaunchID
 	}
-	binding := instanceBinding{instanceID: claims.InstanceID, launchID: launchID}
-	plugin.bindingMu.Lock()
-	defer plugin.bindingMu.Unlock()
-	if existing, ok := plugin.bindings[keyID]; ok && existing != binding {
-		return fmt.Errorf("key ID is already bound to another verified instance or launch")
-	}
-	plugin.bindings[keyID] = binding
-	return nil
+	return store.Bind(keyID, instanceBinding{InstanceID: claims.InstanceID, LaunchID: launchID})
 }
 
 func buildEvidenceRequest(config *Config, nonce []byte, keyID string) ([]byte, error) {

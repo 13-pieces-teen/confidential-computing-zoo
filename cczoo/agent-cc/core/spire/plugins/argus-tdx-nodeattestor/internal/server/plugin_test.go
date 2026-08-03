@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,16 +146,20 @@ func TestAttestRejectsBadSignatureBeforeTrustee(t *testing.T) {
 }
 
 func TestRecordInstanceBindingRejectsCloneConflict(t *testing.T) {
-	plugin := New()
-	first := trustee.VerifiedNodeClaims{InstanceID: "tdvm-0001"}
-	second := trustee.VerifiedNodeClaims{InstanceID: "tdvm-0002"}
-	if err := plugin.recordInstanceBinding("key", first); err != nil {
+	store, err := newBindingStore(t.TempDir())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := plugin.recordInstanceBinding("key", first); err != nil {
+	keyID := strings.Repeat("a", 64)
+	first := trustee.VerifiedNodeClaims{InstanceID: "tdvm-0001"}
+	second := trustee.VerifiedNodeClaims{InstanceID: "tdvm-0002"}
+	if err := recordInstanceBinding(store, keyID, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordInstanceBinding(store, keyID, first); err != nil {
 		t.Fatal("same binding was not idempotent")
 	}
-	if err := plugin.recordInstanceBinding("key", second); err == nil {
+	if err := recordInstanceBinding(store, keyID, second); err == nil {
 		t.Fatal("same key bound to another instance was accepted")
 	}
 }
@@ -180,10 +185,14 @@ func configuredAttestation(t *testing.T, badSignature bool) (*Plugin, *fakeAttes
 	}
 	verifier := &fakeVerifier{claims: claims}
 	plugin := New()
+	bindings, err := newBindingStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	plugin.state = &runtimeState{config: &Config{
 		TrustDomain: "argus.local", Policy: loadedPolicy, ChallengeTTL: 30 * time.Second,
 		VerifierTimeout: time.Second, MaxEvidenceBytes: protocol.MaxEvidenceSize,
-	}, verifier: verifier}
+	}, verifier: verifier, bindingStore: bindings}
 	plugin.random = bytes.NewReader(append(bytes.Repeat([]byte{0x51}, 32), bytes.Repeat([]byte{0x52}, 32)...))
 	plugin.now = time.Now
 	stream := &fakeAttestStream{

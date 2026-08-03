@@ -35,6 +35,7 @@ plugins {
             trustee_expected_spiffe_id = "spiffe://argus.local/service/trustee"
             trustee_auth_mode = "mtls_files"
             policy_path = "/opt/spire/conf/policy.yaml"
+            binding_state_dir = "/opt/spire/data/server/argus-tdx-bindings"
             challenge_ttl = "30s"
             verifier_timeout = "15s"
             max_evidence_bytes = 4194304

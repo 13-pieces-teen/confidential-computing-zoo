@@ -795,6 +795,7 @@ plugins {
             trustee_expected_spiffe_id = "spiffe://argus.local/service/trustee"
             trustee_auth_mode = "mtls_files"
             policy_path = "/etc/spire/argus/argus-tdx-policy.yaml"
+            binding_state_dir = "/var/lib/spire/server/argus-tdx-bindings"
             challenge_ttl = "30s"
             verifier_timeout = "15s"
             max_evidence_bytes = 4194304
@@ -804,6 +805,8 @@ plugins {
 ```
 
 `trustee_server_name` 用于 TLS hostname 校验；若 Trustee 证书包含 SPIFFE URI SAN，还必须精确匹配 `trustee_expected_spiffe_id`。client key 只允许 SPIRE Server 运行用户读取，不能由插件配置热重载时以明文写入日志。
+
+`binding_state_dir` 必须位于 SPIRE Server 的持久化数据卷中，并且不能允许 group/world 写入。Server 为每个证明 `key_id` 原子创建一个不可变的 `(instance_id, launch_id)` 绑定记录；插件重启后继续拒绝同一 key 对应不同 verified instance/launch 的冲突。多副本 Server 必须共享这个目录，或者在后续替换成具有原子 create-if-absent 语义的集中式存储。
 
 ### 9.2 OpenViking SPIRE Agent
 

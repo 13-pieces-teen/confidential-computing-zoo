@@ -48,7 +48,7 @@ func TestParseConfigRejectsUnsafeInputs(t *testing.T) {
 }
 
 type fixturePaths struct {
-	ca, cert, key, policy string
+	ca, cert, key, policy, bindingStateDir string
 }
 
 func writeConfigFixtures(t *testing.T, directory string) fixturePaths {
@@ -88,10 +88,11 @@ func writeConfigFixtures(t *testing.T, directory string) fixturePaths {
 		t.Fatal(err)
 	}
 	paths := fixturePaths{
-		ca:     filepath.Join(directory, "ca.pem"),
-		cert:   filepath.Join(directory, "client.pem"),
-		key:    filepath.Join(directory, "client-key.pem"),
-		policy: filepath.Join(directory, "policy.yaml"),
+		ca:              filepath.Join(directory, "ca.pem"),
+		cert:            filepath.Join(directory, "client.pem"),
+		key:             filepath.Join(directory, "client-key.pem"),
+		policy:          filepath.Join(directory, "policy.yaml"),
+		bindingStateDir: filepath.Join(directory, "bindings"),
 	}
 	writePEM(t, paths.ca, "CERTIFICATE", caDER, 0o644)
 	writePEM(t, paths.cert, "CERTIFICATE", clientDER, 0o644)
@@ -123,6 +124,7 @@ trustee_server_name = "trustee.argus.local"
 trustee_expected_spiffe_id = "spiffe://argus.local/service/trustee"
 trustee_auth_mode = "mtls_files"
 policy_path = "` + paths.policy + `"
+binding_state_dir = "` + paths.bindingStateDir + `"
 challenge_ttl = "30s"
 verifier_timeout = "15s"
 max_evidence_bytes = 4194304

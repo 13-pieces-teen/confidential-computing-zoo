@@ -25,6 +25,7 @@ type Config struct {
 	TrusteeExpectedSPIFFEID string
 	TrusteeTLSConfig        *tls.Config
 	Policy                  *policy.Policy
+	BindingStateDir         string
 	ChallengeTTL            time.Duration
 	VerifierTimeout         time.Duration
 	MaxEvidenceBytes        int64
@@ -39,6 +40,7 @@ type hclConfig struct {
 	TrusteeExpectedSPIFFEID string `hcl:"trustee_expected_spiffe_id"`
 	TrusteeAuthMode         string `hcl:"trustee_auth_mode"`
 	PolicyPath              string `hcl:"policy_path"`
+	BindingStateDir         string `hcl:"binding_state_dir"`
 	ChallengeTTL            string `hcl:"challenge_ttl"`
 	VerifierTimeout         string `hcl:"verifier_timeout"`
 	MaxEvidenceBytes        int64  `hcl:"max_evidence_bytes"`
@@ -89,6 +91,9 @@ func parseConfig(core *configv1.CoreConfiguration, input string) (*Config, []str
 	if raw.MaxEvidenceBytes <= 0 || raw.MaxEvidenceBytes > protocol.MaxEvidenceSize {
 		notes = append(notes, fmt.Sprintf("max_evidence_bytes must be between 1 and %d", protocol.MaxEvidenceSize))
 	}
+	if !filepath.IsAbs(raw.BindingStateDir) {
+		notes = append(notes, "binding_state_dir must be absolute")
+	}
 
 	loadedPolicy, policyErr := loadPolicy(raw.PolicyPath)
 	if policyErr != nil {
@@ -107,6 +112,7 @@ func parseConfig(core *configv1.CoreConfiguration, input string) (*Config, []str
 		TrusteeExpectedSPIFFEID: raw.TrusteeExpectedSPIFFEID,
 		TrusteeTLSConfig:        tlsConfig,
 		Policy:                  loadedPolicy,
+		BindingStateDir:         filepath.Clean(raw.BindingStateDir),
 		ChallengeTTL:            challengeTTL,
 		VerifierTimeout:         verifierTimeout,
 		MaxEvidenceBytes:        raw.MaxEvidenceBytes,
