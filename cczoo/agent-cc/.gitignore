@@ -28,3 +28,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .mypy_cache/
+
+# Local Go plugin binaries
+/core/spire/plugins/argus-tdx-nodeattestor/agent
+/core/spire/plugins/argus-tdx-nodeattestor/server

@@ -1,0 +1,73 @@
+name: argus-spire-m3
+
+services:
+  fake-services:
+    image: argus-spire-m3-fake:local
+    hostname: trustee.argus.local
+    command:
+      - -evidence-listen=127.0.0.1:18080
+      - -trustee-listen=0.0.0.0:18443
+      - -tls-cert=/opt/argus/certs/trustee-server.pem
+      - -tls-key=/opt/argus/certs/trustee-server-key.pem
+      - -client-ca=/opt/argus/certs/trustee-ca.pem
+      - -instance-id=tdvm-m3-0001
+      - -tcb-status=up_to_date
+      - -mrtd=aabb
+      - -rtmr-0=0011
+      - -replay-evidence=${M4_REPLAY_EVIDENCE:-false}
+      - -evidence-status=${M4_EVIDENCE_STATUS:-0}
+      - -trustee-status=${M4_TRUSTEE_STATUS:-0}
+      - -trustee-delay=${M4_TRUSTEE_DELAY:-0s}
+    volumes:
+      - ./runtime/certs:/opt/argus/certs:ro
+    ports:
+      - "127.0.0.1:19989:9989"
+    networks:
+      - m3
+
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.15.1
+    hostname: spire-server
+    depends_on:
+      - fake-services
+    command: ["-config", "/opt/spire/conf/server.conf"]
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-server", "healthcheck", "-socketPath", "/opt/spire/run/server/api.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    volumes:
+      - ./runtime/conf/server.conf:/opt/spire/conf/server.conf:ro
+      - ./runtime/conf/policy.yaml:/opt/spire/conf/policy.yaml:ro
+      - ./runtime/certs:/opt/spire/conf/certs:ro
+      - ./runtime/plugins:/opt/spire/plugins:ro
+      - ${M4_SERVER_DATA_DIR:-./runtime/server-data}:/opt/spire/data/server
+      - ./runtime/server-run:/opt/spire/run/server
+    ports:
+      - "127.0.0.1:19988:9988"
+    networks:
+      - m3
+
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.15.1
+    depends_on:
+      - fake-services
+      - spire-server
+    network_mode: service:fake-services
+    pid: host
+    command: ["-config", "/opt/spire/conf/agent.conf"]
+    healthcheck:
+      test: ["CMD", "/opt/spire/bin/spire-agent", "healthcheck", "-socketPath", "/opt/spire/run/agent/agent.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    volumes:
+      - ./runtime/conf/agent.conf:/opt/spire/conf/agent.conf:ro
+      - ./runtime/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro
+      - ./runtime/plugins:/opt/spire/plugins:ro
+      - ${M4_AGENT_DATA_DIR:-./runtime/agent-data}:/opt/spire/data/agent
+      - ./runtime/agent-run:/opt/spire/run/agent
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+networks:
+  m3: {}
