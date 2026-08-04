@@ -17,6 +17,8 @@ set -euo pipefail
 
 TARGET_URI="${TARGET_URI:-http://127.0.0.1:1933}"
 OPENCLAW_CONTAINER="${OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
+OPENCLAW_USER="${OPENCLAW_USER:-node}"
+OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-/home/node/.openclaw/openclaw.json}"
 OPENCLAW_PLUGIN_SPEC="${OPENCLAW_PLUGIN_SPEC:-clawhub:@openviking/openclaw-plugin}"
 OPENCLAW_INSTALL_PLUGIN="${OPENCLAW_INSTALL_PLUGIN:-1}"
 OPENVIKING_API_KEY="${OPENVIKING_API_KEY:-}"
@@ -40,7 +42,23 @@ wait_http() {
     local attempt
 
     for ((attempt=1; attempt<=WAIT_ATTEMPTS; attempt++)); do
-        if curl -fsS "$url" >/dev/null 2>&1; then
+        if docker exec -i -u "$OPENCLAW_USER" "$OPENCLAW_CONTAINER" \
+            node - "$url" >/dev/null 2>&1 <<'NODE'
+const url = process.argv[2];
+
+async function main() {
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  if (!response.ok) {
+    throw new Error(`${url} returned HTTP ${response.status}`);
+  }
+}
+
+main().catch((error) => {
+  console.error(error.message);
+  process.exit(1);
+});
+NODE
+        then
             log "$name is ready: $url"
             return 0
         fi
@@ -52,8 +70,15 @@ wait_http() {
 }
 
 main() {
-    require_command curl
     require_command docker
+    docker inspect "$OPENCLAW_CONTAINER" >/dev/null 2>&1 || {
+        echo "OpenClaw container does not exist: $OPENCLAW_CONTAINER" >&2
+        exit 1
+    }
+    if [[ "$(docker inspect "$OPENCLAW_CONTAINER" --format '{{.State.Running}}')" != true ]]; then
+        echo "OpenClaw container is not running: $OPENCLAW_CONTAINER" >&2
+        exit 1
+    fi
 
     if [[ -z "$OPENVIKING_API_KEY" ]]; then
         echo "OPENVIKING_API_KEY must contain a non-root OpenViking user key." >&2
@@ -65,11 +90,17 @@ main() {
 
     if [[ "$OPENCLAW_INSTALL_PLUGIN" == "1" ]]; then
         log "Installing the OpenViking OpenClaw plugin"
-        docker exec "$OPENCLAW_CONTAINER" openclaw plugins install "$OPENCLAW_PLUGIN_SPEC"
+        docker exec -u "$OPENCLAW_USER" \
+            -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
+            "$OPENCLAW_CONTAINER" \
+            openclaw plugins install "$OPENCLAW_PLUGIN_SPEC"
     fi
 
     log "Configuring the OpenViking context engine"
-    docker exec "$OPENCLAW_CONTAINER" openclaw openviking setup \
+    docker exec -u "$OPENCLAW_USER" \
+        -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
+        "$OPENCLAW_CONTAINER" \
+        openclaw openviking setup \
         --base-url "$TARGET_URI" \
         --api-key "$OPENVIKING_API_KEY" \
         --json
@@ -78,7 +109,10 @@ main() {
     docker restart "$OPENCLAW_CONTAINER" >/dev/null
 
     log "Verifying the OpenViking plugin status"
-    docker exec "$OPENCLAW_CONTAINER" openclaw openviking status --json
+    docker exec -u "$OPENCLAW_USER" \
+        -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
+        "$OPENCLAW_CONTAINER" \
+        openclaw openviking status --json
 }
 
 main "$@"

@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -24,6 +27,7 @@ import (
 )
 
 const maxProbeBody = 1 << 20
+const requestIDHeader = "X-Argus-Request-ID"
 
 func main() {
 	if err := run(); err != nil {
@@ -113,6 +117,11 @@ func runClientProxy(arguments []string) error {
 	listen := flags.String("listen", "0.0.0.0:1934", "local plaintext listen address")
 	targetValue := flags.String("target", "", "remote mTLS target URL")
 	serverIDValue := flags.String("server-id", "", "only authorized server SPIFFE ID")
+	allowedSourceIPValue := flags.String(
+		"allow-source-ip",
+		"",
+		"optional exact source IP authorized to use this workload identity",
+	)
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -126,6 +135,16 @@ func runClientProxy(arguments []string) error {
 	serverID, err := spiffeid.FromString(*serverIDValue)
 	if err != nil {
 		return fmt.Errorf("parse server SPIFFE ID: %w", err)
+	}
+	var allowedSourceIP net.IP
+	if *allowedSourceIPValue != "" {
+		allowedSourceIP = net.ParseIP(*allowedSourceIPValue)
+		if allowedSourceIP == nil {
+			return fmt.Errorf(
+				"parse allowed source IP %q: expected an IP address",
+				*allowedSourceIPValue,
+			)
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -148,9 +167,45 @@ func runClientProxy(arguments []string) error {
 		log.Printf("mTLS upstream request rejected: %v", proxyErr)
 		http.Error(writer, "mTLS upstream unavailable", http.StatusBadGateway)
 	}
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		startedAt := time.Now()
+		sourceIP, sourceErr := remoteIP(request.RemoteAddr)
+		requestID := validRequestID(request.Header.Get(requestIDHeader))
+		if requestID == "" {
+			requestID = newRequestID()
+		}
+		request.Header.Set(requestIDHeader, requestID)
+		writer.Header().Set(requestIDHeader, requestID)
+
+		recorder := &statusRecorder{ResponseWriter: writer}
+		if sourceErr != nil || (allowedSourceIP != nil && !sourceIP.Equal(allowedSourceIP)) {
+			http.Error(recorder, "OpenClaw egress source rejected", http.StatusForbidden)
+			log.Printf(
+				"request_id=%s method=%s path=%s status=%d duration=%s source_ip=%s decision=source_rejected",
+				requestID,
+				request.Method,
+				request.URL.EscapedPath(),
+				recorder.statusCode(),
+				time.Since(startedAt).Round(time.Millisecond),
+				sourceIPString(sourceIP, sourceErr),
+			)
+			return
+		}
+
+		proxy.ServeHTTP(recorder, request)
+		log.Printf(
+			"request_id=%s method=%s path=%s status=%d duration=%s source_ip=%s decision=forwarded_mtls",
+			requestID,
+			request.Method,
+			request.URL.EscapedPath(),
+			recorder.statusCode(),
+			time.Since(startedAt).Round(time.Millisecond),
+			sourceIP.String(),
+		)
+	})
 	server := &http.Server{
 		Addr:              *listen,
-		Handler:           proxy,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errorChannel := make(chan error, 1)
@@ -160,10 +215,11 @@ func runClientProxy(arguments []string) error {
 		}
 	}()
 	log.Printf(
-		"local proxy listening on %s; mTLS target=%s authorized server=%s",
+		"local proxy listening on %s; mTLS target=%s authorized server=%s allowed source=%s",
 		*listen,
 		target,
 		serverID,
+		allowedSourceDescription(allowedSourceIP),
 	)
 
 	select {
@@ -174,6 +230,92 @@ func runClientProxy(arguments []string) error {
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return server.Shutdown(shutdownContext)
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (recorder *statusRecorder) WriteHeader(status int) {
+	if status >= 100 && status < 200 && status != http.StatusSwitchingProtocols {
+		recorder.ResponseWriter.WriteHeader(status)
+		return
+	}
+	if recorder.status != 0 {
+		return
+	}
+	recorder.status = status
+	recorder.ResponseWriter.WriteHeader(status)
+}
+
+func (recorder *statusRecorder) Write(payload []byte) (int, error) {
+	if recorder.status == 0 {
+		recorder.WriteHeader(http.StatusOK)
+	}
+	return recorder.ResponseWriter.Write(payload)
+}
+
+func (recorder *statusRecorder) Unwrap() http.ResponseWriter {
+	return recorder.ResponseWriter
+}
+
+func (recorder *statusRecorder) statusCode() int {
+	if recorder.status == 0 {
+		return http.StatusOK
+	}
+	return recorder.status
+}
+
+func remoteIP(remoteAddress string) (net.IP, error) {
+	host, _, err := net.SplitHostPort(remoteAddress)
+	if err != nil {
+		return nil, fmt.Errorf("parse remote address %q: %w", remoteAddress, err)
+	}
+	parsed := net.ParseIP(host)
+	if parsed == nil {
+		return nil, fmt.Errorf("parse remote IP %q", host)
+	}
+	return parsed, nil
+}
+
+func sourceIPString(sourceIP net.IP, err error) string {
+	if err != nil {
+		return "invalid"
+	}
+	return sourceIP.String()
+}
+
+func allowedSourceDescription(allowedSourceIP net.IP) string {
+	if allowedSourceIP == nil {
+		return "any"
+	}
+	return allowedSourceIP.String()
+}
+
+func validRequestID(value string) string {
+	if value == "" || len(value) > 128 {
+		return ""
+	}
+	for _, character := range value {
+		switch {
+		case character >= 'a' && character <= 'z':
+		case character >= 'A' && character <= 'Z':
+		case character >= '0' && character <= '9':
+		case character == '-', character == '_', character == '.':
+		default:
+			return ""
+		}
+	}
+	return value
+}
+
+func newRequestID() string {
+	randomBytes := make([]byte, 12)
+	if _, err := rand.Read(randomBytes); err == nil {
+		return hex.EncodeToString(randomBytes)
+	}
+	return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 }
 
 func runProbe(arguments []string) error {

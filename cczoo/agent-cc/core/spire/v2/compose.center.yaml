@@ -91,9 +91,10 @@ services:
     command:
       - client-proxy
       - -socket=unix:///opt/spire/run/openclaw/agent.sock
-      - -listen=127.0.0.1:${V2_OPENCLAW_PROXY_PORT:-1934}
+      - -listen=${V2_OPENCLAW_PROXY_BIND:-172.31.44.1}:${V2_OPENCLAW_PROXY_PORT:-1934}
       - -target=https://127.0.0.1:${V2_TDVM_MTLS_PORT:-1943}
       - -server-id=spiffe://argus.local/service/openviking-cmem
+      - -allow-source-ip=${V2_OPENCLAW_EGRESS_IP:-172.31.44.2}
     labels:
       argus.workload: openclaw
     depends_on:

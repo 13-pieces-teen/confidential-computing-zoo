@@ -13,6 +13,7 @@ does not provide a rollback profile.
 | Verification service | Independent center-side mock Trustee over file-backed mTLS |
 | Caller authorization | Real Argus Guard process with `GUARD_MODE=mock_allow` |
 | Workload transport | Direct SPIFFE mTLS with exact peer SPIFFE ID authorization |
+| Real OpenClaw plugin traffic | Restricted bridge ingress to the OpenClaw mTLS client |
 | Real Quote/QGS | `DEFERRED` |
 | Unbypassable Guard/request gate | `DEFERRED` |
 | Envoy/service mesh | `DEFERRED` |
@@ -27,7 +28,10 @@ Provider is part of OpenViking Agent Node Attestation only.
 - the OpenViking TDVM from `../m4/` is running and reachable over SSH;
 - Docker is installed in the TDVM;
 - OpenViking is already listening on TDVM loopback port 1933;
-- host ports 18081, 18007, 1934, and 1943 are available;
+- the real OpenClaw Gateway container is already running;
+- host ports 18081, 18007, and 1943 are available;
+- the default `172.31.44.0/28` egress subnet is unused, or the egress network
+  variables are overridden consistently;
 - commands below are run as root.
 
 The TDVM must be restarted once after taking the updated `m4/tdvm.sh`, because
@@ -94,6 +98,48 @@ core/spire/v2/start-openclaw-workload.sh
 core/spire/v2/start-openviking-workload.sh
 ```
 
+`start-openclaw-workload.sh` creates or validates a dedicated Docker bridge,
+attaches the real OpenClaw container at a fixed IP, and starts the host-network
+mTLS client on the bridge gateway. The client only accepts the configured
+OpenClaw source IP. The Workload API socket remains mounted only in the mTLS
+client container.
+
+The source-IP check prevents ordinary sibling workloads from borrowing the
+egress identity. It is not a security boundary against a process that already
+controls the host Docker daemon; the OpenClaw sandbox deployment still mounts
+the Docker socket.
+
+The defaults are:
+
+```bash
+export V2_REAL_OPENCLAW_CONTAINER=agentcc-openclaw-sbx-gateway
+export V2_OPENCLAW_EGRESS_NETWORK=argus-openclaw-egress
+export V2_OPENCLAW_EGRESS_SUBNET=172.31.44.0/28
+export V2_OPENCLAW_PROXY_BIND=172.31.44.1
+export V2_OPENCLAW_EGRESS_IP=172.31.44.2
+export V2_OPENCLAW_PROXY_PORT=1934
+```
+
+If the network already exists, its driver, subnet, gateway, and OpenClaw IP
+must match. The script fails instead of disconnecting or silently readdressing
+an existing container.
+
+Configure the real OpenViking context-engine plugin after both mTLS workloads
+are ready:
+
+```bash
+export OPENVIKING_API_KEY='<non-root OpenViking user key>'
+bash core/spire/v2/connect-openclaw-plugin.sh
+```
+
+Set `OPENCLAW_INSTALL_PLUGIN=0` when the expected plugin version is already
+installed and only its remote endpoint should be reconfigured.
+
+The plugin remains a normal remote HTTP client. Its `baseUrl` points to the
+restricted bridge gateway, while the mTLS client obtains and rotates the
+OpenClaw SVID. The API key is preserved for OpenViking application-level
+authorization and is not printed by the connection script.
+
 Run the complete remote-host validation:
 
 ```bash
@@ -109,8 +155,27 @@ The validation checks:
 - cross-role label rejection on both Agents;
 - Guard `mock_allow` response without fabricated verified claims;
 - successful OpenClaw-to-OpenViking SPIFFE mTLS;
+- the real OpenClaw source is accepted by the mTLS egress while a host-source
+  request is rejected;
 - rejection of plaintext, TLS without a client SVID, and the wrong server
   SPIFFE ID.
+
+Run the real plugin message validation separately because it requires a
+configured OpenClaw model and a non-root OpenViking API key:
+
+```bash
+bash core/spire/v2/verify-openclaw-plugin-e2e.sh
+```
+
+The script sends a real `openclaw agent` turn with a unique marker, locates the
+captured marker through the OpenViking sessions API over the same mTLS egress,
+commits the captured session, and waits for `commit_count > 0` plus an archive
+overview. Set `V2_E2E_REQUIRE_MEMORY=1` only when the OpenViking LLM and
+embedding backends are configured and memory extraction is part of the remote
+acceptance target.
+
+This proves real session capture and archive processing. It does not make
+Argus Guard an unbypassable same-request gate; that boundary remains deferred.
 
 ## Fault injection
 
