@@ -60,9 +60,12 @@ build_go_binary() {
 
     docker run --rm \
         -e "GOPROXY=$go_proxy" \
-        -e GOSUMDB=sum.golang.org \
+        -e "GOSUMDB=${ARGUS_GOSUMDB:-sum.golang.org}" \
         -e GOMODCACHE=/gomodcache \
         -e CGO_ENABLED=0 \
+        -e "HTTPS_PROXY=${HTTPS_PROXY:-}" \
+        -e "HTTP_PROXY=${HTTP_PROXY:-}" \
+        -e "NO_PROXY=${NO_PROXY:-}" \
         -v "$module_dir:/source:ro" \
         -v "$GO_CACHE_DIR:/gomodcache" \
         -v "$RUNTIME_DIR/plugins:/out" \
@@ -185,7 +188,9 @@ issue_certificate \
     "URI:x509pop://argus.local/role/openclaw"
 
 chmod 0600 "$RUNTIME_DIR/certs"/*-key.pem
-chmod 0644 "$RUNTIME_DIR/certs"/*.pem
+for cert in "$RUNTIME_DIR"/certs/*.pem; do
+    [[ "$cert" == *-key.pem ]] || chmod 0644 "$cert"
+done
 chown -R 1000:1000 \
     "$RUNTIME_DIR/certs" \
     "$RUNTIME_DIR/server-data" \
@@ -232,6 +237,9 @@ docker build -q \
 
 if [[ "${V2_BUILD_GUARD:-1}" == "1" ]]; then
     docker build -q \
+        --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}" \
+        --build-arg "HTTP_PROXY=${HTTP_PROXY:-}" \
+        --build-arg "NO_PROXY=${NO_PROXY:-}" \
         -f "$SCRIPT_DIR/Dockerfile.guard" \
         -t argus-spire-v2-guard:local \
         "$CORE_DIR" >/dev/null

@@ -48,6 +48,10 @@ func ValidateAgentHello(hello *nodeattestorv1.AgentHello) error {
 }
 
 func ValidateServerChallenge(challenge *nodeattestorv1.ServerChallenge) error {
+	return validateServerChallengeAt(challenge, time.Now().Unix())
+}
+
+func validateServerChallengeAt(challenge *nodeattestorv1.ServerChallenge, now int64) error {
 	if challenge == nil {
 		return fmt.Errorf("ServerChallenge is required")
 	}
@@ -63,8 +67,11 @@ func ValidateServerChallenge(challenge *nodeattestorv1.ServerChallenge) error {
 	if challenge.IssuedAtUnix <= 0 || challenge.ExpiresAtUnix <= challenge.IssuedAtUnix {
 		return fmt.Errorf("challenge validity window is invalid")
 	}
-	now := time.Now().Unix()
-	if now < challenge.IssuedAtUnix || now >= challenge.ExpiresAtUnix {
+	issuedTooFarAhead := now < challenge.IssuedAtUnix &&
+		challenge.IssuedAtUnix-now > ChallengeClockSkewSeconds
+	expiredTooLongAgo := now >= challenge.ExpiresAtUnix &&
+		now-challenge.ExpiresAtUnix >= ChallengeClockSkewSeconds
+	if issuedTooFarAhead || expiredTooLongAgo {
 		return fmt.Errorf("challenge is not currently valid")
 	}
 	if !isASCII(challenge.PolicyId) {

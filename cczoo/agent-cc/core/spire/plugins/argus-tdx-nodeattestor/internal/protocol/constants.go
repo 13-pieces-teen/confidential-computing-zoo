@@ -14,6 +14,8 @@ const (
 	MaxInstanceHint   = 128
 	MaxSelectorValues = 32
 	MaxSelectorSize   = 512
+
+	ChallengeClockSkewSeconds = int64(5)
 )
 
 var bindingDomain = []byte("argus-evidence-v1\x00")
