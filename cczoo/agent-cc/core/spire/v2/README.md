@@ -49,6 +49,12 @@ certificates/configuration:
 core/spire/v2/prepare.sh
 ```
 
+`V2_RUNTIME_DIR`, when set, must be an absolute host path. Keep it exported for
+every prepare, start, registration, and verification command belonging to that
+runtime. The center-side scripts pass the same path to Compose and force
+recreation of SPIRE processes so regenerated configuration and plugins are
+loaded.
+
 Start the center-side Trustee and SPIRE Server, then the OpenClaw Agent and real
 Argus Guard process:
 
@@ -130,6 +136,23 @@ are for the remote mock failure matrix; clear them for the positive architecture
 run. Changing a fault variable after an Agent is already attested does not force
 Node Attestation to run again. Use a fresh, isolated v2 runtime for each failure
 case rather than deleting or reusing the positive-run identity state.
+
+For example, run one fault case with a consistently scoped set of paths:
+
+```bash
+export V2_RUNTIME_DIR=/var/lib/argus-spire-v2-runtimes/trustee-503
+export V2_GUEST_ROOT=/opt/argus-spire-v2/trustee-503
+export V2_GUEST_DATA=/var/lib/argus-spire-v2/trustee-503/openviking-agent
+export V2_GUEST_RUN=/run/argus-spire-v2/trustee-503/openviking
+export V2_TRUSTEE_STATUS=503
+```
+
+Guest overrides are intentionally restricted to scoped paths under
+`/opt/argus-spire-v2`, `/var/lib/argus-spire-v2`, and
+`/run/argus-spire-v2`. This prevents a malformed environment variable from
+turning deployment ownership changes into a recursive modification of a system
+directory. Isolated cases are run sequentially because the container names and
+host ports remain fixed.
 
 ## Compatibility entry points
 

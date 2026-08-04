@@ -2,7 +2,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_DIR="${V2_RUNTIME_DIR:-$SCRIPT_DIR/runtime}"
+export V2_RUNTIME_DIR="$RUNTIME_DIR"
 
+if [[ "$RUNTIME_DIR" != /* ]]; then
+    printf 'V2_RUNTIME_DIR must be an absolute host path: %s\n' "$RUNTIME_DIR" >&2
+    exit 1
+fi
 V2_MTLS_RUNTIME_IMAGE="${V2_MTLS_RUNTIME_IMAGE:-$(
     docker image inspect argus-spire-v2-mtls:local --format '{{.Id}}'
 )}"
@@ -10,7 +16,7 @@ export V2_MTLS_RUNTIME_IMAGE
 
 docker compose -f "$SCRIPT_DIR/compose.center.yaml" \
     --profile workload \
-    up -d openclaw-mtls-client
+    up -d --force-recreate --no-deps openclaw-mtls-client
 
 for _ in $(seq 1 30); do
     if docker compose -f "$SCRIPT_DIR/compose.center.yaml" \

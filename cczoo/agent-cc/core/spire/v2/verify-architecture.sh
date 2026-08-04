@@ -2,8 +2,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_DIR="${V2_RUNTIME_DIR:-$SCRIPT_DIR/runtime}"
+export V2_RUNTIME_DIR="$RUNTIME_DIR"
 SERVER_SOCKET="/opt/spire/run/server/api.sock"
 
+if [[ "$RUNTIME_DIR" != /* ]]; then
+    printf 'V2_RUNTIME_DIR must be an absolute host path: %s\n' "$RUNTIME_DIR" >&2
+    exit 1
+fi
 "$SCRIPT_DIR/verify-mtls.sh"
 
 entries="$(

@@ -2,13 +2,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_DIR="${V2_RUNTIME_DIR:-$SCRIPT_DIR/runtime}"
+export V2_RUNTIME_DIR="$RUNTIME_DIR"
 
-if [[ ! -f "$SCRIPT_DIR/runtime/conf/server.conf" ]]; then
+if [[ "$RUNTIME_DIR" != /* ]]; then
+    printf 'V2_RUNTIME_DIR must be an absolute host path: %s\n' "$RUNTIME_DIR" >&2
+    exit 1
+fi
+if [[ ! -f "$RUNTIME_DIR/conf/server.conf" ]]; then
     printf 'Missing v2 runtime. Run %s/prepare.sh first.\n' "$SCRIPT_DIR" >&2
     exit 1
 fi
 
-docker compose -f "$SCRIPT_DIR/compose.center.yaml" up -d \
+docker compose -f "$SCRIPT_DIR/compose.center.yaml" up -d --force-recreate \
     mock-trustee \
     spire-server
 

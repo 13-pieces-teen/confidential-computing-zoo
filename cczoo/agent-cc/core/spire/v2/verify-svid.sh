@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_DIR="${V2_RUNTIME_DIR:-$SCRIPT_DIR/runtime}"
+export V2_RUNTIME_DIR="$RUNTIME_DIR"
 SERVER_SOCKET="/opt/spire/run/server/api.sock"
 OPENCLAW_CONTAINER="${V2_OPENCLAW_MTLS_CONTAINER:-argus-v2-openclaw-mtls}"
 OPENVIKING_CONTAINER="${V2_OPENVIKING_MTLS_CONTAINER:-argus-v2-openviking-mtls}"
@@ -11,6 +13,7 @@ TDVM_SSH_TARGET="${TDVM_SSH_TARGET:-tdx@127.0.0.1}"
 TDVM_SSH_PORT="${TDVM_SSH_PORT:-2222}"
 TDVM_SSH_IDENTITY="${TDVM_SSH_IDENTITY:-}"
 TDVM_KNOWN_HOSTS="${TDVM_KNOWN_HOSTS:-/tmp/argus-openviking-v2-known-hosts}"
+REMOTE_RUN="${V2_GUEST_RUN:-/run/argus-spire-v2/openviking}"
 
 ssh_options=(
     -o BatchMode=yes
@@ -27,6 +30,17 @@ fail() {
     printf 'v2 SVID verification: FAIL: %s\n' "$1" >&2
     exit 1
 }
+
+[[ "$RUNTIME_DIR" == /* ]] \
+    || fail "V2_RUNTIME_DIR must be an absolute host path: $RUNTIME_DIR"
+[[ "$REMOTE_RUN" == /run/argus-spire-v2/* \
+    && "$REMOTE_RUN" != *'//'*
+    && "$REMOTE_RUN" != *'/./'*
+    && "$REMOTE_RUN" != *'/../'*
+    && "$REMOTE_RUN" != */.
+    && "$REMOTE_RUN" != */..
+    && "$REMOTE_RUN" != */ ]] \
+    || fail "V2_GUEST_RUN must be an unambiguous child of /run/argus-spire-v2: $REMOTE_RUN"
 
 spire_server() {
     docker compose -f "$SCRIPT_DIR/compose.center.yaml" exec -T spire-server \
@@ -86,15 +100,20 @@ openviking_identity="$(
     || fail "unexpected OpenViking identity: $openviking_identity"
 
 openclaw_digest="$(docker inspect "$OPENCLAW_CONTAINER" --format '{{.Image}}')"
-if docker run --rm \
-    --network none \
-    --label argus.workload=openviking-cmem \
-    -v "$SCRIPT_DIR/runtime/openclaw-agent-run:/opt/spire/run/openclaw:ro" \
-    "$openclaw_digest" \
-    identity \
-    -socket=unix:///opt/spire/run/openclaw/agent.sock \
-    -timeout=3s >/dev/null 2>&1; then
-    fail 'OpenViking label unexpectedly obtained an SVID from the OpenClaw Agent'
+if ! openclaw_denial="$(
+    docker run --rm \
+        --network none \
+        --label argus.workload=openviking-cmem \
+        -v "$RUNTIME_DIR/openclaw-agent-run:/opt/spire/run/openclaw:ro" \
+        "$openclaw_digest" \
+        identity \
+        -socket=unix:///opt/spire/run/openclaw/agent.sock \
+        -expect-no-identity \
+        -timeout=3s 2>&1
+)"; then
+    printf 'v2 SVID verification: FAIL: OpenClaw cross-role check failed:\n%s\n' \
+        "$openclaw_denial" >&2
+    exit 1
 fi
 
 openviking_digest="$(
@@ -102,16 +121,21 @@ openviking_digest="$(
         sudo -n /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" \
         --format '{{.Image}}'
 )"
-if ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" \
-    sudo -n /usr/local/bin/docker run --rm \
-    --network none \
-    --label argus.workload=openclaw \
-    -v /run/argus-spire-v2/openviking:/opt/spire/run/openviking:ro \
-    "$openviking_digest" \
-    identity \
-    -socket=unix:///opt/spire/run/openviking/agent.sock \
-    -timeout=3s >/dev/null 2>&1; then
-    fail 'OpenClaw label unexpectedly obtained an SVID from the OpenViking Agent'
+if ! openviking_denial="$(
+    ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" \
+        sudo -n /usr/local/bin/docker run --rm \
+        --network none \
+        --label argus.workload=openclaw \
+        -v "$REMOTE_RUN:/opt/spire/run/openviking:ro" \
+        "$openviking_digest" \
+        identity \
+        -socket=unix:///opt/spire/run/openviking/agent.sock \
+        -expect-no-identity \
+        -timeout=3s 2>&1
+)"; then
+    printf 'v2 SVID verification: FAIL: OpenViking cross-role check failed:\n%s\n' \
+        "$openviking_denial" >&2
+    exit 1
 fi
 
 printf '%s\n' \

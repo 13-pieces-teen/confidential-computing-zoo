@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -180,6 +182,11 @@ func runProbe(arguments []string) error {
 	targetValue := flags.String("target", "", "mTLS URL to request")
 	serverIDValue := flags.String("server-id", "", "only authorized server SPIFFE ID")
 	timeout := flags.Duration("timeout", 10*time.Second, "overall probe timeout")
+	expectServerIDRejection := flags.Bool(
+		"expect-server-id-rejection",
+		false,
+		"succeed only when a reachable SPIFFE peer presents a different server ID",
+	)
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -201,12 +208,22 @@ func runProbe(arguments []string) error {
 		return err
 	}
 	defer source.Close()
+	var observedServerID spiffeid.ID
+	var serverIDObserved bool
+	authorizer := tlsconfig.Authorizer(func(
+		actual spiffeid.ID,
+		verifiedChains [][]*x509.Certificate,
+	) error {
+		observedServerID = actual
+		serverIDObserved = true
+		return tlsconfig.AuthorizeID(serverID)(actual, verifiedChains)
+	})
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsconfig.MTLSClientConfig(
 				source,
 				source,
-				tlsconfig.AuthorizeID(serverID),
+				authorizer,
 			),
 		},
 		Timeout: *timeout,
@@ -216,6 +233,34 @@ func runProbe(arguments []string) error {
 		return fmt.Errorf("build probe request: %w", err)
 	}
 	response, err := client.Do(request)
+	if *expectServerIDRejection {
+		if err == nil {
+			response.Body.Close()
+			return fmt.Errorf(
+				"server SPIFFE ID %s was unexpectedly authorized",
+				observedServerID,
+			)
+		}
+		if !serverIDObserved {
+			return fmt.Errorf(
+				"probe failed before the server SPIFFE ID could be authorized: %w",
+				err,
+			)
+		}
+		if observedServerID == serverID {
+			return fmt.Errorf(
+				"probe failed after the expected server SPIFFE ID %s was observed: %w",
+				serverID,
+				err,
+			)
+		}
+		fmt.Printf(
+			"server SPIFFE ID rejected as expected: actual=%s expected=%s\n",
+			observedServerID,
+			serverID,
+		)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("SPIFFE mTLS probe failed: %w", err)
 	}
@@ -238,6 +283,11 @@ func runIdentity(arguments []string) error {
 	flags := flag.NewFlagSet("identity", flag.ContinueOnError)
 	socket := flags.String("socket", "", "SPIFFE Workload API address")
 	expectedValue := flags.String("expected-id", "", "optional exact expected workload SPIFFE ID")
+	expectNoIdentity := flags.Bool(
+		"expect-no-identity",
+		false,
+		"succeed only when the Workload API explicitly denies identity issuance",
+	)
 	timeout := flags.Duration("timeout", 10*time.Second, "Workload API timeout")
 	if err := flags.Parse(arguments); err != nil {
 		return err
@@ -247,6 +297,9 @@ func runIdentity(arguments []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
+	if *expectNoIdentity {
+		return expectIdentityDenial(ctx, *socket)
+	}
 	source, err := newX509Source(ctx, *socket)
 	if err != nil {
 		return err
@@ -261,6 +314,32 @@ func runIdentity(arguments []string) error {
 	}
 	fmt.Println(svid.ID)
 	return nil
+}
+
+func expectIdentityDenial(ctx context.Context, socket string) error {
+	client, err := workloadapi.New(ctx, workloadapi.WithAddr(socket))
+	if err != nil {
+		return fmt.Errorf("connect to Workload API at %s: %w", socket, err)
+	}
+	defer client.Close()
+	svid, err := client.FetchX509SVID(ctx)
+	if err == nil {
+		return fmt.Errorf("workload unexpectedly obtained X.509-SVID %s", svid.ID)
+	}
+	if !isNoIdentityDenial(err) {
+		return fmt.Errorf(
+			"Workload API failed without an explicit identity denial: %w",
+			err,
+		)
+	}
+	fmt.Println("Workload API denied identity issuance as expected")
+	return nil
+}
+
+func isNoIdentityDenial(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "code = PermissionDenied") &&
+		strings.Contains(message, "no identity issued")
 }
 
 func newX509Source(ctx context.Context, socket string) (*workloadapi.X509Source, error) {

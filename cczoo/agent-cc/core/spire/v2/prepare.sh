@@ -19,6 +19,15 @@ fail() {
     exit 1
 }
 
+[[ "$RUNTIME_DIR" =~ ^/[^/]+/[^/]+(/.*)?$ \
+    && "$RUNTIME_DIR" != *'//'*
+    && "$RUNTIME_DIR" != *'/./'*
+    && "$RUNTIME_DIR" != *'/../'*
+    && "$RUNTIME_DIR" != */.
+    && "$RUNTIME_DIR" != */..
+    && "$RUNTIME_DIR" != */ ]] \
+    || fail "V2_RUNTIME_DIR must be an unambiguous absolute path at least two levels below /: $RUNTIME_DIR"
+
 require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"
 }

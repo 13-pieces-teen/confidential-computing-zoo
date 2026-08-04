@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNTIME_DIR="${V2_RUNTIME_DIR:-$SCRIPT_DIR/runtime}"
+export V2_RUNTIME_DIR="$RUNTIME_DIR"
 SERVER_SOCKET="/opt/spire/run/server/api.sock"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
 OPENVIKING_ID="spiffe://argus.local/service/openviking-cmem"
@@ -26,6 +28,9 @@ fail() {
     printf 'v2 registration: FAIL: %s\n' "$1" >&2
     exit 1
 }
+
+[[ "$RUNTIME_DIR" == /* ]] \
+    || fail "V2_RUNTIME_DIR must be an absolute host path: $RUNTIME_DIR"
 
 spire_server() {
     docker compose -f "$SCRIPT_DIR/compose.center.yaml" exec -T spire-server \

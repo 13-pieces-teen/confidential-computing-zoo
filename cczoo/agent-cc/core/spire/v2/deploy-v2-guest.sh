@@ -35,6 +35,36 @@ fail() {
     exit 1
 }
 
+validate_scoped_remote_path() {
+    local name="$1"
+    local value="$2"
+    local allowed_root="$3"
+    local allow_root="$4"
+
+    [[ "$value" == /* ]] \
+        || fail "$name must be an absolute Guest path: $value"
+    [[ "$value" != *'//'*
+        && "$value" != *'/./'*
+        && "$value" != *'/../'*
+        && "$value" != */.
+        && "$value" != */..
+        && "$value" != */ ]] \
+        || fail "$name must not contain ambiguous path components: $value"
+    if [[ "$allow_root" == "1" ]]; then
+        [[ "$value" == "$allowed_root" || "$value" == "$allowed_root/"* ]] \
+            || fail "$name must stay under $allowed_root: $value"
+        return
+    fi
+    [[ "$value" == "$allowed_root/"* ]] \
+        || fail "$name must be a child of $allowed_root: $value"
+}
+
+validate_guest_paths() {
+    validate_scoped_remote_path V2_GUEST_ROOT "$REMOTE_ROOT" /opt/argus-spire-v2 1
+    validate_scoped_remote_path V2_GUEST_DATA "$REMOTE_DATA" /var/lib/argus-spire-v2 0
+    validate_scoped_remote_path V2_GUEST_RUN "$REMOTE_RUN" /run/argus-spire-v2 0
+}
+
 remote() {
     local command_string="" argument quoted
     for argument in "$@"; do
@@ -85,6 +115,9 @@ wait_for_agent() {
 }
 
 deploy_agent() {
+    validate_guest_paths
+    [[ "$RUNTIME_DIR" == /* ]] \
+        || fail "V2_RUNTIME_DIR must be an absolute host path: $RUNTIME_DIR"
     command -v docker >/dev/null 2>&1 || fail 'Docker is required on the host'
     [[ -s "$RUNTIME_DIR/conf/openviking-agent.conf" ]] \
         || fail "missing generated config; run $SCRIPT_DIR/prepare.sh first"
@@ -123,7 +156,15 @@ deploy_agent() {
     remote_sudo chmod 0644 \
         "$REMOTE_ROOT/conf/openviking-agent.conf" \
         "$REMOTE_ROOT/certs/upstream-ca.pem"
-    remote_sudo chown -R 1000:1000 "$REMOTE_ROOT" "$REMOTE_DATA" "$REMOTE_RUN"
+    remote_sudo chown 1000:1000 \
+        "$REMOTE_ROOT" \
+        "$REMOTE_ROOT/conf" \
+        "$REMOTE_ROOT/certs" \
+        "$REMOTE_ROOT/plugins" \
+        "$REMOTE_ROOT/conf/openviking-agent.conf" \
+        "$REMOTE_ROOT/certs/upstream-ca.pem" \
+        "$REMOTE_ROOT/plugins/argus-tdx-nodeattestor-agent"
+    remote_sudo chown -R 1000:1000 "$REMOTE_DATA" "$REMOTE_RUN"
 
     remote_sudo /usr/local/bin/docker rm -f "$PROVIDER_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker run -d \
@@ -166,6 +207,7 @@ deploy_agent() {
 
 start_workload() {
     local mtls_image_id
+    validate_guest_paths
     remote_sudo /usr/local/bin/docker inspect "$AGENT_CONTAINER" >/dev/null \
         || fail 'OpenViking SPIRE Agent is not deployed'
     mtls_image_id="$(
