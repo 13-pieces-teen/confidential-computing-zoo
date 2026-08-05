@@ -7,6 +7,7 @@ OPENCLAW_CONFIG="${V2_REAL_OPENCLAW_CONFIG:-/home/node/.openclaw/openclaw.json}"
 MTLS_CONTAINER="${V2_OPENCLAW_MTLS_CONTAINER:-argus-v2-openclaw-mtls}"
 PROXY_BIND="${V2_OPENCLAW_PROXY_BIND:-172.31.44.1}"
 PROXY_PORT="${V2_OPENCLAW_PROXY_PORT:-1934}"
+EGRESS_IP="${V2_OPENCLAW_EGRESS_IP:-172.31.44.2}"
 EXPECTED_BASE_URL="${V2_OPENCLAW_PROXY_URL:-http://$PROXY_BIND:$PROXY_PORT}"
 CAPTURE_ATTEMPTS="${V2_E2E_CAPTURE_ATTEMPTS:-30}"
 CAPTURE_INTERVAL="${V2_E2E_CAPTURE_INTERVAL:-2}"
@@ -48,6 +49,15 @@ done
     || fail "V2_E2E_RUN_ID contains unsupported characters"
 [[ "$SESSION_KEY" =~ ^[A-Za-z0-9._:-]+$ ]] \
     || fail "V2_E2E_SESSION_KEY contains unsupported characters"
+if ! python3 - "$EGRESS_IP" <<'PY'
+import ipaddress
+import sys
+
+ipaddress.ip_address(sys.argv[1])
+PY
+then
+    fail "V2_OPENCLAW_EGRESS_IP is not a valid IP address: $EGRESS_IP"
+fi
 
 docker inspect "$OPENCLAW_CONTAINER" >/dev/null 2>&1 \
     || fail "real OpenClaw container does not exist: $OPENCLAW_CONTAINER"
@@ -135,8 +145,69 @@ if ! agent_output="$(
     fail 'real OpenClaw agent turn failed'
 fi
 [[ -n "$agent_output" ]] || fail 'real OpenClaw agent turn returned empty output'
+printf '%s' "$agent_output" | python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+if not isinstance(payload, dict):
+    raise SystemExit("agent JSON output is not an object")
+ok = payload.get("ok")
+status = payload.get("status")
+if ok is not True or status != "ok":
+    raise SystemExit(
+        "agent JSON output is not successful: "
+        f"ok={ok!r} status={status!r}"
+    )
+' || fail 'real OpenClaw agent turn did not return the successful JSON envelope'
 printf 'Real OpenClaw agent turn completed: session_key=%s output_chars=%s\n' \
     "$SESSION_KEY" "${#agent_output}"
+
+if ! agent_turn_proxy_logs="$(
+    docker logs --since "$started_at" "$MTLS_CONTAINER" 2>&1
+)"; then
+    fail 'could not read mTLS proxy logs for the real OpenClaw agent turn'
+fi
+agent_write_evidence="$(
+    printf '%s\n' "$agent_turn_proxy_logs" \
+        | EXPECTED_SOURCE_IP="$EGRESS_IP" python3 -c '
+import os
+import re
+import sys
+
+expected_source_ip = os.environ["EXPECTED_SOURCE_IP"]
+write_methods = {"POST", "PUT", "PATCH", "DELETE"}
+helper_prefixes = ("e2e-scan-", "e2e-commit-", "e2e-inspect-")
+
+for raw_line in sys.stdin:
+    line = raw_line.rstrip()
+    fields = dict(re.findall(r"(?:^|\s)([a-z_]+)=([^\s]+)", line))
+    request_id = fields.get("request_id", "")
+    try:
+        status = int(fields.get("status", "0"))
+    except ValueError:
+        status = 0
+    if (
+        fields.get("decision") == "forwarded_mtls"
+        and fields.get("source_ip") == expected_source_ip
+        and fields.get("method") in write_methods
+        and fields.get("path", "").startswith("/api/v1/")
+        and 200 <= status < 300
+        and not request_id.startswith(helper_prefixes)
+    ):
+        print(line)
+'
+)"
+if [[ -z "$agent_write_evidence" ]]; then
+    fail 'real OpenClaw agent turn produced no attributable OpenViking write through the mTLS proxy'
+fi
+agent_write_count="$(
+    printf '%s\n' "$agent_write_evidence" \
+        | awk 'NF { count += 1 } END { print count + 0 }'
+)"
+agent_write_first="${agent_write_evidence%%$'\n'*}"
+printf 'Real OpenClaw agent-turn mTLS write evidence: count=%s\n%s\n' \
+    "$agent_write_count" "$agent_write_first"
 
 scan_marker() {
     docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
@@ -504,17 +575,12 @@ if [[ -z "$processing_summary" ]]; then
     fail "OpenViking commit/archive processing did not complete for $openviking_session_id"
 fi
 
-proxy_logs="$(docker logs --since "$started_at" "$MTLS_CONTAINER" 2>&1 || true)"
-printf '%s' "$proxy_logs" | grep -q 'decision=forwarded_mtls' \
-    || fail 'mTLS proxy did not log a successful forwarded request for this run'
-printf '%s' "$proxy_logs" | grep -q 'path=/api/v1/' \
-    || fail 'mTLS proxy did not log an OpenViking business API path for this run'
-
 printf '%s\n' \
     'Real OpenClaw -> OpenViking plugin E2E passed.' \
     "Marker: $MARKER" \
     "OpenClaw session key: $SESSION_KEY" \
     "OpenViking session ID: $openviking_session_id" \
     "Processing: $processing_summary" \
-    'The turn was captured and archived through the SPIFFE mTLS egress.' \
+    'Agent-turn proxy evidence: allowed source issued a write-class /api/v1 request before E2E inspection traffic.' \
+    'The unique marker was subsequently captured and archived through the SPIFFE mTLS egress.' \
     'Memory extraction was required only when V2_E2E_REQUIRE_MEMORY=1.'

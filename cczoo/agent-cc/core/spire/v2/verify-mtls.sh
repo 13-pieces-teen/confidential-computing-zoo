@@ -38,7 +38,9 @@ NODE
 
 "$SCRIPT_DIR/verify-svid.sh"
 
-guard_health="$(curl -fsS --max-time 10 "$GUARD_URL/health")"
+guard_health="$(
+    curl -fsS --noproxy '127.0.0.1,localhost' --max-time 10 "$GUARD_URL/health"
+)"
 printf '%s' "$guard_health" | python3 -c '
 import json
 import sys
@@ -63,7 +65,7 @@ print(json.dumps({
 PY
 )"
 guard_response="$(
-    curl -fsS --max-time 10 \
+    curl -fsS --noproxy '127.0.0.1,localhost' --max-time 10 \
         -H 'Content-Type: application/json' \
         -d "$guard_payload" \
         "$GUARD_URL/ra/v1/verify"
@@ -84,25 +86,91 @@ if value.get("claims") is not None:
 response="$(real_openclaw_get "$OPENCLAW_PROXY_URL/health")"
 printf 'OpenClaw -> OpenViking SPIFFE mTLS response:\n%s\n' "$response"
 
-proxy_status="$(
-    curl -sS --max-time 3 \
-        -o /dev/null \
-        -w '%{http_code}' \
-        "$OPENCLAW_PROXY_URL/health" || true
-)"
-if [[ "$proxy_status" != 403 ]]; then
-    printf 'OpenClaw mTLS proxy did not reject the host source; HTTP status=%s.\n' \
-        "${proxy_status:-unreachable}" >&2
+if ! docker inspect "$REAL_OPENCLAW_CONTAINER" | python3 -c '
+import json
+import os
+import sys
+
+containers = json.load(sys.stdin)
+if len(containers) != 1:
+    raise SystemExit("expected one real OpenClaw container inspection result")
+
+blocked = []
+for mount in containers[0].get("Mounts") or []:
+    destination = os.path.normpath(str(mount.get("Destination") or ""))
+    if (
+        destination in {"/run/spire", "/opt/spire/run"}
+        or destination.startswith("/run/spire/")
+        or destination.startswith("/opt/spire/run/")
+        or os.path.basename(destination) == "agent.sock"
+    ):
+        blocked.append(destination)
+
+if blocked:
+    print(
+        "real OpenClaw container has prohibited Workload API mount(s): "
+        + ", ".join(sorted(set(blocked))),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+'; then
+    printf 'Real OpenClaw Workload API isolation check failed.\n' >&2
     exit 1
 fi
 
-if curl -fsS --max-time 3 \
+host_probe_request_id="verify-mtls-host-source-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+host_probe_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if ! proxy_response="$(
+    curl -sS --noproxy "$OPENCLAW_PROXY_BIND" --max-time 3 \
+        -H "X-Argus-Request-ID: $host_probe_request_id" \
+        -w $'\n%{http_code}' \
+        "$OPENCLAW_PROXY_URL/health"
+)"; then
+    printf 'Direct host-source probe could not reach the OpenClaw mTLS proxy.\n' >&2
+    exit 1
+fi
+proxy_status="${proxy_response##*$'\n'}"
+proxy_body="${proxy_response%$'\n'*}"
+if [[ "$proxy_status" != 403 ]]; then
+    printf 'OpenClaw mTLS proxy did not reject the host source; HTTP status=%s.\n' \
+        "$proxy_status" >&2
+    exit 1
+fi
+if [[ "$proxy_body" != 'OpenClaw egress source rejected' ]]; then
+    printf 'Host-source HTTP 403 did not come from the OpenClaw mTLS proxy; body=%s.\n' \
+        "${proxy_body:-empty}" >&2
+    exit 1
+fi
+host_probe_log=""
+for _ in 1 2 3 4 5; do
+    if ! host_probe_logs="$(
+        docker logs --since "$host_probe_started_at" "$OPENCLAW_MTLS_CONTAINER" 2>&1
+    )"; then
+        printf 'Could not read OpenClaw mTLS proxy logs for the host-source probe.\n' >&2
+        exit 1
+    fi
+    host_probe_log="$(
+        printf '%s\n' "$host_probe_logs" \
+            | grep -F "request_id=$host_probe_request_id " \
+            | grep -F 'method=GET path=/health status=403 ' \
+            | grep -F 'decision=source_rejected' \
+            | tail -n 1 || true
+    )"
+    [[ -z "$host_probe_log" ]] || break
+    read -r -t 1 _ || true
+done
+if [[ -z "$host_probe_log" ]]; then
+    printf 'OpenClaw mTLS proxy did not log the matching source_rejected request ID.\n' >&2
+    exit 1
+fi
+
+if curl -fsS --noproxy '127.0.0.1,localhost' --max-time 3 \
     "${OPENVIKING_MTLS_URL/https:/http:}/health" >/dev/null 2>&1; then
     printf 'OpenViking port 1943 unexpectedly accepted plaintext HTTP.\n' >&2
     exit 1
 fi
 
-if curl -kfsS --max-time 3 \
+if curl -kfsS --noproxy '127.0.0.1,localhost' --max-time 3 \
     "$OPENVIKING_MTLS_URL/health" >/dev/null 2>&1; then
     printf 'OpenViking port 1943 unexpectedly accepted TLS without a client SVID.\n' >&2
     exit 1
@@ -122,7 +190,8 @@ real_openclaw_get "$OPENCLAW_PROXY_URL/health" >/dev/null
 printf '%s\n' \
     'Argus Guard: real process, explicit mock_allow decision, no fabricated claims' \
     'SPIFFE mTLS: mutual X.509-SVID authentication and exact peer ID passed' \
-    'OpenClaw mTLS egress: real OpenClaw source allowed, host source rejected' \
+    'OpenClaw mTLS egress: real OpenClaw source allowed, direct host source rejected with matching proxy log' \
+    'Real OpenClaw isolation: no SPIRE Workload API mount' \
     'Plaintext, missing client SVID, and wrong server ID: rejected' \
     'Real Quote/QGS: DEFERRED' \
     'Unbypassable same-request Guard-to-mTLS gate: DEFERRED' \

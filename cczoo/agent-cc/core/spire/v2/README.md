@@ -156,9 +156,15 @@ The validation checks:
 - Guard `mock_allow` response without fabricated verified claims;
 - successful OpenClaw-to-OpenViking SPIFFE mTLS;
 - the real OpenClaw source is accepted by the mTLS egress while a host-source
-  request is rejected;
+  request is rejected with the expected body and matching proxy request ID;
+- the real OpenClaw container has no SPIRE Workload API mount;
 - rejection of plaintext, TLS without a client SVID, and the wrong server
   SPIFFE ID.
+
+Host-side probes bypass the environment HTTP proxy only for the local Guard,
+bridge gateway, and loopback TDVM addresses. External traffic continues to use
+the machine's configured corporate proxy. This prevents an upstream proxy's
+HTTP 403 page from satisfying the mTLS egress source-rejection assertion.
 
 Run the real plugin message validation separately because it requires a
 configured OpenClaw model and a non-root OpenViking API key:
@@ -167,12 +173,15 @@ configured OpenClaw model and a non-root OpenViking API key:
 bash core/spire/v2/verify-openclaw-plugin-e2e.sh
 ```
 
-The script sends a real `openclaw agent` turn with a unique marker, locates the
-captured marker through the OpenViking sessions API over the same mTLS egress,
-commits the captured session, and waits for `commit_count > 0` plus an archive
-overview. Set `V2_E2E_REQUIRE_MEMORY=1` only when the OpenViking LLM and
-embedding backends are configured and memory extraction is part of the remote
-acceptance target.
+The script sends a real `openclaw agent` turn with a unique marker and requires
+its stable JSON result to report `ok=true` and `status=ok`. Before issuing any
+E2E scan, commit, or inspection request, it captures the mTLS proxy log window
+and requires a successful write-class `/api/v1/` request from the configured
+OpenClaw source IP. It then locates the captured marker through the OpenViking
+sessions API over the same mTLS egress, commits the captured session, and waits
+for `commit_count > 0` plus an archive overview. Set
+`V2_E2E_REQUIRE_MEMORY=1` only when the OpenViking LLM and embedding backends
+are configured and memory extraction is part of the remote acceptance target.
 
 This proves real session capture and archive processing. It does not make
 Argus Guard an unbypassable same-request gate; that boundary remains deferred.
