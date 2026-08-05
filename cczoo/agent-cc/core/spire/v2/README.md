@@ -11,15 +11,23 @@ does not provide a rollback profile.
 | OpenViking node identity | Independent SPIRE Agent using external `argus_tdx` |
 | OpenViking evidence | Guest-local mock Evidence Provider on `127.0.0.1:18080` |
 | Verification service | Independent center-side mock Trustee over file-backed mTLS |
-| Caller authorization | Real Argus Guard process with `GUARD_MODE=mock_allow` |
+| Caller authorization | OpenClaw mTLS egress PEP synchronously calls the real Argus Guard PDP with `GUARD_MODE=mock_allow` |
 | Workload transport | Direct SPIFFE mTLS with exact peer SPIFFE ID authorization |
 | Real OpenClaw plugin traffic | Restricted bridge ingress to the OpenClaw mTLS client |
 | Real Quote/QGS | `DEFERRED` |
-| Unbypassable Guard/request gate | `DEFERRED` |
+| Unbypassable Guard/request gate | Implemented in source; remote runtime validation pending |
 | Envoy/service mesh | `DEFERRED` |
 
-Argus Guard and the mock Evidence Provider do not connect in this stage. The
-Provider is part of OpenViking Agent Node Attestation only.
+Argus Guard and the Guest-local mock Evidence Provider do not connect in this
+stage. The Provider is part of OpenViking Agent Node Attestation only. A future
+`fresh_evidence` Guard mode would use a separately protected OpenViking service
+evidence endpoint; it must not expose the Guest loopback Node Attestation
+endpoint directly.
+
+Guard mode is mandatory and the v2 runtime requires authorization context by
+default. The incomplete legacy `evidence` mode is disabled unless an isolated
+development environment explicitly sets `GUARD_ALLOW_INCOMPLETE_EVIDENCE=1`;
+that override is not part of this v2 runtime.
 
 ## Prerequisites
 
@@ -155,7 +163,15 @@ The validation checks:
   `V2_GUEST_RUN` values;
 - exact OpenClaw and OpenViking workload SVIDs;
 - cross-role label rejection on both Agents;
-- Guard `mock_allow` response without fabricated verified claims;
+- Guard requires a versioned business `authorization_context`, returns
+  `mock_allow` without fabricated verified claims, and echoes a matching
+  decision ID and request digest;
+- authorization context v2 binds the exact target service, target URI, and
+  target SPIFFE ID in addition to method, path, query, body hash, and caller;
+- a digest-valid context whose target differs from `VerifyRequest.target` is
+  rejected;
+- the same request ID, Guard decision ID, and request digest appear in Guard
+  and mTLS egress logs before the request is forwarded;
 - successful OpenClaw-to-OpenViking SPIFFE mTLS;
 - the real OpenClaw source is accepted by the mTLS egress while a host-source
   request is rejected with the expected body and matching proxy request ID;
@@ -179,19 +195,38 @@ The script sends a real gateway-backed `openclaw agent` turn with a unique
 marker. Its JSON result must report `status=ok`, a non-empty `runId`, and a
 `result` object. Before issuing any E2E scan, commit, or inspection request, it
 captures the mTLS proxy log window and requires a successful write-class
-`/api/v1/` request from the configured OpenClaw source IP. After locating the
-captured marker, it also requires the pre-scan write evidence to target that
-exact OpenViking session's `/messages` endpoint. It then commits the captured
-session and waits for `commit_count > 0` plus an archive overview. Set
+`/api/v1/` request from the configured OpenClaw source IP with a valid Guard
+decision receipt. After locating the captured marker, it also requires the
+pre-scan write evidence to target that exact OpenViking session's `/messages`
+endpoint and finds the matching Guard ALLOW log by request ID, decision ID, and
+request digest. It then commits the captured session and waits for
+`commit_count > 0` plus an archive overview. Set
 `V2_E2E_REQUIRE_MEMORY=1` only when the OpenViking LLM and embedding backends
 are configured and memory extraction is part of the remote acceptance target.
 
-This proves real session capture and archive processing. It does not make
-Argus Guard an unbypassable same-request gate; that boundary remains deferred.
+A successful run proves real session capture, archive processing, and the
+mock-stage same-request Guard-to-mTLS gate. It does not prove real Quote/QGS,
+production Trustee verification, or a production Guard policy.
 
 ## Fault injection
 
 Provider and Trustee failures are configured independently.
+
+Run the caller-side Guard gate failure matrix after the positive architecture
+validation:
+
+```bash
+bash core/spire/v2/verify-guard-gate-failures.sh
+```
+
+The script temporarily points only the OpenClaw mTLS egress at a loopback fault
+stub and verifies valid Guard DENY, malformed DENY, HTTP 503, timeout, malformed
+JSON, missing decision receipt, mismatched request digest, and expired decision
+receipt. Every case must return the exact fail-closed response and must have no
+`forwarded_mtls` log for the same generated request ID. A valid DENY must
+preserve its decision receipt, while malformed responses must not leak one. Its
+exit trap reports restoration failures, and the script finishes only after the
+restored egress completes a real Guard-gated health request.
 
 Before deploying the OpenViking Agent:
 

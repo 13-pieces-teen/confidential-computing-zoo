@@ -115,7 +115,12 @@ cargo build --release
 # Inject a stable workload identity for the Evidence Provider
 export ARGUS_WORKLOAD_IDENTITY=openviking-cmem
 
-# Validate the environment, then start and smoke-test both services
+# Explicitly enable the incomplete legacy evidence development path
+export GUARD_MODE=evidence
+export GUARD_ALLOW_INCOMPLETE_EVIDENCE=1
+export GUARD_REQUIRE_AUTHORIZATION_CONTEXT=0
+
+# Validate the environment, then start and smoke-test both development services
 ./start_argus.sh validate
 ./start_argus.sh start
 ./start_argus.sh test
@@ -125,10 +130,17 @@ export ARGUS_WORKLOAD_IDENTITY=openviking-cmem
 
 `ARGUS_WORKLOAD_IDENTITY` is now the recommended way to inject a real, stable workload identity for the Evidence Provider. `ARGUS_SERVICE_NAME`, `SERVICE_NAME`, and `K_SERVICE` remain accepted as compatibility inputs, but `HOSTNAME` is no longer accepted as a service-identity source.
 
-`argus-guard` defaults to `GUARD_MODE=evidence`. The Argus-SPIFFE v2 mock
-connectivity runtime can explicitly set `GUARD_MODE=mock_allow`; that mode
-bypasses evidence retrieval and verification, returns no verified claims, and
-must not be treated as remote-attestation or production authorization.
+`argus-guard` requires an explicit `GUARD_MODE`. The Argus-SPIFFE v2 mock
+connectivity runtime sets `GUARD_MODE=mock_allow`; that mode bypasses evidence
+retrieval and verification, returns no verified claims, and must not be treated
+as remote-attestation or production authorization.
+
+The current `evidence` path is disabled by default until the Guard independently
+recomputes expected evidence binding and uses a production policy. Isolated
+development of that incomplete path requires both
+`GUARD_MODE=evidence` and `GUARD_ALLOW_INCOMPLETE_EVIDENCE=1`. Legacy requests
+that do not carry the business authorization context must additionally set
+`GUARD_REQUIRE_AUTHORIZATION_CONTEXT=0` explicitly.
 
 To exercise the full multi-service flow (Argus + TC-API + OpenViking + OpenClaw) with real TDX quotes over Docker Compose, see [adapters/OpenViking/examples/README.md](../../adapters/OpenViking/examples/README.md) and run `run_openclaw_openviking_e2e.sh`.
 

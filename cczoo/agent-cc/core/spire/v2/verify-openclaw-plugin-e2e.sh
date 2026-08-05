@@ -5,6 +5,7 @@ OPENCLAW_CONTAINER="${V2_REAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
 OPENCLAW_USER="${V2_REAL_OPENCLAW_USER:-node}"
 OPENCLAW_CONFIG="${V2_REAL_OPENCLAW_CONFIG:-/home/node/.openclaw/openclaw.json}"
 MTLS_CONTAINER="${V2_OPENCLAW_MTLS_CONTAINER:-argus-v2-openclaw-mtls}"
+GUARD_CONTAINER="${V2_GUARD_CONTAINER:-argus-v2-guard}"
 PROXY_BIND="${V2_OPENCLAW_PROXY_BIND:-172.31.44.1}"
 PROXY_PORT="${V2_OPENCLAW_PROXY_PORT:-1934}"
 EGRESS_IP="${V2_OPENCLAW_EGRESS_IP:-172.31.44.2}"
@@ -121,6 +122,18 @@ async function main() {
   if (!response.ok) {
     throw new Error(`mTLS egress health returned HTTP ${response.status}`);
   }
+  if (!/^[0-9a-f]{24}$/.test(response.headers.get("x-argus-request-id") ?? "")) {
+    throw new Error("mTLS egress preflight has no generated request ID");
+  }
+  if (!/^[0-9a-f]{32}$/.test(response.headers.get("x-argus-decision-id") ?? "")) {
+    throw new Error("mTLS egress preflight has no Guard decision ID");
+  }
+  if (!/^sha256:[0-9a-f]{64}$/.test(response.headers.get("x-argus-request-digest") ?? "")) {
+    throw new Error("mTLS egress preflight has no Guard-bound request digest");
+  }
+  if (response.headers.get("x-argus-verification-mode") !== "mock_allow") {
+    throw new Error("mTLS egress preflight did not declare mock_allow");
+  }
   console.log(`OpenClaw plugin preflight passed: ${expectedBaseUrl}`);
 }
 
@@ -192,7 +205,7 @@ helper_prefixes = ("e2e-scan-", "e2e-commit-", "e2e-inspect-")
 for raw_line in sys.stdin:
     line = raw_line.rstrip()
     fields = dict(re.findall(r"(?:^|\s)([a-z_]+)=([^\s]+)", line))
-    request_id = fields.get("request_id", "")
+    client_request_id = fields.get("client_request_id", "")
     try:
         status = int(fields.get("status", "0"))
     except ValueError:
@@ -203,7 +216,11 @@ for raw_line in sys.stdin:
         and fields.get("method") in write_methods
         and fields.get("path", "").startswith("/api/v1/")
         and 200 <= status < 300
-        and not request_id.startswith(helper_prefixes)
+        and not client_request_id.startswith(helper_prefixes)
+        and re.fullmatch(r"[0-9a-f]{24}", fields.get("request_id", ""))
+        and re.fullmatch(r"[0-9a-f]{32}", fields.get("guard_decision_id", ""))
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", fields.get("request_digest", ""))
+        and fields.get("verification_mode") == "mock_allow"
     ):
         print(line)
 '
@@ -379,6 +396,45 @@ if [[ -z "$session_write_evidence" ]]; then
 fi
 session_write_first="${session_write_evidence%%$'\n'*}"
 printf 'Captured-session mTLS write evidence:\n%s\n' "$session_write_first"
+read -r session_request_id session_decision_id session_request_digest < <(
+    printf '%s\n' "$session_write_first" | python3 -c '
+import re
+import sys
+
+line = sys.stdin.read().strip()
+fields = dict(re.findall(r"(?:^|\s)([a-z_]+)=([^\s]+)", line))
+print(
+    fields.get("request_id", ""),
+    fields.get("guard_decision_id", ""),
+    fields.get("request_digest", ""),
+)
+'
+)
+if [[ ! "$session_request_id" =~ ^[0-9a-f]{24}$ ]] \
+    || [[ ! "$session_decision_id" =~ ^[0-9a-f]{32}$ ]] \
+    || [[ ! "$session_request_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    fail 'captured-session proxy evidence has an invalid Guard decision receipt'
+fi
+session_guard_evidence=""
+for _ in 1 2 3 4 5; do
+    if ! guard_logs="$(docker logs --since "$started_at" "$GUARD_CONTAINER" 2>&1)"; then
+        fail 'could not read Guard logs for the captured OpenViking session'
+    fi
+    session_guard_evidence="$(
+        printf '%s\n' "$guard_logs" \
+            | grep -F "request_id=$session_request_id" \
+            | grep -F "request_digest=$session_request_digest" \
+            | grep -F "decision_id=$session_decision_id" \
+            | grep -F 'Guard returned mock ALLOW' \
+            | tail -n 1 || true
+    )"
+    [[ -n "$session_guard_evidence" ]] && break
+    read -r -t 1 _ || true
+done
+if [[ -z "$session_guard_evidence" ]]; then
+    fail 'captured OpenViking session write has no matching Guard ALLOW receipt'
+fi
+printf 'Captured-session Guard causal evidence:\n%s\n' "$session_guard_evidence"
 
 task_id="$(
     docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
@@ -615,6 +671,6 @@ printf '%s\n' \
     "OpenClaw session key: $SESSION_KEY" \
     "OpenViking session ID: $openviking_session_id" \
     "Processing: $processing_summary" \
-    'Agent-turn proxy evidence: allowed source wrote the captured session /messages endpoint before E2E inspection traffic.' \
+    'Agent-turn proxy evidence: allowed source obtained a matching Guard decision receipt and wrote the captured session /messages endpoint before E2E inspection traffic.' \
     'The unique marker was subsequently captured and archived through the SPIFFE mTLS egress.' \
     'Memory extraction was required only when V2_E2E_REQUIRE_MEMORY=1.'

@@ -154,11 +154,17 @@ start_evidence_provider() {
 # Start Guard Service
 start_guard_service() {
     log_info "Starting Argus Guard on port 8007..."
+
+    if [[ -z "${GUARD_MODE:-}" ]]; then
+        log_error "GUARD_MODE must be explicitly set to mock_allow or evidence."
+        exit 1
+    fi
     
     # Set environment
     export RUST_LOG=${RUST_LOG:-info}
     export HOST=${HOST:-0.0.0.0}
     export PORT=8007
+    export GUARD_MODE
     export EVIDENCE_ENDPOINT=${EVIDENCE_ENDPOINT:-http://localhost:8008}
     
     # Check if binary exists

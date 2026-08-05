@@ -77,6 +77,8 @@ services:
       HOST: 0.0.0.0
       PORT: 8007
       GUARD_MODE: mock_allow
+      GUARD_REQUIRE_AUTHORIZATION_CONTEXT: "1"
+      GUARD_DECISION_TTL_SECONDS: "${V2_GUARD_DECISION_TTL_SECONDS:-15}"
       RUST_LOG: ${RUST_LOG:-info}
     ports:
       - "127.0.0.1:${V2_GUARD_PORT:-18007}:8007"
@@ -95,10 +97,18 @@ services:
       - -target=https://127.0.0.1:${V2_TDVM_MTLS_PORT:-1943}
       - -server-id=spiffe://argus.local/service/openviking-cmem
       - -allow-source-ip=${V2_OPENCLAW_EGRESS_IP:-172.31.44.2}
+      - -guard-url=http://127.0.0.1:${V2_GUARD_PORT:-18007}/ra/v1/verify
+      - -guard-expected-mode=mock_allow
+      - -guard-caller-id=spiffe://argus.local/agent/openclaw
+      - -guard-target-service=openviking-cmem
+      - -guard-data-class=${V2_GUARD_DATA_CLASS:-openviking-context}
+      - -guard-timeout=${V2_GUARD_TIMEOUT:-3s}
+      - -guard-max-body=${V2_GUARD_MAX_BODY:-8388608}
     labels:
       argus.workload: openclaw
     depends_on:
       - openclaw-agent
+      - guard
     volumes:
       - "${V2_RUNTIME_DIR:-./runtime}/openclaw-agent-run:/opt/spire/run/openclaw:ro"
     network_mode: host

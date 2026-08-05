@@ -34,9 +34,16 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::Utc;
+use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
+
+const AUTHORIZATION_CONTEXT_VERSION: &str = "argus-authorization-v2";
+const AUTHORIZATION_CONTEXT_DOMAIN: &[u8] = b"argus-business-authorization-v2\0";
+const MAX_AUTHORIZATION_FIELD_LENGTH: usize = 8192;
+const MAX_AUTHORIZATION_CLOCK_SKEW_SECONDS: i64 = 60;
 
 /// Application state for the Guard HTTP server
 #[derive(Clone)]
@@ -46,6 +53,8 @@ struct GuardAppState {
     ra_adapter: Arc<RaAdapter>,
     policy_evaluator: Arc<dyn PolicyEvaluatorTrait>,
     mode: GuardMode,
+    require_authorization_context: bool,
+    decision_ttl_seconds: i64,
     /// Optional TC-API client for Agent-side metadata (when Agent is also a TDX workload)
     tc_api_client: Option<Arc<TcApiClient>>,
 }
@@ -56,16 +65,41 @@ struct HealthResponse {
     status: String,
     version: String,
     mode: &'static str,
+    authorization_context_required: bool,
+    authorization_context_version: &'static str,
+    decision_ttl_seconds: i64,
+}
+
+/// Caller-side business request context bound to a Guard decision.
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuthorizationContext {
+    pub version: String,
+    pub request_id: String,
+    pub request_digest: String,
+    pub method: String,
+    pub path_and_query: String,
+    pub body_sha256: String,
+    pub caller_spiffe_id: String,
+    pub target_spiffe_id: String,
+    pub target_service: String,
+    pub target_uri: String,
+    pub operation: String,
+    pub data_class: String,
+    pub issued_at_unix: i64,
+    pub nonce: String,
 }
 
 /// Verification request from caller
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VerifyRequest {
     pub target: TargetService,
     pub caller_id: String,
     pub requested_claims: Option<Vec<RequestedClaim>>,
     pub verification_options: Option<VerificationOptions>,
     pub profile_digest: Option<String>,
+    pub authorization_context: Option<AuthorizationContext>,
 }
 
 /// Verification response
@@ -75,6 +109,15 @@ pub struct VerifyResponse {
     pub reason: Option<String>,
     pub claims: Option<VerifiedClaims>,
     pub verification_mode: &'static str,
+    pub decision_id: Option<String>,
+    pub request_digest: Option<String>,
+    pub expires_at_unix: Option<i64>,
+}
+
+struct DecisionReceipt {
+    decision_id: String,
+    request_digest: String,
+    expires_at_unix: i64,
 }
 
 /// Guard context from request
@@ -94,6 +137,9 @@ async fn health_handler(State(state): State<GuardAppState>) -> Json<HealthRespon
         status: "OK".to_string(),
         version: "v1".to_string(),
         mode: state.mode.as_str(),
+        authorization_context_required: state.require_authorization_context,
+        authorization_context_version: AUTHORIZATION_CONTEXT_VERSION,
+        decision_ttl_seconds: state.decision_ttl_seconds,
     })
 }
 
@@ -106,7 +152,7 @@ enum GuardMode {
 impl GuardMode {
     fn from_environment() -> Result<Self> {
         match std::env::var("GUARD_MODE")
-            .unwrap_or_else(|_| "evidence".to_string())
+            .map_err(|_| anyhow::anyhow!("GUARD_MODE must be explicitly set"))?
             .to_ascii_lowercase()
             .as_str()
         {
@@ -126,6 +172,177 @@ impl GuardMode {
     }
 }
 
+fn valid_ascii_token(value: &str, max_length: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= max_length
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')
+        })
+}
+
+fn valid_sha256(value: &str) -> bool {
+    let Some(hex_digest) = value.strip_prefix("sha256:") else {
+        return false;
+    };
+    hex_digest.len() == 64
+        && hex_digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn append_authorization_field(buffer: &mut Vec<u8>, value: &str) -> Result<(), StatusCode> {
+    if value.len() > MAX_AUTHORIZATION_FIELD_LENGTH {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let length = u32::try_from(value.len()).map_err(|_| StatusCode::BAD_REQUEST)?;
+    buffer.extend_from_slice(&length.to_be_bytes());
+    buffer.extend_from_slice(value.as_bytes());
+    Ok(())
+}
+
+fn compute_authorization_digest(
+    context: &AuthorizationContext,
+) -> Result<String, StatusCode> {
+    let mut canonical = Vec::with_capacity(1024);
+    canonical.extend_from_slice(AUTHORIZATION_CONTEXT_DOMAIN);
+    let issued_at_unix = context.issued_at_unix.to_string();
+    for value in [
+        context.version.as_str(),
+        context.request_id.as_str(),
+        context.method.as_str(),
+        context.path_and_query.as_str(),
+        context.body_sha256.as_str(),
+        context.caller_spiffe_id.as_str(),
+        context.target_spiffe_id.as_str(),
+        context.target_service.as_str(),
+        context.target_uri.as_str(),
+        context.operation.as_str(),
+        context.data_class.as_str(),
+        issued_at_unix.as_str(),
+        context.nonce.as_str(),
+    ] {
+        append_authorization_field(&mut canonical, value)?;
+    }
+    Ok(format!("sha256:{}", hex::encode(Sha256::digest(&canonical))))
+}
+
+fn validate_authorization_context(
+    request: &VerifyRequest,
+    context: &AuthorizationContext,
+) -> Result<(), StatusCode> {
+    if context.version != AUTHORIZATION_CONTEXT_VERSION
+        || !valid_ascii_token(&context.request_id, 128)
+        || !valid_sha256(&context.request_digest)
+        || !valid_sha256(&context.body_sha256)
+        || context.method.is_empty()
+        || context.method.len() > 32
+        || !context
+            .method
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte == b'-')
+        || !context.path_and_query.starts_with('/')
+        || context.path_and_query.len() > MAX_AUTHORIZATION_FIELD_LENGTH
+        || context
+            .path_and_query
+            .bytes()
+            .any(|byte| byte.is_ascii_control())
+        || !context.caller_spiffe_id.starts_with("spiffe://")
+        || context.caller_spiffe_id.len() <= "spiffe://".len()
+        || !valid_ascii_token(&context.caller_spiffe_id, 2048)
+        || !context.target_spiffe_id.starts_with("spiffe://")
+        || context.target_spiffe_id.len() <= "spiffe://".len()
+        || !valid_ascii_token(&context.target_spiffe_id, 2048)
+        || !valid_ascii_token(&context.target_service, 256)
+        || context.target_uri.is_empty()
+        || context.target_uri.len() > MAX_AUTHORIZATION_FIELD_LENGTH
+        || context
+            .target_uri
+            .bytes()
+            .any(|byte| byte.is_ascii_control())
+        || !valid_ascii_token(&context.operation, 128)
+        || !valid_ascii_token(&context.data_class, 128)
+        || context.nonce.len() != 32
+        || !context.nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || context.caller_spiffe_id != request.caller_id
+        || context.target_service != request.target.service_name
+        || context.target_uri != request.target.target_uri
+        || context.operation != format!("http:{}", context.method)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let now = Utc::now().timestamp();
+    if context.issued_at_unix < now - MAX_AUTHORIZATION_CLOCK_SKEW_SECONDS
+        || context.issued_at_unix > now + MAX_AUTHORIZATION_CLOCK_SKEW_SECONDS
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if compute_authorization_digest(context)? != context.request_digest {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
+fn new_decision_id() -> Result<String, StatusCode> {
+    let mut random_bytes = [0u8; 16];
+    getrandom::getrandom(&mut random_bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(hex::encode(random_bytes))
+}
+
+fn validated_request_digest(
+    request: &VerifyRequest,
+    require_authorization_context: bool,
+) -> Result<Option<String>, StatusCode> {
+    let Some(context) = request.authorization_context.as_ref() else {
+        if require_authorization_context {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        return Ok(None);
+    };
+    validate_authorization_context(request, context)?;
+    Ok(Some(context.request_digest.clone()))
+}
+
+fn decision_receipt(
+    request_digest: Option<&str>,
+    decision_ttl_seconds: i64,
+) -> Result<Option<DecisionReceipt>, StatusCode> {
+    let Some(request_digest) = request_digest else {
+        return Ok(None);
+    };
+    Ok(Some(DecisionReceipt {
+        decision_id: new_decision_id()?,
+        request_digest: request_digest.to_string(),
+        expires_at_unix: Utc::now().timestamp() + decision_ttl_seconds,
+    }))
+}
+
+fn response_with_receipt(
+    decision: String,
+    reason: Option<String>,
+    claims: Option<VerifiedClaims>,
+    verification_mode: &'static str,
+    receipt: Option<DecisionReceipt>,
+) -> VerifyResponse {
+    let (decision_id, request_digest, expires_at_unix) = match receipt {
+        Some(receipt) => (
+            Some(receipt.decision_id),
+            Some(receipt.request_digest),
+            Some(receipt.expires_at_unix),
+        ),
+        None => (None, None, None),
+    };
+    VerifyResponse {
+        decision,
+        reason,
+        claims,
+        verification_mode,
+        decision_id,
+        request_digest,
+        expires_at_unix,
+    }
+}
+
 fn validate_mock_request(request: &VerifyRequest) -> Result<(), StatusCode> {
     if request.caller_id.trim().is_empty()
         || request.target.service_name.trim().is_empty()
@@ -136,20 +353,45 @@ fn validate_mock_request(request: &VerifyRequest) -> Result<(), StatusCode> {
     Ok(())
 }
 
-fn mock_allow_response(request: &VerifyRequest) -> Result<VerifyResponse, StatusCode> {
+fn mock_allow_response(
+    request: &VerifyRequest,
+    require_authorization_context: bool,
+    decision_ttl_seconds: i64,
+) -> Result<VerifyResponse, StatusCode> {
     validate_mock_request(request)?;
+    let request_digest = validated_request_digest(
+        request,
+        require_authorization_context,
+    )?;
+    let receipt = decision_receipt(request_digest.as_deref(), decision_ttl_seconds)?;
+    let decision_id = receipt
+        .as_ref()
+        .map(|receipt| receipt.decision_id.as_str())
+        .unwrap_or("none");
     tracing::warn!(
         caller_id = %request.caller_id,
         target_service = %request.target.service_name,
         target_uri = %request.target.target_uri,
+        request_id = request
+            .authorization_context
+            .as_ref()
+            .map(|context| context.request_id.as_str())
+            .unwrap_or("none"),
+        request_digest = request
+            .authorization_context
+            .as_ref()
+            .map(|context| context.request_digest.as_str())
+            .unwrap_or("none"),
+        decision_id = decision_id,
         "Guard returned mock ALLOW without fetching or verifying evidence"
     );
-    Ok(VerifyResponse {
-        decision: "ALLOW".to_string(),
-        reason: Some("mock_allow connectivity mode; no evidence was fetched".to_string()),
-        claims: None,
-        verification_mode: GuardMode::MockAllow.as_str(),
-    })
+    Ok(response_with_receipt(
+        "ALLOW".to_string(),
+        Some("mock_allow connectivity mode; no evidence was fetched".to_string()),
+        None,
+        GuardMode::MockAllow.as_str(),
+        receipt,
+    ))
 }
 
 /// Verification handler - POST /ra/v1/verify
@@ -158,8 +400,18 @@ async fn verify_handler(
     Json(request): Json<VerifyRequest>,
 ) -> Result<Json<VerifyResponse>, StatusCode> {
     if state.mode == GuardMode::MockAllow {
-        return mock_allow_response(&request).map(Json);
+        return mock_allow_response(
+            &request,
+            state.require_authorization_context,
+            state.decision_ttl_seconds,
+        )
+        .map(Json);
     }
+
+    let request_digest = validated_request_digest(
+        &request,
+        state.require_authorization_context,
+    )?;
 
     // Build guard context from request
     let context = GuardContext::from(&request);
@@ -206,21 +458,27 @@ async fn verify_handler(
         .policy_evaluator
         .evaluate_policy(&request.target, &verified_claims, &context)
         .await;
+    let receipt = decision_receipt(
+        request_digest.as_deref(),
+        state.decision_ttl_seconds,
+    )?;
 
     // Convert decision to response
     let response = match decision {
-        GuardDecision::Allow(claims) => VerifyResponse {
-            decision: "ALLOW".to_string(),
-            reason: None,
-            claims: Some(claims),
-            verification_mode: GuardMode::Evidence.as_str(),
-        },
-        GuardDecision::Deny { reason, claims } => VerifyResponse {
-            decision: "DENY".to_string(),
-            reason: Some(format!("{:?}", reason)),
+        GuardDecision::Allow(claims) => response_with_receipt(
+            "ALLOW".to_string(),
+            None,
+            Some(claims),
+            GuardMode::Evidence.as_str(),
+            receipt,
+        ),
+        GuardDecision::Deny { reason, claims } => response_with_receipt(
+            "DENY".to_string(),
+            Some(format!("{:?}", reason)),
             claims,
-            verification_mode: GuardMode::Evidence.as_str(),
-        },
+            GuardMode::Evidence.as_str(),
+            receipt,
+        ),
     };
 
     Ok(Json(response))
@@ -247,17 +505,42 @@ async fn batch_verify_handler(
 
     for req in request.requests {
         if state.mode == GuardMode::MockAllow {
-            match mock_allow_response(&req) {
+            match mock_allow_response(
+                &req,
+                state.require_authorization_context,
+                state.decision_ttl_seconds,
+            ) {
                 Ok(response) => results.push(response),
-                Err(_) => results.push(VerifyResponse {
-                    decision: "ERROR".to_string(),
-                    reason: Some("caller_id, service_name, and target_uri are required".to_string()),
-                    claims: None,
-                    verification_mode: GuardMode::MockAllow.as_str(),
-                }),
+                Err(_) => results.push(response_with_receipt(
+                    "ERROR".to_string(),
+                    Some(
+                        "caller, target, and a valid authorization_context are required"
+                            .to_string(),
+                    ),
+                    None,
+                    GuardMode::MockAllow.as_str(),
+                    None,
+                )),
             }
             continue;
         }
+
+        let request_digest = match validated_request_digest(
+            &req,
+            state.require_authorization_context,
+        ) {
+            Ok(request_digest) => request_digest,
+            Err(_) => {
+                results.push(response_with_receipt(
+                    "ERROR".to_string(),
+                    Some("authorization_context validation failed".to_string()),
+                    None,
+                    GuardMode::Evidence.as_str(),
+                    None,
+                ));
+                continue;
+            }
+        };
 
         // Build guard context from request
         let context = GuardContext::from(&req);
@@ -277,12 +560,13 @@ async fn batch_verify_handler(
             Ok(e) => e,
             Err(e) => {
                 tracing::error!("Evidence fetch failed: {}", e);
-                results.push(VerifyResponse {
-                    decision: "ERROR".to_string(),
-                    reason: Some(format!("Evidence fetch failed: {}", e)),
-                    claims: None,
-                    verification_mode: GuardMode::Evidence.as_str(),
-                });
+                results.push(response_with_receipt(
+                    "ERROR".to_string(),
+                    Some(format!("Evidence fetch failed: {}", e)),
+                    None,
+                    GuardMode::Evidence.as_str(),
+                    None,
+                ));
                 continue;
             }
         };
@@ -303,12 +587,13 @@ async fn batch_verify_handler(
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("Verification failed: {}", e);
-                results.push(VerifyResponse {
-                    decision: "ERROR".to_string(),
-                    reason: Some(format!("Verification failed: {}", e)),
-                    claims: None,
-                    verification_mode: GuardMode::Evidence.as_str(),
-                });
+                results.push(response_with_receipt(
+                    "ERROR".to_string(),
+                    Some(format!("Verification failed: {}", e)),
+                    None,
+                    GuardMode::Evidence.as_str(),
+                    None,
+                ));
                 continue;
             }
         };
@@ -318,21 +603,39 @@ async fn batch_verify_handler(
             .policy_evaluator
             .evaluate_policy(&req.target, &verified_claims, &context)
             .await;
+        let receipt = match decision_receipt(
+            request_digest.as_deref(),
+            state.decision_ttl_seconds,
+        ) {
+            Ok(receipt) => receipt,
+            Err(_) => {
+                results.push(response_with_receipt(
+                    "ERROR".to_string(),
+                    Some("decision receipt generation failed".to_string()),
+                    None,
+                    GuardMode::Evidence.as_str(),
+                    None,
+                ));
+                continue;
+            }
+        };
 
         // Convert decision to response
         let response = match decision {
-            GuardDecision::Allow(claims) => VerifyResponse {
-                decision: "ALLOW".to_string(),
-                reason: None,
-                claims: Some(claims),
-                verification_mode: GuardMode::Evidence.as_str(),
-            },
-            GuardDecision::Deny { reason, claims } => VerifyResponse {
-                decision: "DENY".to_string(),
-                reason: Some(format!("{:?}", reason)),
+            GuardDecision::Allow(claims) => response_with_receipt(
+                "ALLOW".to_string(),
+                None,
+                Some(claims),
+                GuardMode::Evidence.as_str(),
+                receipt,
+            ),
+            GuardDecision::Deny { reason, claims } => response_with_receipt(
+                "DENY".to_string(),
+                Some(format!("{:?}", reason)),
                 claims,
-                verification_mode: GuardMode::Evidence.as_str(),
-            },
+                GuardMode::Evidence.as_str(),
+                receipt,
+            ),
         };
 
         results.push(response);
@@ -358,6 +661,28 @@ pub enum PolicyType {
     Strict,
 }
 
+fn boolean_environment(name: &str, default: bool) -> Result<bool> {
+    let Ok(raw) = std::env::var(name) else {
+        return Ok(default);
+    };
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" => Ok(false),
+        _ => anyhow::bail!("{name} must be a boolean"),
+    }
+}
+
+fn decision_ttl_from_environment() -> Result<i64> {
+    let ttl = std::env::var("GUARD_DECISION_TTL_SECONDS")
+        .unwrap_or_else(|_| "15".to_string())
+        .parse::<i64>()
+        .map_err(|_| anyhow::anyhow!("GUARD_DECISION_TTL_SECONDS must be an integer"))?;
+    if !(1..=300).contains(&ttl) {
+        anyhow::bail!("GUARD_DECISION_TTL_SECONDS must be between 1 and 300");
+    }
+    Ok(ttl)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
@@ -368,8 +693,22 @@ async fn main() -> Result<()> {
     let port: u16 = std::env::var("PORT")
         .unwrap_or_else(|_| "8007".to_string())
         .parse()
-        .unwrap_or(8007);
+        .map_err(|_| anyhow::anyhow!("PORT must be an integer between 1 and 65535"))?;
+    if port == 0 {
+        anyhow::bail!("PORT must be an integer between 1 and 65535");
+    }
     let guard_mode = GuardMode::from_environment()?;
+    let allow_incomplete_evidence =
+        boolean_environment("GUARD_ALLOW_INCOMPLETE_EVIDENCE", false)?;
+    if guard_mode == GuardMode::Evidence && !allow_incomplete_evidence {
+        anyhow::bail!(
+            "GUARD_MODE=evidence is disabled until expected binding and policy validation are completed; \
+             set GUARD_ALLOW_INCOMPLETE_EVIDENCE=1 only for isolated development"
+        );
+    }
+    let require_authorization_context =
+        boolean_environment("GUARD_REQUIRE_AUTHORIZATION_CONTEXT", true)?;
+    let decision_ttl_seconds = decision_ttl_from_environment()?;
     let evidence_endpoint = std::env::var("EVIDENCE_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:8006".to_string());
     
@@ -412,6 +751,8 @@ async fn main() -> Result<()> {
         ra_adapter,
         policy_evaluator,
         mode: guard_mode,
+        require_authorization_context,
+        decision_ttl_seconds,
         tc_api_client,
     };
 
@@ -439,6 +780,11 @@ async fn main() -> Result<()> {
     tracing::info!("Batch verification endpoint: POST /ra/v1/verify/batch");
     tracing::info!("Health endpoint: GET /health");
     tracing::info!("Guard mode: {}", guard_mode.as_str());
+    tracing::info!(
+        "Authorization context required: {}; decision TTL: {} seconds",
+        require_authorization_context,
+        decision_ttl_seconds
+    );
     if guard_mode == GuardMode::Evidence {
         tracing::info!("Evidence endpoint: {}", evidence_endpoint);
     } else {

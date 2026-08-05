@@ -29,6 +29,26 @@ docker inspect "$OPENCLAW_CONTAINER" >/dev/null 2>&1 \
 [[ "$(docker inspect "$OPENCLAW_CONTAINER" --format '{{.State.Running}}')" == true ]] \
     || fail "real OpenClaw container is not running: $OPENCLAW_CONTAINER"
 
+guard_health="$(
+    curl -fsS --noproxy '127.0.0.1,localhost' --max-time 3 \
+        "http://127.0.0.1:${V2_GUARD_PORT:-18007}/health"
+)" || fail 'Argus Guard health endpoint is unavailable'
+printf '%s' "$guard_health" | python3 -c '
+import json
+import sys
+
+value = json.load(sys.stdin)
+if value.get("status") != "OK" or value.get("mode") != "mock_allow":
+    raise SystemExit("Argus Guard is not in explicit mock_allow mode")
+if value.get("authorization_context_required") is not True:
+    raise SystemExit("Argus Guard does not require authorization_context")
+if value.get("authorization_context_version") != "argus-authorization-v2":
+    raise SystemExit("Argus Guard authorization context version is not v2")
+ttl = value.get("decision_ttl_seconds")
+if not isinstance(ttl, int) or not 1 <= ttl <= 300:
+    raise SystemExit("Argus Guard decision TTL is invalid")
+' || fail 'Argus Guard configuration is not safe for the gated workload'
+
 python3 - "$EGRESS_SUBNET" "$PROXY_BIND" "$EGRESS_IP" <<'PY'
 import ipaddress
 import sys
