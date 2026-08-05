@@ -25,6 +25,9 @@ fail() {
     exit 1
 }
 
+[[ -n "${OPENVIKING_API_KEY:-}" ]] \
+    || fail 'OPENVIKING_API_KEY must be set for authenticated E2E inspection'
+
 [[ "$OPENCLAW_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] \
     || fail "invalid real OpenClaw container name: $OPENCLAW_CONTAINER"
 [[ "$MTLS_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] \
@@ -55,7 +58,8 @@ docker inspect "$MTLS_CONTAINER" >/dev/null 2>&1 \
 [[ "$(docker inspect "$MTLS_CONTAINER" --format '{{.State.Running}}')" == true ]] \
     || fail "mTLS client container is not running: $MTLS_CONTAINER"
 
-docker exec -i -u "$OPENCLAW_USER" "$OPENCLAW_CONTAINER" \
+docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
+        "$OPENCLAW_CONTAINER" \
     node - "$OPENCLAW_CONFIG" "$EXPECTED_BASE_URL" <<'NODE'
 const { execFileSync } = require("node:child_process");
 
@@ -135,7 +139,8 @@ printf 'Real OpenClaw agent turn completed: session_key=%s output_chars=%s\n' \
     "$SESSION_KEY" "${#agent_output}"
 
 scan_marker() {
-    docker exec -i -u "$OPENCLAW_USER" "$OPENCLAW_CONTAINER" \
+    docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
+        "$OPENCLAW_CONTAINER" \
         node - "$OPENCLAW_CONFIG" "$MARKER" "$RUN_ID" "$SESSION_SCAN_LIMIT" <<'NODE'
 const { execFileSync } = require("node:child_process");
 
@@ -163,7 +168,7 @@ function readOpenClawConfig(path) {
 const plugin = readOpenClawConfig("plugins.entries.openviking.config");
 const baseUrl =
   typeof plugin?.baseUrl === "string" ? plugin.baseUrl.replace(/\/+$/, "") : "";
-const apiKey = plugin?.apiKey;
+const apiKey = process.env.OPENVIKING_API_KEY;
 const actorPeerValue = plugin?.peer_prefix ?? "main";
 if (
   !baseUrl
@@ -271,7 +276,8 @@ printf 'OpenViking captured the real turn: session_id=%s marker=%s\n' \
     "$openviking_session_id" "$MARKER"
 
 task_id="$(
-    docker exec -i -u "$OPENCLAW_USER" "$OPENCLAW_CONTAINER" \
+    docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
+        "$OPENCLAW_CONTAINER" \
         node - "$OPENCLAW_CONFIG" "$openviking_session_id" "$RUN_ID" <<'NODE'
 const { execFileSync } = require("node:child_process");
 
@@ -298,7 +304,7 @@ function readOpenClawConfig(path) {
 const plugin = readOpenClawConfig("plugins.entries.openviking.config");
 const baseUrl =
   typeof plugin?.baseUrl === "string" ? plugin.baseUrl.replace(/\/+$/, "") : "";
-const apiKey = plugin?.apiKey;
+const apiKey = process.env.OPENVIKING_API_KEY;
 const actorPeerValue = plugin?.peer_prefix ?? "main";
 if (
   !baseUrl
@@ -355,7 +361,8 @@ NODE
 printf 'OpenViking session commit accepted: task_id=%s\n' "${task_id:-not-returned}"
 
 inspect_processing() {
-    docker exec -i -u "$OPENCLAW_USER" "$OPENCLAW_CONTAINER" \
+    docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
+        "$OPENCLAW_CONTAINER" \
         node - \
         "$OPENCLAW_CONFIG" \
         "$openviking_session_id" \
@@ -389,7 +396,7 @@ function readOpenClawConfig(path) {
 const plugin = readOpenClawConfig("plugins.entries.openviking.config");
 const baseUrl =
   typeof plugin?.baseUrl === "string" ? plugin.baseUrl.replace(/\/+$/, "") : "";
-const apiKey = plugin?.apiKey;
+const apiKey = process.env.OPENVIKING_API_KEY;
 const actorPeerValue = plugin?.peer_prefix ?? "main";
 if (
   !baseUrl
