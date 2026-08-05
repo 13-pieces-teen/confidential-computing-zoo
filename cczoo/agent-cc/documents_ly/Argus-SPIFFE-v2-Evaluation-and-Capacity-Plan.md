@@ -15,6 +15,12 @@
 本文是评测实施计划，不包含尚未执行的性能结论。所有最终数字必须来自 Linux
 服务器上的真实运行产物，不得使用配置值、目标值或单次成功日志代替测量结果。
 
+本文与
+[Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md](Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md)
+配套使用。Pre-RA 计划定义被测系统在 mock RA 条件下必须满足的安全、隔离、
+生命周期和审计门槛；本文定义在这些门槛之上如何采集性能、容量和稳定性数据。
+安全加固验收不能替代性能评测，性能通过也不能替代安全正确性验收。
+
 ## 2. 当前评测边界
 
 ### 2.1 本阶段纳入
@@ -25,7 +31,15 @@
 - 单个 OpenViking 的多轮独立冷启动 RATS；
 - OpenViking Agent 准入、registration entry 和 workload SVID 获取；
 - 多个独立 OpenClaw 身份域的批量启动和 workload SVID 获取；
-- 多个 OpenClaw 部署单元到单个 OpenViking 的 SPIFFE mTLS 请求；
+- 多个 OpenClaw 部署单元经 Guard-gated egress 到单个 OpenViking 的
+  SPIFFE mTLS 请求；
+- `mock_allow` 条件下 Guard 决策与同一业务请求的强制绑定和 fail-closed 行为；
+- OpenClaw 到 OpenViking 已知明文、直连和跨身份旁路的拒绝验证；
+- SVID 轮换、到期、Agent/Server 重启、Workload API 故障、entry 删除、
+  Agent ban/delete 和旧连接排空的收敛测量；
+- binding store 并发、重启、损坏和 clone conflict 的正确性验证；
+- run 级 runtime 隔离与 run 内 OpenClaw Deployment Unit 隔离；
+- 从 OpenClaw 请求、Guard、mTLS egress 到 OpenViking marker 的结构化审计关联；
 - SPIRE、Provider、Trustee、OpenViking 和 Linux 主机资源观测；
 - 冷启动、突发启动、限速启动和稳定性测试；
 - 原始样本、Prometheus 指标和汇总报告。
@@ -35,10 +49,12 @@
 - 真实 TDX Quote/QGS 性能；
 - production Trustee 和真实 TCB 验证性能；
 - Quote、TCB collateral 和远程证明网络抖动；
-- Argus Guard 的生产级不可绕过门控；
-- SVID 撤销和旧连接失效收敛时间；
+- Guard `spiffe_identity` 和 `fresh_evidence` 生产模式；
+- Guard 基于真实 Quote、TCB、measurement、RTMR 或正式 Trustee 的决策真实性；
+- 面向生产 profile 的 Envoy/service mesh 强制执行面；
 - 周期 re-attestation；
 - 多 OpenViking 服务实例和跨区域部署；
+- 多 SPIRE Server 副本和共享事务 binding store；
 - 生产环境容量承诺。
 
 因此，本阶段结果必须标记为：
@@ -49,6 +65,9 @@ TD Guest device: required (/dev/tdx_guest)
 Attestation profile: mock evidence / mock Quote verification
 Evidence Provider: mock
 Trustee: mock
+Business path: Guard-gated OpenClaw egress -> SPIFFE mTLS -> OpenViking
+Guard verification mode: mock_allow
+Pre-RA hardening gates: required for formal B/C business results
 Real Quote/QGS: deferred
 Production capacity acceptance: not established
 ```
@@ -58,19 +77,26 @@ Production capacity acceptance: not established
 
 ### 2.3 当前仓库实现基线
 
-当前 `feat/argus-spiffe-v2`、HEAD `a155ad2` 已提供：
+截至 2026-08-05，当前 `feat/argus-spiffe-v2`、HEAD `2f4c171` 已提供：
 
 - 单 OpenViking `argus_tdx` Agent/Server NodeAttestor 链路；
 - TDVM 内 mock Evidence Provider；
 - 中心侧独立 mock Trustee；
 - 单 OpenClaw `x509pop` Agent；
-- 单 OpenClaw mTLS egress proxy；
+- 单 OpenClaw Guard-gated mTLS egress proxy；
 - 固定 OpenClaw/OpenViking workload registration entries；
 - SVID 正向、身份隔离和 mTLS 负向验证脚本；
-- NodeAttestor attempts、duration、evidence bytes 和 Trustee request 基础埋点。
+- NodeAttestor attempts、duration、evidence bytes 和 Trustee request 基础埋点；
+- 真实 OpenClaw 插件在 mock RA 条件下写入真实 OpenViking 的 E2E 证据；
+- Guard `authorization_context`、独立业务请求摘要、精确 target 绑定、
+  `decision_id` 和有界决策有效期的源码实现；
+- Guard DENY、503、timeout、malformed、missing receipt、digest mismatch 和
+  expired receipt 的远程故障矩阵脚本。
 
 当前未提供：
 
+- WP1 当前源码在 Linux/TDVM 上的完整重新编译和远程验收结论；
+- WP2 到 WP8 的完整实施与远程验收；
 - RATS benchmark controller；
 - run-scoped OpenViking 冷启动生命周期；
 - N 个 OpenClaw Unit 的配置、证书和容器生成器；
@@ -97,6 +123,23 @@ A 类 OpenViking RATS 实验要求：
 B/C 类轻量 OpenClaw 容量实验主要运行在 Linux Host；OpenViking 仍位于已经完成
 RATS 的 TDVM 内。若缺少 TDVM，只能执行单元测试和软件协议夹具，不能生成本计划
 定义的正式 A/B/C 运行结果。
+
+### 2.5 Pre-RA 加固门槛与评测依赖
+
+Pre-RA 工作包不是一律阻塞全部评测，而是按被测对象形成以下依赖：
+
+| 评测对象 | 正式样本前置门槛 | 说明 |
+| --- | --- | --- |
+| A 类单 OpenViking RATS | WP4 中与 binding/合法轮换相关的语义冻结；WP5 run-scoped 隔离；WP6 结构化事件与产物 | 不依赖 Guard 数据面门控，但不能通过清空 binding store 制造样本 |
+| B 类 OpenClaw 身份启动 | WP5 run/runtime 隔离；WP6 统一 receipt 和指标 | 只测 x509pop 准入和 SVID 就绪时不经过业务 Guard |
+| C 类业务请求容量 | WP1 同请求 Guard 门控；WP2 唯一受控路径；WP5 隔离；WP6 审计 | 正式业务样本必须经过 Guard-gated egress；纯 mTLS 只能作为诊断基准 |
+| 生命周期与拒绝收敛 | WP3 生命周期实现与 SLA 冻结 | rotation、ban、entry 删除和旧连接排空单独成组 |
+| canary、切换和回滚 | WP7 可重复脚本和版本留痕 | 形成独立运维验收报告，不混入容量基线 |
+| future real RA | WP8 接口边界加真实 Quote/QGS/Trustee | 使用独立 profile 和结果集，不与 mock 样本混合 |
+
+WP5 的“多 runtime”指多个完整 run/runtime 之间的隔离；B 类的
+`N_openclaw` 指同一个 benchmark run 内的 N 个 OpenClaw Deployment Unit。
+两层都使用 `RUN_ID`/`unit_id` 分区，但不能把二者计数互换。
 
 ## 3. 必须分开的评测对象
 
@@ -177,8 +220,8 @@ Trustee/Provider 不重启
 - 一份独立 x509pop 叶证书和私钥；
 - 一个独立 SPIRE Agent 身份域和唯一 Agent ID；
 - 独立 Agent 状态目录和 Workload API socket；
-- 一个持有 OpenClaw 侧 workload SVID 的独立 mTLS egress proxy；
-- 一个到 OpenViking 的 SPIFFE mTLS client/proxy 路径。
+- 一个持有 OpenClaw 侧 workload SVID 的独立 Guard-gated mTLS egress proxy；
+- 一个经 caller-side Guard ALLOW 后到 OpenViking 的 SPIFFE mTLS 路径。
 
 当前仓库中，SVID 的实际持有者是 `openclaw-mtls-client` egress proxy，
 OpenClaw 应用容器本身不挂载 Workload API socket。因此本计划统一使用：
@@ -228,14 +271,18 @@ OpenClaw 侧的 `x509pop` 准入结果写成 TDX RATS 性能。
 目标是测量已经完成身份启动的 OpenClaw workload 对单个 OpenViking 发起请求时
 的运行容量。
 
-第一阶段只使用确定性的 health、session 或最小 mTLS 请求，避免模型推理延迟、
-第三方 API 限流和 token 成本污染身份基础设施结果。完整 OpenClaw/LLM 请求只在
-代表性规模点补测。
+第一阶段只使用确定性的 session、最小业务写入或等价请求，避免模型推理延迟、
+第三方 API 限流和 token 成本污染身份基础设施结果。正式 C 类请求必须经过
+Guard-gated egress，并产生 Guard decision、SPIFFE mTLS 和 OpenViking marker
+的同请求证据。纯 health 或绕过 Guard 的 mTLS 请求只能作为协议诊断，不进入正式
+C 类容量结论。完整 OpenClaw/LLM 请求只在代表性规模点补测。
 
 该实验回答：
 
 - 已就绪身份下的最大稳定并发连接数；
 - 单个 OpenViking 的稳定 QPS；
+- Guard 决策、mTLS 握手和 OpenViking 服务各自增加的延迟；
+- Guard 在并发增长时的吞吐、错误、timeout 和排队边界；
 - mTLS 握手和复用连接的成本差异；
 - OpenViking P95/P99、错误率和资源水位随并发增长的变化。
 
@@ -286,8 +333,10 @@ Repeat R independent cold-start runs
 N OpenClaw Deployment Units
   -> N unique x509pop Agent IDs
   -> N isolated Workload API sockets
-  -> N mTLS egress proxies
+  -> N Guard-gated mTLS egress proxies
   -> shared OpenClaw workload SPIFFE ID
+  -> configured caller-side Argus Guard instance set
+  -> Guard ALLOW bound to the same business request
   -> SPIFFE mTLS requests
   -> one OpenViking service
   -> one OpenViking argus_tdx identity
@@ -308,11 +357,17 @@ OpenClaw 进程。这样能够区分身份基础设施瓶颈与 OpenClaw/模型�
 - 唯一 `entry_id`，父节点指向该 Unit 的 Agent ID；
 - `argus.workload=openclaw` 和 `argus.benchmark.unit=<unit_id>` selectors；
 - 唯一 mTLS proxy 容器名、监听端口和允许的 OpenClaw source IP；
+- Guard endpoint、Guard instance count、请求绑定合同版本和 timeout；
 - run-scoped 网络地址和原始 receipt。
 
 完整 OpenClaw 多实例阶段使用一个 run-scoped bridge network、唯一 OpenClaw IP
 和每 Unit 唯一 proxy listen port。不能复用当前单实例的固定容器名、
 `172.31.44.2` source IP 或 `1934` proxy port。
+
+Guard 的实例基数必须在正式测试前冻结。当前单实例共享 Guard 可以作为首版基线；
+若后续改为每 Unit 一个 Guard 或 Guard pool，必须建立新的拓扑 profile，不与共享
+Guard 结果合并。所有正式 C 类业务请求都必须经同步 Guard 决策；仅用于诊断的
+Guard-bypass/mTLS-only 测试必须使用独立 scenario 名称和结果集。
 
 ### 4.3 D 类后续扩展拓扑
 
@@ -491,13 +546,33 @@ mTLS/业务阶段：
 
 - 连接建立成功率；
 - TLS handshake P50/P95/P99；
+- Guard ALLOW/DENY/error/timeout 数量和比例；
+- `guard_decision_ms` P50/P95/P99；
+- `guard_to_forward_ms` P50/P95/P99；
 - 请求成功率；
-- 请求延迟 P50/P95/P99；
+- `guarded_request_e2e_ms` P50/P95/P99；
 - stable QPS；
 - 活跃连接数；
 - peer SPIFFE ID 错误数；
 - 证书或 bundle 获取失败数；
 - OpenViking 5xx、timeout 和 connection reset 数。
+
+时间口径冻结为：
+
+```text
+G0 = egress 完成请求冻结并开始调用 Guard
+G1 = egress 收到并校验完整 Guard decision receipt
+G2 = egress 开始发送同一个被冻结请求的 mTLS 转发
+G3 = egress 收到 OpenViking 最终响应
+
+guard_decision_ms      = G1 - G0
+guard_to_forward_ms    = G2 - G1
+guarded_request_e2e_ms = G3 - G0
+```
+
+`mtls_handshake_ms` 继续作为协议分段指标；它不能替代
+`guarded_request_e2e_ms`。如需测量不经过 Guard 的 mTLS 极限，只能使用
+`diagnostic_mtls_only` scenario，不进入正式 C 类业务容量结论。
 
 连接模式必须拆分：
 
@@ -506,7 +581,7 @@ mTLS/业务阶段：
 3. 固定 QPS；
 4. 固定并发数。
 
-### 5.5 身份正确性硬指标
+### 5.5 身份和门控正确性硬指标
 
 以下指标必须为零，任何一项非零都不能判为评测通过：
 
@@ -518,12 +593,45 @@ cross_agent_socket_access
 unexpected_peer_spiffe_id
 stale_svid_accepted
 plaintext_request_accepted
+guard_bypass_request_accepted
+guard_failure_forwarded
+guard_digest_mismatch_forwarded
+guard_expired_decision_forwarded
+direct_openviking_request_accepted
+unauthorized_openviking_marker_written
+audit_correlation_missing
 ```
 
-性能下降可以形成容量拐点，身份串用属于正确性失败，不能用提高超时或重试次数
-掩盖。
+性能下降可以形成容量拐点；身份串用、Guard fail-open、旁路成功或同请求审计链
+缺失属于正确性失败，不能用提高超时、重试次数或删除失败样本掩盖。
 
-### 5.6 资源和瓶颈指标
+`audit_correlation_missing` 的判定对象是正式 C 类成功请求：每个成功请求必须能以
+同一个 `request_id` 关联 Guard `decision_id`、`request_digest`、mTLS 转发和
+OpenViking session/message/commit marker。拒绝请求则必须关联到明确拒绝阶段，且
+OpenViking 不存在对应 marker。
+
+### 5.6 生命周期与拒绝收敛指标
+
+生命周期场景与 bootstrap、普通 steady-state 分开，至少记录：
+
+```text
+svid_rotation_interruption_ms
+agent_restart_recovery_ms
+workload_api_failure_to_deny_ms
+agent_ban_to_new_connection_deny_ms
+entry_delete_to_new_connection_deny_ms
+old_connection_drain_ms
+bundle_update_convergence_ms
+```
+
+每个场景必须同时记录正向、负向和恢复结果。Agent ban、entry 删除或 SVID 到期后，
+只检查新进程或新连接不够；还必须检查测试开始前已建立的 keep-alive/TLS 连接。
+连接最大生命周期、idle timeout、重试上限和 SVID TTL 必须进入 manifest。
+
+这些收敛指标是 mock-stage 身份生命周期与执行面指标，不代表发生了新的
+`argus_tdx` Node Attestation，也不代表真实 Quote 被重新验证。
+
+### 5.7 资源和瓶颈指标
 
 SPIRE Server：
 
@@ -543,6 +651,15 @@ mock Evidence Provider / Trustee：
 - timeout 和 5xx；
 - CPU、RSS、文件描述符；
 - 排队长度。
+
+Argus Guard / Guard-gated egress：
+
+- Guard 请求速率、in-flight 和队列长度；
+- ALLOW、DENY、error、timeout 和 malformed receipt；
+- decision P50/P95/P99；
+- request digest mismatch 和 expired receipt；
+- egress body buffer、活动连接、goroutine/线程、CPU、RSS 和文件描述符；
+- Guard 或 egress 重启、OOM 和 fail-closed 数量。
 
 SPIRE Agent / OpenClaw：
 
@@ -599,6 +716,16 @@ OpenClaw Deployment Unit 冷启动：
 不得通过删除整个 SPIRE Server data directory 制造“冷启动”。SPIRE Server、
 Trustee、Provider、TDVM、镜像和信任根在同一批次中保持稳定；只重建被测身份单元。
 
+不得通过清空或替换 binding store 绕过 clone 检测。A 类正式运行前必须冻结：
+
+- 每轮是否使用唯一且可审计的 `instance_id`；
+- attestation key 轮换何时属于合法轮换；
+- `idempotent`、`clone_conflict`、`state_corrupt` 和 `storage_error` 的分类；
+- Agent/entry teardown 与 binding 保留、备份和恢复的关系。
+
+如果新 Attestation Key 因复用旧 `instance_id` 被正确判定为 clone conflict，该轮是
+失败样本，不能删除 binding 后重跑并只保留成功结果。
+
 热启动、缓存命中和连接复用单独成组，不能与冷启动样本混合。
 
 ### 6.3 原始样本优先
@@ -640,6 +767,12 @@ measured OpenClaw phase:
   C1: SPIRE Server first shows the expected Unit Agent ID as valid
   C2: the Unit's run-scoped registration entry is visible
   C3: the Unit's assigned egress proxy first obtains the expected SVID
+
+measured guarded business phase:
+  G0: after request freeze, immediately before calling Guard
+  G1: complete Guard decision receipt is received and validated
+  G2: the same frozen request begins mTLS forwarding
+  G3: the final OpenViking response is received
 ```
 
 Controller 要求：
@@ -651,12 +784,20 @@ Controller 要求：
   `plugin_attestation_ms`；
 - 记录每个事件的 monotonic offset 和 UTC wall time；
 - SVID receipt 记录 SPIFFE ID、证书 serial、NotBefore、NotAfter 和首次观察时间；
+- 正式 C 类请求记录 `request_id`、`decision_id`、`request_digest`、
+  `verification_mode`、G0-G3 和 OpenViking marker；
+- Guard DENY/error/timeout/malformed/digest mismatch/expired receipt 均产生失败
+  receipt，并证明 OpenViking 无对应 marker；
 - timeout 也必须产生最终 receipt；
 - teardown 使用精确 run-scoped 名称，不清理其他运行或生产数据。
 
 `plugin_attestation_ms` 由插件进程内部计时；T0-T3/C0-C3 由 controller 计时。
 两类时间不能互相替代。Controller 轮询带来的观测误差不从样本中人为扣除，
 而是通过 `controller_poll_interval_ms` 一并披露。
+
+G0-G3 由 egress 结构化事件或与 controller 使用同一 monotonic 时间域的专用探针
+记录。若不能证明时间源关系，则报告分段耗时和 controller 观察到的端到端耗时，
+不得把不同主机 wall clock 直接相减。
 
 ## 7. 埋点与数据产物设计
 
@@ -707,6 +848,25 @@ argus_mock_trustee_in_flight
 argus_mock_trustee_request_duration_seconds
 ```
 
+Guard 和 Guard-gated egress 至少提供以下逻辑指标：
+
+```text
+argus_guard_decisions_total{decision,result,reason}
+argus_guard_decision_duration_seconds{result}
+argus_guard_in_flight
+
+argus_egress_requests_total{decision,result,reason}
+argus_egress_guard_to_forward_duration_seconds{result}
+argus_egress_guarded_request_duration_seconds{result}
+argus_egress_in_flight
+
+argus_identity_lifecycle_convergence_seconds{scenario,result}
+```
+
+`reason` 只能使用冻结的低基数枚举，例如 `deny`、`timeout`、`unavailable`、
+`malformed`、`missing_receipt`、`digest_mismatch`、`expired_receipt`、
+`peer_id_mismatch`。完整错误文本进入结构化事件，不进入 label。
+
 现有 `argus_m4_fake_requests_total` 只作为兼容指标保留，不作为新报告的主指标。
 duration 使用可聚合 histogram 或保留原始请求 receipt；不得跨实例平均 summary
 quantile。
@@ -719,6 +879,8 @@ quantile。
 - OpenClaw Agent：每 Unit 映射唯一 Host loopback metrics 端口；
 - mock Trustee：Prometheus 使用配置的 mTLS client credentials 抓取中心侧
   `/metrics`；
+- Guard：每个配置的 Guard 实例使用受限 metrics endpoint；
+- Guard-gated egress：每 Unit 或每个共享 egress 使用唯一、受限 metrics endpoint；
 - Linux/容器资源：controller 采集 `docker stats`、进程和主机资源快照。
 
 最终 Prometheus 暴露名称以 SPIRE MetricsService 实际输出为准，并在实现阶段通过
@@ -778,11 +940,34 @@ openclaw_svid_delivery_ms
 openclaw_admission_to_svid_ms
 openclaw_bootstrap_to_svid_ms
 mtls_handshake_ms
-request_latency_ms
 svid_serial
 svid_not_before
 svid_not_after
 ```
+
+正式 C 类每个业务请求还必须记录：
+
+```text
+request_id
+guard_decision_id
+request_digest
+verification_mode
+guard_result
+guard_failure_reason
+guard_decision_ms
+guard_to_forward_ms
+guarded_request_e2e_ms
+client_spiffe_id
+server_spiffe_id
+openviking_session_id
+openviking_marker_id
+http_status
+forwarded_mtls
+```
+
+身份启动 receipt 不要求不存在的 Guard 字段；业务 request receipt 不得省略这些字段
+后仍标记为正式 C 类成功样本。`request_id`、`guard_decision_id`、
+`request_digest` 和 marker 属于原始 receipt/日志字段，不得进入 Prometheus label。
 
 不得在 OpenClaw receipt 中把 `attestor` 标记为 `argus_tdx`。
 所有 Unit 的 `expected_workload_id` 可以相同，但 `unit_id`、Agent ID、entry ID、
@@ -796,7 +981,10 @@ socket 和容器名必须不同。
 - 最近一次重试原因；
 - 相关组件是否重启；
 - 是否观察到 Agent ID；
-- 是否取得错误 SVID。
+- 是否取得错误 SVID；
+- Guard decision 是否存在以及失败原因；
+- 请求是否被转发；
+- OpenViking 是否出现对应 marker。
 
 ### 7.3 Run manifest
 
@@ -821,6 +1009,17 @@ container_runtime_version
 attestation_profile
 provider_type
 trustee_type
+pre_ra_hardening_gate_version
+pre_ra_hardening_gate_status
+guard_mode
+guard_contract_version
+guard_instance_count
+guard_timeout_ms
+guard_max_body_bytes
+egress_profile
+business_request_digest_algorithm
+binding_store_backend
+binding_store_schema_version
 scenario
 openviking_count
 openviking_rats_repetitions
@@ -833,10 +1032,15 @@ timeouts
 controller_poll_interval_ms
 server_x509_svid_ttl
 workload_x509_svid_ttl
+max_connection_lifetime_ms
+connection_idle_timeout_ms
+retry_policy_version
 SLO version
 ```
 
-缺少 commit、环境规格或 mock/real 标记的运行，不进入最终简历数据集。
+缺少 commit、环境规格或 mock/real 标记的运行，不进入最终简历数据集。正式 C 类
+业务结果若缺少 Guard mode、合同版本、hardening gate 状态或连接生命周期配置，
+同样不能进入正式报告。
 
 ### 7.4 建议产物目录
 
@@ -853,20 +1057,25 @@ core/spire/benchmarks/
     prometheus.yaml
     scenarios.yaml
     capacity-slo.yaml
+    hardening-gates.yaml
   load/
     openviking-rats-runner/
     openclaw-unit-runner/
     svid-probe/
-    mtls-load-client/
+    guarded-load-client/
+    diagnostic-mtls-client/
   scripts/
+    verify-hardening-gates.sh
     run-openviking-rats.sh
     run-openclaw-capacity.sh
+    run-identity-lifecycle.sh
     collect-resources.sh
     summarize.sh
   results/
     .gitignore
     <run-id>/
       manifest.json
+      hardening-gate.json
       samples.jsonl
       prometheus-snapshot/
       container-stats.csv
@@ -889,7 +1098,7 @@ N_openclaw
   = 独立 OpenClaw Deployment Unit 数量
 
 request_concurrency / request_rate
-  = 已就绪 OpenClaw 对单 OpenViking 的业务负载
+  = 已就绪 OpenClaw 经 Guard-gated egress 对单 OpenViking 的业务负载
 ```
 
 A 类保持 `M_openviking=1`，通过增加 R 获取延迟和成功率样本，不对单
@@ -975,13 +1184,15 @@ resource_headroom
 - 扩容后 ready throughput 增益很小；
 - P95/P99 开始非线性增长；
 - OpenClaw `x509pop` 身份准入、SPIRE Server 或 CA/SVID 签发开始排队；
+- 共享 Guard 或 Guard-gated egress 开始排队、timeout 或消耗主要 CPU；
 - datastore lock/write latency 明显增长；
 - CPU、内存、FD 或网络接近资源上限；
 - OpenClaw Agent 重试率显著增加；
 - OpenViking 请求延迟在同一 QPS 下持续抬升。
 
 当前 B/C 类出现上述现象时，不能归因于 `argus_tdx` NodeAttestor；需要从
-OpenClaw `x509pop` 身份平面、SVID 签发、mTLS 或 OpenViking 服务面定位。
+OpenClaw `x509pop` 身份平面、SVID 签发、Guard/egress、mTLS 或 OpenViking
+服务面定位。
 
 拐点算法和阈值必须在正式测试前写入 `capacity-slo.yaml`，不能看到结果后再修改
 规则以美化结论。
@@ -991,16 +1202,27 @@ OpenClaw `x509pop` 身份平面、SVID 签发、mTLS 或 OpenViking 服务面定
 ### 9.1 硬性正确性门槛
 
 - A 类每个成功 run 只产生本轮预期的 OpenViking Agent 和服务 SVID；
+- A 类不得通过清空 binding store 绕过 clone conflict；binding 失败必须保留并分类；
 - B 类唯一 OpenClaw Agent ID 数与成功 Deployment Unit 数一致；
 - B 类每个成功 Unit 使用唯一 Agent ID、entry、socket 和 egress proxy；
 - B 类所有成功 egress proxy 获得精确的共享业务 ID
   `spiffe://argus.local/agent/openclaw`；
 - OpenClaw 应用容器未挂载 Workload API socket，且只能经分配的 egress proxy
   访问 OpenViking；
+- 正式 C 类请求全部经过当前 run 声明的 Guard-gated egress；
+- 每个正式 C 类成功请求都能关联唯一 request、Guard decision、request digest、
+  mTLS 转发和 OpenViking marker；
+- Guard DENY、503、timeout、malformed、missing receipt、digest mismatch 和
+  expired receipt 均不得产生 OpenViking marker；
+- 直连 OpenViking、绕过 Guard 或绕过分配 egress 的请求均被拒绝；
 - 错误 SVID、跨 Agent socket 和错误 peer SPIFFE ID 均为零；
 - plaintext 不能访问 mTLS 端口；
 - 无 OOM、无关键组件 crash loop；
 - 每个样本能够关联到唯一 run 和 Agent/Deployment Unit。
+
+正式 C 类运行前，WP1、WP2、WP5 和 WP6 对应的 hardening gate 必须在同一 Git
+commit/profile 上有远程 PASS 证据。若 hardening gate 不完整，只能产生
+`diagnostic` 或 `exploratory` 结果。
 
 ### 9.2 性能 SLO
 
@@ -1014,7 +1236,10 @@ OpenClaw `x509pop` 身份平面、SVID 签发、mTLS 或 OpenViking 服务面定
 - 最低 OpenClaw Deployment Unit 就绪率；
 - `openclaw_bootstrap_to_svid_ms` P95/P99 上限；
 - OpenClaw 整批 `time_to_95_percent_ready` 上限；
+- Guard decision P95/P99 和 timeout 上限；
+- `guarded_request_e2e_ms` P95/P99 上限；
 - OpenViking 请求成功率和 P95/P99 上限；
+- SVID 轮换业务中断、Agent ban 新连接拒绝和旧连接排空上限；
 - 最大 CPU、内存、FD 和重启次数；
 - 单批 timeout。
 
@@ -1027,10 +1252,12 @@ OpenClaw `x509pop` 身份平面、SVID 签发、mTLS 或 OpenViking 服务面定
 先保留现场并定位：
 
 - 身份正确性失败；
+- Guard fail-open、旁路成功、digest/decision 绑定失败或审计链缺失；
 - 成功率低于冻结 SLO；
 - P99 超过冻结 SLO；
 - 批次 timeout；
 - SPIRE、Provider、Trustee 或 OpenViking OOM/重启；
+- Guard 或 Guard-gated egress OOM、重启或持续排队；
 - CPU 长时间高于安全水位；
 - 文件描述符、端口、PID 或 conntrack 接近上限；
 - datastore 持续锁等待；
@@ -1059,24 +1286,41 @@ OpenClaw `x509pop` 身份平面、SVID 签发、mTLS 或 OpenViking 服务面定
 
 R 只用于增加统计样本，不代表并发 OpenViking 数量。
 
-### 10.2 B 类：多 OpenClaw 到单 OpenViking
+### 10.2 B/C 类：多 OpenClaw 到单 OpenViking
 
 | 场景 | OpenClaw 单元数 | 请求模式 | 主要输出 |
 | --- | ---: | --- | --- |
 | 身份启动基线 | 1 | 无业务请求 | bootstrap 到 SVID |
 | 批量身份启动 | 指数增长 | 无业务请求 | 就绪率和身份平面容量 |
-| mTLS burst | 代表性 N | 新连接 | 握手容量 |
-| mTLS keep-alive | 代表性 N | 连接复用 | 稳定 QPS |
-| 固定 QPS | 代表性 N | 逐级加压 | OpenViking 延迟和错误率 |
-| 固定并发 | 代表性 N | 逐级加压 | 最大稳定并发 |
+| diagnostic mTLS-only | 代表性 N | 新连接/复用 | 纯握手和 mTLS 分段基线，不进入正式 C 类 |
+| Guard decision baseline | 1 | 固定最小业务请求 | Guard decision 与 gated E2E 分段 |
+| Guard-gated burst | 代表性 N | 每请求新连接 | Guard、握手和业务容量 |
+| Guard-gated keep-alive | 代表性 N | 连接复用 | 稳定 QPS 与旧连接行为 |
+| Guard-gated 固定 QPS | 代表性 N | 逐级加压 | Guard/OpenViking 延迟和错误率 |
+| Guard-gated 固定并发 | 代表性 N | 逐级加压 | 最大稳定并发 |
 | bootstrap steady | 代表性 N | 首次 SVID 轮换前 | 不含轮换的稳定性 |
 | rotation steady | 代表性 N | 至少两次 SVID serial 变化 | 轮换期间错误率和资源 |
-| 完整 OpenClaw | 1、拐点前、拐点附近 | 真实应用请求 | 应用开销对照 |
+| 完整 OpenClaw | 1、拐点前、拐点附近 | 真实 Guard-gated 请求 | 应用开销和完整审计链 |
 
 完整 OpenClaw 测试不必覆盖所有 N。先用轻量身份和 mTLS 客户端找到基础设施边界，
 再在少量规模点验证完整应用，避免 LLM 时延和费用主导结果。
 
-### 10.3 D 类：多 OpenViking RATS 容量（后续）
+### 10.3 生命周期与拒绝收敛
+
+| 场景 | 连接状态 | 主要输出 |
+| --- | --- | --- |
+| SVID 自动轮换 | 新连接和已有连接 | 中断时间、错误率、serial 变化 |
+| Workload API 短时不可用 | 新请求 | fail-closed 时间和恢复时间 |
+| SPIRE Agent 重启 | 新连接和已有连接 | 恢复时间和隔离完整性 |
+| workload entry 删除 | 新连接和已有连接 | 新连接拒绝与旧连接排空 |
+| Agent ban/delete | 新连接和已有连接 | 拒绝收敛、最大残留连接时间 |
+| trust bundle 更新/旧 bundle | 新连接 | 更新收敛和旧 bundle 拒绝 |
+| egress/Guard 重启 | 业务请求 | fail-closed、恢复和重复请求行为 |
+
+生命周期场景使用冻结的连接最大生命周期、idle timeout 和 retry policy。任何
+fail-open、明文/API key-only fallback 或无限存活的旧连接都属于正确性失败。
+
+### 10.4 D 类：多 OpenViking RATS 容量（后续）
 
 | 场景 | OpenViking/TDVM 数 | 启动模型 | 主要输出 |
 | --- | ---: | --- | --- |
@@ -1096,39 +1340,54 @@ R 只用于增加统计样本，不代表并发 OpenViking 数量。
 - [ ] 冻结 OpenViking identity cold start，不包含 TDVM boot 和镜像传输；
 - [ ] 冻结 OpenClaw 为独立 x509pop Agent、共享 workload SPIFFE ID；
 - [ ] 明确 SVID 实际持有者为 mTLS egress proxy；
-- [ ] 冻结 T0/T1/T2/T3 时间点；
+- [ ] 冻结 run 级 runtime 隔离与 run 内 Unit 隔离的边界；
+- [ ] 冻结共享 Guard、每 Unit Guard 或 Guard pool 的实例基数；
+- [ ] 冻结 Guard mode、Guard/authorization contract 版本和请求摘要算法；
+- [ ] 冻结正式 C 类必须经过 Guard-gated egress，mTLS-only 仅为诊断场景；
+- [ ] 冻结 T0-T3、C0-C3、G0-G3 时间点；
 - [ ] 冻结成功、失败、timeout 和 retry 定义；
+- [ ] 冻结 binding store、`instance_id`、合法 key rotation 和 clone conflict 语义；
+- [ ] 冻结连接最大生命周期、idle timeout 和生命周期收敛 SLO；
 - [ ] 定义 manifest、receipt 和 summary schema；
 - [ ] 明确 TDVM required、mock evidence/Trustee 和 real Quote deferred 边界；
+- [ ] 将 WP1、WP2、WP5、WP6 的验收状态定义为正式 C 类 hardening gate；
 - [ ] 固化 `mtls-smoke` 依赖锁定方式，提交可复现的 `go.sum`。
 
 完成标准：同一份原始数据能够由不同人计算出相同成功率和百分位。
 
-### Phase 1：补齐埋点和 controller 垂直切片
+### Phase 1：建立 hardening gate、埋点和 controller 垂直切片
 
+- [ ] 在目标 Linux/TDVM commit/profile 上重新验证 WP1 Guard 同请求门控；
+- [ ] 验证 WP2 唯一受控路径和所有旁路拒绝；
+- [ ] 记录 WP5 run/runtime 隔离与 WP6 审计字段的 gate 版本；
 - [ ] NodeAttestor duration 加入 `result/reason` 维度；
 - [ ] 保留 attempts、evidence bytes 和 Trustee requests；
 - [ ] 输出结构化 attestation 完成事件；
 - [ ] 增加 mock Provider/Trustee duration、in-flight 和 reason 指标；
+- [ ] 增加 Guard/egress decision、duration、in-flight 和 reason 指标；
 - [ ] 实现统一 monotonic benchmark controller；
 - [ ] 实现 OpenViking service SVID probe；
 - [ ] SVID receipt 输出 serial、NotBefore 和 NotAfter；
 - [ ] 实现 Server Agent/entry 轮询，不用 healthcheck 代替 T1/T2；
+- [ ] 实现正式请求的 request/decision/digest/mTLS/marker 关联 receipt；
 - [ ] 验证每轮冷启动不会复用旧 Agent/SVID；
 - [ ] 生成第一份完整 run 目录。
 
 完成标准：一个 OpenViking 冷启动 run 能够生成 manifest、原始 receipt、
-Prometheus 快照和 report。
+Prometheus 快照和 report；一个最小 Guard-gated 请求能够生成完整因果链 receipt。
 
 ### Phase 2：实现 OpenViking RATS 重复采样
 
 - [ ] 计时前预加载镜像并预热 Provider/Trustee；
 - [ ] 参数化 run-scoped Guest root、`data_dir`、socket、容器名和证明密钥；
+- [ ] 每个 run 使用独立 `RUN_ID`，清理脚本只能处理当前 run；
 - [ ] 从新 Attestation Key 确定本轮预期 Agent ID；
+- [ ] 按冻结合同生成唯一 `instance_id` 或执行显式合法 key rotation；
 - [ ] 实现顺序 identity cold start、状态轮询和 timeout；
 - [ ] 实现 run-scoped OpenViking workload entry 并显式使用本轮 parent ID；
 - [ ] 实现 OpenViking 服务 SVID 精确校验；
 - [ ] 按精确 Agent ID/entry ID 执行安全 teardown；
+- [ ] 不清空 binding store，并保留 clone/state/storage 失败样本；
 - [ ] 确认旧 Agent 不会使“恰好一个 Agent”的单实例 fixture 误判；
 - [ ] 采集各组件和主机资源；
 - [ ] 分别汇总 RATS success rate、identity ready rate、P50/P95/P99 和 attempts。
@@ -1142,43 +1401,63 @@ Prometheus 快照和 report。
 - [ ] 参数化 OpenClaw 独立 `x509pop` Agent ID、配置和容器名；
 - [ ] 为每个 OpenClaw 使用独立 Agent 状态和 Workload API；
 - [ ] 为每个 Unit 创建唯一 entry ID 和 `argus.benchmark.unit` selector；
-- [ ] 每 Unit 建立独立 mTLS egress proxy、metrics 端口和 source IP；
+- [ ] 每 Unit 建立独立 Guard-gated mTLS egress proxy、metrics 端口和 source IP；
+- [ ] 按冻结拓扑生成 Guard endpoint，并记录 Guard 实例基数；
+- [ ] 验证每 Unit 只能访问其分配的 egress，所有 egress 只能走 Guard ALLOW 路径；
 - [ ] 批量获取并精确校验共享 ID 的 OpenClaw-side egress proxy SVID；
-- [ ] 支持 burst、ramp、bootstrap-steady、rotation-steady 和 churn；
+- [ ] 支持 burst、ramp 和 bootstrap-steady；rotation-steady/churn 在 Phase 5 启用；
 - [ ] 输出每个 Deployment Unit 的原始 receipt。
 
-完成标准：N=1、10、32 的 OpenClaw 身份启动和 mTLS 请求结果可重复，且不会触发
-额外 `argus_tdx` Node Attestation。
+完成标准：N=1、10、32 的 OpenClaw 身份启动和最小 Guard-gated 请求结果可重复，
+且不会触发额外 `argus_tdx` Node Attestation。
 
-### Phase 4：搜索多 OpenClaw 身份和 mTLS 容量
+### Phase 4：搜索多 OpenClaw 身份和 Guard-gated 业务容量
 
 - [ ] 按指数序列扩大 `N_openclaw`；
 - [ ] 找到首次失败点并细化边界；
 - [ ] 重复验证 `N_openclaw_knee` 和 `N_openclaw_max_stable`；
-- [ ] 实现输出逐请求 JSONL 的轻量 mTLS load client；
-- [ ] 对单个 OpenViking 执行新连接和 keep-alive 测试；
+- [ ] 实现输出逐请求 JSONL 的 Guard-gated 轻量 load client；
+- [ ] 对单个 OpenViking 执行 Guard-gated 新连接和 keep-alive 测试；
+- [ ] 单独执行 `diagnostic_mtls_only` 分段基线，不混入正式 C 类；
+- [ ] 分开统计 Guard、egress、mTLS 和 OpenViking 延迟与资源；
 - [ ] 搜索最大稳定请求并发和 QPS；
-- [ ] 分开报告 bootstrap、rotation 和业务请求阶段；
-- [ ] 记录 OpenViking 和身份平面资源；
+- [ ] 分开报告身份 bootstrap 和 Guard-gated 业务请求阶段；
+- [ ] 记录 Guard、OpenViking 和身份平面资源；
+- [ ] 每个正式成功请求校验完整因果链，每个拒绝请求校验无 marker；
 - [ ] 输出 B/C 类正式报告。
 
 完成标准：能够回答“多少个 OpenClaw 部署单元在什么请求模型下稳定工作，以及
-继续增加时首先影响什么”。
+继续增加时首先影响 Guard、身份平面、mTLS 还是 OpenViking”。hardening gate
+未通过时不得输出正式 C 类结论。
 
-### Phase 5：完整 OpenClaw 代表性验证
+### Phase 5：生命周期和拒绝收敛
+
+- [ ] 完成 SVID rotation、Workload API 故障和 Agent/Server 重启测试；
+- [ ] 完成 entry 删除、Agent ban/delete、SVID 到期和 bundle 更新测试；
+- [ ] 同时观察已有 keep-alive/TLS 连接和新连接；
+- [ ] 记录拒绝时间、恢复时间、业务中断和旧连接排空时间；
+- [ ] 验证所有故障均不回退到明文、API key-only 或未授权直连；
+- [ ] 将 `bootstrap-steady`、`rotation-steady` 和 lifecycle fault 场景分开。
+
+完成标准：WP3 定义的每个场景都有正向、负向和恢复 receipt，并满足冻结的
+工程 SLO。
+
+### Phase 6：完整 OpenClaw 和运维代表性验证
 
 - [ ] 选择单实例、拐点前和拐点附近规模；
-- [ ] 替换轻量客户端为真实 OpenClaw 调用；
+- [ ] 替换轻量客户端为真实 OpenClaw Guard-gated 调用；
 - [ ] 使用 run-scoped bridge、唯一 OpenClaw IP 和唯一 proxy listen port；
 - [ ] 验证每个 OpenClaw 只能访问分配给自己的 egress proxy；
 - [ ] 固定模型、prompt、响应上限和外部依赖；
-- [ ] 分开报告身份/mTLS 延迟与模型业务延迟；
+- [ ] 分开报告身份、Guard/mTLS 与模型业务延迟；
+- [ ] 使用真实 OpenViking marker 验证完整审计链；
 - [ ] 对比轻量与完整进程的资源增量。
+- [ ] 执行 WP7 canary、切换和回滚脚本并归档版本、身份和流量证据；
 
 完成标准：确认轻量压测结论能够解释真实应用部署，但不把模型 API 容量归因给
-Argus/SPIRE。
+Argus/SPIRE；canary/回滚形成独立运维验收报告，不混入容量百分位。
 
-### Phase 6：多 OpenViking RATS 容量（条件触发）
+### Phase 7：多 OpenViking RATS 容量（条件触发）
 
 - [ ] 确认项目已进入多个独立 OpenViking/TDVM 场景；
 - [ ] 为每个 OpenViking 建立独立 `argus_tdx` Agent 身份域；
@@ -1197,11 +1476,20 @@ A 类单 OpenViking RATS 报告至少输出：
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | PASS/FAIL |
 
-B/C 类多 OpenClaw 容量报告至少输出：
+B 类多 OpenClaw 身份容量报告至少输出：
 
-| N OpenClaw | 批次 | Unit 就绪率 | SVID P95 | SVID P99 | mTLS P95 | 请求 P95 | 请求 P99 | Ready/s | CPU 峰值 | RSS 峰值 | 结果 |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | PASS/FAIL |
+| N OpenClaw | 批次 | Unit 就绪率 | SVID P95 | SVID P99 | Ready/s | CPU 峰值 | RSS 峰值 | 结果 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | PASS/FAIL |
+
+C 类 Guard-gated 业务容量报告至少输出：
+
+| N OpenClaw | Guard profile | 请求数 | 成功率 | Guard P95/P99 | mTLS P95/P99 | Gated E2E P95/P99 | stable QPS | 审计关联缺失 | 未授权 marker | 结果 |
+| ---: | --- | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | --- |
+| 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 待测 | 0 | 0 | PASS/FAIL |
+
+生命周期报告至少输出场景、连接状态、拒绝时间、恢复时间、业务中断、旧连接排空、
+fallback 观察和 PASS/FAIL。生命周期结果不得并入普通 steady-state 延迟分布。
 
 报告必须同时写明：
 
@@ -1213,6 +1501,12 @@ OpenViking attestation profile:
 OpenClaw attestor:
 OpenClaw workload identity model:
 OpenClaw SVID holder:
+Pre-RA hardening gate version/status:
+Guard mode/contract:
+Guard instance topology:
+Egress profile:
+Binding store backend/schema:
+Connection lifetime/idle timeout:
 OpenViking count:
 OpenViking RATS repetitions:
 OpenClaw unit count:
@@ -1238,10 +1532,14 @@ Run IDs:
 | OpenClaw SVID 变慢 | x509pop、registration、CA、Workload API | OpenClaw admission/SVID 分段耗时 |
 | OpenClaw ready/s 平台化 | SPIRE Server、CA 或 datastore | CPU、DB write/lock、gRPC throughput |
 | 只有 OpenClaw burst 失败 | 启动风暴和瞬时资源上限 | burst 与 ramp 对比 |
+| Guard decision P95/P99 抬升 | Guard、egress 或 Guard 网络路径 | decision duration、in-flight、timeout、CPU/RSS |
+| Guard 正常但 Gated E2E 变慢 | mTLS、OpenViking 或连接管理 | G0-G3 分段、handshake、服务延迟 |
 | Agent 正常但 OpenViking 请求慢 | OpenViking 服务面 | QPS、连接数、服务 CPU/RSS |
 | 新连接慢、keep-alive 正常 | TLS/证书/FD/端口 | handshake、FD、conntrack、重传 |
+| ban 后新连接拒绝但旧连接仍工作 | 连接生命周期和排空策略 | SVID NotAfter、连接年龄、max lifetime、drain receipt |
 | 容器数继续增加但业务吞吐不增 | 主机或 OpenViking 饱和 | throughput gain、resource headroom |
 | 出现错误身份或错误 SVID | 隔离/注册逻辑错误 | parent、selector、socket、原始 receipt |
+| Guard 故障仍出现 marker | egress fail-open 或旁路 | request/decision/digest/marker 因果链和网络路径 |
 
 最终报告必须给出证据链，而不是仅写“性能下降”。
 除非执行 D 类多 OpenViking 实验，否则 OpenClaw 扩容中的退化不得归因于
@@ -1273,10 +1571,11 @@ RATS 可观测评测链，
 
 ```text
 构建 [N] 个独立 x509pop Agent 身份域、共享 OpenClaw workload SPIFFE ID 到单
-OpenViking 的 SPIFFE mTLS 压测模型，
-在 [并发/QPS 模型] 下实现 [成功率] 和 [P95/P99]，结合 SPIRE、OpenViking 与
-Linux 资源指标定位容量拐点；测试结果基于 mock Trustee，未包含真实 Quote/QGS
-开销。
+OpenViking 的 Guard-gated SPIFFE mTLS 压测模型，
+在 [并发/QPS 模型] 下实现 [成功率]、Guard decision P95/P99 [A/B ms] 和业务
+端到端 P95/P99 [C/D ms]，结合 Guard、SPIRE、OpenViking 与 Linux 资源指标定位
+容量拐点；测试使用 `mock_allow` 和 mock Trustee，只证明门控执行正确性，
+未包含真实 Quote/QGS 或生产 RA 决策开销。
 ```
 
 在正式结果产生前，只能写“设计/实现评测体系”，不能填写目标 N 或把 100 写成
@@ -1382,6 +1681,35 @@ Linux 资源指标定位容量拐点；测试结果基于 mock Trustee，未包�
 - renewal 期间的延迟和错误单独报告；
 - SVID rotation 不计为 `argus_tdx` re-attestation。
 
+### 15.11 Guard-bypass 样本混入正式容量
+
+控制：
+
+- 正式 C 类 scenario 只能调用 Guard-gated egress；
+- mTLS-only 使用 `diagnostic_mtls_only` 名称和独立结果目录；
+- manifest 记录 hardening gate、Guard mode、合同版本和实例基数；
+- 每个正式成功请求必须关联 decision/digest/marker；
+- 任一 Guard fail-open、旁路成功或未授权 marker 使整批结果无效。
+
+### 15.12 清空 binding store 制造成功冷启动
+
+控制：
+
+- binding store 在同一批正式 A 类实验中保持持久；
+- 每轮按冻结合同使用唯一 `instance_id` 或显式合法 key rotation；
+- clone conflict、state corrupt 和 storage error 全部保留；
+- 备份恢复单独成组，不与正常 cold start 延迟混合；
+- 不删除失败 binding 后重跑并只保留成功样本。
+
+### 15.13 Guard 实例基数变化污染容量对比
+
+控制：
+
+- manifest 记录共享 Guard、每 Unit Guard 或 Guard pool；
+- Guard 实例数、资源限额、timeout 和网络路径保持固定；
+- 改变 Guard 实例基数时建立新 topology profile；
+- 不把扩展 Guard 后的结果与单共享 Guard 基线直接计算同一容量曲线。
+
 ## 16. 完成定义
 
 本评测计划完成需要同时满足：
@@ -1395,6 +1723,14 @@ Linux 资源指标定位容量拐点；测试结果基于 mock Trustee，未包�
 - 多 OpenClaw 测试使用唯一 x509pop Agent 身份域、唯一 socket/entry/proxy，
   但共享业务 workload SPIFFE ID；
 - OpenClaw SVID 持有者被准确记录为 mTLS egress proxy，而不是应用进程；
+- 正式 C 类结果只来自通过 WP1/WP2/WP5/WP6 hardening gate 的 commit/profile；
+- 正式 C 类请求全部经过 Guard-gated egress，并拥有完整
+  request/decision/digest/mTLS/marker 因果链；
+- Guard fail-open、旁路成功、未授权 marker 和审计关联缺失均为零；
+- Guard、mTLS 和 OpenViking 分段耗时与 gated E2E 已分开报告；
+- mTLS-only 结果已标记为 diagnostic，未混入正式业务容量；
+- 生命周期场景已分别记录轮换、拒绝、恢复和旧连接排空时间；
+- A 类未通过清空 binding store 绕过 clone 检测；
 - benchmark launcher 未使用当前固定 `compose.center.yaml` 或
   `docker compose --scale` 生成多 Unit；
 - 已通过指数搜索和边界细化得到 `N_openclaw_knee` 与
@@ -1403,6 +1739,7 @@ Linux 资源指标定位容量拐点；测试结果基于 mock Trustee，未包�
 - 已完成多个 OpenClaw Deployment Unit 到单 OpenViking 的代表性测试；
 - `bootstrap-steady` 与 `rotation-steady` 分开，SVID renewal 未计为
   `argus_tdx` re-attestation；
+- canary、切换和回滚形成独立运维验收报告，未混入容量百分位；
 - 未把 OpenClaw 数量写成自定义 NodeAttestor 容量；
 - mock、真实实现和 deferred 能力边界在所有报告中一致；
 - 简历表述能够追溯到正式 run，而不是目标值或人工估计。
@@ -1413,23 +1750,28 @@ D 类多 OpenViking RATS 容量是条件触发的扩展项，不是当前主计�
 
 建议按以下顺序进入代码实施：
 
-1. 冻结 manifest/sample/summary schema、`capacity-slo.yaml`、身份模型与 SVID
-   TTL，并为 `mtls-smoke` 固化可复现依赖；
-2. 实现 monotonic benchmark controller 的单 OpenViking 垂直切片，包括
-   T0-T3、Server 轮询、SVID receipt、timeout receipt 和精确 teardown；
-3. 补齐 NodeAttestor 成功/失败 duration、结构化完成事件，以及 mock
-   Provider/Trustee duration、in-flight、reason 和资源采集；
-4. 将 OpenViking Agent data、Attestation Key、socket、容器和 registration
-   entry 改为 run-scoped，完成真正的 identity cold start；
-5. 在 Linux Host + TDVM 上执行多轮独立 OpenViking 冷启动，分别形成 RATS
-   success、identity ready、P95/P99 与 Attestation-to-SVID 基线；
-6. 实现 benchmark 专用 OpenClaw Unit launcher，先用 N=2 完成证书、Agent ID、
-   entry、socket、proxy、source IP 和端口隔离门槛；
-7. 完成 `N_openclaw=1、10、32` 的身份启动与最小 mTLS 基线；
-8. 执行 burst/ramp 指数搜索和边界细化，得到 `N_openclaw_knee` 与
-   `N_openclaw_max_stable`；
-9. 执行单 OpenViking 的新连接、keep-alive、固定并发和固定 QPS 压测，并分开
-   `bootstrap-steady` 与 `rotation-steady`；
-10. 在单实例、拐点前和拐点附近运行完整 OpenClaw，形成轻量客户端对照；
-11. 冻结首版 benchmark report 和可追溯的简历数据；
-12. 仅在多个独立 OpenViking/TDVM 进入范围后实施 D 类 NodeAttestor 容量测试。
+1. 冻结 hardening gate、Guard topology/contract、binding 生命周期、连接生命周期、
+   manifest/sample/summary schema、`capacity-slo.yaml`、身份模型与 SVID TTL；
+2. 在目标 Linux/TDVM commit/profile 上完成 WP1 Guard 同请求门控和 WP2 旁路拒绝
+   的远程验收，记录 WP5/WP6 gate 版本；
+3. 实现 monotonic benchmark controller 的单 OpenViking 垂直切片，包括 T0-T3、
+   Server 轮询、SVID/timeout receipt、binding 分类和精确 teardown；
+4. 补齐 NodeAttestor、mock Provider/Trustee、Guard/egress 的 duration、in-flight、
+   reason、结构化事件和资源采集，并为 `mtls-smoke` 固化可复现依赖；
+5. 将 OpenViking Agent data、Attestation Key、socket、容器和 registration
+   entry 改为 run-scoped，在不清空 binding store 的条件下完成 identity cold start；
+6. 在 Linux Host + TDVM 上执行多轮独立 OpenViking 冷启动，形成 RATS success、
+   identity ready、P95/P99 与 Attestation-to-SVID 基线；
+7. 实现 benchmark 专用 OpenClaw Unit launcher，先用 N=2 完成证书、Agent ID、
+   entry、socket、Guard-gated proxy、source IP 和端口隔离门槛；
+8. 完成 `N_openclaw=1、10、32` 的身份启动、`diagnostic_mtls_only` 和最小
+   Guard-gated 业务基线；
+9. 执行 burst/ramp 指数搜索和边界细化，分别得到 OpenClaw 身份容量和
+   Guard-gated 业务的 `N_openclaw_knee`/`N_openclaw_max_stable`；
+10. 执行 Guard-gated 新连接、keep-alive、固定并发和固定 QPS 压测，分开报告
+    Guard、mTLS、OpenViking 和 gated E2E；
+11. 完成 SVID rotation、Agent ban、entry 删除、Workload API 故障和旧连接排空
+    的生命周期与拒绝收敛实验；
+12. 在单实例、拐点前和拐点附近运行完整 OpenClaw，并单独完成 canary/回滚验收；
+13. 冻结首版 benchmark report 和可追溯的简历数据；
+14. 仅在多个独立 OpenViking/TDVM 进入范围后实施 D 类 NodeAttestor 容量测试。
