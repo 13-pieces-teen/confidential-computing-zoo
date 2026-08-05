@@ -179,7 +179,12 @@ func runClientProxy(arguments []string) error {
 
 		recorder := &statusRecorder{ResponseWriter: writer}
 		if sourceErr != nil || (allowedSourceIP != nil && !sourceIP.Equal(allowedSourceIP)) {
-			http.Error(recorder, "OpenClaw egress source rejected", http.StatusForbidden)
+			// Write the exact rejection body without the trailing newline that
+			// http.Error would append, so verifiers can byte-match the response.
+			recorder.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			recorder.Header().Set("X-Content-Type-Options", "nosniff")
+			recorder.WriteHeader(http.StatusForbidden)
+			_, _ = recorder.Write([]byte("OpenClaw egress source rejected"))
 			log.Printf(
 				"request_id=%s method=%s path=%s status=%d duration=%s source_ip=%s decision=source_rejected",
 				requestID,
