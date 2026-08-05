@@ -151,6 +151,8 @@ The validation checks:
 - one live `x509pop` Agent and one live `argus_tdx` Agent;
 - no live Join Token Agent;
 - different workload parents and Workload API sockets;
+- active Workload API mount sources match the explicit `V2_RUNTIME_DIR` and
+  `V2_GUEST_RUN` values;
 - exact OpenClaw and OpenViking workload SVIDs;
 - cross-role label rejection on both Agents;
 - Guard `mock_allow` response without fabricated verified claims;
@@ -173,13 +175,14 @@ configured OpenClaw model and a non-root OpenViking API key:
 bash core/spire/v2/verify-openclaw-plugin-e2e.sh
 ```
 
-The script sends a real `openclaw agent` turn with a unique marker and requires
-its stable JSON result to report `ok=true` and `status=ok`. Before issuing any
-E2E scan, commit, or inspection request, it captures the mTLS proxy log window
-and requires a successful write-class `/api/v1/` request from the configured
-OpenClaw source IP. It then locates the captured marker through the OpenViking
-sessions API over the same mTLS egress, commits the captured session, and waits
-for `commit_count > 0` plus an archive overview. Set
+The script sends a real gateway-backed `openclaw agent` turn with a unique
+marker. Its JSON result must report `status=ok`, a non-empty `runId`, and a
+`result` object. Before issuing any E2E scan, commit, or inspection request, it
+captures the mTLS proxy log window and requires a successful write-class
+`/api/v1/` request from the configured OpenClaw source IP. After locating the
+captured marker, it also requires the pre-scan write evidence to target that
+exact OpenViking session's `/messages` endpoint. It then commits the captured
+session and waits for `commit_count > 0` plus an archive overview. Set
 `V2_E2E_REQUIRE_MEMORY=1` only when the OpenViking LLM and embedding backends
 are configured and memory extraction is part of the remote acceptance target.
 

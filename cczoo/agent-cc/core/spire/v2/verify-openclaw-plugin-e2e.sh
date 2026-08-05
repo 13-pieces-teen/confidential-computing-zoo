@@ -145,23 +145,33 @@ if ! agent_output="$(
     fail 'real OpenClaw agent turn failed'
 fi
 [[ -n "$agent_output" ]] || fail 'real OpenClaw agent turn returned empty output'
-printf '%s' "$agent_output" | python3 -c '
+if ! agent_run_id="$(
+    printf '%s' "$agent_output" | python3 -c '
 import json
 import sys
 
 payload = json.load(sys.stdin)
 if not isinstance(payload, dict):
     raise SystemExit("agent JSON output is not an object")
-ok = payload.get("ok")
 status = payload.get("status")
-if ok is not True or status != "ok":
-    raise SystemExit(
-        "agent JSON output is not successful: "
-        f"ok={ok!r} status={status!r}"
-    )
-' || fail 'real OpenClaw agent turn did not return the successful JSON envelope'
-printf 'Real OpenClaw agent turn completed: session_key=%s output_chars=%s\n' \
-    "$SESSION_KEY" "${#agent_output}"
+if status != "ok":
+    raise SystemExit(f"agent JSON output status is not ok: {status!r}")
+run_id = payload.get("runId")
+if not isinstance(run_id, str) or not run_id.strip():
+    raise SystemExit("agent JSON output has no non-empty runId")
+result = payload.get("result")
+if not isinstance(result, dict):
+    raise SystemExit("agent JSON output has no result object")
+if payload.get("error") not in (None, "", False):
+    raise SystemExit("agent JSON output contains an error")
+print(run_id.strip())
+'
+)"; then
+    fail 'real OpenClaw agent turn did not return the successful gateway JSON envelope'
+fi
+[[ -n "$agent_run_id" ]] || fail 'real OpenClaw agent turn returned an empty runId'
+printf 'Real OpenClaw agent turn completed: session_key=%s run_id=%s output_chars=%s\n' \
+    "$SESSION_KEY" "$agent_run_id" "${#agent_output}"
 
 if ! agent_turn_proxy_logs="$(
     docker logs --since "$started_at" "$MTLS_CONTAINER" 2>&1
@@ -345,6 +355,30 @@ if [[ -z "$openviking_session_id" ]]; then
 fi
 printf 'OpenViking captured the real turn: session_id=%s marker=%s\n' \
     "$openviking_session_id" "$MARKER"
+
+session_write_evidence="$(
+    printf '%s\n' "$agent_write_evidence" \
+        | EXPECTED_SESSION_ID="$openviking_session_id" python3 -c '
+import os
+import re
+import sys
+from urllib.parse import quote
+
+session_id = os.environ["EXPECTED_SESSION_ID"]
+encoded_session_id = quote(session_id, safe="")
+expected_path = f"/api/v1/sessions/{encoded_session_id}/messages"
+for raw_line in sys.stdin:
+    line = raw_line.rstrip()
+    fields = dict(re.findall(r"(?:^|\s)([a-z_]+)=([^\s]+)", line))
+    if fields.get("path") == expected_path:
+        print(line)
+'
+)"
+if [[ -z "$session_write_evidence" ]]; then
+    fail "agent-turn write evidence is not linked to captured OpenViking session $openviking_session_id"
+fi
+session_write_first="${session_write_evidence%%$'\n'*}"
+printf 'Captured-session mTLS write evidence:\n%s\n' "$session_write_first"
 
 task_id="$(
     docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
@@ -581,6 +615,6 @@ printf '%s\n' \
     "OpenClaw session key: $SESSION_KEY" \
     "OpenViking session ID: $openviking_session_id" \
     "Processing: $processing_summary" \
-    'Agent-turn proxy evidence: allowed source issued a write-class /api/v1 request before E2E inspection traffic.' \
+    'Agent-turn proxy evidence: allowed source wrote the captured session /messages endpoint before E2E inspection traffic.' \
     'The unique marker was subsequently captured and archived through the SPIFFE mTLS egress.' \
     'Memory extraction was required only when V2_E2E_REQUIRE_MEMORY=1.'

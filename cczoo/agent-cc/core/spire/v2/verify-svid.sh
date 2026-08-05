@@ -42,6 +42,70 @@ fail() {
     && "$REMOTE_RUN" != */ ]] \
     || fail "V2_GUEST_RUN must be an unambiguous child of /run/argus-spire-v2: $REMOTE_RUN"
 
+expected_openclaw_run="$RUNTIME_DIR/openclaw-agent-run"
+if ! actual_openclaw_run="$(
+    docker inspect "$OPENCLAW_CONTAINER" | python3 -c '
+import json
+import os
+import sys
+
+containers = json.load(sys.stdin)
+if len(containers) != 1:
+    raise SystemExit("expected one OpenClaw mTLS container")
+for mount in containers[0].get("Mounts") or []:
+    if mount.get("Destination") == "/opt/spire/run/openclaw":
+        source = str(mount.get("Source") or "")
+        if not source:
+            raise SystemExit("OpenClaw Workload API mount has no source")
+        print(os.path.normpath(source))
+        break
+else:
+    raise SystemExit("OpenClaw mTLS container has no Workload API mount")
+'
+)"; then
+    fail "cannot inspect the active OpenClaw Workload API mount in $OPENCLAW_CONTAINER"
+fi
+expected_openclaw_run="$(
+    python3 -c 'import os, sys; print(os.path.normpath(sys.argv[1]))' \
+        "$expected_openclaw_run"
+)"
+[[ "$actual_openclaw_run" == "$expected_openclaw_run" ]] \
+    || fail "V2_RUNTIME_DIR does not match the active OpenClaw runtime: expected mount $expected_openclaw_run, actual $actual_openclaw_run"
+
+if ! actual_openviking_run="$(
+    ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" \
+        sudo -n /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" \
+        | python3 -c '
+import json
+import os
+import sys
+
+containers = json.load(sys.stdin)
+if len(containers) != 1:
+    raise SystemExit("expected one OpenViking mTLS container")
+for mount in containers[0].get("Mounts") or []:
+    if mount.get("Destination") == "/opt/spire/run/openviking":
+        source = str(mount.get("Source") or "")
+        if not source:
+            raise SystemExit("OpenViking Workload API mount has no source")
+        print(os.path.normpath(source))
+        break
+else:
+    raise SystemExit("OpenViking mTLS container has no Workload API mount")
+'
+)"; then
+    fail "cannot inspect the active OpenViking Workload API mount in $OPENVIKING_CONTAINER"
+fi
+expected_openviking_run="$(
+    python3 -c 'import os, sys; print(os.path.normpath(sys.argv[1]))' "$REMOTE_RUN"
+)"
+[[ "$actual_openviking_run" == "$expected_openviking_run" ]] \
+    || fail "V2_GUEST_RUN does not match the active OpenViking runtime: expected mount $expected_openviking_run, actual $actual_openviking_run"
+
+printf '%s\n' \
+    "OpenClaw runtime mount: $actual_openclaw_run" \
+    "OpenViking runtime mount: $actual_openviking_run"
+
 spire_server() {
     docker compose -f "$SCRIPT_DIR/compose.center.yaml" exec -T spire-server \
         /opt/spire/bin/spire-server "$@" -socketPath "$SERVER_SOCKET"

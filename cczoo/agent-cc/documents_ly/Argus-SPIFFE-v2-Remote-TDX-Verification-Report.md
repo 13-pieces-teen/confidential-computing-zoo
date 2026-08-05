@@ -68,7 +68,7 @@ RUN_ID=`remote-fixed-20260805T034447Z`（全新，未复用）；日志 `/tmp/ar
 
 - 失败命令：`verify-openclaw-plugin-e2e.sh` 的 agent JSON 信封断言；exit 1
 - 错误原文：`agent JSON output is not successful: ok=None status='ok'`
-- 根因（含上游证据）：上游 OpenClaw 的 `openclaw agent --json`（gateway 路径）信封自 v2026.1.8 起一直是 `{runId, status, summary, result}`，**任何已发布版本都没有顶层 `ok` 字段**（上游 `src/commands/agent-via-gateway.ts` 的 `buildGatewayJsonResponse` 原样输出 gateway payload；全历史 pickaxe 无 `ok` 增删记录）。带 `{"ok":true,"status":"ok"}` 的信封属于**另一个子命令** `openclaw agent exec --json`（≥ v2026.7.2-beta.5 才存在；本机容器为 2026.6.11，无此子命令）。即 aa240a5 新增的 `ok=true` 断言针对的是 `agent --json` 永远不会满足的契约。
+- 根因（含上游证据）：远程容器使用的 OpenClaw v2026.6.11，以及本报告核对时的 upstream main，`openclaw agent --json` gateway 路径信封均为 `{runId, status, summary, result}`，没有顶层 `ok` 字段；上游 `src/commands/agent-via-gateway.ts` 的 `buildGatewayJsonResponse` 原样输出 gateway payload。带 `{"ok":true,"status":"ok"}` 的信封属于另一个子命令 `openclaw agent exec --json`（远程容器 v2026.6.11 无此子命令）。因此 aa240a5 新增的 `ok=true` 断言不符合本次被测 gateway CLI 契约。
 - 在约束（不允许放宽/删除断言、不允许改 SUT 造假）下无合规的最小修复：升级 OpenClaw 也无效（main 分支该路径仍无 `ok`）；改用 `agent exec` 会改变被测路径（headless 一次性运行，不再经过 gateway session + context-engine 插件，违背 E2E 目的）。
 
 **本轮可获得的部分证据**（手工提取，不替代自动化断言）：
