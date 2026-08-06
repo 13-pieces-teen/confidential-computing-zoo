@@ -332,6 +332,8 @@ OpenClaw
 
 在 `can_reattest=false` 保持不变的情况下，补齐：
 
+> **实现约束（远程验证记录 2026-08-06）**：SPIRE 1.15.1 的 `spire-server agent` CLI 不含 `update` 子命令（仅 ban/count/evict/list/purge/show），无法在 Agent 认证后修改 `can_reattest`。`can_reattest` 由 NodeAttestor 决定：OpenClaw `x509pop` Agent 为 `true`（可重认证），OpenViking `argus_tdx` Agent 为 `false`（满足本工作包"保持不变 false"要求）。因此 OpenClaw 侧生命周期测试观测 `can_reattest=true` 行为（SVID 到期自动重认证）；OpenViking 侧观测 `can_reattest=false` fail-closed。文档不应声称可在 CLI 层将 OpenClaw 设为 false。
+
 - workload SVID 自动轮换；
 - trust bundle 更新；
 - SPIRE Agent 重启；

@@ -133,11 +133,24 @@ func runServer(arguments []string) error {
 	listen := flags.String("listen", "0.0.0.0:1943", "mTLS listen address")
 	clientIDValue := flags.String("client-id", "", "only authorized client SPIFFE ID")
 	upstreamValue := flags.String("upstream", "", "optional plaintext HTTP upstream")
+	connMaxLifetime := flags.Duration(
+		"conn-max-lifetime",
+		60*time.Second,
+		"maximum TLS connection lifetime before it is forced closed",
+	)
+	connIdleTimeout := flags.Duration(
+		"conn-idle-timeout",
+		30*time.Second,
+		"idle keep-alive connection timeout",
+	)
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
 	if *socket == "" || *clientIDValue == "" {
 		return fmt.Errorf("-socket and -client-id are required")
+	}
+	if *connMaxLifetime <= 0 || *connIdleTimeout <= 0 {
+		return fmt.Errorf("-conn-max-lifetime and -conn-idle-timeout must be positive")
 	}
 	clientID, err := spiffeid.FromString(*clientIDValue)
 	if err != nil {
@@ -166,14 +179,21 @@ func runServer(arguments []string) error {
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       *connIdleTimeout,
 	}
 	errorChannel := make(chan error, 1)
 	go func() {
-		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(&lifetimeListener{Listener: listener, lifetime: *connMaxLifetime}); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errorChannel <- err
 		}
 	}()
-	log.Printf("SPIFFE mTLS server listening on %s; authorized client=%s", *listen, clientID)
+	log.Printf(
+		"SPIFFE mTLS server listening on %s; authorized client=%s; conn max lifetime=%s idle timeout=%s",
+		*listen,
+		clientID,
+		*connMaxLifetime,
+		*connIdleTimeout,
+	)
 
 	select {
 	case <-ctx.Done():
@@ -231,6 +251,16 @@ func runClientProxy(arguments []string) error {
 		"",
 		"required exact source IP authorized to use this workload identity",
 	)
+	connMaxLifetime := flags.Duration(
+		"conn-max-lifetime",
+		60*time.Second,
+		"maximum TLS connection lifetime before it is forced closed",
+	)
+	connIdleTimeout := flags.Duration(
+		"conn-idle-timeout",
+		30*time.Second,
+		"idle keep-alive connection timeout",
+	)
 	if err := flags.Parse(arguments); err != nil {
 		return err
 	}
@@ -254,6 +284,9 @@ func runClientProxy(arguments []string) error {
 	}
 	if *guardMaxBody <= 0 || *guardMaxBody > 64<<20 {
 		return fmt.Errorf("-guard-max-body must be greater than zero and at most 64 MiB")
+	}
+	if *connMaxLifetime <= 0 || *connIdleTimeout <= 0 {
+		return fmt.Errorf("-conn-max-lifetime and -conn-idle-timeout must be positive")
 	}
 	target, err := parseHTTPURL(*targetValue, true)
 	if err != nil {
@@ -324,13 +357,36 @@ func runClientProxy(arguments []string) error {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Transport = &http.Transport{
+	upstreamTransport := &http.Transport{
 		TLSClientConfig: tlsconfig.MTLSClientConfig(
 			source,
 			source,
 			tlsconfig.AuthorizeID(serverID),
 		),
+		MaxIdleConns:          10,
+		MaxIdleConnsPerHost:   2,
+		IdleConnTimeout:       *connIdleTimeout,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			rawConn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			return &lifetimeConn{Conn: rawConn, deadline: time.Now().Add(*connMaxLifetime)}, nil
+		},
 	}
+	proxy.Transport = upstreamTransport
+	// Drain idle mTLS connections whenever the Workload API reports an X.509
+	// context update, so a rotated SVID or trust bundle is used for new
+	// connections instead of reusing a stale one (WP3 convergence).
+	go func() {
+		_ = workloadapi.WatchX509Context(
+			ctx,
+			&x509ContextDrainWatcher{drain: func() { upstreamTransport.CloseIdleConnections() }},
+			workloadapi.WithAddr(*socket),
+		)
+	}()
 	proxy.ModifyResponse = func(response *http.Response) error {
 		response.Header.Del(requestIDHeader)
 		response.Header.Del(decisionIDHeader)
@@ -526,25 +582,32 @@ func runClientProxy(arguments []string) error {
 			receipt.VerificationMode,
 		)
 	})
+	listener, err := net.Listen("tcp", *listen)
+	if err != nil {
+		return fmt.Errorf("listen for local proxy: %w", err)
+	}
+	defer listener.Close()
 	server := &http.Server{
-		Addr:              *listen,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       *connIdleTimeout,
 	}
 	errorChannel := make(chan error, 1)
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(&lifetimeListener{Listener: listener, lifetime: *connMaxLifetime}); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errorChannel <- err
 		}
 	}()
 	log.Printf(
-		"local proxy listening on %s; mTLS target=%s authorized server=%s allowed source=%s Guard=%s mode=%s",
+		"local proxy listening on %s; mTLS target=%s authorized server=%s allowed source=%s Guard=%s mode=%s conn max lifetime=%s idle timeout=%s",
 		*listen,
 		target,
 		serverID,
 		allowedSourceIP.String(),
 		guard.endpoint,
 		guard.expectedMode,
+		*connMaxLifetime,
+		*connIdleTimeout,
 	)
 
 	select {
@@ -905,6 +968,59 @@ func validRequestID(value string) string {
 func newRequestID() (string, error) {
 	return randomHex(12)
 }
+
+// lifetimeConn wraps a net.Conn so it is closed once the configured maximum
+// connection lifetime is reached. This bounds how long a connection that was
+// negotiated with an old (rotated, revoked, or expired) identity can survive,
+// which is the WP3 identity-lifecycle convergence backstop.
+type lifetimeConn struct {
+	net.Conn
+	deadline time.Time
+}
+
+func (conn *lifetimeConn) Read(payload []byte) (int, error) {
+	if time.Now().After(conn.deadline) {
+		_ = conn.Close()
+		return 0, errors.New("connection max lifetime exceeded")
+	}
+	return conn.Conn.Read(payload)
+}
+
+func (conn *lifetimeConn) Write(payload []byte) (int, error) {
+	if time.Now().After(conn.deadline) {
+		_ = conn.Close()
+		return 0, errors.New("connection max lifetime exceeded")
+	}
+	return conn.Conn.Write(payload)
+}
+
+// lifetimeListener wraps a net.Listener so every accepted connection has a
+// bounded lifetime.
+type lifetimeListener struct {
+	net.Listener
+	lifetime time.Duration
+}
+
+func (listener *lifetimeListener) Accept() (net.Conn, error) {
+	conn, err := listener.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return &lifetimeConn{Conn: conn, deadline: time.Now().Add(listener.lifetime)}, nil
+}
+
+// x509ContextDrainWatcher drains idle mTLS connections whenever the Workload
+// API reports an X.509 context (SVID or trust bundle) update, so connections
+// carrying a rotated identity are not reused.
+type x509ContextDrainWatcher struct {
+	drain func()
+}
+
+func (watcher *x509ContextDrainWatcher) OnX509ContextUpdate(*workloadapi.X509Context) {
+	watcher.drain()
+}
+
+func (watcher *x509ContextDrainWatcher) OnX509ContextWatchError(error) {}
 
 func runProbe(arguments []string) error {
 	flags := flag.NewFlagSet("probe", flag.ContinueOnError)

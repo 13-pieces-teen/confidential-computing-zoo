@@ -274,6 +274,37 @@ egress: ... request_id=e3c0dc779397a811a22c3c78 client_request_id=verify-mtls-he
 
 静态检查：docker-gate 模块 `gofmt`/`go vet`/`go test`（含 allowlist 与 create 校验单元测试）PASS；新脚本 `bash -n` PASS。
 
+### 9.2 WP3：身份生命周期和拒绝收敛（阶段 A）
+
+**状态：阶段 A 完成（连接生命周期代码已部署并回归通过）；阶段 B 核心场景通过（6/7 PASS，收敛实测 208s，2 场景需专用 runtime 未执行）。**
+
+阶段 A 实现：
+- `mtls-smoke/main.go` 新增连接生命周期：
+  - `-conn-max-lifetime`（默认 60s）与 `-conn-idle-timeout`（默认 30s）
+  - `lifetimeConn`（连接超龄强制关闭）+ `lifetimeListener`（server 侧接受连接有界生命周期）
+  - client Transport 增加 `MaxIdleConns`/`MaxIdleConnsPerHost`/`IdleConnTimeout`/`TLSHandshakeTimeout`/`ResponseHeaderTimeout`
+  - X509Context drain watcher：Workload API 报告 SVID/bundle 更新时 `CloseIdleConnections()` 排空旧连接
+- egress 与 guest mTLS server 均已部署新 flags（日志确认 `conn max lifetime=1m0s idle timeout=30s`）
+- E2E 回归 **PASS**
+
+**`can_reattest` 实现约束（重要）**：SPIRE 1.15.1 `spire-server agent` CLI **无 `update` 子命令**（仅 ban/count/evict/list/purge/show），无法在 Agent 认证后修改 `can_reattest`；它由 NodeAttestor 决定。实测：OpenClaw `x509pop` Agent `can_reattest=true`（默认允许重认证）、OpenViking `argus_tdx` Agent `can_reattest=false`（满足计划"保持不变 false"）。OpenClaw 侧生命周期测试将观测 `can_reattest=true` 行为；文档不声称可在 CLI 层将 OpenClaw 设为 false。详见计划文档 §7.1。
+
+**WP3-B 验证结果（`verify-wp3.sh`，OpenClaw 侧，隔离 runtime）**：
+
+| 场景 | 结果 | 说明 |
+| --- | --- | --- |
+| mTLS egress 重启与恢复 | **PASS** | egress 重启后重新取得 SVID，正向路径恢复 |
+| Workload API 短时中断 | **PASS** | 中断期间新身份获取 fail-closed；恢复后正常 |
+| SPIRE Agent 重启 | **PASS** | x509pop 重新认证（can_reattest=true），恢复 |
+| SPIRE Server 重启 | **PASS** | 双 Agent 身份与 entry 持久化，恢复 |
+| workload entry 删除 | **PASS** | 删除后新身份签发 fail-closed；重建后恢复 |
+| Agent ban | **PASS** | ban 后新身份 fail-closed；evict+重认证+重挂 parent 恢复（SPIRE 1.15 无 unban） |
+| 连接收敛（身份撤销后） | **实测 ~208s** | 正路径在 entry 删除后于 ~208s 停止；收敛上界 = SVID TTL（SPIRE 最低 5 分钟）|
+| trust bundle 更新 / 旧 bundle / 错误 trust domain | **SKIP** | 需第二 trust domain 或 CA 轮换的专用 runtime |
+| SVID 到期（can_reattest=false） | **SKIP** | OpenViking argus_tdx 侧；x509pop 为 true 会重认证 |
+
+收敛语义说明：撤销（entry 删除/ban）停止**新身份签发**，但已签发 SVID 在到期前仍有效；因此收敛上界为 **SVID TTL**（SPIRE `min_x509_svid_ttl` 最低 5 分钟）。连接 `max-lifetime`（60s）约束的是"旧连接存活时长"（每次超过 60s 强制关闭），二者共同决定端到端收敛。
+
 ---
 
 ## 10. Node Attestation 回归

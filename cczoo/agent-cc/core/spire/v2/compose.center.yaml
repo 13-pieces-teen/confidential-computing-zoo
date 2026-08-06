@@ -104,6 +104,8 @@ services:
       - -guard-data-class=${V2_GUARD_DATA_CLASS:-openviking-context}
       - -guard-timeout=${V2_GUARD_TIMEOUT:-3s}
       - -guard-max-body=${V2_GUARD_MAX_BODY:-8388608}
+      - -conn-max-lifetime=${V2_CONN_MAX_LIFETIME:-60s}
+      - -conn-idle-timeout=${V2_CONN_IDLE_TIMEOUT:-30s}
     labels:
       argus.workload: openclaw
     depends_on:
