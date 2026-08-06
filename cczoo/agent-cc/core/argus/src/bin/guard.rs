@@ -368,21 +368,19 @@ fn mock_allow_response(
         .as_ref()
         .map(|receipt| receipt.decision_id.as_str())
         .unwrap_or("none");
+    let log_request_id = request
+        .authorization_context
+        .as_ref()
+        .map(|context| context.request_id.as_str())
+        .unwrap_or("none");
+    let log_request_digest = request_digest.as_deref().unwrap_or("none");
     tracing::warn!(
         caller_id = %request.caller_id,
         target_service = %request.target.service_name,
         target_uri = %request.target.target_uri,
-        request_id = request
-            .authorization_context
-            .as_ref()
-            .map(|context| context.request_id.as_str())
-            .unwrap_or("none"),
-        request_digest = request
-            .authorization_context
-            .as_ref()
-            .map(|context| context.request_digest.as_str())
-            .unwrap_or("none"),
-        decision_id = decision_id,
+        request_id = %log_request_id,
+        request_digest = %log_request_digest,
+        decision_id = %decision_id,
         "Guard returned mock ALLOW without fetching or verifying evidence"
     );
     Ok(response_with_receipt(
@@ -685,8 +683,15 @@ fn decision_ttl_from_environment() -> Result<i64> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Initialize tracing with plain (non-ANSI) output so service logs remain
+    // machine-greppable for the same-request audit correlation chain.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with_ansi(false)
+        .init();
 
     // Get configuration from environment
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

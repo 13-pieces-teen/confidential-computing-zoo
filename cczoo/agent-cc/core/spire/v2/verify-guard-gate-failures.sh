@@ -37,6 +37,13 @@ valid_port "$FAULT_GUARD_PORT" \
 recreate_egress() {
     local guard_port="$1"
     local guard_timeout="$2"
+    # Preserve the immutable image reference so the Docker Workload
+    # Attestation keeps matching the v2-openclaw-workload entry selectors:
+    # the docker attestor derives image_id from the container Config.Image,
+    # so a repo:tag reference would fail to issue the workload identity.
+    V2_MTLS_RUNTIME_IMAGE="${V2_MTLS_RUNTIME_IMAGE:-$(
+        docker image inspect argus-spire-v2-mtls:local --format '{{.Id}}'
+    )}" \
     V2_GUARD_PORT="$guard_port" \
     V2_GUARD_TIMEOUT="$guard_timeout" \
         docker compose -f "$COMPOSE_FILE" \
