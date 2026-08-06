@@ -5,6 +5,15 @@
 - 验证主机: 远程 Linux/TDX 主机（Host + TDVM + Guest Docker + 真实 OpenClaw/OpenViking）
 - 本轮日志目录: `/var/log/argus-spire-v2-verify/pre-ra-wp1-20260806T013248Z/`
 
+> **后续代码审计补充（不属于本报告原始远程结果）**：初版
+> `argus-docker-gate` 虽限制 endpoint 和 `containers/create`，但没有把
+> container/exec 目标绑定到 gate 创建的 sandbox，因此仍可能对 SPIRE、Guard、
+> mTLS 或其他已有容器执行已放行的 lifecycle/exec/archive API。原 WP2 PASS 仅代表
+> 本报告所列矩阵通过，不能继续作为“无任意 Docker 控制”的完整安全结论。
+> 当前源码已增加 run-scoped owner label 注入、container/exec parent 回查和对应
+> 负向测试；修复版在远程重新构建并通过 `verify-wp2.sh` 与完整 E2E 前，WP2
+> 当前状态按 **SOURCE FIXED / REMOTE REVALIDATION PENDING** 处理。
+
 ---
 
 ## 1. 结论

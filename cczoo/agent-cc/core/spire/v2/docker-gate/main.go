@@ -38,6 +38,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -45,11 +46,13 @@ import (
 )
 
 type config struct {
-	listen       string // unix:///path/to/proxy.sock
-	upstream     string // unix:///path/to/docker.sock
-	allowedImage string // only this image may be used in containers/create
-	socketGID    int    // group owner of the proxy socket
-	logPath      string // optional audit log path
+	listen          string // unix:///path/to/proxy.sock
+	upstream        string // unix:///path/to/docker.sock
+	allowedImage    string // only this image may be used in containers/create
+	ownerLabelKey   string // label injected into and required on managed sandboxes
+	ownerLabelValue string // run-scoped owner value for managed sandboxes
+	socketGID       int    // group owner of the proxy socket
+	logPath         string // optional audit log path
 }
 
 var cfg config
@@ -77,6 +80,10 @@ func parseFlags() {
 		"Real Docker daemon Unix socket")
 	flag.StringVar(&cfg.allowedImage, "allowed-image", "openclaw-sandbox:bookworm-slim",
 		"Only image permitted in containers/create")
+	flag.StringVar(&cfg.ownerLabelKey, "owner-label-key", "argus.openclaw.sandbox.owner",
+		"Docker label key injected into and required on managed sandbox containers")
+	flag.StringVar(&cfg.ownerLabelValue, "owner-label-value", "",
+		"Run-scoped Docker label value injected into and required on managed sandbox containers")
 	flag.IntVar(&cfg.socketGID, "socket-gid", 0,
 		"Group ID applied to the proxy socket (0 = do not chown)")
 	flag.StringVar(&cfg.logPath, "log", "",
@@ -238,6 +245,131 @@ func validateCreate(body []byte) (string, error) {
 	return "allowed", nil
 }
 
+func prepareCreate(body []byte) ([]byte, error) {
+	if _, err := validateCreate(body); err != nil {
+		return nil, err
+	}
+	var request map[string]json.RawMessage
+	if err := json.Unmarshal(body, &request); err != nil {
+		return nil, fmt.Errorf("malformed create request: %w", err)
+	}
+	labels := make(map[string]string)
+	if rawLabels, ok := request["Labels"]; ok && string(rawLabels) != "null" {
+		if err := json.Unmarshal(rawLabels, &labels); err != nil {
+			return nil, fmt.Errorf("malformed create labels: %w", err)
+		}
+	}
+	labels[cfg.ownerLabelKey] = cfg.ownerLabelValue
+	encodedLabels, err := json.Marshal(labels)
+	if err != nil {
+		return nil, fmt.Errorf("encode managed sandbox labels: %w", err)
+	}
+	request["Labels"] = encodedLabels
+	prepared, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("encode managed sandbox request: %w", err)
+	}
+	return prepared, nil
+}
+
+type dockerTargetAuthorizer struct {
+	client *http.Client
+}
+
+type dockerContainerInspect struct {
+	ID     string `json:"Id"`
+	Config struct {
+		Labels map[string]string `json:"Labels"`
+	} `json:"Config"`
+}
+
+type dockerExecInspect struct {
+	ContainerID string `json:"ContainerID"`
+}
+
+func newDockerTransport() *http.Transport {
+	return &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", strings.TrimPrefix(cfg.upstream, "unix://"))
+		},
+	}
+}
+
+func newDockerTargetAuthorizer() *dockerTargetAuthorizer {
+	return &dockerTargetAuthorizer{
+		client: &http.Client{Transport: newDockerTransport(), Timeout: 5 * time.Second},
+	}
+}
+
+func (authorizer *dockerTargetAuthorizer) authorizeContainer(ctx context.Context, target string) error {
+	var inspect dockerContainerInspect
+	if err := authorizer.getJSON(ctx, "/containers/"+url.PathEscape(target)+"/json", &inspect); err != nil {
+		return fmt.Errorf("inspect container target: %w", err)
+	}
+	if inspect.Config.Labels[cfg.ownerLabelKey] != cfg.ownerLabelValue {
+		return fmt.Errorf("container target is not managed by this gate")
+	}
+	return nil
+}
+
+func (authorizer *dockerTargetAuthorizer) authorizeExec(ctx context.Context, target string) error {
+	var inspect dockerExecInspect
+	if err := authorizer.getJSON(ctx, "/exec/"+url.PathEscape(target)+"/json", &inspect); err != nil {
+		return fmt.Errorf("inspect exec target: %w", err)
+	}
+	if inspect.ContainerID == "" {
+		return fmt.Errorf("exec target has no parent container")
+	}
+	return authorizer.authorizeContainer(ctx, inspect.ContainerID)
+}
+
+func (authorizer *dockerTargetAuthorizer) getJSON(ctx context.Context, path string, output any) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker"+path, nil)
+	if err != nil {
+		return err
+	}
+	response, err := authorizer.client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("Docker returned HTTP %d", response.StatusCode)
+	}
+	decoder := json.NewDecoder(io.LimitReader(response.Body, 1<<20))
+	if err := decoder.Decode(output); err != nil {
+		return err
+	}
+	return nil
+}
+
+func containerTarget(path string) (string, bool) {
+	rest, ok := strings.CutPrefix(stripAPIVersion(path), "/containers/")
+	if !ok {
+		return "", false
+	}
+	target, _, _ := strings.Cut(rest, "/")
+	if target == "" {
+		return "", false
+	}
+	decoded, err := url.PathUnescape(target)
+	return decoded, err == nil
+}
+
+func execTarget(path string) (string, bool) {
+	rest, ok := strings.CutPrefix(stripAPIVersion(path), "/exec/")
+	if !ok {
+		return "", false
+	}
+	target, _, _ := strings.Cut(rest, "/")
+	if target == "" {
+		return "", false
+	}
+	decoded, err := url.PathUnescape(target)
+	return decoded, err == nil
+}
+
 func auditLog(op string, r *http.Request, decision, reason string) {
 	audit.Printf("operation=%s method=%s path=%s decision=%s reason=%s",
 		op, r.Method, r.URL.RequestURI(), decision, reason)
@@ -258,22 +390,32 @@ func newProxy() *httputil.ReverseProxy {
 			req.URL.Scheme = "http"
 			req.URL.Host = "docker"
 		},
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", strings.TrimPrefix(cfg.upstream, "unix://"))
-			},
-		},
+		Transport: newDockerTransport(),
 	}
 	return proxy
 }
 
-func handler(proxy *httputil.ReverseProxy) http.Handler {
+func handler(proxy *httputil.ReverseProxy, authorizer *dockerTargetAuthorizer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		op, allowed, reason := allowDecision(r.Method, r.URL.Path)
 		if !allowed {
 			auditLog(op, r, "deny", reason)
 			writeDenied(w, reason)
 			return
+		}
+		if target, targeted := containerTarget(r.URL.Path); targeted &&
+			op != "containers_create" && op != "containers_list" {
+			if err := authorizer.authorizeContainer(r.Context(), target); err != nil {
+				auditLog(op, r, "deny", err.Error())
+				writeDenied(w, err.Error())
+				return
+			}
+		} else if target, targeted := execTarget(r.URL.Path); targeted {
+			if err := authorizer.authorizeExec(r.Context(), target); err != nil {
+				auditLog(op, r, "deny", err.Error())
+				writeDenied(w, err.Error())
+				return
+			}
 		}
 		if op == "containers_create" {
 			body, err := io.ReadAll(r.Body)
@@ -282,7 +424,8 @@ func handler(proxy *httputil.ReverseProxy) http.Handler {
 				writeDenied(w, "read create request body failed")
 				return
 			}
-			if _, err := validateCreate(body); err != nil {
+			body, err = prepareCreate(body)
+			if err != nil {
 				auditLog(op, r, "deny", err.Error())
 				writeDenied(w, err.Error())
 				return
@@ -302,6 +445,12 @@ func main() {
 	}
 	if !strings.HasPrefix(cfg.upstream, "unix://") {
 		log.Fatalf("upstream must be a unix:// socket: %s", cfg.upstream)
+	}
+	if strings.TrimSpace(cfg.ownerLabelKey) == "" || strings.ContainsAny(cfg.ownerLabelKey, "=,\x00\r\n") {
+		log.Fatalf("owner-label-key must be a non-empty Docker label key")
+	}
+	if strings.TrimSpace(cfg.ownerLabelValue) == "" || strings.ContainsAny(cfg.ownerLabelValue, "\x00\r\n") {
+		log.Fatalf("owner-label-value must be explicitly set to a non-empty run-scoped value")
 	}
 
 	if cfg.logPath != "" {
@@ -332,11 +481,11 @@ func main() {
 	}
 
 	server := &http.Server{
-		Handler:           handler(newProxy()),
+		Handler:           handler(newProxy(), newDockerTargetAuthorizer()),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	audit.Printf("argus-docker-gate listening on %s (upstream %s, allowed-image %q)",
-		cfg.listen, cfg.upstream, cfg.allowedImage)
+	audit.Printf("argus-docker-gate listening on %s (upstream %s, allowed-image %q, owner-label %s=%s)",
+		cfg.listen, cfg.upstream, cfg.allowedImage, cfg.ownerLabelKey, cfg.ownerLabelValue)
 	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("serve: %v", err)
 	}

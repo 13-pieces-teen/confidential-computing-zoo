@@ -114,9 +114,9 @@ OpenClaw source IP. The Workload API socket remains mounted only in the mTLS
 client container.
 
 The source-IP check prevents ordinary sibling workloads from borrowing the
-egress identity. It is not a security boundary against a process that already
-controls the host Docker daemon; the OpenClaw sandbox deployment still mounts
-the Docker socket.
+egress identity. WP2 additionally replaces the raw Docker socket with a gate
+that binds every created sandbox to a run-scoped owner label and rejects
+container or exec operations whose parent does not carry that exact label.
 
 The defaults are:
 
@@ -300,7 +300,12 @@ Docker only through `argus-docker-gate`, a minimal socket proxy that enforces a
 strict endpoint allowlist and validates `POST /containers/create` (no
 `--privileged`, no `host` or named-network mode, no `cap_add`, no `unconfined`
 security options, no arbitrary host binds, no device mounts, and only the
-configured sandbox image).
+configured sandbox image). The gate overwrites the run-scoped owner label on
+every create request. Container lifecycle, exec, attach, logs and archive calls
+are forwarded only after the Docker daemon confirms the target has that exact
+label; exec IDs are resolved back to their parent container before approval.
+SPIRE, Guard, mTLS and unrelated containers therefore fail closed even when the
+gateway knows their Docker names or IDs.
 
 Start the proxy and repoint the gateway:
 
@@ -308,6 +313,10 @@ Start the proxy and repoint the gateway:
 core/spire/v2/start-docker-gate.sh        # build + run the proxy on /var/run/argus/docker-proxy.sock
 core/spire/v2/apply-wp2.sh                # ensure proxy, repoint gateway socket, rebuild egress bridge --internal, recreate egress
 ```
+
+`V2_DOCKER_GATE_OWNER_ID` may be set to an explicit run identifier. If omitted,
+`start-docker-gate.sh` derives a stable 24-character value from the absolute
+`V2_RUNTIME_DIR`. The gate refuses to start without a non-empty owner value.
 
 `apply-wp2.sh` is idempotent and is the single entry point that applies the WP2
 state to a running v2 deployment. The egress bridge is recreated with
@@ -319,8 +328,10 @@ core/spire/v2/verify-wp2.sh
 ```
 
 which checks the gateway socket is the proxy, privileged/unsafe creates are
-denied, the bridge is `--internal` with only the gateway, sibling containers get
-403 `source_rejected`, the gateway is not host-networked / not on the identity
+denied, infrastructure and unmanaged container exec/lifecycle/archive calls are
+denied, gate-created sandboxes receive the owner label and remain operable, the
+bridge is `--internal` with only the gateway, sibling containers get 403
+`source_rejected`, the gateway is not host-networked / not on the identity
 plane, and the positive Guard-gated egress still returns 200.
 
 ## Compatibility entry points

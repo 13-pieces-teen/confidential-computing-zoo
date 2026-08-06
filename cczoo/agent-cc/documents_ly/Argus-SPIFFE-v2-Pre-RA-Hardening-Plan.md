@@ -30,12 +30,13 @@
 截至 2026-08-06：
 
 - WP1 Guard 同请求门控已完成远程验收；
-- WP2 Docker 控制面和 egress 数据面旁路收紧已完成远程验收；
+- WP2 初版 Docker endpoint 白名单和 egress 数据面收紧曾完成远程验收；后续代码审计发现初版 proxy 未按 sandbox 所有权约束已有 container/exec 目标；
+- WP2 修复版已加入 run-scoped owner label 注入、container/exec parent 回查和基础设施容器 fail-closed 验证，尚待远程重验；
 - WP3 已完成连接生命周期和 OpenClaw 侧验证脚本的源码建设，但审查发现初版最大连接寿命和负向断言缺陷；
 - WP3 审查修复已加入绝对连接到期、watcher 失败退出、实际 SVID 到期采集、正确的拒绝收敛断言和异常恢复 trap；
 - WP3 修复版尚未远程重验，bundle/trust domain 和 OpenViking `can_reattest=false` 专项 runtime 仍未执行。
 
-WP3 只能标记为“部分完成、修复后待重验”。WP4 至 WP8 仍按本文顺序继续实施。
+WP2 和 WP3 均只能标记为“源码修复完成、待远程重验”。WP4 至 WP8 仍按本文顺序继续实施。
 
 ## 2. 本阶段目标与非目标
 
@@ -294,6 +295,9 @@ OpenClaw sandbox 当前使用 Docker backend，因此不能在没有替代方案
 3. 若暂时继续使用 Docker socket proxy，只开放 sandbox 所需的最小 API。
 4. 禁止 Gateway 创建 privileged 容器、任意 host mount、host network 或加入 Argus 身份网络。
 5. SPIRE Agent 的只读 Docker socket 不向业务容器共享。
+6. Proxy 必须覆盖写入 run-scoped sandbox owner label；不得信任 Gateway 自报 label。
+7. 所有 container lifecycle、exec、attach、logs 和 archive 请求必须先回查目标 label；exec ID 必须回查其 parent container。
+8. SPIRE、Guard、mTLS、OpenViking 和其他无匹配 owner label 的容器必须返回 403，Docker inspect 不可用时必须 fail-closed。
 
 ### 6.2 唯一受控访问路径
 
@@ -324,6 +328,8 @@ OpenClaw
 - OpenClaw 无法直接访问 OpenViking 1933；
 - 只有 OpenClaw mTLS egress 挂载 OpenClaw Workload API；
 - OpenClaw Gateway 无任意 Docker daemon 控制能力；
+- Gateway 对 SPIRE、Guard、mTLS 和任意无 owner label 容器的 exec/start/stop/restart/kill/delete/archive 均被拒绝；
+- Gate 创建的 sandbox 被强制标记且仍可完成正常 lifecycle/exec；
 - 绕过 Guard 或 egress 的请求在 OpenViking 中没有 session/message 证据。
 
 ## 7. WP3：身份生命周期和拒绝收敛
