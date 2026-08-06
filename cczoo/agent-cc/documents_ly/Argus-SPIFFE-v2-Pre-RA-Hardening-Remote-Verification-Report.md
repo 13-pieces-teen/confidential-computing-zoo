@@ -19,7 +19,8 @@
 | Node Attestation 回归（Provider 503 / Trustee 503 / timeout / replay） | **PASS** |
 | 双 Agent v2（x509pop + argus_tdx，无 join_token） | **PASS** |
 | WP2 数据面旁路收紧 | **PASS** |
-| WP3 - WP7 | **PENDING**（未实施与验证） |
+| WP3 身份生命周期和拒绝收敛 | **部分完成**（阶段 A 连接生命周期代码+部署 PASS；阶段 B 6/7 已执行场景 PASS、连接收敛实测 ~208s、bundle/trust domain 场景 PENDING，见 §9.2） |
+| WP4 - WP7 | **PENDING**（未实施与验证） |
 | WP8 真实 RA 接口预留 | **PENDING**（仅接口预留，不视为真实 RA） |
 | Real Quote/QGS | **DEFERRED** |
 | Production Trustee | **DEFERRED** |
@@ -33,21 +34,19 @@
 
 ## 2. 版本信息
 
-- Git SHA: `0e0db390b5f7106cf4caaea3032d68f92eb3fdfd`
+- Git SHA（本报告对应提交）: `759379fdc0793a3a80c4e1c094e497050165c226`（`feat: WP3部分完成`）
 - Branch: `feat/argus-spiffe-v2`
-- 初始工作树状态（会话开始快照）:
+- 相关提交链（时间序）:
   ```
-  M core/argus/src/bin/guard.rs
-  M core/spire/v2/mtls-smoke/go.mod
-  ?? core/spire/v2/mtls-smoke/go.sum
+  daf417e  Verify WP1 Guard-gated evaluation; fix Guard log correlation and Go module hygiene
+  e9be85b  feat: complete wp2
+  759379f  feat: WP3部分完成   <-- 本报告对应 HEAD
   ```
-- 最终工作树状态（本验证结束时）:
-  ```
-  M core/argus/src/bin/guard.rs
-  M core/spire/v2/mtls-smoke/go.mod
-  M core/spire/v2/verify-guard-gate-failures.sh
-  ?? core/spire/v2/mtls-smoke/go.sum
-  ```
+- 本报告验证的最终工作树状态（对应 `759379f` 提交内容，工作树干净）:
+  - WP1: `core/argus/src/bin/guard.rs`、`core/spire/v2/mtls-smoke/go.mod`、`core/spire/v2/mtls-smoke/go.sum`、`core/spire/v2/verify-guard-gate-failures.sh`
+  - WP2: `core/spire/v2/docker-gate/`（main.go + main_test.go + go.mod）、`start-docker-gate.sh`、`repoint-openclaw-socket.sh`、`apply-wp2.sh`、`verify-wp2.sh`、`start-openclaw-workload.sh`、`README.md`
+  - WP3: `core/spire/v2/mtls-smoke/main.go`、`compose.center.yaml`、`deploy-v2-guest.sh`、`verify-wp3.sh`、`openclaw-agent.conf.tmpl`（回退）、计划文档、本报告
+- 验证起点 SHA: `0e0db39`（本会话开始时 HEAD）
 - 是否产生修复: **是**（详见 §12）
 - `git diff --check`: **PASS**（初始与修复后均无空白错误）
 - 未执行 commit / push / reset / clean；未覆盖用户已有修改。
@@ -274,9 +273,23 @@ egress: ... request_id=e3c0dc779397a811a22c3c78 client_request_id=verify-mtls-he
 
 静态检查：docker-gate 模块 `gofmt`/`go vet`/`go test`（含 allowlist 与 create 校验单元测试）PASS；新脚本 `bash -n` PASS。
 
-### 9.2 WP3：身份生命周期和拒绝收敛（阶段 A）
+### 9.2 WP3：身份生命周期和拒绝收敛
 
-**状态：阶段 A 完成（连接生命周期代码已部署并回归通过）；阶段 B 核心场景通过（6/7 PASS，收敛实测 208s，2 场景需专用 runtime 未执行）。**
+**状态：阶段 A 完成（连接生命周期代码已部署并回归通过）；阶段 B 核心场景部分通过（6/7 已执行场景 PASS，连接收敛实测 ~208s，2 场景需专用 runtime 未执行）。WP3 整体 = 部分完成。**
+
+**WP3 隔离 runtime（阶段 B 执行环境）**：
+- Host runtime: `/var/lib/argus-spire-v2-runtimes/wp3-lifecycle-20260806T072158Z`
+- Guest root: `/opt/argus-spire-v2/wp3-lifecycle-20260806T072158Z`
+- Guest data: `/var/lib/argus-spire-v2/wp3-lifecycle-20260806T072158Z/openviking-agent`
+- Guest run: `/run/argus-spire-v2/wp3-lifecycle-20260806T072158Z/openviking`
+- 测试后已恢复正向 runtime（`pre-ra-wp1-20260806T013248Z`），E2E 回归 PASS
+
+**WP3 原始日志路径**（`/var/log/argus-spire-v2-verify/pre-ra-wp1-20260806T013248Z/`）：
+- `wp3-build.log`（mtls-smoke 编译）、`wp3-prepare.log`（阶段 A prepare）
+- `verify-wp3.log` / `verify-wp3-2.log` / `verify-wp3-3.log` / `verify-wp3-4.log` / `verify-wp3-5.log`（各轮 verify-wp3.sh 输出）
+- `wp3-b-prepare.log` / `wp3-b-start-server.log` / `wp3-b-register.log` 等（WP3-B runtime 部署）
+- `wp3-restore-positive-*.log`（正向 runtime 恢复）
+- `verify-openclaw-plugin-e2e-wp3.log` / `wp3-restore-positive-e2e.log`（E2E 回归）
 
 阶段 A 实现：
 - `mtls-smoke/main.go` 新增连接生命周期：
@@ -291,19 +304,21 @@ egress: ... request_id=e3c0dc779397a811a22c3c78 client_request_id=verify-mtls-he
 
 **WP3-B 验证结果（`verify-wp3.sh`，OpenClaw 侧，隔离 runtime）**：
 
-| 场景 | 结果 | 说明 |
+**最终输出**（`verify-wp3-final.log`，未完整跑完前的最后一次完整记录）：7 个测试函数中 6 个 **PASS**、1 个收敛场景 **PARTIAL**、2 个场景 **SKIP**；脚本因收敛场景断言/时长问题整体 exit 1，未标记 PASS。
+
+| 场景（verify-wp3.sh 测试函数） | 结果 | 说明 |
 | --- | --- | --- |
-| mTLS egress 重启与恢复 | **PASS** | egress 重启后重新取得 SVID，正向路径恢复 |
-| Workload API 短时中断 | **PASS** | 中断期间新身份获取 fail-closed；恢复后正常 |
-| SPIRE Agent 重启 | **PASS** | x509pop 重新认证（can_reattest=true），恢复 |
-| SPIRE Server 重启 | **PASS** | 双 Agent 身份与 entry 持久化，恢复 |
-| workload entry 删除 | **PASS** | 删除后新身份签发 fail-closed；重建后恢复 |
-| Agent ban | **PASS** | ban 后新身份 fail-closed；evict+重认证+重挂 parent 恢复（SPIRE 1.15 无 unban） |
-| 连接收敛（身份撤销后） | **实测 ~208s** | 正路径在 entry 删除后于 ~208s 停止；收敛上界 = SVID TTL（SPIRE 最低 5 分钟）|
+| `test_proxy_restart` — mTLS egress 重启与恢复 | **PASS** | egress 重启后重新取得 SVID，正向路径恢复 |
+| `test_workload_api_outage` — Workload API 短时中断 | **PASS** | 中断期间新身份获取 fail-closed；恢复后正常 |
+| `test_agent_restart` — SPIRE Agent 重启 | **PASS** | x509pop 重新认证（can_reattest=true），恢复 |
+| `test_server_restart` — SPIRE Server 重启 | **PASS** | 双 Agent 身份与 entry 持久化，恢复 |
+| `test_entry_deletion` — workload entry 删除 | **PASS** | 删除后新身份签发 fail-closed；重建后恢复 |
+| `test_agent_ban` — Agent ban | **PASS** | ban 后新身份 fail-closed；evict+重认证+重挂 parent 恢复（SPIRE 1.15 无 unban） |
+| `test_connection_convergence` — 连接收敛 | **PARTIAL** | 单轮实测正路径在 entry 删除后 ~208s 停止（90s 预算轮断言失败但观测到收敛）；360s 预算轮因 SVID-TTL 钳制导致的收敛时长波动未在工具超时窗口内完成，自动化断言未干净通过 |
 | trust bundle 更新 / 旧 bundle / 错误 trust domain | **SKIP** | 需第二 trust domain 或 CA 轮换的专用 runtime |
 | SVID 到期（can_reattest=false） | **SKIP** | OpenViking argus_tdx 侧；x509pop 为 true 会重认证 |
 
-收敛语义说明：撤销（entry 删除/ban）停止**新身份签发**，但已签发 SVID 在到期前仍有效；因此收敛上界为 **SVID TTL**（SPIRE `min_x509_svid_ttl` 最低 5 分钟）。连接 `max-lifetime`（60s）约束的是"旧连接存活时长"（每次超过 60s 强制关闭），二者共同决定端到端收敛。
+收敛语义说明：撤销（entry 删除/ban）停止**新身份签发**，但已签发 SVID 在到期前仍有效；因此收敛上界为 **SVID TTL**（SPIRE `min_x509_svid_ttl` 最低 5 分钟）。连接 `max-lifetime`（60s）约束的是"旧连接存活时长"（每次超过 60s 强制关闭），二者共同决定端到端收敛。收敛测试的自动化断言受 SVID-TTL 时长波动影响，单轮实测收敛 ~208s，属于"行为已观测、SLA 断言未干净通过"的 PARTIAL 状态。
 
 ---
 
@@ -399,7 +414,7 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 | --- | --- | --- |
 | WP1 Guard 同请求强制门控 | **PASS** | 架构 19 项 PASS + Guard 矩阵 8 场景 PASS + 真实 OpenClaw 插件 E2E PASS（§9）。完整远程验证通过。 |
 | WP2 数据面旁路收紧 | **PASS** | Docker 控制面经 `argus-docker-gate` 最小 socket proxy 隔离；egress bridge `--internal`；网关网络身份检查 + 兄弟容器 403 自动化测试；真实 E2E 回归通过（见 §9.1）。 |
-| WP3 身份生命周期和拒绝收敛 | **PENDING** | 未实施和验证 |
+| WP3 身份生命周期和拒绝收敛 | **部分完成** | 阶段 A：连接生命周期（conn-max-lifetime/idle-timeout/X509Context 排空）已实现并部署、E2E 回归 PASS；阶段 B：verify-wp3.sh 6/7 已执行场景 PASS、连接收敛实测 ~208s、bundle/trust domain 与 can_reattest=false（OpenViking 侧）场景 PENDING。见 §9.2。 |
 | WP4 持久化克隆检测加固 | **PENDING** | 未实施和验证 |
 | WP5 多 runtime 隔离 | **PENDING** | 未实施和验证（本轮仅按 README 顺序串行运行单 runtime） |
 | WP6 结构化审计与指标 | **PENDING** | 未实施和验证 |
@@ -419,7 +434,7 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 - ❌ 已经接入真实 Quote/QGS
 - ❌ 已经接入正式 Trustee
 - ❌ 已经达到生产安全
-- ❌ 整份 Pre-RA Hardening 计划已经完成（WP3–WP8 仍为 PENDING）
+- ❌ 整份 Pre-RA Hardening 计划已经完成（WP3 仅部分完成、WP4–WP8 仍为 PENDING）
 
 ---
 
@@ -431,7 +446,8 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 - Real OpenClaw plugin E2E: **PASS**
 - Node Attestation regression: **PASS**
 - **WP2 数据面旁路收紧: PASS**（Docker socket proxy + egress `--internal` + 兄弟容器 403 + 回归全过）
-- WP3-WP8: **PENDING**
+- **WP3 身份生命周期: 部分完成**（A 完成 + B 6/7 场景 PASS + 收敛实测 208s；bundle/trust domain 场景 PENDING）
+- WP4-WP8: **PENDING**
 - Real Quote/QGS: **DEFERRED**
 - Production Trustee: **DEFERRED**
 - 报告: `cczoo/agent-cc/documents_ly/Argus-SPIFFE-v2-Pre-RA-Hardening-Remote-Verification-Report.md`
