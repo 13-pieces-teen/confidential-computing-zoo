@@ -27,15 +27,15 @@
 
 ### 1.1 当前实施快照
 
-截至 2026-08-05，WP1 已进入源码实施：
+截至 2026-08-06：
 
-- Argus Guard 已增加版本化 `authorization_context`、独立业务请求摘要、精确 target 绑定、`decision_id` 和有界决策有效期；
-- OpenClaw mTLS egress 已实现 caller-side PEP，同步调用 Guard PDP 后才允许 mTLS 转发；
-- Guard 不可用、DENY、非法响应、摘要不匹配和过期回执均按代码路径 fail-closed；
-- `verify-mtls.sh` 和真实 OpenClaw 插件 E2E 已增加 request ID、decision ID 与 request digest 的因果日志关联；
-- 已增加独立 Guard valid DENY、malformed DENY、503、timeout、malformed JSON、missing receipt、digest mismatch 和 expired receipt 远程故障矩阵脚本。
+- WP1 Guard 同请求门控已完成远程验收；
+- WP2 Docker 控制面和 egress 数据面旁路收紧已完成远程验收；
+- WP3 已完成连接生命周期和 OpenClaw 侧验证脚本的源码建设，但审查发现初版最大连接寿命和负向断言缺陷；
+- WP3 审查修复已加入绝对连接到期、watcher 失败退出、实际 SVID 到期采集、正确的拒绝收敛断言和异常恢复 trap；
+- WP3 修复版尚未远程重验，bundle/trust domain 和 OpenViking `can_reattest=false` 专项 runtime 仍未执行。
 
-上述改动尚未在当前本机运行编译或测试，必须由远程 Linux/TDVM 环境完成验证后，才能将 WP1 状态从“源码已实现”更新为“验收完成”。WP2 至 WP8 仍按本文顺序继续实施。
+WP3 只能标记为“部分完成、修复后待重验”。WP4 至 WP8 仍按本文顺序继续实施。
 
 ## 2. 本阶段目标与非目标
 

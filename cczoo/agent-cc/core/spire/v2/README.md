@@ -229,6 +229,32 @@ preserve its decision receipt, while malformed responses must not leak one. Its
 exit trap reports restoration failures, and the script finishes only after the
 restored egress completes a real Guard-gated health request.
 
+Run the OpenClaw-side WP3 lifecycle and denial-convergence matrix only against
+an isolated runtime:
+
+```bash
+bash core/spire/v2/verify-wp3.sh
+```
+
+The mTLS egress and server default to a 60-second absolute connection lifetime
+and a 30-second idle timeout. Override both before `prepare.sh` when required:
+
+```bash
+export V2_CONN_MAX_LIFETIME=60s
+export V2_CONN_IDLE_TIMEOUT=30s
+```
+
+`verify-wp3.sh` observes the actual workload SVID expiry rather than assuming
+the requested entry TTL was accepted unchanged. Its default 420-second SLA
+budget covers SPIRE's five-minute minimum test TTL, the connection lifetime,
+and probe tolerance. If `V2_CONN_MAX_LIFETIME` is increased, set
+`V2_WP3_CONNECTION_GRACE_SECONDS` to at least that lifetime plus probe
+tolerance and increase `V2_WP3_SLA_BUDGET_SECONDS` accordingly. A failure
+triggers restoration of the Agent, workload
+entry, ban state, egress identity, and positive path. Trust-bundle rotation,
+wrong trust domain, stale bundle, and the OpenViking `can_reattest=false`
+expiry case still require dedicated runtimes and are reported as skipped.
+
 Before deploying the OpenViking Agent:
 
 ```bash

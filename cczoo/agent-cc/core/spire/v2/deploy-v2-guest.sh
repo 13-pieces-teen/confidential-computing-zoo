@@ -229,8 +229,8 @@ start_workload() {
         -listen=0.0.0.0:1943 \
         -client-id=spiffe://argus.local/agent/openclaw \
         -upstream=http://127.0.0.1:1933 \
-        -conn-max-lifetime=${V2_CONN_MAX_LIFETIME:-60s} \
-        -conn-idle-timeout=${V2_CONN_IDLE_TIMEOUT:-30s} >/dev/null
+        "-conn-max-lifetime=${V2_CONN_MAX_LIFETIME:-60s}" \
+        "-conn-idle-timeout=${V2_CONN_IDLE_TIMEOUT:-30s}" >/dev/null
 
     for _ in $(seq 1 30); do
         if remote_sudo /usr/local/bin/docker exec "$MTLS_CONTAINER" \

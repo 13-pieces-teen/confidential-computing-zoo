@@ -373,19 +373,27 @@ func runClientProxy(arguments []string) error {
 			if err != nil {
 				return nil, err
 			}
-			return &lifetimeConn{Conn: rawConn, deadline: time.Now().Add(*connMaxLifetime)}, nil
+			return newLifetimeConn(rawConn, *connMaxLifetime)
 		},
 	}
 	proxy.Transport = upstreamTransport
 	// Drain idle mTLS connections whenever the Workload API reports an X.509
 	// context update, so a rotated SVID or trust bundle is used for new
 	// connections instead of reusing a stale one (WP3 convergence).
+	watchErrorChannel := make(chan error, 1)
 	go func() {
-		_ = workloadapi.WatchX509Context(
+		err := workloadapi.WatchX509Context(
 			ctx,
 			&x509ContextDrainWatcher{drain: func() { upstreamTransport.CloseIdleConnections() }},
 			workloadapi.WithAddr(*socket),
 		)
+		if ctx.Err() != nil {
+			return
+		}
+		if err == nil {
+			err = errors.New("X.509 context watch stopped unexpectedly")
+		}
+		watchErrorChannel <- err
 	}()
 	proxy.ModifyResponse = func(response *http.Response) error {
 		response.Header.Del(requestIDHeader)
@@ -614,6 +622,8 @@ func runClientProxy(arguments []string) error {
 	case <-ctx.Done():
 	case err := <-errorChannel:
 		return fmt.Errorf("serve local proxy: %w", err)
+	case err := <-watchErrorChannel:
+		return fmt.Errorf("watch X.509 context for connection draining: %w", err)
 	}
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -969,29 +979,52 @@ func newRequestID() (string, error) {
 	return randomHex(12)
 }
 
-// lifetimeConn wraps a net.Conn so it is closed once the configured maximum
-// connection lifetime is reached. This bounds how long a connection that was
-// negotiated with an old (rotated, revoked, or expired) identity can survive,
-// which is the WP3 identity-lifecycle convergence backstop.
+// lifetimeConn enforces an absolute connection expiry. The timer interrupts
+// active I/O, while the deadline methods prevent higher protocol layers from
+// extending their own deadlines beyond the configured maximum lifetime.
 type lifetimeConn struct {
 	net.Conn
-	deadline time.Time
+	expiresAt time.Time
+	timer     *time.Timer
 }
 
-func (conn *lifetimeConn) Read(payload []byte) (int, error) {
-	if time.Now().After(conn.deadline) {
+func newLifetimeConn(conn net.Conn, lifetime time.Duration) (*lifetimeConn, error) {
+	expiresAt := time.Now().Add(lifetime)
+	if err := conn.SetDeadline(expiresAt); err != nil {
 		_ = conn.Close()
-		return 0, errors.New("connection max lifetime exceeded")
+		return nil, fmt.Errorf("set connection lifetime deadline: %w", err)
 	}
-	return conn.Conn.Read(payload)
+	wrapped := &lifetimeConn{Conn: conn, expiresAt: expiresAt}
+	wrapped.timer = time.AfterFunc(lifetime, func() {
+		_ = conn.Close()
+	})
+	return wrapped, nil
 }
 
-func (conn *lifetimeConn) Write(payload []byte) (int, error) {
-	if time.Now().After(conn.deadline) {
-		_ = conn.Close()
-		return 0, errors.New("connection max lifetime exceeded")
+func (conn *lifetimeConn) Close() error {
+	if conn.timer != nil {
+		conn.timer.Stop()
 	}
-	return conn.Conn.Write(payload)
+	return conn.Conn.Close()
+}
+
+func (conn *lifetimeConn) SetDeadline(deadline time.Time) error {
+	return conn.Conn.SetDeadline(conn.capDeadline(deadline))
+}
+
+func (conn *lifetimeConn) SetReadDeadline(deadline time.Time) error {
+	return conn.Conn.SetReadDeadline(conn.capDeadline(deadline))
+}
+
+func (conn *lifetimeConn) SetWriteDeadline(deadline time.Time) error {
+	return conn.Conn.SetWriteDeadline(conn.capDeadline(deadline))
+}
+
+func (conn *lifetimeConn) capDeadline(deadline time.Time) time.Time {
+	if deadline.IsZero() || deadline.After(conn.expiresAt) {
+		return conn.expiresAt
+	}
+	return deadline
 }
 
 // lifetimeListener wraps a net.Listener so every accepted connection has a
@@ -1006,7 +1039,7 @@ func (listener *lifetimeListener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &lifetimeConn{Conn: conn, deadline: time.Now().Add(listener.lifetime)}, nil
+	return newLifetimeConn(conn, listener.lifetime)
 }
 
 // x509ContextDrainWatcher drains idle mTLS connections whenever the Workload
@@ -1020,7 +1053,9 @@ func (watcher *x509ContextDrainWatcher) OnX509ContextUpdate(*workloadapi.X509Con
 	watcher.drain()
 }
 
-func (watcher *x509ContextDrainWatcher) OnX509ContextWatchError(error) {}
+func (watcher *x509ContextDrainWatcher) OnX509ContextWatchError(err error) {
+	log.Printf("X.509 context watch error while draining idle mTLS connections: %v", err)
+}
 
 func runProbe(arguments []string) error {
 	flags := flag.NewFlagSet("probe", flag.ContinueOnError)
@@ -1134,6 +1169,11 @@ func runIdentity(arguments []string) error {
 		false,
 		"succeed only when the Workload API explicitly denies identity issuance",
 	)
+	expiryUnix := flags.Bool(
+		"expiry-unix",
+		false,
+		"print only the current X.509-SVID NotAfter time as Unix seconds",
+	)
 	timeout := flags.Duration("timeout", 10*time.Second, "Workload API timeout")
 	if err := flags.Parse(arguments); err != nil {
 		return err
@@ -1157,6 +1197,13 @@ func runIdentity(arguments []string) error {
 	}
 	if *expectedValue != "" && svid.ID.String() != *expectedValue {
 		return fmt.Errorf("workload SPIFFE ID is %s; expected %s", svid.ID, *expectedValue)
+	}
+	if *expiryUnix {
+		if len(svid.Certificates) == 0 {
+			return errors.New("X.509-SVID has no certificates")
+		}
+		fmt.Println(svid.Certificates[0].NotAfter.Unix())
+		return nil
 	}
 	fmt.Println(svid.ID)
 	return nil

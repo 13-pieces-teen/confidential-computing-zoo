@@ -19,14 +19,28 @@ PROXY_URL="${V2_OPENCLAW_PROXY_URL:-http://$PROXY_BIND:$PROXY_PORT}"
 SERVER_SOCKET="/opt/spire/run/server/api.sock"
 WORKLOAD_ENTRY="v2-openclaw-workload"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
-# Convergence after identity revocation is bounded by the workload SVID TTL
-# (SPIRE clamps entry TTL to its 5-minute minimum), so the budget must cover
-# one full TTL plus renewal retries.
-SLA_BUDGET_SECONDS="${V2_WP3_SLA_BUDGET_SECONDS:-360}"
+# SPIRE clamps the test entry to at least five minutes. The default budget
+# covers that SVID lifetime, the 60-second connection lifetime, and probe
+# scheduling tolerance.
+SLA_BUDGET_SECONDS="${V2_WP3_SLA_BUDGET_SECONDS:-420}"
+SHORT_SVID_TTL_SECONDS="${V2_WP3_SHORT_SVID_TTL_SECONDS:-300}"
+CONNECTION_GRACE_SECONDS="${V2_WP3_CONNECTION_GRACE_SECONDS:-90}"
 
 PASS_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
+ENTRY_RESTORE_REQUIRED=0
+AGENT_START_REQUIRED=0
+BANNED_AGENT_ID=""
+CLEANUP_RUNNING=0
+
+for value_name in SLA_BUDGET_SECONDS SHORT_SVID_TTL_SECONDS CONNECTION_GRACE_SECONDS; do
+    value="${!value_name}"
+    [[ "$value" =~ ^[1-9][0-9]*$ ]] \
+        || { printf '%s must be a positive integer number of seconds\n' "$value_name" >&2; exit 1; }
+done
+(( SHORT_SVID_TTL_SECONDS + CONNECTION_GRACE_SECONDS <= SLA_BUDGET_SECONDS )) \
+    || { printf 'SLA budget must cover the short SVID TTL plus connection grace\n' >&2; exit 1; }
 
 fail() {
     printf 'WP3 verification: FAIL: %s\n' "$1" >&2
@@ -64,7 +78,7 @@ for a in json.load(sys.stdin).get("agents", []):
     if "/spire/agent/x509pop/" in v and not a.get("banned"):
         candidates.append((int(a.get("x509svid_expires_at") or 0), v))
 if not candidates:
-    print("")
+    raise SystemExit(1)
 else:
     candidates.sort()
     print(candidates[-1][1])
@@ -80,7 +94,7 @@ openclaw_digest() {
 recreate_openclaw_entry() {
     local ttl="${1:-600}"
     local parent
-    parent="$(openclaw_agent_id)"
+    parent="$(openclaw_agent_id || true)"
     [[ -n "$parent" ]] || { echo "no live x509pop agent" >&2; return 1; }
     local digest
     digest="$(openclaw_digest)"
@@ -108,6 +122,35 @@ egress_identity() {
         -expected-id="$OPENCLAW_ID" 2>/dev/null
 }
 
+egress_identity_expiry() {
+    docker exec "$MTLS_CONTAINER" /spire-mtls identity \
+        -socket=unix:///opt/spire/run/openclaw/agent.sock \
+        -expected-id="$OPENCLAW_ID" \
+        -expiry-unix 2>/dev/null
+}
+
+expect_identity_denial() {
+    docker exec "$MTLS_CONTAINER" /spire-mtls identity \
+        -socket=unix:///opt/spire/run/openclaw/agent.sock \
+        -expect-no-identity \
+        -timeout=5s >/dev/null 2>&1
+}
+
+agent_is_banned() {
+    local expected_id="$1"
+    spire_server agent list -output json | python3 -c '
+import json, sys
+expected = sys.argv[1]
+for agent in json.load(sys.stdin).get("agents", []):
+    value = agent.get("id")
+    if isinstance(value, dict):
+        value = "spiffe://{}{}".format(value["trust_domain"], value["path"])
+    if str(value) == expected:
+        raise SystemExit(0 if agent.get("banned") else 1)
+raise SystemExit(1)
+' "$expected_id"
+}
+
 wait_for() {
     local what="$1"
     local tries="${2:-30}"
@@ -121,6 +164,107 @@ wait_for() {
     return 1
 }
 
+prepare_short_lived_identity() {
+    recreate_openclaw_entry "$SHORT_SVID_TTL_SECONDS" \
+        || fail "could not create the short-lived workload entry"
+    ENTRY_RESTORE_REQUIRED=1
+    docker restart "$MTLS_CONTAINER" >/dev/null
+    wait_for "egress_identity" 60 || fail "egress did not obtain an identity"
+
+    local deadline expiry now remaining
+    deadline="$(( $(date +%s) + SLA_BUDGET_SECONDS ))"
+    while (( $(date +%s) < deadline )); do
+        expiry="$(egress_identity_expiry || true)"
+        now="$(date +%s)"
+        if [[ "$expiry" =~ ^[0-9]+$ ]]; then
+            remaining="$(( expiry - now ))"
+            if (( remaining > 0 && remaining <= SHORT_SVID_TTL_SECONDS + 30 )); then
+                printf '  short-lived SVID expires at %s (%ss remaining)\n' "$expiry" "$remaining"
+                return 0
+            fi
+        fi
+        sleep 5
+    done
+    fail "egress did not obtain an SVID within the short-lived TTL window"
+}
+
+wait_for_revocation_convergence() {
+    local expiry="$1"
+    local label="$2"
+    local started deadline now required elapsed status converged
+    started="$(date +%s)"
+    required="$(( expiry - started + CONNECTION_GRACE_SECONDS ))"
+    if (( required > SLA_BUDGET_SECONDS )); then
+        fail "$label requires ${required}s from the observed SVID expiry; SLA budget is ${SLA_BUDGET_SECONDS}s"
+    fi
+    deadline="$(( started + SLA_BUDGET_SECONDS ))"
+    status="200"
+    converged=0
+    while (( $(date +%s) <= deadline )); do
+        status="$(positive_probe || true)"
+        if [[ "$status" != "200" ]] && expect_identity_denial; then
+            converged=1
+            break
+        fi
+        sleep 2
+    done
+    now="$(date +%s)"
+    elapsed="$(( now - started ))"
+    printf '  %s convergence after %ss (last HTTP status=%s)\n' "$label" "$elapsed" "${status:-transport-error}"
+    (( converged != 0 )) \
+        || fail "$label did not reach both business-path rejection and explicit identity denial within ${SLA_BUDGET_SECONDS}s"
+    sleep 5
+    [[ "$(positive_probe || true)" != "200" ]] \
+        || fail "$label business path recovered after convergence"
+    expect_identity_denial \
+        || fail "$label identity denial did not remain stable after convergence"
+}
+
+restore_runtime() {
+    (( CLEANUP_RUNNING == 0 )) || return 0
+    CLEANUP_RUNNING=1
+    local failed=0
+
+    if (( AGENT_START_REQUIRED != 0 )); then
+        docker start "$AGENT_CONTAINER" >/dev/null 2>&1 || failed=1
+        AGENT_START_REQUIRED=0
+    fi
+    if [[ -n "$BANNED_AGENT_ID" ]]; then
+        spire_server agent evict -spiffeID "$BANNED_AGENT_ID" >/dev/null 2>&1 || true
+        docker restart "$AGENT_CONTAINER" >/dev/null 2>&1 || failed=1
+        wait_for "openclaw_agent_id" 60 || failed=1
+        BANNED_AGENT_ID=""
+        ENTRY_RESTORE_REQUIRED=1
+    fi
+    if (( ENTRY_RESTORE_REQUIRED != 0 )) \
+        || ! spire_server entry show -entryID "$WORKLOAD_ENTRY" >/dev/null 2>&1; then
+        recreate_openclaw_entry 600 || failed=1
+        ENTRY_RESTORE_REQUIRED=0
+    fi
+    if ! egress_identity >/dev/null 2>&1 || [[ "$(positive_probe || true)" != "200" ]]; then
+        docker restart "$MTLS_CONTAINER" >/dev/null 2>&1 || failed=1
+        wait_for "egress_identity" 60 || failed=1
+        wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || failed=1
+    fi
+    CLEANUP_RUNNING=0
+    (( failed == 0 ))
+}
+
+cleanup_on_exit() {
+    local status="$?"
+    trap - EXIT INT TERM
+    set +e
+    if ! restore_runtime; then
+        printf 'FINAL RECOVERY: runtime restoration failed\n' >&2
+        status=1
+    fi
+    exit "$status"
+}
+
+trap cleanup_on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 test_proxy_restart() {
     echo "[WP3] mTLS egress restart & recovery"
     [[ "$(positive_probe)" == "200" ]] || fail "baseline probe failed"
@@ -133,15 +277,19 @@ test_proxy_restart() {
 test_workload_api_outage() {
     echo "[WP3] Workload API short outage"
     [[ "$(positive_probe)" == "200" ]] || fail "baseline probe failed"
+    AGENT_START_REQUIRED=1
     docker stop "$AGENT_CONTAINER" >/dev/null
     sleep 6
     if egress_identity >/dev/null 2>&1; then
-        fail "egress obtained identity while the Workload API was down"
+        fail "a new identity client obtained an SVID while the Workload API was down"
     fi
+    printf '  cached business path status during short outage: %s\n' \
+        "$(positive_probe || true)"
     docker start "$AGENT_CONTAINER" >/dev/null
+    AGENT_START_REQUIRED=0
     wait_for "egress_identity" 40 || fail "egress identity did not recover"
     wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || fail "positive path did not recover"
-    pass "Workload API outage: fail-closed during outage, recovered after"
+    pass "Workload API outage: new source acquisition unavailable; recovered after"
 }
 
 test_agent_restart() {
@@ -164,40 +312,40 @@ test_server_restart() {
 }
 
 test_entry_deletion() {
-    echo "[WP3] workload entry deletion -> fail-closed -> recovery"
+    echo "[WP3] workload entry deletion -> control-plane removal -> recovery"
     [[ "$(positive_probe)" == "200" ]] || fail "baseline probe failed"
+    ENTRY_RESTORE_REQUIRED=1
     spire_server entry delete -entryID "$WORKLOAD_ENTRY" >/dev/null
-    sleep 3
-    if docker exec "$MTLS_CONTAINER" /spire-mtls identity \
-        -socket=unix:///opt/spire/run/openclaw/agent.sock \
-        -expect-no-identity -timeout=5s >/dev/null 2>&1; then
-        fail "egress unexpectedly obtained identity after entry deletion"
-    fi
+    ! spire_server entry show -entryID "$WORKLOAD_ENTRY" >/dev/null 2>&1 \
+        || fail "workload entry still exists after deletion"
     recreate_openclaw_entry || fail "could not re-create the workload entry"
+    ENTRY_RESTORE_REQUIRED=0
     wait_for "egress_identity" 60 || fail "egress identity did not recover"
     wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || fail "positive path did not recover"
-    pass "Entry deletion: fail-closed; re-created and recovered"
+    pass "Entry deletion: control-plane state removed; re-created and recovered"
 }
 
 test_agent_ban() {
     echo "[WP3] Agent ban -> fail-closed -> recovery (evict + re-attest)"
     [[ "$(positive_probe)" == "200" ]] || fail "baseline probe failed"
-    local agent_id
-    agent_id="$(openclaw_agent_id)"
+    prepare_short_lived_identity
+    local agent_id expiry
+    agent_id="$(openclaw_agent_id || true)"
     [[ -n "$agent_id" ]] || fail "could not resolve the OpenClaw agent ID"
+    expiry="$(egress_identity_expiry)"
+    [[ "$expiry" =~ ^[0-9]+$ ]] || fail "could not read the OpenClaw SVID expiry"
+    BANNED_AGENT_ID="$agent_id"
     spire_server agent ban -spiffeID "$agent_id" >/dev/null
-    sleep 3
-    if docker exec "$MTLS_CONTAINER" /spire-mtls identity \
-        -socket=unix:///opt/spire/run/openclaw/agent.sock \
-        -expect-no-identity -timeout=5s >/dev/null 2>&1; then
-        fail "egress unexpectedly obtained identity after agent ban"
-    fi
+    agent_is_banned "$agent_id" || fail "SPIRE Server did not report the Agent as banned"
+    wait_for_revocation_convergence "$expiry" "Agent ban"
     # Recover: SPIRE 1.15 has no `agent unban`; evict the banned agent, let it
     # re-attest (x509pop can_reattest=true), and re-parent the workload entry.
     spire_server agent evict -spiffeID "$agent_id" >/dev/null 2>&1 || true
     docker restart "$AGENT_CONTAINER" >/dev/null
     wait_for "openclaw_agent_id" 60 || fail "OpenClaw agent did not re-attest"
+    BANNED_AGENT_ID=""
     recreate_openclaw_entry || fail "could not re-parent the workload entry"
+    ENTRY_RESTORE_REQUIRED=0
     docker restart "$MTLS_CONTAINER" >/dev/null
     wait_for "egress_identity" 60 || fail "egress identity did not recover"
     wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || fail "positive path did not recover"
@@ -207,33 +355,16 @@ test_agent_ban() {
 test_connection_convergence() {
     echo "[WP3] connection convergence: revoked identity cannot continue (SLA budget ${SLA_BUDGET_SECONDS}s)"
     [[ "$(positive_probe)" == "200" ]] || fail "baseline probe failed"
-    # Issued SVIDs stay valid until expiry, so convergence is bounded by the
-    # SVID TTL plus the connection max lifetime. Use a short-TTL entry so the
-    # convergence window is observable.
-    recreate_openclaw_entry 60 || fail "could not create a short-TTL entry"
-    docker restart "$MTLS_CONTAINER" >/dev/null
-    wait_for "egress_identity" 60 || fail "egress did not obtain the short-TTL identity"
+    prepare_short_lived_identity
     wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || fail "short-TTL baseline probe failed"
-    local started elapsed
-    started="$(date +%s)"
+    local expiry
+    expiry="$(egress_identity_expiry)"
+    [[ "$expiry" =~ ^[0-9]+$ ]] || fail "could not read the OpenClaw SVID expiry"
+    ENTRY_RESTORE_REQUIRED=1
     spire_server entry delete -entryID "$WORKLOAD_ENTRY" >/dev/null
-    # The egress holds a 60s SVID. After it expires it must not renew (entry
-    # gone), so the positive path must fail within the SLA budget.
-    local i
-    for i in $(seq 1 "$((SLA_BUDGET_SECONDS + 10))"); do
-        if [[ "$(positive_probe)" != "200" ]]; then
-            break
-        fi
-        sleep 2
-    done
-    elapsed="$(( $(date +%s) - started ))"
-    echo "  convergence (positive path unavailable) after ${elapsed}s"
-    if [[ "$(positive_probe)" == "200" ]]; then
-        fail "positive path survived beyond the SLA budget (${SLA_BUDGET_SECONDS}s)"
-    fi
-    [[ "$elapsed" -le "$SLA_BUDGET_SECONDS" ]] \
-        || fail "convergence took ${elapsed}s, exceeding the ${SLA_BUDGET_SECONDS}s SLA budget"
+    wait_for_revocation_convergence "$expiry" "Entry deletion"
     recreate_openclaw_entry 600 || fail "could not restore the workload entry"
+    ENTRY_RESTORE_REQUIRED=0
     docker restart "$MTLS_CONTAINER" >/dev/null
     wait_for "egress_identity" 60 || fail "egress identity did not recover"
     wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || fail "positive path did not recover"
@@ -260,15 +391,8 @@ test_connection_convergence
 # Final recovery: the runtime must be left in a working state even if a
 # scenario's recovery failed mid-way.
 echo "[WP3] final recovery"
-if ! spire_server entry show -entryID "$WORKLOAD_ENTRY" >/dev/null 2>&1; then
-    echo "  restoring the OpenClaw workload entry..."
-    recreate_openclaw_entry 600 || { echo "FINAL RECOVERY: could not restore the entry" >&2; exit 1; }
-fi
-if ! egress_identity >/dev/null 2>&1 || [[ "$(positive_probe)" != "200" ]]; then
-    docker restart "$MTLS_CONTAINER" >/dev/null
-    wait_for "egress_identity" 60 || { echo "FINAL RECOVERY: egress identity failed" >&2; exit 1; }
-    wait_for "[[ \"\$(positive_probe)\" == 200 ]]" 20 || { echo "FINAL RECOVERY: positive path failed" >&2; exit 1; }
-fi
+restore_runtime || fail "final runtime restoration failed"
+trap - EXIT INT TERM
 echo "PASS: final recovery - workload entry present and egress serving"
 
 echo "=============================================="
