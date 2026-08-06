@@ -13,9 +13,10 @@ does not provide a rollback profile.
 | Verification service | Independent center-side mock Trustee over file-backed mTLS |
 | Caller authorization | OpenClaw mTLS egress PEP synchronously calls the real Argus Guard PDP with `GUARD_MODE=mock_allow` |
 | Workload transport | Direct SPIFFE mTLS with exact peer SPIFFE ID authorization |
-| Real OpenClaw plugin traffic | Restricted bridge ingress to the OpenClaw mTLS client |
+| Real OpenClaw plugin traffic | Restricted `--internal` bridge ingress to the OpenClaw mTLS client |
+| Docker control plane (WP2) | OpenClaw gateway reaches Docker only through `argus-docker-gate`, a minimal allowlist socket proxy that forbids privileged/host-network/host-mount/capability/device creates |
 | Real Quote/QGS | `DEFERRED` |
-| Unbypassable Guard/request gate | Implemented in source; remote runtime validation pending |
+| Unbypassable Guard/request gate | Verified: real OpenClaw business requests require a matching Guard ALLOW before SPIFFE mTLS forwarding |
 | Envoy/service mesh | `DEFERRED` |
 
 Argus Guard and the Guest-local mock Evidence Provider do not connect in this
@@ -265,6 +266,36 @@ Guest overrides are intentionally restricted to scoped paths under
 turning deployment ownership changes into a recursive modification of a system
 directory. Isolated cases are run sequentially because the container names and
 host ports remain fixed.
+
+## WP2: Docker control-plane isolation and network tightening
+
+The OpenClaw gateway no longer controls the raw Docker daemon socket. It reaches
+Docker only through `argus-docker-gate`, a minimal socket proxy that enforces a
+strict endpoint allowlist and validates `POST /containers/create` (no
+`--privileged`, no `host` or named-network mode, no `cap_add`, no `unconfined`
+security options, no arbitrary host binds, no device mounts, and only the
+configured sandbox image).
+
+Start the proxy and repoint the gateway:
+
+```bash
+core/spire/v2/start-docker-gate.sh        # build + run the proxy on /var/run/argus/docker-proxy.sock
+core/spire/v2/apply-wp2.sh                # ensure proxy, repoint gateway socket, rebuild egress bridge --internal, recreate egress
+```
+
+`apply-wp2.sh` is idempotent and is the single entry point that applies the WP2
+state to a running v2 deployment. The egress bridge is recreated with
+`--internal` so only the gateway is attached and no bridge container can reach
+outside the bridge. Verify with:
+
+```bash
+core/spire/v2/verify-wp2.sh
+```
+
+which checks the gateway socket is the proxy, privileged/unsafe creates are
+denied, the bridge is `--internal` with only the gateway, sibling containers get
+403 `source_rejected`, the gateway is not host-networked / not on the identity
+plane, and the positive Guard-gated egress still returns 200.
 
 ## Compatibility entry points
 

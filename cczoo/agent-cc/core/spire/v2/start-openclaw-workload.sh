@@ -93,13 +93,44 @@ if not any(
         f"expected {sys.argv[2]} gateway {sys.argv[3]}"
     )
 PY
+    # WP2: the egress bridge must be --internal (no path out of the bridge).
+    if [[ "$(docker network inspect "$EGRESS_NETWORK" --format '{{.Internal}}')" != "true" ]]; then
+        printf 'Egress network %s is not --internal; rebuilding it.\n' \
+            "$EGRESS_NETWORK" >&2
+        current_egress_ip="$(
+            docker inspect "$OPENCLAW_CONTAINER" | python3 -c '
+import json
+import sys
+
+container = json.load(sys.stdin)[0]
+network = container.get("NetworkSettings", {}).get("Networks", {}).get(sys.argv[1])
+print("" if network is None else network.get("IPAddress", ""))
+' "$EGRESS_NETWORK"
+        )"
+        if [[ -n "$current_egress_ip" ]]; then
+            docker network disconnect "$EGRESS_NETWORK" "$OPENCLAW_CONTAINER"
+        fi
+        docker network rm "$EGRESS_NETWORK" >/dev/null
+        docker network create \
+            --internal \
+            --driver bridge \
+            --subnet "$EGRESS_SUBNET" \
+            --gateway "$PROXY_BIND" \
+            "$EGRESS_NETWORK" >/dev/null
+    fi
 else
     docker network create \
+        --internal \
         --driver bridge \
         --subnet "$EGRESS_SUBNET" \
         --gateway "$PROXY_BIND" \
         "$EGRESS_NETWORK" >/dev/null
 fi
+
+# WP2: start the Docker control-plane proxy and repoint the gateway socket so
+# the OpenClaw gateway no longer controls the raw Docker daemon socket.
+"$SCRIPT_DIR/start-docker-gate.sh"
+"$SCRIPT_DIR/repoint-openclaw-socket.sh"
 
 current_egress_ip="$(
     docker inspect "$OPENCLAW_CONTAINER" | python3 -c '

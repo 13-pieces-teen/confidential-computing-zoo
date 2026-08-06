@@ -18,7 +18,8 @@
 | 真实 OpenClaw 插件 E2E | **PASS** |
 | Node Attestation 回归（Provider 503 / Trustee 503 / timeout / replay） | **PASS** |
 | 双 Agent v2（x509pop + argus_tdx，无 join_token） | **PASS** |
-| WP2 - WP7 | **PENDING**（未实施与验证） |
+| WP2 数据面旁路收紧 | **PASS** |
+| WP3 - WP7 | **PENDING**（未实施与验证） |
 | WP8 真实 RA 接口预留 | **PENDING**（仅接口预留，不视为真实 RA） |
 | Real Quote/QGS | **DEFERRED** |
 | Production Trustee | **DEFERRED** |
@@ -250,6 +251,29 @@ egress: ... request_id=e3c0dc779397a811a22c3c78 client_request_id=verify-mtls-he
 
 **E2E 完成 → WP1 整体标记 PASS。**
 
+### 9.1 WP2：数据面旁路收紧
+
+**状态：PASS**（`verify-wp2.sh` exit 0；回归全部通过）
+
+实现：
+- 新增 Go 最小 Docker socket proxy `core/spire/v2/docker-gate/`（端点白名单 + `POST /containers/create` 强制校验：拒绝 privileged / host 或命名网络 / cap_add / unconfined / 任意 host bind / device，仅允许配置的 sandbox 镜像）。
+- 新增 `start-docker-gate.sh`（构建+运行 proxy，socket 在 `/var/run/argus/docker-proxy.sock`）、`repoint-openclaw-socket.sh`（重建网关换接 proxy socket，保留全部其余配置）、`apply-wp2.sh`（幂等应用 WP2 全状态）、`verify-wp2.sh`（验证）。
+- 修改 `start-openclaw-workload.sh`：egress bridge 重建为 `--internal`，仅网关（172.31.44.2）可挂载。
+
+`verify-wp2.sh` 证据（`verify-wp2.log`）：
+1. 网关 `/var/run/docker.sock` 挂载源 == `/var/run/argus/docker-proxy.sock`；`docker ps` 经 proxy 正常；`docker run --privileged` 被拒（`blocked by argus-docker-gate: privileged containers are forbidden`）
+2. egress bridge `Internal=true`，成员仅 `agentcc-openclaw-sbx-gateway=172.31.44.2/28`
+3. 兄弟容器（172.31.44.3）加入 egress bridge → curl egress 返回 **403** + 正文 `OpenClaw egress source rejected` + egress 日志 `source_rejected`（request_id=2b366cf4…）
+4. 网关 `NetworkMode != host`、未 attach 身份网络（`argus-spire-v2-center_center`）、无法访问 `127.0.0.1:2933`（TDVM 原始 OpenViking）
+5. 正向 Guard-gated egress 返回 200 且带 mock_allow receipt 头
+
+回归（WP2 后重跑全部 PASS）：
+- `verify-architecture.sh` PASS（19 项）
+- `verify-guard-gate-failures.sh` PASS（8 场景）
+- `verify-openclaw-plugin-e2e.sh` **PASS**（真实 OpenClaw sandbox 经 proxy 生成并正常工作；marker `ARGUS-MTLS-E2E-20260806T063139Z-30477`、session `6bd3ca8c-…`、messages 写入 status=200、Guard ALLOW 与 forwarded_mtls 关联、commit_count=1、archive=true）——证明 WP2 Docker 控制面隔离**未破坏**真实数据面。
+
+静态检查：docker-gate 模块 `gofmt`/`go vet`/`go test`（含 allowlist 与 create 校验单元测试）PASS；新脚本 `bash -n` PASS。
+
 ---
 
 ## 10. Node Attestation 回归
@@ -323,6 +347,14 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 ```
 `git diff --check` 通过；未 commit / push。
 
+### WP2 新增组件（数据面旁路收紧）
+- 新增 `core/spire/v2/docker-gate/`（`main.go` + `main_test.go` + `go.mod`）：Go 最小 Docker socket proxy，端点白名单 + containers/create 强制校验（拒绝 privileged/host 网络/cap_add/unconfined/任意 host bind/device，仅允许 `openclaw-sandbox:bookworm-slim`），审计日志。
+- 新增 `core/spire/v2/start-docker-gate.sh`（构建+运行 proxy，socket GID 与 docker 一致）。
+- 新增 `core/spire/v2/repoint-openclaw-socket.sh`（重建网关换接 proxy socket，保留 mounts/env/端口/group_add，按旧网络重连附加网络）。
+- 新增 `core/spire/v2/apply-wp2.sh`（幂等应用：proxy → repoint → egress `--internal` 重建 → egress 容器重建）。
+- 新增 `core/spire/v2/verify-wp2.sh`（5 项验证）。
+- 修改 `core/spire/v2/start-openclaw-workload.sh`（egress `--internal` 创建/重建 + 调用 start-docker-gate/repoint）。
+
 ### 环境级修复（非代码改动）：E2E API key 恢复
 - **根因**：`connect-openclaw-plugin.sh` 使用 21 字符解码值重新配置插件 apiKey，覆盖了 OpenViking 期望的 105 字符原始值 → 插件写请求 401。
 - **修复**：由用户手动执行 `/tmp/fix_ov_key.sh`——从配置备份 `openclaw.json.bak.2026-08-06T02-19-40`（1528 字节，含正确 key）`docker cp` 恢复插件配置并 `chown node:node`、重启网关，同时把正确 105 字符 key 写入 `/root/.argus_openviking_api_key.env`（0600）。
@@ -335,7 +367,7 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 | 工作包 | 状态 | 说明 |
 | --- | --- | --- |
 | WP1 Guard 同请求强制门控 | **PASS** | 架构 19 项 PASS + Guard 矩阵 8 场景 PASS + 真实 OpenClaw 插件 E2E PASS（§9）。完整远程验证通过。 |
-| WP2 数据面旁路收紧 | **PENDING** | 未实施和验证 |
+| WP2 数据面旁路收紧 | **PASS** | Docker 控制面经 `argus-docker-gate` 最小 socket proxy 隔离；egress bridge `--internal`；网关网络身份检查 + 兄弟容器 403 自动化测试；真实 E2E 回归通过（见 §9.1）。 |
 | WP3 身份生命周期和拒绝收敛 | **PENDING** | 未实施和验证 |
 | WP4 持久化克隆检测加固 | **PENDING** | 未实施和验证 |
 | WP5 多 runtime 隔离 | **PENDING** | 未实施和验证（本轮仅按 README 顺序串行运行单 runtime） |
@@ -349,14 +381,14 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 
 **可以声称**：
 
-> Argus-SPIFFE v2 已在 mock RA 条件下验证：真实 OpenClaw 业务请求经同步 Guard authorization binding 取得 `mock_allow` receipt 后，才由 OpenClaw SVID 经 SPIFFE mTLS 转发至 OpenViking；Guard DENY、503、timeout、malformed response、receipt 缺失、digest mismatch 和 receipt 过期均 fail-closed，且故障请求无下游 `forwarded_mtls`。双 Agent（x509pop + argus_tdx）v2 Node Attestation 在 Provider 503 / Trustee 503 / Trustee timeout / evidence replay 故障下均 fail-closed。真实 OpenClaw 插件 marker 请求跨 Guard、egress 与 OpenViking session 完成同请求因果关联，session 写入、commit 与 archive 均成功。
+> Argus-SPIFFE v2 已在 mock RA 条件下验证：真实 OpenClaw 业务请求经同步 Guard authorization binding 取得 `mock_allow` receipt 后，才由 OpenClaw SVID 经 SPIFFE mTLS 转发至 OpenViking；Guard DENY、503、timeout、malformed response、receipt 缺失、digest mismatch 和 receipt 过期均 fail-closed，且故障请求无下游 `forwarded_mtls`。双 Agent（x509pop + argus_tdx）v2 Node Attestation 在 Provider 503 / Trustee 503 / Trustee timeout / evidence replay 故障下均 fail-closed。真实 OpenClaw 插件 marker 请求跨 Guard、egress 与 OpenViking session 完成同请求因果关联，session 写入、commit 与 archive 均成功。WP2 数据面收紧后，OpenClaw 网关不再直接控制 Docker daemon（经 `argus-docker-gate` 最小白名单 proxy，privileged/host 网络/任意 host mount 均被拒绝），egress bridge 为 `--internal` 且仅网关可挂载、兄弟容器被 source-IP 拒绝，真实 E2E 仍通过。
 
 **不得声称**：
 - ❌ 已经完成真实 TDX 远程证明
 - ❌ 已经接入真实 Quote/QGS
 - ❌ 已经接入正式 Trustee
 - ❌ 已经达到生产安全
-- ❌ 整份 Pre-RA Hardening 计划已经完成（WP2–WP8 仍为 PENDING）
+- ❌ 整份 Pre-RA Hardening 计划已经完成（WP3–WP8 仍为 PENDING）
 
 ---
 
@@ -367,8 +399,9 @@ Guard health 终态: `mode=mock_allow`、`authorization_context_required=true`�
 - Guard failure matrix: **PASS**
 - Real OpenClaw plugin E2E: **PASS**
 - Node Attestation regression: **PASS**
-- WP2-WP8: **PENDING**
+- **WP2 数据面旁路收紧: PASS**（Docker socket proxy + egress `--internal` + 兄弟容器 403 + 回归全过）
+- WP3-WP8: **PENDING**
 - Real Quote/QGS: **DEFERRED**
 - Production Trustee: **DEFERRED**
 - 报告: `cczoo/agent-cc/documents_ly/Argus-SPIFFE-v2-Pre-RA-Hardening-Remote-Verification-Report.md`
-- 是否修改代码: **是**（guard.rs、verify-guard-gate-failures.sh、go.mod、go.sum，详见 §12）
+- 是否修改代码: **是**（WP1 的 guard.rs / verify-guard-gate-failures.sh / go.mod / go.sum；WP2 的 docker-gate 模块与 4 个新脚本 + start-openclaw-workload.sh，详见 §12）
