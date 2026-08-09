@@ -30,6 +30,10 @@ OPENVIKING_USE_LUKS="${OPENVIKING_USE_LUKS:-1}"
 OPENVIKING_LUKS_MOUNT_ROOT="${OPENVIKING_LUKS_MOUNT_ROOT:-/home/encrypted_storage}"
 OPENVIKING_LUKS_SUBDIR="${OPENVIKING_LUKS_SUBDIR:-openviking}"
 OPENVIKING_CONTAINER_STATE_DIR="${OPENVIKING_CONTAINER_STATE_DIR:-/app/.openviking}"
+OPENVIKING_SPIFFE_ENABLED="${OPENVIKING_SPIFFE_ENABLED:-0}"
+OPENVIKING_SPIFFE_WORKLOAD_API_DIR="${OPENVIKING_SPIFFE_WORKLOAD_API_DIR:-}"
+OPENVIKING_SPIFFE_PORT="${OPENVIKING_SPIFFE_PORT:-1943}"
+OPENVIKING_LAUNCH_ACTION="${OPENVIKING_LAUNCH_ACTION:-all}"
 ATTESTATION_REQUIRED="${ATTESTATION_REQUIRED:-false}"
 POLL_INTERVAL="${POLL_INTERVAL:-3}"
 POLL_ATTEMPTS="${POLL_ATTEMPTS:-40}"
@@ -100,7 +104,19 @@ prepare_openviking_storage() {
     export OPENVIKING_HOST_DATA_DIR=""
 
 
-    export OPENVIKING_DOCKER_CMD="docker run -d --name=agentcc-openviking-service --label=argus.workload=${WORKLOAD_ID} --publish=127.0.0.1:1933:1933 --env=OPENVIKING_CONFIG_FILE=${OPENVIKING_CONTAINER_STATE_DIR}/ov.conf --env=OPENVIKING_WITH_BOT=0"
+    export OPENVIKING_DOCKER_CMD="docker run -d --name=agentcc-openviking-service --label=argus.workload=${WORKLOAD_ID} --env=OPENVIKING_CONFIG_FILE=${OPENVIKING_CONTAINER_STATE_DIR}/ov.conf --env=OPENVIKING_WITH_BOT=0"
+
+    if [[ "$OPENVIKING_SPIFFE_ENABLED" == "1" ]]; then
+        [[ -n "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR" ]] \
+            || { echo "OPENVIKING_SPIFFE_WORKLOAD_API_DIR is required for the SPIFFE profile." >&2; exit 1; }
+        [[ "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR" == /* ]] \
+            || { echo "OPENVIKING_SPIFFE_WORKLOAD_API_DIR must be absolute." >&2; exit 1; }
+        [[ -S "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR/agent.sock" ]] \
+            || { echo "SPIFFE Workload API socket is missing: $OPENVIKING_SPIFFE_WORKLOAD_API_DIR/agent.sock" >&2; exit 1; }
+        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=0.0.0.0:${OPENVIKING_SPIFFE_PORT}:1943 --volume=${OPENVIKING_SPIFFE_WORKLOAD_API_DIR}:/opt/spire/run/openviking:ro --env=ARGUS_SPIFFE_ENABLED=1 --env=SPIFFE_ENDPOINT_SOCKET=unix:///opt/spire/run/openviking/agent.sock --env=ARGUS_WORKLOAD_SPIFFE_ID=spiffe://argus.local/service/openviking-cmem --env=ARGUS_EXPECTED_CLIENT_SPIFFE_ID=spiffe://argus.local/agent/openclaw --env=ARGUS_OPENVIKING_MTLS_PORT=1943 --env=ARGUS_SPIFFE_KEEPALIVE_SECONDS=${ARGUS_SPIFFE_KEEPALIVE_SECONDS:-15}"
+    else
+        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=127.0.0.1:1933:1933"
+    fi
 
     if [[ "$OPENVIKING_USE_LUKS" != "1" ]]; then
         echo "OPENVIKING_USE_LUKS=0, using container-local storage only." >&2
@@ -227,6 +243,11 @@ if [[ -z "$OPENVIKING_VERSION" ]]; then
     exit 1
 fi
 
+[[ "$OPENVIKING_LAUNCH_ACTION" == all \
+    || "$OPENVIKING_LAUNCH_ACTION" == build \
+    || "$OPENVIKING_LAUNCH_ACTION" == launch ]] \
+    || { echo 'OPENVIKING_LAUNCH_ACTION must be all, build, or launch.' >&2; exit 1; }
+
 if [[ -z "$OPENVIKING_BASE" ]]; then
     echo "OPENVIKING_BASE is required and must be a pinned official OpenViking image digest." >&2
     exit 1
@@ -250,13 +271,22 @@ if [[ -n "${TC_API_BEARER_TOKEN:-}" ]]; then
     auth_args=(-H "Authorization: Bearer ${TC_API_BEARER_TOKEN}")
 fi
 
-echo "[1/5] Building OpenViking workload image: ${IMAGE_NAME}"
-docker build --build-arg "OPENVIKING_BASE=${OPENVIKING_BASE}" -t "${IMAGE_NAME}" -f "${DOCKERFILE_PATH}" "${REPO_ROOT}"
+if [[ "$OPENVIKING_LAUNCH_ACTION" != launch ]]; then
+    echo "[1/5] Building OpenViking workload image: ${IMAGE_NAME}"
+    docker build --build-arg "OPENVIKING_BASE=${OPENVIKING_BASE}" -t "${IMAGE_NAME}" -f "${DOCKERFILE_PATH}" "${REPO_ROOT}"
 
-echo "[2/5] Pushing image to local registry"
-docker push "$IMAGE_NAME"
+    echo "[2/5] Pushing image to local registry"
+    docker push "$IMAGE_NAME"
+    echo "     tc-api pull reference: ${IMAGE_URL}"
+fi
 
-echo "     tc-api pull reference: ${IMAGE_URL}"
+if [[ "$OPENVIKING_LAUNCH_ACTION" == build ]]; then
+    docker image inspect "$IMAGE_NAME" --format 'OpenViking build-only complete: image={{.RepoTags}} config_digest={{.Id}}'
+    exit 0
+fi
+
+docker image inspect "$IMAGE_NAME" >/dev/null 2>&1 \
+    || { echo "OpenViking image is missing for launch-only action: $IMAGE_NAME" >&2; exit 1; }
 
 ensure_tc_api_identity_token
 

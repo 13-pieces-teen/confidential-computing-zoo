@@ -1,2 +1,19 @@
 ARG OPENVIKING_BASE=ghcr.io/volcengine/openviking@sha256:27d3c97bddbe81f31d2c5af1f31e9d504b5928506c88f559a23faf86358169b7
+
+FROM golang:1.24-bookworm AS svid-materializer-build
+WORKDIR /src
+COPY core/spire/components/svid-materializer/go.mod core/spire/components/svid-materializer/go.sum ./
+RUN go mod download
+COPY core/spire/components/svid-materializer/ ./
+RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags="-s -w" -o /out/argus-svid-materializer .
+
 FROM ${OPENVIKING_BASE}
+
+USER root
+COPY --from=svid-materializer-build /out/argus-svid-materializer /usr/local/bin/argus-svid-materializer
+COPY adapters/OpenViking/spiffe_server /opt/argus/spiffe_server
+COPY adapters/OpenViking/scripts/entrypoint-spiffe.sh /usr/local/bin/entrypoint-spiffe.sh
+RUN chmod 0755 /usr/local/bin/argus-svid-materializer /usr/local/bin/entrypoint-spiffe.sh
+ENV PYTHONPATH=/opt/argus
+ENTRYPOINT ["/usr/local/bin/entrypoint-spiffe.sh"]
+CMD []

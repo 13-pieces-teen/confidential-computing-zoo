@@ -57,6 +57,7 @@ pub mod policy;
 pub mod binding;
 pub mod service;
 pub mod tc_api_client;
+pub mod spiffe_guard;
 
 pub use errors::{ArgusError, EvidenceError, Result};
 pub use types::*;
@@ -66,3 +67,7 @@ pub use verifier::RaAdapter;
 pub use policy::{PolicyEvaluator, AllowAllPolicyEvaluator, DenyAllPolicyEvaluator, ConfigurablePolicyEvaluator, PolicyConfig, CompositeRequirementConfig};
 pub use service::EvidenceEngine;
 pub use tc_api_client::{TcApiClient, ServiceMetadataFetcher, ServiceMetadataResponse};
+pub use spiffe_guard::{
+    SpiffeAuthorizationDecision, SpiffeAuthorizationRequest,
+    SpiffeAuthorizationResponse, SpiffeGuard, SpiffeGuardPolicy,
+};

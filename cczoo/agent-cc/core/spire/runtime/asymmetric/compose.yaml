@@ -1,0 +1,91 @@
+name: argus-spire-v2-center
+
+services:
+  mock-trustee:
+    image: argus-spire-v2-mock-trustee:local
+    container_name: argus-v2-mock-trustee
+    hostname: trustee.argus.local
+    command:
+      - -listen=0.0.0.0:18443
+      - -tls-cert=/opt/argus/certs/trustee-server.pem
+      - -tls-key=/opt/argus/certs/trustee-server-key.pem
+      - -client-ca=/opt/argus/certs/trustee-ca.pem
+      - -instance-id=${V2_TDVM_INSTANCE_ID:-tdvm-v2-0001}
+      - -tcb-status=up_to_date
+      - -mrtd=aabb
+      - -rtmr-0=0011
+      - -trustee-status=${V2_TRUSTEE_STATUS:-0}
+      - -trustee-delay=${V2_TRUSTEE_DELAY:-0s}
+    volumes:
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/trustee-server.pem:/opt/argus/certs/trustee-server.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/trustee-server-key.pem:/opt/argus/certs/trustee-server-key.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/trustee-ca.pem:/opt/argus/certs/trustee-ca.pem:ro"
+    restart: unless-stopped
+    networks:
+      - center
+
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.15.1
+    container_name: argus-v2-spire-server
+    hostname: spire-server
+    depends_on:
+      - mock-trustee
+    command: ["-config", "/opt/spire/conf/server.conf"]
+    volumes:
+      - "${V2_RUNTIME_DIR:-./runtime}/conf/server.conf:/opt/spire/conf/server.conf:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/conf/policy.yaml:/opt/spire/conf/policy.yaml:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/upstream-ca-key.pem:/opt/spire/conf/certs/upstream-ca-key.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/openclaw-agent-ca.pem:/opt/spire/conf/certs/openclaw-agent-ca.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/trustee-ca.pem:/opt/spire/conf/certs/trustee-ca.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/trustee-client.pem:/opt/spire/conf/certs/trustee-client.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/trustee-client-key.pem:/opt/spire/conf/certs/trustee-client-key.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/plugins:/opt/spire/plugins:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/server-data:/opt/spire/data/server"
+      - "${V2_RUNTIME_DIR:-./runtime}/server-run:/opt/spire/run/server"
+    ports:
+      - "${V2_SPIRE_BIND_ADDRESS:-0.0.0.0}:${V2_SPIRE_SERVER_PORT:-18081}:8081"
+      - "127.0.0.1:${V2_SPIRE_METRICS_PORT:-19988}:9988"
+    restart: unless-stopped
+    networks:
+      - center
+
+  openclaw-agent:
+    image: ghcr.io/spiffe/spire-agent:1.15.1
+    container_name: argus-v2-openclaw-agent
+    hostname: openclaw-agent
+    depends_on:
+      - spire-server
+    pid: host
+    command: ["-config", "/opt/spire/conf/openclaw-agent.conf"]
+    volumes:
+      - "${V2_RUNTIME_DIR:-./runtime}/conf/openclaw-agent.conf:/opt/spire/conf/openclaw-agent.conf:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/openclaw-agent.pem:/opt/spire/conf/x509pop/openclaw-agent.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/certs/openclaw-agent-key.pem:/opt/spire/conf/x509pop/openclaw-agent-key.pem:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/openclaw-agent-data:/opt/spire/data/openclaw-agent"
+      - "${V2_RUNTIME_DIR:-./runtime}/openclaw-agent-run:/opt/spire/run/openclaw"
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    networks:
+      - center
+
+  guard:
+    image: argus-spire-v2-guard:local
+    container_name: argus-v2-guard
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8007
+      GUARD_MODE: spiffe_identity
+      GUARD_SPIFFE_POLICY_FILE: /opt/argus/conf/guard-policy.yaml
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - "${V2_RUNTIME_DIR:-./runtime}/conf/guard-policy.yaml:/opt/argus/conf/guard-policy.yaml:ro"
+    ports:
+      - "127.0.0.1:${V2_GUARD_PORT:-18007}:8007"
+    restart: unless-stopped
+    networks:
+      - center
+
+networks:
+  center: {}

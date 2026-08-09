@@ -91,6 +91,33 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Native asymmetric SPIFFE profile
+#
+# The materializer watches the Workload API as the node user and writes the
+# rotating SVID into a 0700 in-container directory. The preload remains in the
+# OpenClaw process and gates only the configured OpenViking origin through
+# Argus Guard before using the SVID for direct mTLS.
+# ---------------------------------------------------------------------------
+
+if [[ "${ARGUS_SPIFFE_ENABLED:-0}" == "1" ]]; then
+  : "${SPIFFE_ENDPOINT_SOCKET:?SPIFFE_ENDPOINT_SOCKET is required}"
+  : "${ARGUS_CALLER_SPIFFE_ID:?ARGUS_CALLER_SPIFFE_ID is required}"
+  : "${ARGUS_OPENVIKING_ORIGIN:?ARGUS_OPENVIKING_ORIGIN is required}"
+  : "${ARGUS_TARGET_SPIFFE_ID:?ARGUS_TARGET_SPIFFE_ID is required}"
+  : "${ARGUS_TARGET_SERVICE:?ARGUS_TARGET_SERVICE is required}"
+  : "${ARGUS_GUARD_URL:?ARGUS_GUARD_URL is required}"
+  credential_dir="${ARGUS_SPIFFE_CREDENTIAL_DIR:-/run/argus-svid}"
+  mkdir -p "$credential_dir"
+  chown node:node "$credential_dir"
+  chmod 0700 "$credential_dir"
+  export ARGUS_SPIFFE_CREDENTIAL_DIR="$credential_dir"
+  if [[ " ${NODE_OPTIONS:-} " != *" --import=/opt/argus/openclaw-spiffe/preload.mjs "* ]]; then
+    export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--import=/opt/argus/openclaw-spiffe/preload.mjs"
+  fi
+  log "SPIFFE transport is ready; OpenViking origin=$ARGUS_OPENVIKING_ORIGIN"
+fi
+
+# ---------------------------------------------------------------------------
 # Phase 2: First-boot config initialization
 #
 # The config named volume starts empty.  We detect first boot by checking
@@ -194,6 +221,11 @@ fi
 # ---------------------------------------------------------------------------
 
 log "Starting gateway (bind=${OPENCLAW_GATEWAY_BIND:-lan}, port=${OPENCLAW_GATEWAY_PORT:-18789})"
+
+if [[ "${ARGUS_SPIFFE_ENABLED:-0}" == "1" ]]; then
+  exec gosu node /usr/local/bin/run-openclaw-spiffe.sh \
+    "${OPENCLAW_GATEWAY_BIND:-lan}" "${OPENCLAW_GATEWAY_PORT:-18789}"
+fi
 
 exec gosu node node /app/dist/index.js gateway \
   --bind  "${OPENCLAW_GATEWAY_BIND:-lan}" \

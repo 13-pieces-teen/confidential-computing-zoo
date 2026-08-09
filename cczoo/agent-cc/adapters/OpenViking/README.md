@@ -94,14 +94,14 @@ adapters/OpenClaw/scripts/connect_openclaw_openviking.sh
 ```
 
 Validate the combined real business path and mock v2 attestation path with
-`core/spire/m4/test-architecture.sh`.
+`core/spire/tests/tdvm/test-architecture.sh`.
 
 For an already configured plugin, switch between the retained Host service and
 the TD VM forward without re-entering the User API key:
 
 ```bash
-core/spire/m4/switch-openclaw-openviking.sh http://127.0.0.1:1934
-core/spire/m4/switch-openclaw-openviking.sh http://127.0.0.1:2933
+core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:1934
+core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:2933
 ```
 
 The switch script runs as the OpenClaw `node` user, preserves a configuration

@@ -37,6 +37,19 @@
 #     -e OPENCLAW_GATEWAY_TOKEN=<your-token> \
 #     openclaw-sbx:latest
 
+FROM golang:1.24-bookworm AS svid-materializer-build
+WORKDIR /src
+COPY core/spire/components/svid-materializer/go.mod core/spire/components/svid-materializer/go.sum ./
+RUN go mod download
+COPY core/spire/components/svid-materializer/ ./
+RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags="-s -w" -o /out/argus-svid-materializer .
+
+FROM node:22-bookworm-slim AS spiffe-transport-build
+WORKDIR /transport
+COPY adapters/OpenClaw/spiffe-transport/package.json ./
+RUN npm install --omit=dev --ignore-scripts
+COPY adapters/OpenClaw/spiffe-transport/preload.mjs ./
+
 FROM ghcr.io/openclaw/openclaw:latest
 
 # Re-elevate to root for installation steps.
@@ -97,9 +110,13 @@ WORKDIR /app/skills/get_td_quote/scripts
 RUN python3 setup.py build_ext --inplace
 
 WORKDIR /app
-# Copy entrypoint script (expected alongside this Dockerfile in the build context).
-COPY entrypoint-sbx.sh /usr/local/bin/entrypoint-sbx.sh
-RUN chmod 755 /usr/local/bin/entrypoint-sbx.sh
+# The build context is cczoo/agent-cc so the same identity helper is shared by
+# the OpenClaw and OpenViking workload images.
+COPY --from=svid-materializer-build /out/argus-svid-materializer /usr/local/bin/argus-svid-materializer
+COPY --from=spiffe-transport-build /transport /opt/argus/openclaw-spiffe
+COPY adapters/OpenClaw/scripts/entrypoint-sbx.sh /usr/local/bin/entrypoint-sbx.sh
+COPY adapters/OpenClaw/scripts/run-openclaw-spiffe.sh /usr/local/bin/run-openclaw-spiffe.sh
+RUN chmod 755 /usr/local/bin/entrypoint-sbx.sh /usr/local/bin/run-openclaw-spiffe.sh
 
 # ── Runtime environment defaults ─────────────────────────────────────────
 # All values are overridable at `docker run` time via -e.

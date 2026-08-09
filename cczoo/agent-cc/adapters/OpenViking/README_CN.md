@@ -76,15 +76,15 @@ export OPENVIKING_API_KEY=<existing-openclaw-user-key>
 adapters/OpenClaw/scripts/connect_openclaw_openviking.sh
 ```
 
-使用 `core/spire/m4/test-architecture.sh` 同时验证真实业务链路与 mock v2
+使用 `core/spire/tests/tdvm/test-architecture.sh` 同时验证真实业务链路与历史 mock
 认证链路。
 
 对于已经配置好的插件，可以在保留的 Host 服务与 TD VM 转发之间切换，无需重新
 输入或输出 User API Key：
 
 ```bash
-core/spire/m4/switch-openclaw-openviking.sh http://127.0.0.1:1934
-core/spire/m4/switch-openclaw-openviking.sh http://127.0.0.1:2933
+core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:1934
+core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:2933
 ```
 
 切换脚本以 OpenClaw `node` 用户运行，保留配置备份，重启 Gateway，并验证带认证的

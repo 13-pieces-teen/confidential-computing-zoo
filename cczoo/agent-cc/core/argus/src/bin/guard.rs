@@ -24,6 +24,9 @@ use argus::{
     policy::AllowAllPolicyEvaluator,
     binding::ServiceRuntimeBinding,
     tc_api_client::TcApiClient,
+    spiffe_guard::{
+        SpiffeAuthorizationRequest, SpiffeAuthorizationResponse, SpiffeGuard,
+    },
 };
 use anyhow::Result;
 use axum::{
@@ -57,6 +60,8 @@ struct GuardAppState {
     decision_ttl_seconds: i64,
     /// Optional TC-API client for Agent-side metadata (when Agent is also a TDX workload)
     tc_api_client: Option<Arc<TcApiClient>>,
+    /// Caller-local identity policy used only by the asymmetric SPIFFE profile.
+    spiffe_guard: Option<Arc<SpiffeGuard>>,
 }
 
 /// Health check response
@@ -147,6 +152,7 @@ async fn health_handler(State(state): State<GuardAppState>) -> Json<HealthRespon
 enum GuardMode {
     Evidence,
     MockAllow,
+    SpiffeIdentity,
 }
 
 impl GuardMode {
@@ -158,8 +164,9 @@ impl GuardMode {
         {
             "evidence" => Ok(Self::Evidence),
             "mock_allow" => Ok(Self::MockAllow),
+            "spiffe_identity" => Ok(Self::SpiffeIdentity),
             value => anyhow::bail!(
-                "unsupported GUARD_MODE {value:?}; expected evidence or mock_allow"
+                "unsupported GUARD_MODE {value:?}; expected evidence, mock_allow, or spiffe_identity"
             ),
         }
     }
@@ -168,8 +175,40 @@ impl GuardMode {
         match self {
             Self::Evidence => "evidence",
             Self::MockAllow => "mock_allow",
+            Self::SpiffeIdentity => "spiffe_identity",
         }
     }
+}
+
+/// Caller-local authorization handler - POST /guard/v1/authorize.
+async fn spiffe_authorize_handler(
+    State(state): State<GuardAppState>,
+    Json(request): Json<SpiffeAuthorizationRequest>,
+) -> Result<Json<SpiffeAuthorizationResponse>, StatusCode> {
+    if state.mode != GuardMode::SpiffeIdentity {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let guard = state
+        .spiffe_guard
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let response = guard.authorize(&request);
+    tracing::info!(
+        request_id = %response.request_id,
+        caller_spiffe_id = %request.caller_spiffe_id,
+        target_spiffe_id = %request.target_spiffe_id,
+        target_service = %request.target_service,
+        target_origin = %request.target_origin,
+        operation = request.operation.as_deref().unwrap_or("none"),
+        data_class = request.data_class.as_deref().unwrap_or("none"),
+        decision = ?response.decision,
+        decision_id = %response.decision_id,
+        policy_id = %response.policy_id,
+        rule_id = response.rule_id.as_deref().unwrap_or("none"),
+        reason = %response.reason,
+        "caller-local SPIFFE authorization decision"
+    );
+    Ok(Json(response))
 }
 
 fn valid_ascii_token(value: &str, max_length: usize) -> bool {
@@ -397,6 +436,9 @@ async fn verify_handler(
     State(state): State<GuardAppState>,
     Json(request): Json<VerifyRequest>,
 ) -> Result<Json<VerifyResponse>, StatusCode> {
+    if state.mode == GuardMode::SpiffeIdentity {
+        return Err(StatusCode::NOT_FOUND);
+    }
     if state.mode == GuardMode::MockAllow {
         return mock_allow_response(
             &request,
@@ -499,6 +541,9 @@ async fn batch_verify_handler(
     State(state): State<GuardAppState>,
     Json(request): Json<BatchVerifyRequest>,
 ) -> Result<Json<BatchVerifyResponse>, StatusCode> {
+    if state.mode == GuardMode::SpiffeIdentity {
+        return Err(StatusCode::NOT_FOUND);
+    }
     let mut results = Vec::with_capacity(request.requests.len());
 
     for req in request.requests {
@@ -694,7 +739,14 @@ async fn main() -> Result<()> {
         .init();
 
     // Get configuration from environment
-    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let guard_mode = GuardMode::from_environment()?;
+    let host = std::env::var("HOST").unwrap_or_else(|_| {
+        if guard_mode == GuardMode::SpiffeIdentity {
+            "127.0.0.1".to_string()
+        } else {
+            "0.0.0.0".to_string()
+        }
+    });
     let port: u16 = std::env::var("PORT")
         .unwrap_or_else(|_| "8007".to_string())
         .parse()
@@ -702,7 +754,6 @@ async fn main() -> Result<()> {
     if port == 0 {
         anyhow::bail!("PORT must be an integer between 1 and 65535");
     }
-    let guard_mode = GuardMode::from_environment()?;
     let allow_incomplete_evidence =
         boolean_environment("GUARD_ALLOW_INCOMPLETE_EVIDENCE", false)?;
     if guard_mode == GuardMode::Evidence && !allow_incomplete_evidence {
@@ -711,9 +762,31 @@ async fn main() -> Result<()> {
              set GUARD_ALLOW_INCOMPLETE_EVIDENCE=1 only for isolated development"
         );
     }
-    let require_authorization_context =
-        boolean_environment("GUARD_REQUIRE_AUTHORIZATION_CONTEXT", true)?;
-    let decision_ttl_seconds = decision_ttl_from_environment()?;
+    let require_authorization_context = if guard_mode == GuardMode::SpiffeIdentity {
+        false
+    } else {
+        boolean_environment("GUARD_REQUIRE_AUTHORIZATION_CONTEXT", true)?
+    };
+    let spiffe_guard = if guard_mode == GuardMode::SpiffeIdentity {
+        let policy_file = std::env::var("GUARD_SPIFFE_POLICY_FILE").map_err(|_| {
+            anyhow::anyhow!(
+                "GUARD_SPIFFE_POLICY_FILE must be set when GUARD_MODE=spiffe_identity"
+            )
+        })?;
+        let guard = SpiffeGuard::from_yaml_file(&policy_file)?;
+        tracing::info!(
+            policy_file = %policy_file,
+            policy_id = %guard.policy_id(),
+            "loaded caller-local SPIFFE authorization policy"
+        );
+        Some(Arc::new(guard))
+    } else {
+        None
+    };
+    let decision_ttl_seconds = match spiffe_guard.as_ref() {
+        Some(guard) => guard.decision_ttl_seconds() as i64,
+        None => decision_ttl_from_environment()?,
+    };
     let evidence_endpoint = std::env::var("EVIDENCE_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:8006".to_string());
     
@@ -759,6 +832,7 @@ async fn main() -> Result<()> {
         require_authorization_context,
         decision_ttl_seconds,
         tc_api_client,
+        spiffe_guard,
     };
 
     // Configure CORS
@@ -770,10 +844,15 @@ async fn main() -> Result<()> {
     // Build router
     let app = Router::new()
         .route("/health", get(health_handler))
+        .route("/guard/v1/authorize", post(spiffe_authorize_handler))
         .route("/ra/v1/verify", post(verify_handler))
         .route("/ra/v1/verify/batch", post(batch_verify_handler))
-        .with_state(state)
-        .layer(cors);
+        .with_state(state);
+    let app = if guard_mode == GuardMode::SpiffeIdentity {
+        app
+    } else {
+        app.layer(cors)
+    };
 
     // Parse address
     let addr: SocketAddr = format!("{}:{}", host, port)
@@ -783,6 +862,7 @@ async fn main() -> Result<()> {
     tracing::info!("Argus Guard starting on {}", addr);
     tracing::info!("Verification endpoint: POST /ra/v1/verify");
     tracing::info!("Batch verification endpoint: POST /ra/v1/verify/batch");
+    tracing::info!("SPIFFE authorization endpoint: POST /guard/v1/authorize");
     tracing::info!("Health endpoint: GET /health");
     tracing::info!("Guard mode: {}", guard_mode.as_str());
     tracing::info!(
@@ -790,12 +870,14 @@ async fn main() -> Result<()> {
         require_authorization_context,
         decision_ttl_seconds
     );
-    if guard_mode == GuardMode::Evidence {
-        tracing::info!("Evidence endpoint: {}", evidence_endpoint);
-    } else {
-        tracing::warn!(
+    match guard_mode {
+        GuardMode::Evidence => tracing::info!("Evidence endpoint: {}", evidence_endpoint),
+        GuardMode::MockAllow => tracing::warn!(
             "mock_allow is connectivity-only: Evidence Provider and verifier are bypassed"
-        );
+        ),
+        GuardMode::SpiffeIdentity => tracing::info!(
+            "spiffe_identity performs caller-local policy evaluation; SPIRE and the TLS client verify workload identities"
+        ),
     }
     
     if agent_tc_api_url.is_some() {
