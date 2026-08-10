@@ -135,6 +135,24 @@ Integration verification covers:
 - Guard DENY, malformed response, 503, timeout, and outage fail-closed;
 - real OpenClaw turn, OpenViking session capture, commit, and archive.
 
+## Remote evaluation
+
+After functional validation passes, E3-E7 Guard, mTLS, capacity, SVID rotation,
+resource, and attestation-amortization measurements are available under
+[`../../benchmarks/asymmetric`](../../benchmarks/asymmetric/README.md). They run
+only against the already-admitted asymmetric runtime and keep Mock RA/Mock
+Trustee explicit in every manifest and report.
+
+```bash
+V2_RUNTIME_DIR=/var/lib/argus-spire-asymmetric/run-001 \
+ARGUS_BENCHMARK_RESULT_ROOT=/var/lib/argus-spire-asymmetric/benchmarks \
+  bash core/spire/runtime/asymmetric/scripts/remote-benchmark.sh all
+```
+
+The benchmark's mTLS-only profile is diagnostic. Formal capacity results use
+the real OpenClaw preload, caller-local Guard, rotating SVID, and native
+OpenViking mTLS server.
+
 For a staged run, the scripts can also be invoked individually:
 
 ```bash

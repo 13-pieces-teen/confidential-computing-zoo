@@ -40,6 +40,14 @@ run_openclaw_transport_tests() {
     )
 }
 
+run_benchmark_tool_tests() {
+    (
+        cd "$SPIRE_ROOT/benchmarks/asymmetric"
+        node --test load-generator.test.mjs \
+            && python3 -m unittest -v test_collector.py test_report.py
+    )
+}
+
 run_unit() {
     run_check 'Rust Guard' \
         cargo test --manifest-path "$AGENT_CC_DIR/core/argus/Cargo.toml"
@@ -55,6 +63,7 @@ run_unit() {
     run_check 'OpenViking native SPIFFE server helpers' \
         run_in_directory "$AGENT_CC_DIR/adapters/OpenViking" \
         python3 -m unittest spiffe_server.test_server
+    run_check 'Asymmetric evaluation tooling' run_benchmark_tool_tests
 }
 
 run_attestation() {

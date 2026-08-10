@@ -5,6 +5,18 @@ import { Agent, fetch as undiciFetch } from "undici";
 const originalFetch = globalThis.fetch.bind(globalThis);
 let dispatcherCache;
 
+function elapsedMilliseconds(started, completed) {
+  return Number(completed - started) / 1_000_000;
+}
+
+function emitTelemetry(event) {
+  if (process.env.ARGUS_SPIFFE_TELEMETRY !== "1") return;
+  process.emit("argus:spiffe-telemetry", Object.freeze({
+    schema_version: "argus-spiffe-transport-v1",
+    ...event,
+  }));
+}
+
 function requiredEnvironment(name) {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -203,18 +215,54 @@ export function installSPIFFETransport(configuration = configurationFromEnvironm
     const method = init.method
       ?? (typeof input === "object" && input.method ? input.method : undefined)
       ?? "GET";
-    await authorize(configuration, requestURL, method);
-    const dispatcher = await dispatcherFor(configuration);
-    const response = await undiciFetch(input, {
-      ...init,
-      dispatcher,
-      redirect: "manual",
-    });
-    if (response.status >= 300 && response.status < 400) {
-      await response.body?.cancel();
-      throw new Error("OpenViking redirect rejected: SPIFFE target origin is fixed");
+    const g0 = process.hrtime.bigint();
+    let stage = "guard";
+    let decision;
+    try {
+      decision = await authorize(configuration, requestURL, method);
+      const g1 = process.hrtime.bigint();
+      stage = "credentials";
+      const dispatcher = await dispatcherFor(configuration);
+      const g2 = process.hrtime.bigint();
+      stage = "transport";
+      const response = await undiciFetch(input, {
+        ...init,
+        dispatcher,
+        redirect: "manual",
+      });
+      const g3 = process.hrtime.bigint();
+      if (response.status >= 300 && response.status < 400) {
+        await response.body?.cancel();
+        throw new Error("OpenViking redirect rejected: SPIFFE target origin is fixed");
+      }
+      emitTelemetry({
+        type: "spiffe_transport",
+        outcome: "response_headers",
+        request_id: decision.request_id,
+        decision_id: decision.decision_id,
+        method: method.toUpperCase(),
+        target_path: requestURL.pathname,
+        status: response.status,
+        guard_decision_ms: elapsedMilliseconds(g0, g1),
+        guard_to_send_ms: elapsedMilliseconds(g1, g2),
+        transport_headers_ms: elapsedMilliseconds(g2, g3),
+        guarded_request_headers_ms: elapsedMilliseconds(g0, g3),
+      });
+      return response;
+    } catch (error) {
+      emitTelemetry({
+        type: "spiffe_transport",
+        outcome: "error",
+        stage,
+        request_id: decision?.request_id ?? null,
+        decision_id: decision?.decision_id ?? null,
+        method: method.toUpperCase(),
+        target_path: requestURL.pathname,
+        elapsed_ms: elapsedMilliseconds(g0, process.hrtime.bigint()),
+        error: error?.message ?? String(error),
+      });
+      throw error;
     }
-    return response;
   };
 }
 

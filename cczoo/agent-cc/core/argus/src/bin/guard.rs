@@ -25,7 +25,8 @@ use argus::{
     binding::ServiceRuntimeBinding,
     tc_api_client::TcApiClient,
     spiffe_guard::{
-        SpiffeAuthorizationRequest, SpiffeAuthorizationResponse, SpiffeGuard,
+        SpiffeAuthorizationDecision, SpiffeAuthorizationRequest, SpiffeAuthorizationResponse,
+        SpiffeGuard,
     },
 };
 use anyhow::Result;
@@ -40,7 +41,11 @@ use axum::{
 use chrono::Utc;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+use std::time::Instant;
 use tower_http::cors::{Any, CorsLayer};
 
 const AUTHORIZATION_CONTEXT_VERSION: &str = "argus-authorization-v2";
@@ -62,6 +67,90 @@ struct GuardAppState {
     tc_api_client: Option<Arc<TcApiClient>>,
     /// Caller-local identity policy used only by the asymmetric SPIFFE profile.
     spiffe_guard: Option<Arc<SpiffeGuard>>,
+    /// Dependency-free Prometheus metrics for the caller-local Guard path.
+    spiffe_metrics: Arc<SpiffeGuardMetrics>,
+}
+
+const GUARD_DURATION_BUCKETS_SECONDS: [f64; 13] = [
+    0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1,
+    0.25, 0.5, 1.0,
+];
+
+#[derive(Default)]
+struct SpiffeGuardMetrics {
+    requests: AtomicU64,
+    allow: AtomicU64,
+    deny: AtomicU64,
+    in_flight: AtomicU64,
+    duration_micros: AtomicU64,
+    duration_buckets: [AtomicU64; GUARD_DURATION_BUCKETS_SECONDS.len()],
+}
+
+impl SpiffeGuardMetrics {
+    fn begin(&self) -> Instant {
+        self.requests.fetch_add(1, Ordering::Relaxed);
+        self.in_flight.fetch_add(1, Ordering::Relaxed);
+        Instant::now()
+    }
+
+    fn finish(&self, decision: SpiffeAuthorizationDecision, started: Instant) {
+        self.in_flight.fetch_sub(1, Ordering::Relaxed);
+        match decision {
+            SpiffeAuthorizationDecision::Allow => {
+                self.allow.fetch_add(1, Ordering::Relaxed);
+            }
+            SpiffeAuthorizationDecision::Deny => {
+                self.deny.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        let elapsed = started.elapsed();
+        let micros = u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX);
+        self.duration_micros.fetch_add(micros, Ordering::Relaxed);
+        let seconds = elapsed.as_secs_f64();
+        for (index, upper_bound) in GUARD_DURATION_BUCKETS_SECONDS.iter().enumerate() {
+            if seconds <= *upper_bound {
+                self.duration_buckets[index].fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn render(&self) -> String {
+        let requests = self.requests.load(Ordering::Relaxed);
+        let allow = self.allow.load(Ordering::Relaxed);
+        let deny = self.deny.load(Ordering::Relaxed);
+        let in_flight = self.in_flight.load(Ordering::Relaxed);
+        let duration_sum_seconds =
+            self.duration_micros.load(Ordering::Relaxed) as f64 / 1_000_000.0;
+        let mut output = String::from(
+            "# HELP argus_guard_requests_total Caller-local SPIFFE Guard requests.\n\
+# TYPE argus_guard_requests_total counter\n",
+        );
+        output.push_str(&format!(
+            "argus_guard_requests_total{{decision=\"allow\"}} {allow}\n\
+argus_guard_requests_total{{decision=\"deny\"}} {deny}\n"
+        ));
+        output.push_str(
+            "# HELP argus_guard_in_flight Caller-local SPIFFE Guard requests currently executing.\n\
+# TYPE argus_guard_in_flight gauge\n",
+        );
+        output.push_str(&format!("argus_guard_in_flight {in_flight}\n"));
+        output.push_str(
+            "# HELP argus_guard_decision_duration_seconds Caller-local SPIFFE Guard decision latency.\n\
+# TYPE argus_guard_decision_duration_seconds histogram\n",
+        );
+        for (index, upper_bound) in GUARD_DURATION_BUCKETS_SECONDS.iter().enumerate() {
+            let count = self.duration_buckets[index].load(Ordering::Relaxed);
+            output.push_str(&format!(
+                "argus_guard_decision_duration_seconds_bucket{{le=\"{upper_bound}\"}} {count}\n"
+            ));
+        }
+        output.push_str(&format!(
+            "argus_guard_decision_duration_seconds_bucket{{le=\"+Inf\"}} {requests}\n\
+argus_guard_decision_duration_seconds_sum {duration_sum_seconds}\n\
+argus_guard_decision_duration_seconds_count {requests}\n"
+        ));
+        output
+    }
 }
 
 /// Health check response
@@ -192,7 +281,9 @@ async fn spiffe_authorize_handler(
         .spiffe_guard
         .as_ref()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let started = state.spiffe_metrics.begin();
     let response = guard.authorize(&request);
+    state.spiffe_metrics.finish(response.decision, started);
     tracing::info!(
         request_id = %response.request_id,
         caller_spiffe_id = %request.caller_spiffe_id,
@@ -209,6 +300,14 @@ async fn spiffe_authorize_handler(
         "caller-local SPIFFE authorization decision"
     );
     Ok(Json(response))
+}
+
+async fn metrics_handler(State(state): State<GuardAppState>) -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/plain; version=0.0.4; charset=utf-8")
+        .body(Body::from(state.spiffe_metrics.render()))
+        .expect("static metrics response must be valid")
 }
 
 fn valid_ascii_token(value: &str, max_length: usize) -> bool {
@@ -833,6 +932,7 @@ async fn main() -> Result<()> {
         decision_ttl_seconds,
         tc_api_client,
         spiffe_guard,
+        spiffe_metrics: Arc::new(SpiffeGuardMetrics::default()),
     };
 
     // Configure CORS
@@ -844,6 +944,7 @@ async fn main() -> Result<()> {
     // Build router
     let app = Router::new()
         .route("/health", get(health_handler))
+        .route("/metrics", get(metrics_handler))
         .route("/guard/v1/authorize", post(spiffe_authorize_handler))
         .route("/ra/v1/verify", post(verify_handler))
         .route("/ra/v1/verify/batch", post(batch_verify_handler))
@@ -864,6 +965,7 @@ async fn main() -> Result<()> {
     tracing::info!("Batch verification endpoint: POST /ra/v1/verify/batch");
     tracing::info!("SPIFFE authorization endpoint: POST /guard/v1/authorize");
     tracing::info!("Health endpoint: GET /health");
+    tracing::info!("Metrics endpoint: GET /metrics");
     tracing::info!("Guard mode: {}", guard_mode.as_str());
     tracing::info!(
         "Authorization context required: {}; decision TTL: {} seconds",
@@ -891,4 +993,32 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod metrics_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn spiffe_metrics_expose_decisions_latency_and_in_flight() {
+        let metrics = SpiffeGuardMetrics::default();
+        let started = metrics.begin() - Duration::from_millis(2);
+        assert_eq!(metrics.in_flight.load(Ordering::Relaxed), 1);
+
+        metrics.finish(SpiffeAuthorizationDecision::Allow, started);
+        let rendered = metrics.render();
+
+        assert!(rendered.contains(
+            "argus_guard_requests_total{decision=\"allow\"} 1"
+        ));
+        assert!(rendered.contains(
+            "argus_guard_requests_total{decision=\"deny\"} 0"
+        ));
+        assert!(rendered.contains("argus_guard_in_flight 0"));
+        assert!(rendered.contains("argus_guard_decision_duration_seconds_count 1"));
+        assert!(rendered.contains(
+            "argus_guard_decision_duration_seconds_bucket{le=\"+Inf\"} 1"
+        ));
+    }
 }
