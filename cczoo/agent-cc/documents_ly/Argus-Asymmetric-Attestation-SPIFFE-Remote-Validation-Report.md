@@ -2,9 +2,11 @@
 
 - **Profile:** `Argus-Asymmetric-Attestation-SPIFFE` (asymmetric: OpenClaw attested by **x509pop**, OpenViking attested by the custom **argus_tdx** NodeAttestor)
 - **Host:** remote Linux TDX host, working dir `/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc`
-- **Branch:** `feat/argus-spiffe-v2` — **HEAD `d96d8538efdb2109731bb57a67300bbdd83b6c95`** (`feat(agent-cc): implement asymmetric SPIFFE runtime`)
+- **Branch:** `feat/argus-spiffe-v2`
+- **Validated base:** `d96d8538efdb2109731bb57a67300bbdd83b6c95` (`feat(agent-cc): implement asymmetric SPIFFE runtime`)
+- **Report and validation-fix commit:** `250ef078fbf781be83278a1ba8dec7d0fca34591` (`fix(agent-cc): validate asymmetric Argus SPIFFE runtime, fix harness bugs`)
 - **Validated:** 2026-08-10 (UTC)
-- **Conclusion:** **PARTIAL** — the asymmetric runtime, the isolated node-attestation matrix, and the full integration / business E2E all **PASS**; the unit suite is **PARTIAL** (2 of 7 components fail: pre-existing Rust test-suite compile break and a host-environment Python import gap, neither affecting the running system). Real TDX Quote / QGS / Trustee remain **NOT VERIFIED / DEFERRED** (mock v2 attestation profile used). SVID rotation is **not** a new TDX attestation. Scope excludes compromised OpenClaw, Docker administration, and production acceptance.
+- **Conclusion:** **PARTIAL** — the asymmetric runtime, the isolated node-attestation matrix, and the full integration / business E2E all **PASS**; the unit suite is **PARTIAL** (2 of 7 components fail: a Rust test-suite compile break and a host-environment Python import gap). Those failures did not block the captured E2E, but remain test-quality gaps until a remote rerun passes. Real TDX Quote / QGS / Trustee remain **NOT VERIFIED / DEFERRED** (mock v2 attestation profile used). SVID rotation is **not** a new TDX attestation. Scope excludes compromised OpenClaw, Docker administration, and production acceptance.
 
 ---
 
@@ -23,7 +25,7 @@ This report documents a 10-constraint, evidence-backed validation of the **asymm
 | OpenClaw start & plugin connect (x509pop, native SPIFFE mTLS) | **PASS** |
 | Integration + business E2E (`remote-test.sh integration`) | **PASS** |
 
-Five repository defects were found and fixed during validation (Bugs #1–#5). Two pre-existing defects remain unresolved (Rust argus test-suite does not compile; OpenViking Python unit test needs the container Python environment). Real Quote / QGS / Trustee verification is deferred.
+Five repository defects were found and fixed during validation (Bugs #1–#5). Two pre-existing defects were unresolved in the captured remote run (the Rust argus test-suite did not compile and the host-side OpenViking Python test imported the container runtime). Follow-up source corrections are described in §12, but remain **NOT REMOTELY RE-VERIFIED**. Real Quote / QGS / Trustee verification is deferred.
 
 > **Security note (verbatim constraints honored):** this report never prints SVID private keys, the `OPENVIKING_API_KEY`, gateway tokens, or TLS private keys. Network addresses were taken from existing config / state — none were guessed.
 
@@ -49,7 +51,8 @@ $ git diff --check        # whitespace / conflict-marker check
 The formal entry points are the asymmetric profile docs + `remote-test.sh` under `core/spire/runtime/asymmetric/`:
 
 - `core/spire/runtime/asymmetric/README.md`
-- `core/spire/runtime/asymmetric/docs/` (profile-specific design & usage docs)
+- `documents_ly/Argus-Asymmetric-Attestation-SPIFFE-Architecture.md`
+- `documents_ly/Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md`
 - `core/spire/runtime/asymmetric/scripts/remote-test.sh`
 
 > Old `core/spire/v2`, `m3`, `m4`, and the legacy compatibility / proxy-hardening materials were **not** used as the formal entry for this validation (per constraint). The legacy `demo-argus-chain.sh` (untracked) references the OLD proxy chain and was not used.
@@ -97,7 +100,7 @@ Both recovered on retry (final `PREPARE_EXIT=0`, `OPENVIKING_BUILD_EXIT=0`).
 | 6 | OpenClaw SPIFFE transport | `npm install --ignore-scripts && npm test` (spiffe-transport) | **PASS** (exit 0) | 2 tests pass (canonicalOrigin, longest-prefix operation map) |
 | 7 | OpenViking native SPIFFE server helpers | `python3 -m unittest spiffe_server.test_server` | **FAIL** (exit 1) | `ModuleNotFoundError: No module named 'openviking'` — host lacks the container Python env; see §12.2 |
 
-**Unit verdict: PARTIAL (5/7 pass).** The two failures are both non-runtime: the Rust test-suite compile break (§12.1) and the host-side Python import gap (§12.2). Neither affects the deployed Guard / OpenViking / OpenClaw behavior, which the integration E2E validates end-to-end (§9).
+**Unit verdict: PARTIAL (5/7 pass).** The two failures are the Rust test-suite compile break (§12.1) and the host-side Python import gap (§12.2). They did not block the deployed Guard / OpenViking / OpenClaw E2E captured in §9, but the report does not treat a passing E2E as a substitute for those missing unit-test gates.
 
 ---
 
@@ -290,9 +293,9 @@ The 15 integration result items are all satisfied: Guard ALLOW exact match; wron
 
 | # | File | Defect | Fix |
 |---|---|---|---|
-| 1 | `adapters/OpenClaw/spiffe-transport/preload.mjs` | SPIFFE transport lacked a fallback for one method | Added method fallback (already at HEAD `d96d853`) |
-| 2 | `core/spire/runtime/asymmetric/scripts/verify-svid.sh` | SSH command quoting broke in-guest SVID verification | Quoting fixed (already at HEAD) |
-| 3 | `core/spire/runtime/asymmetric/scripts/verify-guard-gate-failures.sh` | `JSON.parse` without fallback on non-JSON fault response | JSON parse fallback added (already at HEAD) |
+| 1 | `adapters/OpenClaw/spiffe-transport/preload.mjs` | SPIFFE transport lacked a fallback for one method | Fixed in the validation worktree and committed in `250ef07` |
+| 2 | `core/spire/runtime/asymmetric/scripts/verify-svid.sh` | SSH command quoting broke in-guest SVID verification | Fixed in the validation worktree and committed in `250ef07` |
+| 3 | `core/spire/runtime/asymmetric/scripts/verify-guard-gate-failures.sh` | Empty fault-injection request bodies were not handled | Fixed in the validation worktree and committed in `250ef07` |
 | 4 | `core/spire/runtime/asymmetric/scripts/verify-openclaw-plugin-e2e.sh` | `require` + top-level `await` under the ESM preload → `ERR_AMBIGUOUS_MODULE_SYNTAX` | Processing block wrapped in an async IIFE `(async () => { … })().catch(…)` |
 | 5 | `core/spire/runtime/asymmetric/scripts/remote-test.sh` | Trailing `[[ "$ACTION" == integration || … ]] && run_integration` returns status 1 for `unit`/`attestation` actions → script exits 1 **even when all tests pass**; also, the isolated M3/M4 stack is not hermetic against a host proxy | Dispatch changed to `if …; then …; fi`; `run_attestation` now exports a no-proxy pin for `fake-services,spire-server` before invoking the matrix |
 
@@ -310,7 +313,7 @@ The 15 integration result items are all satisfied: Guard ALLOW exact match; wron
 
 ---
 
-## 12. Pre-Existing Unresolved Defects (reported, not modified)
+## 12. Defects Observed in the Captured Remote Run
 
 ### 12.1 Rust argus test suite does not compile (`cargo test` exit 101)
 
@@ -322,9 +325,29 @@ The 15 integration result items are all satisfied: Guard ALLOW exact match; wron
 
 `git log -S` shows these tests were introduced at `7aa3cb7` and the asymmetric commit `d96d853` only *added* `spiffe_guard`; the argus test suite has **never compiled green** in this repo. Re-exporting the orphaned modules would change the crate's public API surface (security-relevant, since `TdxQuoteVerifier::check_tcb_status` deliberately returns `Unknown` TCB status) — a maintainer decision, deliberately **not** changed during validation.
 
+Post-validation local correction: the integration tests were aligned with the
+current public Argus API instead of exporting the orphaned verifier modules;
+obsolete `generate_nonce_with_size` expectations were removed and the current
+optional identity fields were added. This correction is not counted as PASS
+until `remote-test.sh unit` succeeds on the remote host.
+
 ### 12.2 OpenViking Python unit test requires the container Python env
 
 `python3 -m unittest spiffe_server.test_server` fails with `ModuleNotFoundError: No module named 'openviking'` on the host. `spiffe_server/server.py` imports `openviking` / `openviking_cli` packages that exist only inside the built OpenViking container (TD Guest) — the test is not host-runnable without installing those packages. This is a harness/dependency gap, not a defect in the tested functions (`certificate_uri_sans`, `is_exact_spiffe_identity`).
+
+Post-validation local correction: the dependency-free certificate identity
+helpers were moved to `spiffe_server/identity.py`, and the unit test imports
+that module without loading the OpenViking application. This correction is not
+counted as PASS until it succeeds on the remote host.
+
+### 12.3 Follow-up harness reproducibility corrections
+
+The local follow-up also changes `remote-test.sh` to execute every selected
+check and report an aggregate failure list, makes the `no_proxy` extension safe
+when the variables are initially unset, and makes
+`OPENVIKING_MODEL_CA_BUNDLE` an explicit validated read-only mount. These
+changes address review findings after `250ef07`; they are not part of the
+remote PASS evidence in this report and require a new remote run.
 
 ---
 

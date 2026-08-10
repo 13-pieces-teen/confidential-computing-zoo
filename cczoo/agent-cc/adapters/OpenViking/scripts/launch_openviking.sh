@@ -33,6 +33,7 @@ OPENVIKING_CONTAINER_STATE_DIR="${OPENVIKING_CONTAINER_STATE_DIR:-/app/.openviki
 OPENVIKING_SPIFFE_ENABLED="${OPENVIKING_SPIFFE_ENABLED:-0}"
 OPENVIKING_SPIFFE_WORKLOAD_API_DIR="${OPENVIKING_SPIFFE_WORKLOAD_API_DIR:-}"
 OPENVIKING_SPIFFE_PORT="${OPENVIKING_SPIFFE_PORT:-1943}"
+OPENVIKING_MODEL_CA_BUNDLE="${OPENVIKING_MODEL_CA_BUNDLE:-}"
 OPENVIKING_LAUNCH_ACTION="${OPENVIKING_LAUNCH_ACTION:-all}"
 ATTESTATION_REQUIRED="${ATTESTATION_REQUIRED:-false}"
 POLL_INTERVAL="${POLL_INTERVAL:-3}"
@@ -114,14 +115,15 @@ prepare_openviking_storage() {
         [[ -S "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR/agent.sock" ]] \
             || { echo "SPIFFE Workload API socket is missing: $OPENVIKING_SPIFFE_WORKLOAD_API_DIR/agent.sock" >&2; exit 1; }
         export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=0.0.0.0:${OPENVIKING_SPIFFE_PORT}:1943 --volume=${OPENVIKING_SPIFFE_WORKLOAD_API_DIR}:/opt/spire/run/openviking:ro --env=ARGUS_SPIFFE_ENABLED=1 --env=SPIFFE_ENDPOINT_SOCKET=unix:///opt/spire/run/openviking/agent.sock --env=ARGUS_WORKLOAD_SPIFFE_ID=spiffe://argus.local/service/openviking-cmem --env=ARGUS_EXPECTED_CLIENT_SPIFFE_ID=spiffe://argus.local/agent/openclaw --env=ARGUS_OPENVIKING_MTLS_PORT=1943 --env=ARGUS_SPIFFE_KEEPALIVE_SECONDS=${ARGUS_SPIFFE_KEEPALIVE_SECONDS:-15}"
-        # Optional model-gateway CA. When the VLM/archive step needs the model
-        # provider (e.g. an Intel LLM gateway signed by the Intel PKI), the
-        # chain is not in Python's default trust store. Pointing SSL_CERT_FILE
-        # at the bundle already mounted from OPENVIKING_MODEL_CA_BUNDLE makes
-        # httpx verify it without disabling TLS checks. The container path must
-        # match the mount created by the caller when staging the bundle.
-        if [[ -n "${OPENVIKING_MODEL_CA_BUNDLE:-}" ]]; then
-            export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --env=SSL_CERT_FILE=${OPENVIKING_MODEL_CA_BUNDLE}"
+        # Optional model-gateway CA. The supplied path is on the TD Guest and
+        # is mounted read-only at a fixed container path so the launch remains
+        # reproducible without disabling TLS verification.
+        if [[ -n "$OPENVIKING_MODEL_CA_BUNDLE" ]]; then
+            [[ "$OPENVIKING_MODEL_CA_BUNDLE" == /* ]] \
+                || { echo "OPENVIKING_MODEL_CA_BUNDLE must be absolute." >&2; exit 1; }
+            [[ -f "$OPENVIKING_MODEL_CA_BUNDLE" ]] \
+                || { echo "OpenViking model CA bundle is missing: $OPENVIKING_MODEL_CA_BUNDLE" >&2; exit 1; }
+            export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --volume=${OPENVIKING_MODEL_CA_BUNDLE}:/opt/model-ca/argus-ca-bundle.pem:ro --env=SSL_CERT_FILE=/opt/model-ca/argus-ca-bundle.pem"
         fi
     else
         export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=127.0.0.1:1933:1933"

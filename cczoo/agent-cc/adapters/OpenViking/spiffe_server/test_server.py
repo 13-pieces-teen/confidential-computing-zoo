@@ -1,6 +1,6 @@
 import unittest
 
-from spiffe_server.server import certificate_uri_sans, is_exact_spiffe_identity
+from spiffe_server.identity import certificate_uri_sans, is_exact_spiffe_identity
 
 
 class ExactSPIFFEIdentityTests(unittest.TestCase):

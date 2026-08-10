@@ -10,7 +10,6 @@ import os
 import ssl
 import threading
 from pathlib import Path
-from typing import Iterable, Mapping
 
 import uvicorn
 from uvicorn.protocols.http.h11_impl import H11Protocol
@@ -21,6 +20,8 @@ from openviking_cli.utils.config import OPENVIKING_CONFIG_ENV
 from openviking_cli.utils.config.open_viking_config import OpenVikingConfigSingleton
 from openviking_cli.utils.logger import configure_uvicorn_logging
 
+from .identity import certificate_uri_sans, is_exact_spiffe_identity
+
 LOGGER = logging.getLogger("argus.openviking.spiffe")
 
 
@@ -29,29 +30,6 @@ def required_environment(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is required")
     return value
-
-
-def is_exact_spiffe_identity(uris: Iterable[str], expected: str) -> bool:
-    identities = list(uris)
-    return identities == [expected]
-
-
-def certificate_uri_sans(certificate: Mapping[str, object] | None) -> list[str]:
-    """Extract URI SANs from an already chain-validated stdlib peer certificate."""
-
-    if not certificate:
-        return []
-    subject_alt_names = certificate.get("subjectAltName", ())
-    if not isinstance(subject_alt_names, (tuple, list)):
-        return []
-    return [
-        value
-        for item in subject_alt_names
-        if isinstance(item, tuple)
-        and len(item) == 2
-        and item[0] == "URI"
-        and isinstance((value := item[1]), str)
-    ]
 
 
 class RotatingServerContext:

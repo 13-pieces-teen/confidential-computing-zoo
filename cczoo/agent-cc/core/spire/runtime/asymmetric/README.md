@@ -80,6 +80,9 @@ Then launch the already-built OpenViking image in the TD Guest:
 ```bash
 export OPENVIKING_SPIFFE_ENABLED=1
 export OPENVIKING_SPIFFE_WORKLOAD_API_DIR=/run/argus-spire-v2/openviking
+# Optional: required only when the model provider uses a private CA. This path
+# must exist in the TD Guest; the launcher mounts it read-only into the workload.
+# export OPENVIKING_MODEL_CA_BUNDLE=/path/on/td-guest/model-ca-bundle.pem
 export OPENVIKING_LAUNCH_ACTION=launch
 bash adapters/OpenViking/scripts/launch_openviking.sh
 ```
@@ -94,6 +97,7 @@ The target hostname defaults to `openviking.argus.local`. Set
 available through DNS; the launcher adds only this exact host mapping.
 
 ```bash
+# export V2_MODEL_CA_BUNDLE=/path/on/validation-host/model-ca-bundle.pem  # optional
 bash core/spire/runtime/asymmetric/scripts/start-openclaw-workload.sh
 export OPENVIKING_API_KEY='<non-root OpenViking user key>'
 bash core/spire/runtime/asymmetric/scripts/connect-openclaw-plugin.sh
@@ -114,8 +118,10 @@ OPENVIKING_API_KEY='<non-root key>' \
 ```
 
 The stages can also be run independently as `unit`, `attestation`, and
-`integration`. The isolated attestation stack uses host metrics ports 29988
-and 29989 by default, so it does not collide with the formal profile.
+`integration`. Every selected check runs even when an earlier check fails; the
+script prints a consolidated failure list and returns non-zero at the end. The
+isolated attestation stack uses host metrics ports 29988 and 29989 by default,
+so it does not collide with the formal profile.
 
 Integration verification covers:
 

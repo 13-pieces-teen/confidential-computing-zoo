@@ -172,6 +172,8 @@ async fn evidence_post_handler(
                 service_id: Some("test-service-id".to_string()),
                 instance_id: "test-instance".to_string(),
                 instance_scope: "pod".to_string(),
+                launch_id: None,
+                transparency_log_id: None,
                 image_digest: Some("sha256:test123".to_string()),
                 executable_digest: None,
                 spiffe_id: Some("spiffe://test.domain/test".to_string()),

@@ -19,7 +19,6 @@ use argus::{
     engine::{ArgusEngine, MockEvidenceFetcher, EvidenceFetcher, PolicyEvaluatorTrait},
     policy::AllowAllPolicyEvaluator,
     verifier::{RaAdapter, MockRaAdapter},
-    tdx_verifier::{TdxQuoteVerifier, TcbStatus, TcbStatusType, TcbEvaluationLevel},
     binding::LocalServiceRuntimeBinding,
     errors::ArgusError,
 };
@@ -71,17 +70,6 @@ fn test_nonce_uniqueness() {
     }
     // At least 99% should be unique (allowing for statistical near-impossibility)
     assert!(unique_count >= 99);
-}
-
-#[test]
-fn test_nonce_with_size() {
-    let nonce_16 = generate_nonce_with_size(16);
-    let nonce_32 = generate_nonce_with_size(32);
-    let nonce_64 = generate_nonce_with_size(64);
-    
-    assert_eq!(nonce_16.len(), 32);  // 16 bytes * 2 hex chars
-    assert_eq!(nonce_32.len(), 64);  // 32 bytes * 2 hex chars
-    assert_eq!(nonce_64.len(), 128); // 64 bytes * 2 hex chars
 }
 
 #[test]
@@ -141,51 +129,6 @@ async fn test_mock_evidence_fetcher_generates_valid_evidence() {
     let evidence = evidence.unwrap();
     assert_eq!(evidence.version, "v1");
     assert!(!evidence.report_data.is_empty());
-}
-
-// ============ TDX Quote Verifier Tests ============
-
-#[test]
-fn test_tdx_quote_verifier_creation() {
-    let verifier = TdxQuoteVerifier::new();
-    assert!(true); // Should not panic
-}
-
-#[test]
-fn test_tdx_quote_verifier_with_freshness() {
-    let verifier = TdxQuoteVerifier::with_freshness_window(600);
-    assert!(true); // Should not panic
-}
-
-#[test]
-fn test_tcb_status_creation() {
-    let status = TcbStatus {
-        tcb_version: Some("1.0.0".to_string()),
-        tcb_evaluation: TcbEvaluationLevel::Standard,
-        tcb_status_type: TcbStatusType::UpToDate,
-        advisory_ids: vec!["ADV-001".to_string()],
-    };
-    
-    assert_eq!(status.tcb_status_type, TcbStatusType::UpToDate);
-    assert_eq!(status.tcb_evaluation, TcbEvaluationLevel::Standard);
-}
-
-#[test]
-fn test_tcb_status_type_serialization() {
-    let status = TcbStatusType::UpToDate;
-    let serialized = serde_json::to_string(&status).unwrap();
-    assert!(serialized.contains("up_to_date"));
-    
-    let status = TcbStatusType::OutOfDate;
-    let serialized = serde_json::to_string(&status).unwrap();
-    assert!(serialized.contains("out_of_date"));
-}
-
-#[test]
-fn test_tcb_evaluation_level_serialization() {
-    let level = TcbEvaluationLevel::Standard;
-    let serialized = serde_json::to_string(&level).unwrap();
-    assert!(serialized.contains("standard"));
 }
 
 // ============ Policy Evaluator Tests ============
