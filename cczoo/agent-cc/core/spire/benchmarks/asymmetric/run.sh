@@ -10,8 +10,8 @@ RUNTIME_DIR="${V2_RUNTIME_DIR:-}"
 
 [[ "$ACTION" == unit || "$ACTION" == preflight || "$ACTION" == e3 \
     || "$ACTION" == e4 || "$ACTION" == e5 || "$ACTION" == e6 \
-    || "$ACTION" == e7 || "$ACTION" == report || "$ACTION" == all ]] \
-    || { echo 'usage: run.sh [unit|preflight|e3|e4|e5|e6|e7|report|all]' >&2; exit 2; }
+    || "$ACTION" == e6nc || "$ACTION" == e7 || "$ACTION" == report || "$ACTION" == all ]] \
+    || { echo 'usage: run.sh [unit|preflight|e3|e4|e5|e6|e6nc|e7|report|all]' >&2; exit 2; }
 
 OPENCLAW_CONTAINER="${V2_REAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
 SPIRE_SERVER_CONTAINER="${V2_SPIRE_SERVER_CONTAINER:-argus-v2-spire-server}"
@@ -360,6 +360,27 @@ run_e6() {
         0 "$duration" "${E6_QPS:-10}" "${E6_CONCURRENCY:-8}"
 }
 
+# E6 new-connection probe: same SVID-rotation span as run_e6 but every request
+# establishes a fresh mTLS connection (mode `guarded-new-connection`), so the
+# case independently proves that NEW connections succeed before/during/after
+# each SVID rotation, with per-request success/failure + handshake metrics.
+# The keep-alive E6 alone cannot prove this (connections are reused).
+run_e6nc() {
+    local ttl="${V2_SVID_TTL_SECONDS:-}"
+    if [[ -z "$ttl" ]]; then
+        ttl="$(docker exec "$OPENCLAW_CONTAINER" cat /run/argus-svid/status.json \
+            | python3 -c 'import json,sys; value=json.load(sys.stdin); print(int(value["not_after_unix"]) - int(value["not_before_unix"]))')"
+    fi
+    [[ "$ttl" =~ ^[1-9][0-9]*$ ]] || fail "unable to determine a positive SVID TTL: $ttl"
+    local duration="${E6NC_DURATION_SECONDS:-$((ttl * 3 + 60))}"
+    [[ "$duration" =~ ^[1-9][0-9]*$ ]] || fail "E6NC duration must be a positive integer: $duration"
+    (( duration >= ttl * 3 )) \
+        || fail "E6NC_DURATION_SECONDS must span at least three SVID TTL periods ($((ttl * 3))s)"
+    run_case E6 e6-svid-rotation-new-connection guarded-new-connection-rotation \
+        guarded-new-connection \
+        0 "$duration" "${E6NC_QPS:-5}" "${E6NC_CONCURRENCY:-4}"
+}
+
 generate_report() {
     python3 "$SCRIPT_DIR/report.py" --run-dir "$RUN_DIR"
 }
@@ -395,6 +416,7 @@ trap 'stop_collector; exit 143' TERM
 [[ "$ACTION" == e4 || "$ACTION" == all ]] && run_e4
 [[ "$ACTION" == e5 || "$ACTION" == all ]] && run_e5
 [[ "$ACTION" == e6 || "$ACTION" == all ]] && run_e6
+[[ "$ACTION" == e6nc ]] && run_e6nc
 stop_collector
 trap - EXIT INT TERM
 
