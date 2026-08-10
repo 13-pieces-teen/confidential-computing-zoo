@@ -36,6 +36,7 @@ processing_summary="$(docker exec -i -u "$OPENCLAW_USER" -e OPENVIKING_API_KEY \
     "$OPENCLAW_CONFIG" "$EXPECTED_BASE_URL" "$MARKER" "$RUN_ID" \
     "$CAPTURE_ATTEMPTS" "$COMMIT_ATTEMPTS" <<'NODE'
 const { execFileSync } = require("node:child_process");
+(async () => {
 const [configPath, expectedBase, marker, runID, captureAttemptsRaw, commitAttemptsRaw] = process.argv.slice(2);
 const captureAttempts = Number(captureAttemptsRaw);
 const commitAttempts = Number(commitAttemptsRaw);
@@ -113,6 +114,7 @@ for (let attempt = 0; attempt < commitAttempts; attempt += 1) {
 }
 if (!summary) throw new Error(`commit/archive did not complete for ${sessionID}`);
 process.stdout.write(JSON.stringify(summary));
+})().catch((error) => { console.error(error); process.exit(1); });
 NODE
 )" || fail 'OpenViking marker capture or commit/archive verification failed'
 

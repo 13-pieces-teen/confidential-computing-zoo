@@ -32,6 +32,16 @@ run_unit() {
 }
 
 run_attestation() {
+    # The isolated M3/M4 stack must stay on the compose network: the SPIRE
+    # agent's argus_tdx plugin calls the mock Trustee at fake-services:18443.
+    # A corporate proxy configured on the host (daemon systemd drop-in or the
+    # docker client proxies block) would intercept that call and answer 504.
+    # Pin the no-proxy list to the stack's service names before invoking the
+    # matrix; environment variables take precedence over the docker client
+    # proxy configuration.
+    export no_proxy="fake-services,spire-server,$no_proxy"
+    export NO_PROXY="fake-services,spire-server,$NO_PROXY"
+
     echo '=== Isolated argus_tdx Node Attestation success and rejection matrix ==='
     M3_SERVER_METRICS_PORT="${M3_SERVER_METRICS_PORT:-29988}" \
     M3_AGENT_METRICS_PORT="${M3_AGENT_METRICS_PORT:-29989}" \
@@ -50,6 +60,6 @@ run_integration() {
     fi
 }
 
-[[ "$ACTION" == unit || "$ACTION" == all ]] && run_unit
-[[ "$ACTION" == attestation || "$ACTION" == all ]] && run_attestation
-[[ "$ACTION" == integration || "$ACTION" == all ]] && run_integration
+if [[ "$ACTION" == unit || "$ACTION" == all ]]; then run_unit; fi
+if [[ "$ACTION" == attestation || "$ACTION" == all ]]; then run_attestation; fi
+if [[ "$ACTION" == integration || "$ACTION" == all ]]; then run_integration; fi

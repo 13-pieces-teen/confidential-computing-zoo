@@ -220,6 +220,19 @@ if [[ "$ARGUS_SPIFFE_ENABLED" == "1" ]]; then
     [[ -n "$target_host" ]] || fail 'unable to extract host from ARGUS_OPENVIKING_ORIGIN'
     SPIFFE_HOST_ARGS=(--add-host "${target_host}:${ARGUS_OPENVIKING_HOST_ADDRESS}")
   fi
+  # Optional model-gateway CA bundle. When the business turn needs the OpenClaw
+  # gateway to reach an internal model provider over HTTPS (e.g. an Intel LLM
+  # gateway signed by the Intel PKI), the provider chain may not be in the
+  # container's default trust store. Mounting a bundle here and exporting
+  # NODE_EXTRA_CA_CERTS keeps the provider reachable without disabling TLS
+  # verification. The default bundle path matches the adapter documentation.
+  if [[ -n "${ARGUS_MODEL_CA_BUNDLE:-}" ]]; then
+    [[ -f "$ARGUS_MODEL_CA_BUNDLE" ]] || fail "model CA bundle not found: $ARGUS_MODEL_CA_BUNDLE"
+    SPIFFE_MOUNT_ARGS+=(-v "${ARGUS_MODEL_CA_BUNDLE}:/opt/model-ca/argus-ca-bundle.pem:ro")
+    SPIFFE_ENV_ARGS+=(-e "NODE_EXTRA_CA_CERTS=/opt/model-ca/argus-ca-bundle.pem")
+    [[ -n "${NODE_USE_ENV_PROXY:-}" ]] \
+      && SPIFFE_ENV_ARGS+=(-e "NODE_USE_ENV_PROXY=${NODE_USE_ENV_PROXY}")
+  fi
 fi
 
 # Verify Docker CLI is present inside the image (required for sibling containers)

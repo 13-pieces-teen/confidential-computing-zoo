@@ -43,7 +43,7 @@ docker exec "$OPENCLAW_CONTAINER" cat /run/argus-svid/status.json \
 
 ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" sudo -n /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" >/dev/null \
     || fail 'OpenViking workload is missing in the TD Guest'
-openviking_mount="$(ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" sudo -n /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/opt/spire/run/openviking"}}{{.Source}}{{end}}{{end}}')"
+openviking_mount="$(ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" "sudo -n /usr/local/bin/docker inspect $OPENVIKING_CONTAINER --format '{{range .Mounts}}{{if eq .Destination \"/opt/spire/run/openviking\"}}{{.Source}}{{end}}{{end}}'")"
 [[ "$openviking_mount" == "$REMOTE_RUN" ]] || fail "OpenViking Workload API mount is $openviking_mount"
 ssh "${ssh_options[@]}" "$TDVM_SSH_TARGET" sudo -n /usr/local/bin/docker exec "$OPENVIKING_CONTAINER" cat /run/argus-svid/status.json \
     | validate_status spiffe://argus.local/service/openviking-cmem

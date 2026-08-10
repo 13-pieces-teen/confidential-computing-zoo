@@ -63,7 +63,7 @@ http.createServer((request, response) => {
     if (process.env.FAULT_MODE === "timeout") return setTimeout(() => response.end(), 5000);
     if (process.env.FAULT_MODE === "http_503") { response.writeHead(503); return response.end(); }
     if (process.env.FAULT_MODE === "malformed") { response.writeHead(200, {"content-type":"application/json"}); return response.end("{\"decision\":"); }
-    const input = JSON.parse(raw);
+    const input = raw ? JSON.parse(raw) : {};
     response.writeHead(200, {"content-type":"application/json"});
     response.end(JSON.stringify({request_id:input.request_id,decision:"DENY",reason:"fault injection",decision_id:"fault-deny",expires_at_unix:Math.floor(Date.now()/1000)+15,policy_id:"fault",rule_id:null}));
   });

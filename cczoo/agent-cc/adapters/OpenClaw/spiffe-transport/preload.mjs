@@ -200,7 +200,9 @@ export function installSPIFFETransport(configuration = configurationFromEnvironm
     if (requestURL.origin !== configuration.targetOrigin) {
       return originalFetch(input, init);
     }
-    const method = init.method ?? (typeof input === "object" && input.method) ?? "GET";
+    const method = init.method
+      ?? (typeof input === "object" && input.method ? input.method : undefined)
+      ?? "GET";
     await authorize(configuration, requestURL, method);
     const dispatcher = await dispatcherFor(configuration);
     const response = await undiciFetch(input, {

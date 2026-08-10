@@ -32,3 +32,6 @@ __pycache__/
 # Local Go plugin binaries
 /core/spire/plugins/argus-tdx-nodeattestor/agent
 /core/spire/plugins/argus-tdx-nodeattestor/server
+
+# Node dependencies (e.g. OpenClaw spiffe-transport)
+node_modules/
