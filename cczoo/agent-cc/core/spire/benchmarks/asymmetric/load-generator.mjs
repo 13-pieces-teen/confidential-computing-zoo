@@ -212,7 +212,6 @@ async function createExecutor(configuration) {
     };
   }
 
-  const credentials = await loadCredentials();
   const expectedSPIFFEID = requiredEnvironment("ARGUS_TARGET_SPIFFE_ID");
   const keepAliveAgent = configuration.mode === "diagnostic-mtls-only"
     ? new HTTPSAgent({ keepAlive: true, maxSockets: configuration.concurrency })
@@ -223,6 +222,12 @@ async function createExecutor(configuration) {
       const decision = await authorize(guardURL, targetURL, configuration.timeoutMs);
       decisionID = decision.decision_id;
     }
+    // Re-read the SVID before every new mTLS connection. The workload SVID
+    // materializer rotates /run/argus-svid on a ~TTL/2 cadence; credentials
+    // read once at executor start expire after a single lifetime and every
+    // subsequent fresh handshake then fails (the peer rejects the expired
+    // client certificate). Refreshing here keeps rotation-spanning runs valid.
+    const credentials = await loadCredentials();
     const result = await directMTLSRequest(targetURL, {
       method: configuration.method,
       credentials,
