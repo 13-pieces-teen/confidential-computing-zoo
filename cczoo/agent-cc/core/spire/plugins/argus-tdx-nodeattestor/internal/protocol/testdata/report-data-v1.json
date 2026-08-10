@@ -1,0 +1,64 @@
+{
+  "protocol_version": 1,
+  "evidence_request": {
+    "version": "v1",
+    "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "caller_id": "spiffe://argus.local/spire/server",
+    "target": {
+      "service_name": "argus-tdx-node",
+      "target_uri": "argus-node:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "requested_claims": ["TeeQuote", "IdentityClaims"],
+    "profile_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "binding_claims": {
+    "assurance_level": "L2",
+    "service_identity": {
+      "service_name": "argus-tdx-node",
+      "service_id": null,
+      "instance_id": "tdvm-0001",
+      "instance_scope": "vm",
+      "image_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "executable_digest": null,
+      "spiffe_id": null
+    },
+    "runtime_binding": {
+      "endpoint": "unix:///run/argus/evidence.sock",
+      "owning_pid": 4242,
+      "process_start_time": "2026-07-27T10:00:00Z",
+      "container_id": null,
+      "pod_uid": null,
+      "vm_instance_id": "tdvm-0001",
+      "namespace": null,
+      "cgroup_path": "/system.slice/spire-agent.service"
+    },
+    "claim_support": {
+      "instance_id": ["runtime", "quote", "runtime"],
+      "service_name": ["config"]
+    },
+    "verifier_validated_support": null,
+    "provider_claim_assurance": {
+      "instance_id": "L2",
+      "service_name": "L1"
+    }
+  },
+  "canonical_evidence_request": "{\"caller_id\":\"spiffe://argus.local/spire/server\",\"nonce\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\",\"profile_digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"requested_claims\":[\"TeeQuote\",\"IdentityClaims\"],\"target\":{\"service_name\":\"argus-tdx-node\",\"target_uri\":\"argus-node:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"},\"version\":\"v1\"}",
+  "canonical_binding_claims": "{\"assurance_level\":\"L2\",\"claim_support\":{\"instance_id\":[\"quote\",\"runtime\"],\"service_name\":[\"config\"]},\"provider_claim_assurance\":{\"instance_id\":\"L2\",\"service_name\":\"L1\"},\"runtime_binding\":{\"cgroup_path\":\"/system.slice/spire-agent.service\",\"container_id\":null,\"endpoint\":\"unix:///run/argus/evidence.sock\",\"namespace\":null,\"owning_pid\":4242,\"pod_uid\":null,\"process_start_time\":\"2026-07-27T10:00:00Z\",\"vm_instance_id\":\"tdvm-0001\"},\"service_identity\":{\"executable_digest\":null,\"image_digest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"instance_id\":\"tdvm-0001\",\"instance_scope\":\"vm\",\"service_id\":null,\"service_name\":\"argus-tdx-node\",\"spiffe_id\":null},\"verifier_validated_support\":null}",
+  "evidence_request_digest": "sha256:9ed92f9fce74c2706f0f4440b188842776ad16ec179df94afc679a46c1b261bf",
+  "binding_digest_sha384": "b71b4d7d4ccf714b9a630bdeec354264a3ac30bf1805ae75a3d58cd6916bdff132e001854fa4976fa65f48fd45ea4b61",
+  "report_data": "b71b4d7d4ccf714b9a630bdeec354264a3ac30bf1805ae75a3d58cd6916bdff132e001854fa4976fa65f48fd45ea4b6100000000000000000000000000000000",
+  "mutations": {
+    "nonce": {
+      "value": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA",
+      "report_data": "6144dbcbf275e665c9d9d67c789eafe50f51112d57313ca40cedb96f90ab1a6aadddf77c3cb54323687408c4a24c33d300000000000000000000000000000000"
+    },
+    "key": {
+      "value": "argus-node:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "report_data": "61c3541ded34f92f53c2d80e2aafd13279e4f942c656e5df8de9243ccdb62dfb5a9fe381a83a09788aeec935947e65ab00000000000000000000000000000000"
+    },
+    "policy": {
+      "value": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "report_data": "60f83c575bc61542ea8b0b156c22166f6877359e48be0f6bd4a8297593507e89d5cff15c8eec8aedd34f59076e6b15ee00000000000000000000000000000000"
+    }
+  }
+}

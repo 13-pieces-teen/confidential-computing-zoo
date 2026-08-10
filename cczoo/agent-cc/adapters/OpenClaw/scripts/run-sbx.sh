@@ -47,6 +47,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGENT_CC_DIR="$(cd "$ROOT_DIR/../../.." && pwd)"
 IMAGE="openclaw-sbx:latest"
 CONTAINER_NAME="openclaw-gateway"
 GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
@@ -61,6 +62,11 @@ DO_BUILD=0
 NO_START=0
 CONFIG_VOLUME="${OPENCLAW_CONFIG_VOLUME:-openclaw-config}"
 WORKSPACE_VOLUME="${OPENCLAW_WORKSPACE_VOLUME:-openclaw-workspace}"
+ARGUS_SPIFFE_ENABLED="${ARGUS_SPIFFE_ENABLED:-0}"
+SPIFFE_MOUNT_ARGS=()
+SPIFFE_ENV_ARGS=()
+SPIFFE_NETWORK_ARGS=()
+SPIFFE_HOST_ARGS=()
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -172,7 +178,7 @@ build_image() {
   docker build \
     -f "$ROOT_DIR/Dockerfile.sbx" \
     -t "$IMAGE" \
-    "$ROOT_DIR"
+    "$AGENT_CC_DIR"
   echo "==> Image built: $IMAGE"
 }
 
@@ -182,6 +188,51 @@ if [[ "$DO_BUILD" -eq 1 ]]; then
 elif ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "Image $IMAGE not found locally — building..."
   build_image
+fi
+
+if [[ "$ARGUS_SPIFFE_ENABLED" == "1" ]]; then
+  : "${ARGUS_SPIFFE_WORKLOAD_API_DIR:?ARGUS_SPIFFE_WORKLOAD_API_DIR is required when ARGUS_SPIFFE_ENABLED=1}"
+  : "${ARGUS_OPENVIKING_ORIGIN:?ARGUS_OPENVIKING_ORIGIN is required when ARGUS_SPIFFE_ENABLED=1}"
+  : "${ARGUS_GUARD_URL:?ARGUS_GUARD_URL is required when ARGUS_SPIFFE_ENABLED=1}"
+  [[ -S "$ARGUS_SPIFFE_WORKLOAD_API_DIR/agent.sock" ]] \
+    || fail "SPIFFE Workload API socket not found: $ARGUS_SPIFFE_WORKLOAD_API_DIR/agent.sock"
+  SPIFFE_MOUNT_ARGS=(-v "${ARGUS_SPIFFE_WORKLOAD_API_DIR}:/run/spire/agent:ro")
+  SPIFFE_ENV_ARGS=(
+    -e "ARGUS_SPIFFE_ENABLED=1"
+    -e "NODE_OPTIONS=--import=/opt/argus/openclaw-spiffe/preload.mjs"
+    -e "SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/agent/agent.sock"
+    -e "ARGUS_CALLER_SPIFFE_ID=${ARGUS_CALLER_SPIFFE_ID:-spiffe://argus.local/agent/openclaw}"
+    -e "ARGUS_TARGET_SPIFFE_ID=${ARGUS_TARGET_SPIFFE_ID:-spiffe://argus.local/service/openviking-cmem}"
+    -e "ARGUS_TARGET_SERVICE=${ARGUS_TARGET_SERVICE:-openviking-cmem}"
+    -e "ARGUS_OPENVIKING_ORIGIN=${ARGUS_OPENVIKING_ORIGIN}"
+    -e "ARGUS_GUARD_URL=${ARGUS_GUARD_URL}"
+    -e "ARGUS_GUARD_DATA_CLASS=${ARGUS_GUARD_DATA_CLASS:-sensitive}"
+    -e "ARGUS_GUARD_TIMEOUT_MS=${ARGUS_GUARD_TIMEOUT_MS:-2000}"
+    -e "ARGUS_SPIFFE_KEEPALIVE_TIMEOUT_MS=${ARGUS_SPIFFE_KEEPALIVE_TIMEOUT_MS:-10000}"
+    -e "ARGUS_SPIFFE_KEEPALIVE_MAX_TIMEOUT_MS=${ARGUS_SPIFFE_KEEPALIVE_MAX_TIMEOUT_MS:-30000}"
+  )
+  [[ -n "${ARGUS_GUARD_OPERATION_MAP_JSON:-}" ]] \
+    && SPIFFE_ENV_ARGS+=(-e "ARGUS_GUARD_OPERATION_MAP_JSON=${ARGUS_GUARD_OPERATION_MAP_JSON}")
+  [[ -n "${ARGUS_SPIFFE_DOCKER_NETWORK:-}" ]] \
+    && SPIFFE_NETWORK_ARGS=(--network "$ARGUS_SPIFFE_DOCKER_NETWORK")
+  if [[ -n "${ARGUS_OPENVIKING_HOST_ADDRESS:-}" ]]; then
+    target_host="$(python3 -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os.environ["ARGUS_OPENVIKING_ORIGIN"]).hostname or "")')"
+    [[ -n "$target_host" ]] || fail 'unable to extract host from ARGUS_OPENVIKING_ORIGIN'
+    SPIFFE_HOST_ARGS=(--add-host "${target_host}:${ARGUS_OPENVIKING_HOST_ADDRESS}")
+  fi
+  # Optional model-gateway CA bundle. When the business turn needs the OpenClaw
+  # gateway to reach an internal model provider over HTTPS (e.g. an Intel LLM
+  # gateway signed by the Intel PKI), the provider chain may not be in the
+  # container's default trust store. Mounting a bundle here and exporting
+  # NODE_EXTRA_CA_CERTS keeps the provider reachable without disabling TLS
+  # verification. The default bundle path matches the adapter documentation.
+  if [[ -n "${ARGUS_MODEL_CA_BUNDLE:-}" ]]; then
+    [[ -f "$ARGUS_MODEL_CA_BUNDLE" ]] || fail "model CA bundle not found: $ARGUS_MODEL_CA_BUNDLE"
+    SPIFFE_MOUNT_ARGS+=(-v "${ARGUS_MODEL_CA_BUNDLE}:/opt/model-ca/argus-ca-bundle.pem:ro")
+    SPIFFE_ENV_ARGS+=(-e "NODE_EXTRA_CA_CERTS=/opt/model-ca/argus-ca-bundle.pem")
+    [[ -n "${NODE_USE_ENV_PROXY:-}" ]] \
+      && SPIFFE_ENV_ARGS+=(-e "NODE_USE_ENV_PROXY=${NODE_USE_ENV_PROXY}")
+  fi
 fi
 
 # Verify Docker CLI is present inside the image (required for sibling containers)
@@ -396,9 +447,13 @@ docker run \
   --name "$CONTAINER_NAME" \
   --init \
   --restart unless-stopped \
+  --label argus.workload=openclaw \
   -v "${CONFIG_VOLUME}:/home/node/.openclaw" \
   -v "${WORKSPACE_VOLUME}:/home/node/.openclaw/workspace" \
   "${DOCKER_MOUNT_ARGS[@]}" \
+  "${SPIFFE_MOUNT_ARGS[@]}" \
+  "${SPIFFE_NETWORK_ARGS[@]}" \
+  "${SPIFFE_HOST_ARGS[@]}" \
   --group-add "$DOCKER_GID" \
   -v /etc/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf \
   -v /dev/tdx_guest:/dev/tdx_guest \
@@ -409,6 +464,7 @@ docker run \
   -e "OPENCLAW_GATEWAY_PORT=${GATEWAY_PORT}" \
   -e "OPENCLAW_GATEWAY_BIND=${GATEWAY_BIND}" \
   "${DOCKER_HOST_ENV_ARGS[@]}" \
+  "${SPIFFE_ENV_ARGS[@]}" \
   "${TOKEN_ENV_ARGS[@]}" \
   "$IMAGE"
 # ---------------------------------------------------------------------------

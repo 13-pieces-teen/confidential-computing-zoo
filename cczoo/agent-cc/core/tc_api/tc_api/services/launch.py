@@ -26,12 +26,27 @@ from ..config import (
     DOCKER_CMD,
     SKOPEO_CMD,
 )
+from ..docktap.workload_store import WorkloadStore
 from ..models import LaunchResult, TransparencyResult
 from ..transparency.commit_client import TrustedLogAPI
 from ..transparency.events import EventEntryKey
 from tlog.types import Entry
 
 logger = logging.getLogger(__name__)
+
+def _is_insecure_local_registry_ref(image_ref: str) -> bool:
+    if not image_ref.startswith("docker://"):
+        return False
+
+    registry = image_ref[len("docker://"):].split("/", 1)[0]
+    if registry.startswith(("localhost:", "127.0.0.1:")):
+        return True
+
+    configured_registry = os.getenv("DOCKER_REGISTRY", "").strip()
+    if configured_registry and registry == configured_registry:
+        return True
+
+    return registry == "registry:5000"
 
 
 def _load_transparency_artifact(build_path: str) -> dict:
@@ -160,7 +175,7 @@ class LaunchServiceMixin:
             source_ref = f"oci:{source_ref}"
         source_ref = source_ref.replace("docker.io","docker:/")
         dest_ref = os.path.join('oci:'+target_dir,'encrypted')
-        insecure_local_registry = source_ref.startswith("docker://localhost:") or source_ref.startswith("docker://127.0.0.1:")
+        insecure_local_registry = _is_insecure_local_registry_ref(source_ref)
 
         attempt = 0
         while attempt < max_retries:
@@ -308,7 +323,19 @@ class LaunchServiceMixin:
         """Get launch status by launch_id"""
         return self.launches.get(launch_id)
 
-    async def launch_containers(self, tlog, record_id, image_url, image_id, launch_pth, workload_id: Optional[str] = None, launch_id: Optional[str] = None, dockercmd: Optional[str] = None):
+    async def launch_containers(
+        self,
+        tlog,
+        record_id,
+        image_url,
+        image_id,
+        launch_pth,
+        workload_id: Optional[str] = None,
+        launch_id: Optional[str] = None,
+        image_digest: Optional[str] = None,
+        service_name: Optional[str] = None,
+        dockercmd: Optional[str] = None,
+    ):
         image_dir = 'oci:' + os.path.join(launch_pth,'encrypted')
         if image_id.startswith("oci:"):
             local_tag = launch_id or workload_id or f"local-{uuid.uuid4().hex[:12]}"
@@ -360,38 +387,44 @@ class LaunchServiceMixin:
                 docker_gid = subprocess.run(["stat", "-c", "'%g'", "/var/run/docker.sock"], capture_output=True, text=True).stdout.replace('\n', '').strip("'")
                 if docker_gid != None:
                     docker_cmd.extend(["--group-add", docker_gid])
-                
-                # image settings
-                # Fix volume ownership
-                cmd = [DOCKER_CMD, "run", "--rm", "--user", "root", "-v", "openclaw-config:/home/node/.openclaw", "-v", "openclaw-workspace:/home/node/.openclaw/workspace", "--entrypoint", "sh", loaded_image_ref, "-c"]
-                cmd.append('find /home/node/.openclaw -xdev -exec chown node:node {} + 2>/dev/null; [ -d /home/node/.openclaw/workspace/.openclaw ] &&  chown -R node:node /home/node/.openclaw/workspace/.openclaw 2>/dev/null || true')
-                fix_vol = subprocess.run(cmd, capture_output=True, text=True)
-                if fix_vol.returncode == 0:
-                    logger.info(f"Fix volume ownership.")
-                    logger.info(" ".join(cmd))
-                else:
-                    logger.info("Fix volume ownership failed.")
-                    logger.info(f"{fix_vol.stderr}")
 
-                # Seed directory structure
-                cmd1 = [DOCKER_CMD, "run",  "--rm", "--user", "node", "-v", "openclaw-config:/home/node/.openclaw", "-v", "openclaw-workspace:/home/node/.openclaw/workspace", "--entrypoint", "sh", loaded_image_ref, "-c"]
-                cmd1.append('mkdir -p /home/node/.openclaw/identity /home/node/.openclaw/agents/main/agent /home/node/.openclaw/agents/main/sessions')
-                makedir = subprocess.run(cmd1, capture_output=True, text=True)
-                if makedir.returncode == 0:
-                    logger.info(f"Seed directory structure.")
-                    logger.info(" ".join(cmd1))
-                else:
-                    logger.info("Seed directory structure failed.")
-                    logger.info(f"{makedir.stderr}")
+                is_openclaw_workload = (
+                    "openclaw" in loaded_image_ref.lower()
+                    or (service_name is not None and "openclaw" in service_name.lower())
+                )
 
-                # Gateway defaults
-                cmd2 = [DOCKER_CMD, "run",  "--rm", "--user", "node", "-v", "openclaw-config:/home/node/.openclaw", "-v", "openclaw-workspace:/home/node/.openclaw/workspace", "--entrypoint", "node", loaded_image_ref, "/app/dist/index.js"]
-                for conf in [['config', 'set', 'gateway.mode',  'local'],['config', 'set', 'gateway.bind', 'lan'],['config', 'set', 'agents.defaults.sandbox.mode', 'all'],['config', 'set', 'agents.defaults.sandbox.scope', 'session'],['config', 'set', 'agents.defaults.sandbox.workspaceAccess', 'rw'],['config', 'set', 'agents.defaults.sandbox.backend', 'docker']]:
-                    set_res = subprocess.run(cmd2+conf, capture_output=True, text=True)
-                    if (set_res.returncode != 0):
-                        logger.info(f"Seting failed.")
-                        logger.info(" ".join(cmd2+conf))
-                        logger.info(f"{set_res.stderr}")
+                if is_openclaw_workload:
+                    # image settings
+                    # Fix volume ownership
+                    cmd = [DOCKER_CMD, "run", "--rm", "--user", "root", "-v", "openclaw-config:/home/node/.openclaw", "-v", "openclaw-workspace:/home/node/.openclaw/workspace", "--entrypoint", "sh", loaded_image_ref, "-c"]
+                    cmd.append('find /home/node/.openclaw -xdev -exec chown node:node {} + 2>/dev/null; [ -d /home/node/.openclaw/workspace/.openclaw ] &&  chown -R node:node /home/node/.openclaw/workspace/.openclaw 2>/dev/null || true')
+                    fix_vol = subprocess.run(cmd, capture_output=True, text=True)
+                    if fix_vol.returncode == 0:
+                        logger.info(f"Fix volume ownership.")
+                        logger.info(" ".join(cmd))
+                    else:
+                        logger.info("Fix volume ownership failed.")
+                        logger.info(f"{fix_vol.stderr}")
+
+                    # Seed directory structure
+                    cmd1 = [DOCKER_CMD, "run",  "--rm", "--user", "node", "-v", "openclaw-config:/home/node/.openclaw", "-v", "openclaw-workspace:/home/node/.openclaw/workspace", "--entrypoint", "sh", loaded_image_ref, "-c"]
+                    cmd1.append('mkdir -p /home/node/.openclaw/identity /home/node/.openclaw/agents/main/agent /home/node/.openclaw/agents/main/sessions')
+                    makedir = subprocess.run(cmd1, capture_output=True, text=True)
+                    if makedir.returncode == 0:
+                        logger.info(f"Seed directory structure.")
+                        logger.info(" ".join(cmd1))
+                    else:
+                        logger.info("Seed directory structure failed.")
+                        logger.info(f"{makedir.stderr}")
+
+                    # Gateway defaults
+                    cmd2 = [DOCKER_CMD, "run",  "--rm", "--user", "node", "-v", "openclaw-config:/home/node/.openclaw", "-v", "openclaw-workspace:/home/node/.openclaw/workspace", "--entrypoint", "node", loaded_image_ref, "/app/dist/index.js"]
+                    for conf in [['config', 'set', 'gateway.mode',  'local'],['config', 'set', 'gateway.bind', 'lan'],['config', 'set', 'agents.defaults.sandbox.mode', 'all'],['config', 'set', 'agents.defaults.sandbox.scope', 'session'],['config', 'set', 'agents.defaults.sandbox.workspaceAccess', 'rw'],['config', 'set', 'agents.defaults.sandbox.backend', 'docker']]:
+                        set_res = subprocess.run(cmd2+conf, capture_output=True, text=True)
+                        if (set_res.returncode != 0):
+                            logger.info(f"Seting failed.")
+                            logger.info(" ".join(cmd2+conf))
+                            logger.info(f"{set_res.stderr}")
             else:
                 docker_cmd = [
                     DOCKER_CMD,
@@ -474,6 +507,17 @@ class LaunchServiceMixin:
             
             container_info = {"container_ID": containerID, "container_Status": status_text}
             tlog.add_entry(record_id, Entry(key="container_info", value=container_info))
+            if workload_id:
+                workload_store = WorkloadStore()
+                workload_store.init_db()
+                workload_store.put(
+                    containerID,
+                    workload_id,
+                    launch_id=launch_id,
+                    operation="create",
+                    image_digest=image_digest,
+                    service_name=service_name,
+                )
             return [container_info]
 
         except Exception as e:

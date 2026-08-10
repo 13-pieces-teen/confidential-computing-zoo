@@ -1,0 +1,113 @@
+package telemetry
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+	"unicode"
+
+	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
+	metricsv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/hostservice/common/metrics/v1"
+	"google.golang.org/grpc/status"
+)
+
+type Recorder struct {
+	client metricsv1.MetricsServiceClient
+}
+
+func (recorder *Recorder) Broker(broker pluginsdk.ServiceBroker) {
+	broker.BrokerClient(&recorder.client)
+}
+
+func (recorder *Recorder) Attestation(side string, started time.Time, err error) {
+	result, reason := resultAndReason(err)
+	recorder.increment([]string{"argus_nodeattestor", "attempts"}, labels(
+		"side", side, "result", result, "reason", reason,
+	))
+	if !recorder.client.IsInitialized() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, _ = recorder.client.MeasureSince(ctx, &metricsv1.MeasureSinceRequest{
+		Key: []string{"argus_nodeattestor", "duration"}, Time: started.UnixNano(),
+		Labels: labels("side", side),
+	})
+}
+
+func (recorder *Recorder) EvidenceBytes(side string, size int) {
+	if !recorder.client.IsInitialized() || size < 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, _ = recorder.client.AddSample(ctx, &metricsv1.AddSampleRequest{
+		Key: []string{"argus_nodeattestor", "evidence_bytes"}, Val: float32(size),
+		Labels: labels("side", side),
+	})
+}
+
+func (recorder *Recorder) Trustee(err error) {
+	result, reason := trusteeResultAndReason(err)
+	recorder.increment([]string{"argus_nodeattestor", "trustee_requests"}, labels(
+		"result", result, "reason", reason,
+	))
+}
+
+func (recorder *Recorder) increment(key []string, metricLabels []*metricsv1.Label) {
+	if !recorder.client.IsInitialized() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, _ = recorder.client.IncrCounter(ctx, &metricsv1.IncrCounterRequest{
+		Key: key, Val: 1, Labels: metricLabels,
+	})
+}
+
+func resultAndReason(err error) (string, string) {
+	if err == nil {
+		return "success", "ok"
+	}
+	return "error", snakeCase(status.Code(err).String())
+}
+
+func trusteeResultAndReason(err error) (string, string) {
+	if err == nil {
+		return "success", "ok"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "error", "deadline_exceeded"
+	}
+	const marker = "Trustee returned HTTP "
+	if index := strings.Index(err.Error(), marker); index >= 0 {
+		statusCode := strings.Fields(err.Error()[index+len(marker):])
+		if len(statusCode) > 0 {
+			return "error", "http_" + statusCode[0]
+		}
+	}
+	return "error", "unknown"
+}
+
+func snakeCase(input string) string {
+	var output strings.Builder
+	for index, character := range input {
+		if unicode.IsUpper(character) {
+			if index > 0 {
+				output.WriteByte('_')
+			}
+			character = unicode.ToLower(character)
+		}
+		output.WriteRune(character)
+	}
+	return output.String()
+}
+
+func labels(values ...string) []*metricsv1.Label {
+	output := make([]*metricsv1.Label, 0, len(values)/2)
+	for index := 0; index+1 < len(values); index += 2 {
+		output = append(output, &metricsv1.Label{Name: values[index], Value: values[index+1]})
+	}
+	return output
+}
