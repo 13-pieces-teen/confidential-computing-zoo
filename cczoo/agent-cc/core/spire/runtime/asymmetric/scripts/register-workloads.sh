@@ -102,6 +102,14 @@ openviking_parent="$(
 [[ "$openclaw_parent" != "$openviking_parent" ]] \
     || fail 'OpenClaw and OpenViking resolved to the same Agent parent'
 
+# SPIRE's docker WorkloadAttestor emits `docker:image_id` from
+# container.Config.Image, which is the image reference exactly as passed to
+# `docker run` (e.g. `localhost:5000/openviking:v0.4.8`), while
+# `docker:image_config_digest` is the immutable config digest (imageJSON.ID).
+# Pin the image tag for `image_id` and keep the digest for
+# `image_config_digest` so both selectors match a running container.
+openclaw_image_id="${OPENCLAW_IMAGE_ID:-$OPENCLAW_WORKLOAD_IMAGE}"
+openviking_image_id="${OPENVIKING_IMAGE_ID:-$OPENVIKING_WORKLOAD_IMAGE}"
 openclaw_digest="${OPENCLAW_IMAGE_CONFIG_DIGEST:-$(
     docker image inspect "$OPENCLAW_WORKLOAD_IMAGE" --format '{{.Id}}'
 )}"
@@ -119,7 +127,7 @@ spire_server entry create \
     -parentID "$openclaw_parent" \
     -spiffeID "$OPENCLAW_ID" \
     -selector docker:label:argus.workload:openclaw \
-    -selector docker:image_id:"$openclaw_digest" \
+    -selector docker:image_id:"$openclaw_image_id" \
     -selector docker:image_config_digest:"$openclaw_digest" \
     -x509SVIDTTL 600 >/dev/null
 
@@ -129,14 +137,16 @@ spire_server entry create \
     -parentID "$openviking_parent" \
     -spiffeID "$OPENVIKING_ID" \
     -selector docker:label:argus.workload:openviking-cmem \
-    -selector docker:image_id:"$openviking_digest" \
+    -selector docker:image_id:"$openviking_image_id" \
     -selector docker:image_config_digest:"$openviking_digest" \
     -x509SVIDTTL 600 >/dev/null
 
 printf '%s\n' \
     "OpenClaw Agent parent: $openclaw_parent" \
     "OpenViking Agent parent: $openviking_parent" \
+    "OpenClaw image id: $openclaw_image_id" \
     "OpenClaw image config digest: $openclaw_digest" \
+    "OpenViking image id: $openviking_image_id" \
     "OpenViking image config digest: $openviking_digest"
 spire_server entry show -entryID v2-openclaw-workload
 spire_server entry show -entryID v2-openviking-workload
