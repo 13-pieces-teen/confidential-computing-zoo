@@ -103,6 +103,7 @@ def aggregate_case(case_directory: Path) -> dict[str, Any]:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
     tasks = [record for record in read_jsonl(case_directory / "tasks.jsonl") if record.get("measured") is True]
     completed = [record for record in tasks if record.get("status") == "completed"]
+    failed = [record for record in tasks if record.get("status") != "completed"]
     starts = [record.get("started_unix_ms") for record in tasks if record.get("started_unix_ms") is not None]
     ends = [record.get("finished_unix_ms") for record in tasks if record.get("finished_unix_ms") is not None]
     duration_minutes = (max(ends) - min(starts)) / 60_000 if starts and ends and max(ends) > min(starts) else None
@@ -112,8 +113,13 @@ def aggregate_case(case_directory: Path) -> dict[str, Any]:
         fairness = None
     else:
         fairness = min(unit_rates) / max(unit_rates)
-    failures = Counter(str(record.get("failure_stage") or "unknown") for record in tasks if record.get("status") != "completed")
-    errors = Counter(str(record.get("error_class") or "error") for record in tasks if record.get("status") != "completed")
+    failures = Counter(str(record.get("failure_stage") or "unknown") for record in failed)
+    errors = Counter(str(record.get("error_class") or "error") for record in failed)
+    failure_stage_elapsed: dict[str, list[float]] = defaultdict(list)
+    for record in failed:
+        elapsed = record.get("elapsed_ms")
+        if elapsed is not None:
+            failure_stage_elapsed[str(record.get("failure_stage") or "unknown")].append(float(elapsed))
     resources = resource_summary(read_jsonl(case_directory / "resources.jsonl"))
     return {
         "case": case_directory.name,
@@ -126,6 +132,8 @@ def aggregate_case(case_directory: Path) -> dict[str, Any]:
         "measurement_minutes": duration_minutes,
         "scaling_efficiency": None,
         "fairness_ratio": fairness,
+        "task_finalization_ms": distribution(record.get("elapsed_ms") for record in tasks),
+        "failed_task_elapsed_ms": distribution(record.get("elapsed_ms") for record in failed),
         "agent_task_e2e_ms": distribution(record.get("agent_task_e2e_ms") for record in completed),
         "agent_turn_ms": distribution(record.get("agent_turn_ms") for record in completed),
         "capture_first_observed_ms": distribution(record.get("capture_first_observed_ms") for record in completed),
@@ -133,6 +141,9 @@ def aggregate_case(case_directory: Path) -> dict[str, Any]:
         "input_tokens": sum(record.get("input_tokens") or 0 for record in completed) or None,
         "output_tokens": sum(record.get("output_tokens") or 0 for record in completed) or None,
         "failure_stages": dict(sorted(failures.items())),
+        "failure_stage_elapsed_ms": {
+            stage: distribution(samples) for stage, samples in sorted(failure_stage_elapsed.items())
+        },
         "error_classes": dict(sorted(errors.items())),
         "generation_provider_errors": failures.get("openclaw_generation_provider", 0),
         "archive_provider_errors": failures.get("openviking_archive_provider", 0),
@@ -181,6 +192,19 @@ def control_plane(run_directory: Path, completed_tasks: int) -> dict[str, Any]:
     }
 
 
+def formal_matrix_status(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    required = ("C1", "C2", "C4", "C8")
+    observed = {str(case.get("case", "")).upper(): case for case in cases}
+    missing = [name for name in required if name not in observed]
+    empty = [name for name in required if name in observed and int(observed[name].get("launched", 0)) <= 0]
+    return {
+        "complete": not missing and not empty,
+        "required_cases": list(required),
+        "missing_cases": missing,
+        "empty_cases": empty,
+    }
+
+
 def apply_scaling(cases: list[dict[str, Any]]) -> None:
     baseline = next((case for case in cases if case["case"].upper() == "C1"), None)
     baseline_rate = baseline.get("tasks_per_minute") if baseline else None
@@ -201,6 +225,9 @@ def show(value: Any, digits: int = 2) -> str:
 
 
 def render_markdown(run_directory: Path, cases: list[dict[str, Any]], plane: dict[str, Any]) -> str:
+    formal = formal_matrix_status(cases)
+    formal_label = "complete" if formal["complete"] else "incomplete"
+    formal_detail = ", ".join(formal["missing_cases"] + formal["empty_cases"]) or "none"
     lines = [
         "# Argus 多 OpenClaw 真实 LLM Agent 任务评估报告",
         "",
@@ -208,10 +235,11 @@ def render_markdown(run_directory: Path, cases: list[dict[str, Any]], plane: dic
         "> 本报告是当前配置下的探索性快照，不代表生产容量或真实 Quote/QGS 性能。",
         "",
         f"Run directory: `{run_directory}`",
+        f"Formal matrix: `{formal_label}`（missing/empty: {formal_detail}）",
         "",
         "## Case 汇总",
         "",
-        "| Case | OpenClaw | 完成/启动 | Tasks/min | 成功率 % | E2E P50/P95/max ms | Agent P50 ms | Archive P50 ms | Gen provider errors | Archive provider errors | Fairness | Scaling |",
+        "| Case | OpenClaw | 完成/启动 | Tasks/min | 成功率 % | Completed E2E P50/P95/max ms | Agent P50 ms | Archive P50 ms | Gen provider errors | Archive provider errors | Fairness | Scaling |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for case in cases:
@@ -223,6 +251,20 @@ def render_markdown(run_directory: Path, cases: list[dict[str, Any]], plane: dic
             f"{show(case['agent_turn_ms']['p50'])} | {show(case['commit_to_archive_ms']['p50'])} | "
             f"{case['generation_provider_errors']} | {case['archive_provider_errors']} | "
             f"{show(case['fairness_ratio'])} | {show(case['scaling_efficiency'])} |"
+        )
+    lines.extend([
+        "",
+        "## 全任务最终耗时",
+        "",
+        "| Case | 全部任务 P50/P95/max ms | 失败任务 P50/P95/max ms |",
+        "|---|---:|---:|",
+    ])
+    for case in cases:
+        final = case["task_finalization_ms"]
+        failed = case["failed_task_elapsed_ms"]
+        lines.append(
+            f"| {case['case']} | {show(final['p50'])}/{show(final['p95'])}/{show(final['max'])} | "
+            f"{show(failed['p50'])}/{show(failed['p95'])}/{show(failed['max'])} |"
         )
     lines.extend(["", "## Per-unit", "", "| Case | Unit | 完成/启动 | Tasks/min | 成功率 % | E2E P95 ms |", "|---|---|---:|---:|---:|---:|"])
     for case in cases:
@@ -244,7 +286,8 @@ def render_markdown(run_directory: Path, cases: list[dict[str, Any]], plane: dic
     if any(case["failure_stages"] for case in cases):
         for case in cases:
             for stage, count in case["failure_stages"].items():
-                lines.append(f"- {case['case']} `{stage}`: {count}")
+                elapsed = case["failure_stage_elapsed_ms"].get(stage, {})
+                lines.append(f"- {case['case']} `{stage}`: {count}，耗时 P50/P95/max={show(elapsed.get('p50'))}/{show(elapsed.get('p95'))}/{show(elapsed.get('max'))} ms")
     else:
         lines.append("- 无正式任务失败。")
     lines.extend([
@@ -259,6 +302,8 @@ def render_markdown(run_directory: Path, cases: list[dict[str, Any]], plane: dic
         "",
         "## 结果边界",
         "",
+        f"- C1/C2/C4/C8 formal matrix：`{formal_label}`；不完整时不得据此声明正式容量或扩展效率。",
+        "- Completed E2E 仅统计成功任务；全任务最终耗时和失败阶段耗时包含失败收据。",
         "- `null`/`N/A` 表示没有可验证的测量值，不使用配置值补齐。",
         "- OpenClaw generation Provider 与 OpenViking archive 错误按失败阶段分别统计；无法证明来源时不推断。",
         "- 多个 OpenClaw 共享当前 x509pop Agent 和业务 SPIFFE ID，不代表多个独立身份域。",
@@ -279,10 +324,11 @@ def main() -> int:
     completed_tasks = sum(case["completed"] for case in cases)
     plane = control_plane(run_directory, completed_tasks)
     summary = {
-        "schema_version": "argus-e8-agent-task-summary-v1",
+        "schema_version": "argus-e8-agent-task-summary-v2",
         "attestation_profile": "mock_ra_mock_trustee",
         "run_directory": str(run_directory),
         "cases": cases,
+        "formal_matrix": formal_matrix_status(cases),
         "control_plane": plane,
     }
     (run_directory / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")

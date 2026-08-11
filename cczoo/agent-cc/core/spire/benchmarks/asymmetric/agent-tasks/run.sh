@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ACTION="${1:-all}"
+ACTION="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SPIRE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -64,8 +64,13 @@ run_unit() {
     (
         cd "$SCRIPT_DIR"
         node --test task-worker.test.mjs
-        python3 -m unittest -v test_report.py
+        python3 -m unittest -v test_report.py test_provenance.py
     )
+}
+
+verify_source_revision() {
+    python3 "$SCRIPT_DIR/provenance.py" --repo "$AGENT_CC_DIR" --require-clean >/dev/null \
+        || fail 'formal E8 actions require a clean committed worktree'
 }
 
 source_config_volume() {
@@ -124,6 +129,7 @@ NODE
 
 preflight() {
     check_remote_environment
+    verify_source_revision
     V2_RUNTIME_DIR="$RUNTIME_DIR" bash "$RUNTIME_SCRIPT_DIR/verify-svid.sh"
     if [[ "${E8_PREFLIGHT_RUN_REAL_E2E:-1}" == "1" ]]; then
         bash "$RUNTIME_SCRIPT_DIR/verify-openclaw-plugin-e2e.sh"
@@ -145,6 +151,8 @@ new_run_directory() {
 
 write_manifest() {
     local safe_profile="$RUN_DIR/config-profile.json"
+    local source_revision="$RUN_DIR/source-revision.json"
+    python3 "$SCRIPT_DIR/provenance.py" --repo "$AGENT_CC_DIR" --require-clean --output "$source_revision"
     docker exec -i -u node "$SOURCE_OPENCLAW_CONTAINER" node - "$OPENCLAW_CONFIG" >"$safe_profile" <<'NODE'
 const { execFileSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
@@ -173,31 +181,35 @@ const profile = {
 profile.non_secret_config_fingerprint = createHash("sha256").update(JSON.stringify(profile)).digest("hex");
 process.stdout.write(JSON.stringify(profile));
 NODE
-    local commit prompt_hash image_digest openviking_image_digest
-    commit="$(git -C "$AGENT_CC_DIR" rev-parse HEAD)"
+    local prompt_hash image_digest openviking_image_digest
     prompt_hash="$(sha256sum "$SCRIPT_DIR/prompts.json" | awk '{print $1}')"
     image_digest="$(docker inspect "$SOURCE_OPENCLAW_CONTAINER" --format '{{.Image}}')"
     openviking_image_digest="$(ssh "${ssh_arguments[@]}" "$TDVM_SSH_TARGET" \
         sudo -n /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.Image}}')"
-    python3 - "$RUN_DIR/manifest.json" "$safe_profile" "$commit" "$ACTION" "$RUN_ID" \
+    python3 - "$RUN_DIR/manifest.json" "$safe_profile" "$source_revision" "$ACTION" "$RUN_ID" \
         "$SOURCE_OPENCLAW_CONTAINER" "$SOURCE_CONFIG_VOLUME" "$image_digest" "$openviking_image_digest" "$prompt_hash" \
         "$AGENT_TIMEOUT_MS" "$CAPTURE_TIMEOUT_MS" "$COMMIT_TIMEOUT_MS" "$ARCHIVE_TIMEOUT_MS" \
         "$CAPTURE_POLL_MS" "$ARCHIVE_POLL_MS" <<'PY'
-import json, platform, sys
+import datetime, json, platform, sys
 (
-    target, profile_path, commit, action, run_id, source_container, source_volume,
+    target, profile_path, revision_path, action, run_id, source_container, source_volume,
     image_digest, openviking_image_digest, prompt_hash, agent_timeout, capture_timeout, commit_timeout,
     archive_timeout, capture_poll, archive_poll,
 ) = sys.argv[1:]
 profile = json.load(open(profile_path, encoding="utf-8"))
+revision = json.load(open(revision_path, encoding="utf-8"))
+snapshot_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 manifest = {
-    "schema_version": "argus-e8-agent-task-run-v1",
+    "schema_version": "argus-e8-agent-task-run-v2",
     "profile": "multi_openclaw_real_llm_shared_x509pop_agent",
-    "git_commit": commit,
+    "git_commit": revision["commit"],
+    "git_branch": revision["branch"],
+    "git_tree_state": revision["tree_state"],
     "action": action,
     "run_id": run_id,
     "host": platform.node(),
-    "started_at_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+    "started_at_utc": snapshot_at,
+    "config_snapshot_at_utc": snapshot_at,
     "attestation_profile": "mock_ra_mock_trustee",
     "guard_evidence_mode": "case_level",
     "source_openclaw_container": source_container,
@@ -220,7 +232,6 @@ with open(target, "w", encoding="utf-8") as destination:
     json.dump(manifest, destination, indent=2, sort_keys=True)
     destination.write("\n")
 PY
-    rm -f "$safe_profile"
     cp "$SCRIPT_DIR/prompts.json" "$RUN_DIR/prompts.json"
 }
 
@@ -362,10 +373,10 @@ PY
 }
 
 validate_case() {
-    local case_directory="$1" units="$2" warmups="$3" tasks="$4" require_success="$5"
-    python3 - "$case_directory/tasks.jsonl" "$case_directory/resources.jsonl" "$units" "$warmups" "$tasks" "$require_success" <<'PY'
+    local case_directory="$1" units="$2" warmups="$3" tasks="$4"
+    python3 - "$case_directory/tasks.jsonl" "$case_directory/resources.jsonl" "$units" "$warmups" "$tasks" <<'PY'
 import json, sys
-path, resource_path, units, warmups, tasks, require_success = sys.argv[1:]
+path, resource_path, units, warmups, tasks = sys.argv[1:]
 units, warmups, tasks = int(units), int(warmups), int(tasks)
 records = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
 ids = [record.get("task_id") for record in records]
@@ -384,8 +395,6 @@ if any(record.get("started_unix_ms") is None or record.get("finished_unix_ms") i
     raise SystemExit("a measured task did not enter and leave the timed window")
 if len(warm) != units * warmups or any(record.get("status") != "completed" for record in warm):
     raise SystemExit("warm-up receipts are missing or failed")
-if require_success == "1" and any(record.get("status") != "completed" for record in measured):
-    raise SystemExit("Pilot requires every task to complete")
 for record in records:
     if record.get("status") not in {"completed", "failed"}:
         raise SystemExit("receipt has no final status")
@@ -398,7 +407,7 @@ PY
 }
 
 run_case() {
-    local case_name="$1" units="$2" warmups="$3" tasks="$4" require_success="$5"
+    local case_name="$1" units="$2" warmups="$3" tasks="$4"
     local case_directory="$RUN_DIR/cases/$case_name"
     [[ ! -e "$case_directory" ]] || fail "case already exists: $case_name"
     mkdir -p "$case_directory/units"
@@ -436,7 +445,7 @@ run_case() {
     done <"$case_directory/units.tsv"
     stop_active_containers
     (( status == 0 )) || fail "$case_name had a worker process failure"
-    validate_case "$case_directory" "$units" "$warmups" "$tasks" "$require_success" \
+    validate_case "$case_directory" "$units" "$warmups" "$tasks" \
         || fail "$case_name receipts failed validation"
 }
 
@@ -455,24 +464,20 @@ run_selected_cases() {
             # validate -> commit -> archive) at small scale. The per-task format
             # gate is reachable but the real model (minimax-m2.7) omits the
             # end-marker on a meaningful fraction of turns, so the pilot reports
-            # the measured success rate (require_success=0) instead of demanding
-            # 100% completion; C1/C2/C4/C8 use the same policy.
-            run_case P0 1 0 2 0
-            run_case P1 2 0 3 0
-            run_case P2 4 0 3 0
+            # the measured success rate instead of demanding 100% completion.
+            run_case P0 1 0 2
+            run_case P1 2 0 3
+            run_case P2 4 0 3
             ;;
-        c1) run_case C1 1 1 10 0 ;;
-        c2) run_case C2 2 1 10 0 ;;
-        c4) run_case C4 4 1 10 0 ;;
-        c8) run_case C8 8 1 10 0 ;;
+        c1) run_case C1 1 1 10 ;;
+        c2) run_case C2 2 1 10 ;;
+        c4) run_case C4 4 1 10 ;;
+        c8) run_case C8 8 1 10 ;;
         all)
-            run_case P0 1 0 2 0
-            run_case P1 2 0 3 0
-            run_case P2 4 0 3 0
-            run_case C1 1 1 10 0
-            run_case C2 2 1 10 0
-            run_case C4 4 1 10 0
-            run_case C8 8 1 10 0
+            run_case C1 1 1 10
+            run_case C2 2 1 10
+            run_case C4 4 1 10
+            run_case C8 8 1 10
             ;;
     esac
 }

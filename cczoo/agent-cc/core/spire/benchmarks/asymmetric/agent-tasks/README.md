@@ -30,6 +30,7 @@ trusted-Agent or production capacity.
 ## Remote prerequisites
 
 - The target branch is checked out on the remote Linux host.
+- The checkout is clean and every harness change has been committed.
 - The asymmetric runtime and current real OpenClaw/OpenViking E2E are healthy.
 - `V2_RUNTIME_DIR` is the absolute active runtime directory.
 - `OPENVIKING_API_KEY` is available in the invoking shell.
@@ -66,7 +67,8 @@ OPENVIKING_API_KEY=... \
   bash core/spire/runtime/asymmetric/scripts/remote-agent-task-benchmark.sh pilot
 ```
 
-Run Pilot followed by `C1/C2/C4/C8`:
+After reviewing the separate Pilot result, run only the formal
+`C1/C2/C4/C8` matrix:
 
 ```bash
 V2_RUNTIME_DIR=/var/lib/argus-spire-asymmetric/run-001 \
@@ -109,6 +111,8 @@ evidence.
 ```text
 run-<UTC>/
   manifest.json
+  source-revision.json
+  config-profile.json
   prompts.json
   spire-metrics-{before,after}.prom
   guard-metrics-{before,after}.prom
@@ -122,8 +126,10 @@ run-<UTC>/
   SHA256SUMS.txt
 ```
 
-Worker failures remain task receipts; formal cases are valid when every
-planned task has a final receipt even if some tasks fail. Pilot requires every
-task to complete. Case containers are stopped after evidence capture, while
-their run-scoped containers and volumes are retained for explicit later
-inspection or cleanup.
+Worker failures remain task receipts; a case is structurally valid when every
+planned task has a final receipt even if some tasks fail. `summary.json` marks
+the C1/C2/C4/C8 formal matrix incomplete until all four non-empty cases exist,
+and reports both completed-only E2E latency and all-outcome finalization
+latency. Case containers are stopped after evidence capture, while their
+run-scoped containers and volumes are retained for explicit later inspection
+or cleanup.

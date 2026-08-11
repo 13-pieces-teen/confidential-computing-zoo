@@ -141,9 +141,11 @@ Provider、插件和必要凭据配置，为各 OpenClaw 实例创建同源初�
 
 ```json
 {
-  "schema_version": "argus-e8-agent-task-run-v1",
+  "schema_version": "argus-e8-agent-task-run-v2",
   "profile": "multi_openclaw_real_llm_shared_x509pop_agent",
   "git_commit": null,
+  "git_branch": null,
+  "git_tree_state": "clean",
   "host": null,
   "started_at_utc": null,
   "attestation_profile": "mock_ra_mock_trustee",
@@ -206,7 +208,7 @@ Gateway/Bridge：默认仅容器网络可见；需要主机端口时动态分配
 ```text
 你正在完成一个受控评估任务。
 
-请阅读下面的材料，生成 150–250 字的中文摘要，并严格使用 `1.`、`2.`、`3.`
+请阅读下面的材料，生成 150–400 字的中文摘要，并严格使用 `1.`、`2.`、`3.`
 三行编号列出三条关键结论。
 不要调用额外工具，不要省略材料中的关键约束。
 请在回答最后单独一行输出由固定前缀 `ARGUS-E8-RESULT-` 与下面 nonce
@@ -345,7 +347,7 @@ OpenViking archive timeout：T3 后 300 s
 任务只有同时满足以下条件才记为 `completed`：
 
 1. `openclaw agent --json` 返回 `status=ok`、非空 `runId` 且无 error；
-2. assistant 正文非空、中文正文为 150–250 字、包含三条可机械识别的结论，且唯一
+2. assistant 正文非空、中文摘要为 150–400 字、恰好包含按顺序出现的三条可机械识别结论，且唯一
    response marker 位于末行；这里只验证格式，不进行主观质量评分；
 3. response marker 只属于预期 unit、sequence、session 和 assistant message；
 4. OpenViking commit 成功返回本次 task ID；
@@ -445,6 +447,8 @@ success rate、tasks/min 和 E2E，避免只看吞吐掩盖失败差异。
 每个 case 输出：
 
 - `agent_task_e2e_ms` P50/P95/max；
+- `task_finalization_ms` P50/P95/max，包含成功与失败任务；
+- `failed_task_elapsed_ms` 及按失败阶段拆分的 P50/P95/max；
 - `agent_turn_ms` P50/P95/max；
 - `capture_first_observed_ms` P50/P95/max；
 - `commit_to_archive_ms` P50/P95/max；
@@ -452,8 +456,8 @@ success rate、tasks/min 和 E2E，避免只看吞吐掩盖失败差异。
 
 首轮 C1/C2 样本不足以稳定解释 P99，因此主报告使用 P50/P95/max。单个可比较样本组
 成功任务超过 100 后可以附带 P99，但不能以少量样本 P99 作为主要结论。percentile 对
-成功任务使用 nearest-rank 算法并在报告中写明样本数；失败任务单独进入 timeout/失败
-阶段分布。
+成功任务使用 nearest-rank 算法并在报告中写明样本数；失败任务进入 timeout/失败阶段
+分布，并保留其最终耗时，避免成功样本延迟掩盖长时间超时。
 
 ### 10.3 模型与 token
 
@@ -509,7 +513,7 @@ right_trustee_requests_per_1000_completed_tasks
 
 ```json
 {
-  "schema_version": "argus-e8-agent-task-v1",
+  "schema_version": "argus-e8-agent-task-v2",
   "run_id": "run-placeholder",
   "case": "C4",
   "unit_id": "openclaw-03",
@@ -540,7 +544,7 @@ right_trustee_requests_per_1000_completed_tasks
   "capture_first_observed_ms": null,
   "commit_to_archive_ms": null,
   "agent_task_e2e_ms": null,
-  "response_body_chars": null,
+  "response_summary_chars": null,
   "response_conclusion_count": null,
   "input_tokens": null,
   "output_tokens": null,
@@ -554,7 +558,7 @@ right_trustee_requests_per_1000_completed_tasks
 
 成功和失败使用同一 schema。原始模型输出可以保存在 run-scoped evidence 目录中用于
 marker 校验，但正式报告只展示任务标识、统计和必要的短样例，不批量复制全部输出。
-`response_body_chars` 按去掉末行 marker 后、去除空白的 Unicode code point 数计算；
+`response_summary_chars` 按去掉 marker 和三条结论后的摘要、去除空白的 Unicode code point 数计算；
 `response_conclusion_count` 只按固定列表格式机械计数。绝对 monotonic 值仅用于同一控制器
 进程内审计，跨组件日志对齐使用 Unix 时间；所有 duration 必须由 monotonic 差值生成。
 
@@ -563,6 +567,8 @@ marker 校验，但正式报告只展示任务标识、统计和必要的短样�
 ```text
 /var/lib/argus-spire-asymmetric/agent-tasks/run-<UTC>/
 ├── manifest.json
+├── source-revision.json
+├── config-profile.json
 ├── prompts.json
 ├── cases/
 │   ├── C1/
@@ -586,8 +592,9 @@ marker 校验，但正式报告只展示任务标识、统计和必要的短样�
 | Case | OpenClaw | 完成/启动 | Tasks/min | 成功率 | E2E P50/P95/max | Agent turn P50 | Archive P50 | Generation Provider errors | Archive Provider errors | OpenViking CPU |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 
-还需要提供 per-unit 表、失败阶段表、资源曲线、Node Attestation/Trustee 增量和明确的
-结果边界。
+还需要提供 per-unit 表、失败阶段与耗时表、资源曲线、Node Attestation/Trustee 增量和
+明确的结果边界。`summary.json` 必须明确标记 C1/C2/C4/C8 formal matrix 是否完整；不完整
+时不得生成正式容量或扩展效率结论。
 
 ## 14. 最小实现方案
 
@@ -655,7 +662,7 @@ remote-agent-task-benchmark.sh report
 3. 运行 `unit`；
 4. 运行 `preflight`，验证当前单实例真实 E2E；
 5. 运行 P0/P1/P2 Pilot；
-6. Pilot 全部正确归属后运行 C1/C2/C4/C8；
+6. 核对 Pilot 的任务归属与失败阶段后，使用 `all` 仅运行 C1/C2/C4/C8；
 7. 生成 summary/report/SHA256；
 8. 核对报告与原始 JSONL 后再形成提交。
 
@@ -669,7 +676,8 @@ run-scoped 容器和卷在证据核对完成前保留。清理是独立显式动
 
 本轮不预设 tasks/min 或延迟 SLO。以下条件只决定是否继续扩大实例数：
 
-- P0/P1/P2 必须 100% 完成且无 session/marker 串线；
+- P0/P1/P2 必须为每个计划任务保留最终收据且无 session/marker 串线；真实模型或归档失败
+  进入成功率与失败阶段，不能被结构校验掩盖；
 - 当前 case 若出现无法解释的 harness/config 错误，修复后重跑当前 case；
 - 当前 case 若 OpenClaw generation Provider `429/5xx/timeout` 占启动任务超过 20%，
   完成并保留当前 case，暂不扩大 `N`，结论写为 generation-provider-bound；

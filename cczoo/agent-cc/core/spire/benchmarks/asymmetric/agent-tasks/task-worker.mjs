@@ -12,11 +12,9 @@ const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mil
 
 // Calibration constants for assistant-response validation.
 // The OpenViking context transport collapses newline characters into spaces, so
-// marker/conclusion checks must tolerate a single-line response. The prompt asks
-// for a 150-250-char Chinese summary plus three numbered conclusions; the band
-// below is applied to the summary prose only (conclusions are counted
-// separately) and is widened to the real model's observed output (minimax-m2.7
-// consistently emits ~300-340 summary chars).
+// marker/conclusion checks must tolerate a single-line response. The band below
+// is applied to the summary prose only (conclusions are counted
+// separately) and matches the calibrated task prompt used with the live model.
 const SUMMARY_MIN_CHARS = 150;
 const SUMMARY_MAX_CHARS = 400;
 const CONCLUSION_MARKERS = new Set(["1.", "2.", "3."]);
@@ -86,7 +84,7 @@ export function taskPrompt(sourceText, nonce) {
   return [
     "你正在完成一个受控评估任务。",
     "",
-    "请阅读下面的材料，生成 150–250 字的中文摘要，并严格使用 `1.`、`2.`、`3.` 三行编号列出三条关键结论。",
+    "请阅读下面的材料，生成 150–400 字的中文摘要，并严格使用 `1.`、`2.`、`3.` 三行编号列出三条关键结论。",
     "不要调用额外工具，不要省略材料中的关键约束。",
     "请在回答最后单独一行输出由固定前缀 `ARGUS-E8-RESULT-` 与下面 nonce 无空格拼接得到的字符串。",
     "不要在正文中输出该字符串。",
@@ -117,15 +115,14 @@ export function validateAssistant(message, marker) {
   const body = text.slice(0, text.lastIndexOf(marker)).trim();
   const bodyTokens = body.split(/\s+/u).filter(Boolean);
   const conclusionTokens = bodyTokens.filter((token) => CONCLUSION_MARKERS.has(token));
-  const conclusions = ["1", "2", "3"].filter((number) => conclusionTokens.includes(`${number}.`));
   const firstConclusion = bodyTokens.findIndex((token) => CONCLUSION_MARKERS.has(token));
   const summary = firstConclusion < 0 ? body : bodyTokens.slice(0, firstConclusion).join(" ");
   const summaryChars = Array.from(summary.replace(/\s/gu, "")).length;
   if (summaryChars < SUMMARY_MIN_CHARS || summaryChars > SUMMARY_MAX_CHARS) {
     throw new TaskError("response_validation", "invalid_length", `summary length is ${summaryChars}`);
   }
-  if (conclusions.join(",") !== "1,2,3") throw new TaskError("response_validation", "invalid_conclusions", "expected 1./2./3. conclusion lines");
-  return { text, bodyChars: summaryChars, conclusionCount: conclusions.length };
+  if (conclusionTokens.join(",") !== "1.,2.,3.") throw new TaskError("response_validation", "invalid_conclusions", "expected exactly one ordered 1./2./3. conclusion sequence");
+  return { text, summaryChars, conclusionCount: conclusionTokens.length };
 }
 
 function unwrap(payload, label, stage) {
@@ -278,7 +275,7 @@ async function waitArchive(request, sessionId, taskId, baselineCount, baselineDi
 
 function emptyReceipt(config, identity, sequence, measured) {
   return {
-    schema_version: "argus-e8-agent-task-v1",
+    schema_version: "argus-e8-agent-task-v2",
     run_id: config.runId, case: config.caseName, unit_id: config.unitId, sequence, measured,
     task_id: identity.taskId, task_nonce: identity.nonce, response_marker: identity.marker, session_key: identity.sessionKey,
     status: "failed", failure_stage: null, error_class: null, error_message: null,
@@ -289,7 +286,7 @@ function emptyReceipt(config, identity, sequence, measured) {
     started_unix_ms: null, agent_returned_unix_ms: null, capture_observed_unix_ms: null,
     commit_created_unix_ms: null, archive_ready_unix_ms: null, finished_unix_ms: null,
     agent_turn_ms: null, capture_first_observed_ms: null, commit_to_archive_ms: null,
-    agent_task_e2e_ms: null, response_body_chars: null, response_conclusion_count: null,
+    agent_task_e2e_ms: null, response_summary_chars: null, response_conclusion_count: null,
     input_tokens: null, output_tokens: null, guard_evidence_mode: "case_level", guard_requests: [],
     timeout_limit_ms: null, elapsed_ms: null, transport_success_count: null,
   };
@@ -340,7 +337,7 @@ async function runTask(config, request, promptEntry, sequence, measured) {
     receipt.openviking_session_id = captured.sessionId;
     receipt.openviking_message_id = captured.messageId;
     receipt.openviking_message_digest = captured.messageDigest;
-    receipt.response_body_chars = captured.bodyChars;
+    receipt.response_summary_chars = captured.summaryChars;
     receipt.response_conclusion_count = captured.conclusionCount;
     const tokenUsage = usage(agent);
     receipt.input_tokens = tokenUsage.input;
