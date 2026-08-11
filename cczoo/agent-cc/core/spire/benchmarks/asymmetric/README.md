@@ -8,6 +8,10 @@ asymmetric runtime has passed its functional validation. It does not start a
 new OpenViking identity, repeat the attestation failure matrix, or claim real
 Quote/QGS/production Trustee performance.
 
+The separate [`agent-tasks/`](./agent-tasks/) harness implements E8: real LLM
+generation from `1/2/4/8` OpenClaw containers into one OpenViking, measured in
+completed Agent tasks/minute rather than raw QPS.
+
 ## What is measured
 
 | Action | Measurement |

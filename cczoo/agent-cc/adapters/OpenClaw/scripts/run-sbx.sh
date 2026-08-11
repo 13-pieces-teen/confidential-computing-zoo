@@ -18,7 +18,8 @@
 #
 # Usage:
 #   ./scripts/docker/run-sbx.sh [--build] [--token TOKEN] [--port PORT]
-#                                [--bind BIND] [--name NAME] [--no-start]
+#                                [--bind BIND] [--name NAME] [--no-publish]
+#                                [--no-start]
 #
 # Options:
 #   --build          Force rebuild of the openclaw-sbx:latest image before run.
@@ -26,6 +27,7 @@
 #   --port PORT      Host port for gateway (default: 18789).
 #   --bind BIND      Gateway bind mode: lan | loopback (default: lan).
 #   --name NAME      Container name (default: openclaw-gateway).
+#   --no-publish     Keep Gateway/Bridge ports on the container network only.
 #   --no-start       Only build the image; do not start the container.
 #
 # Prerequisites:
@@ -60,6 +62,7 @@ DOCKER_MOUNT_ARGS=()
 DOCKER_HOST_ENV_ARGS=()
 DO_BUILD=0
 NO_START=0
+PUBLISH_PORTS="${OPENCLAW_PUBLISH_PORTS:-1}"
 CONFIG_VOLUME="${OPENCLAW_CONFIG_VOLUME:-openclaw-config}"
 WORKSPACE_VOLUME="${OPENCLAW_WORKSPACE_VOLUME:-openclaw-workspace}"
 ARGUS_SPIFFE_ENABLED="${ARGUS_SPIFFE_ENABLED:-0}"
@@ -134,10 +137,14 @@ while [[ $# -gt 0 ]]; do
     --port)     GATEWAY_PORT="${2:-}"; shift ;;
     --bind)     GATEWAY_BIND="${2:-}"; shift ;;
     --name)     CONTAINER_NAME="${2:-}"; shift ;;
+    --no-publish) PUBLISH_PORTS=0 ;;
     *) fail "Unknown option: $1" ;;
   esac
   shift
 done
+
+[[ "$PUBLISH_PORTS" == "0" || "$PUBLISH_PORTS" == "1" ]] \
+  || fail "OPENCLAW_PUBLISH_PORTS must be 0 or 1, got: $PUBLISH_PORTS"
 
 # ---------------------------------------------------------------------------
 # Pre-flight
@@ -429,6 +436,11 @@ fi
 echo "    Docker GID     : $DOCKER_GID"
 echo "    Gateway port   : $GATEWAY_PORT"
 echo "    Gateway bind   : $GATEWAY_BIND"
+if [[ "$PUBLISH_PORTS" == "1" ]]; then
+  echo "    Host ports     : ${GATEWAY_PORT}:18789, ${BRIDGE_PORT}:18790"
+else
+  echo "    Host ports     : not published"
+fi
 if [[ -n "$GATEWAY_TOKEN" ]]; then
   echo "    Token          : (provided via --token / env)"
 else
@@ -439,6 +451,10 @@ fi
 # string with literal quotes rather than two separate arguments.
 TOKEN_ENV_ARGS=()
 [[ -n "$GATEWAY_TOKEN" ]] && TOKEN_ENV_ARGS=(-e "OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}")
+PORT_ARGS=()
+if [[ "$PUBLISH_PORTS" == "1" ]]; then
+  PORT_ARGS=(-p "${GATEWAY_PORT}:18789" -p "${BRIDGE_PORT}:18790")
+fi
 
 echo ''
 
@@ -459,8 +475,7 @@ docker run \
   -v /dev/tdx_guest:/dev/tdx_guest \
   -v /usr/share/doc/libtdx-attest-dev/examples/:/td-attest/ \
   -v /etc/tdx-attest.conf:/etc/tdx-attest.conf \
-  -p "${GATEWAY_PORT}:18789" \
-  -p "${BRIDGE_PORT}:18790" \
+  "${PORT_ARGS[@]}" \
   -e "OPENCLAW_GATEWAY_PORT=${GATEWAY_PORT}" \
   -e "OPENCLAW_GATEWAY_BIND=${GATEWAY_BIND}" \
   "${DOCKER_HOST_ENV_ARGS[@]}" \
