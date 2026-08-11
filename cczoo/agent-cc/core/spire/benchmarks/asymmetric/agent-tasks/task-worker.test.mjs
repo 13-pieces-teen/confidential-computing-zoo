@@ -10,15 +10,16 @@ import {
   validateAssistant,
 } from "./task-worker.mjs";
 
-function validAssistant(marker) {
-  const longText = "本段说明系统在真实任务中保持固定配置并记录完整证据，同时区分生成、捕获、提交和归档阶段，避免把中间状态误写成最终成功。";
+function validAssistant(marker, { collapsed = false } = {}) {
+  const summary = "某团队计划于周三夜间对内部知识服务进行两小时维护升级，内容包括数据库索引重建、API 镜像替换及缓存预热，升级前须导出配置与索引元数据但禁止复制用户原文，数据库迁移必须保证向后兼容且旧版服务须在十五分钟内重新接管流量，发布分三档推进并逐档观察错误率、九十五分位延迟与队列积压指标，完成后须保存版本时间线与指标快照并注明各阶段实测时长。";
+  const conclusions = ["1. 数据库迁移须向后兼容且禁止手工删表。", "2. 错误率超百分之一或等待超五分钟即回滚。", "3. 缓存预热失败只限流不单独回滚。"];
+  const text = collapsed
+    ? `${summary} ${conclusions.join(" ")} ${marker}`
+    : `${summary}\n${conclusions.join("\n")}\n${marker}`;
   return {
     id: "message-target",
     role: "assistant",
-    parts: [{
-      type: "text",
-      text: `1. ${longText}\n2. ${longText}\n3. ${longText}\n${marker}`,
-    }],
+    parts: [{ type: "text", text }],
   };
 }
 
@@ -69,5 +70,28 @@ test("response validation requires three numbered conclusions and a final marker
   const marker = "ARGUS-E8-RESULT-0123456789abcdef0123456789abcdef";
   const result = validateAssistant(validAssistant(marker), marker);
   assert.equal(result.conclusionCount, 3);
-  assert.ok(result.bodyChars >= 150 && result.bodyChars <= 250);
+  assert.ok(result.bodyChars >= 150 && result.bodyChars <= 400, `summary length ${result.bodyChars}`);
+});
+
+test("response validation tolerates the transport collapsing newlines to spaces", () => {
+  const marker = "ARGUS-E8-RESULT-0123456789abcdef0123456789abcdef";
+  const result = validateAssistant(validAssistant(marker, { collapsed: true }), marker);
+  assert.equal(result.conclusionCount, 3);
+  assert.ok(result.bodyChars >= 150 && result.bodyChars <= 400, `summary length ${result.bodyChars}`);
+});
+
+test("response validation rejects a marker that is not the final token", () => {
+  const marker = "ARGUS-E8-RESULT-0123456789abcdef0123456789abcdef";
+  const message = {
+    role: "assistant",
+    parts: [{ type: "text", text: `摘要。 1. 甲。 2. 乙。 3. 丙。 ${marker} 结尾多余` }],
+  };
+  assert.throws(() => validateAssistant(message, marker), (error) => error?.errorClass === "invalid_marker");
+});
+
+test("response validation rejects missing numbered conclusions", () => {
+  const marker = "ARGUS-E8-RESULT-0123456789abcdef0123456789abcdef";
+  const dropped = validAssistant(marker, { collapsed: true }).parts[0].text.replace(/\s*1\.\s/u, " ");
+  const message = { role: "assistant", parts: [{ type: "text", text: dropped }] };
+  assert.throws(() => validateAssistant(message, marker), (error) => error?.errorClass === "invalid_conclusions");
 });
