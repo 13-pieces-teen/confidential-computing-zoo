@@ -18,7 +18,7 @@
 
 | 阶段 | 命令 | 结果 | 退出码 |
 |---|---|---|---|
-| 单元测试 | `remote-test.sh unit` | **PASS**（Rust Guard 43 测试、Go 插件/组件、npm 传输、Python、benchmark 工具全绿） | 0 |
+| 单元测试 | `remote-test.sh unit` | **PASS**（Rust Guard 42 测试、Go 插件/组件、npm 传输、Python、benchmark 工具全绿） | 0 |
 | 集成 | `remote-test.sh integration` | **PASS**（架构 / Guard 故障矩阵 / 业务 E2E 三组全过） | 0 |
 | 基准预检 | `remote-benchmark.sh preflight` | **PASS**（Guard spiffe_identity 健康、/metrics、SPIRE metrics、SVID、预检 guarded 请求） | 0 |
 | 全量基准 | `remote-benchmark.sh all` | **PASS**（E3×5 + E4×3 + E5×4 + E6×1 共 13 用例全部通过） | 0（`BENCHMARK_EXIT=0`） |
