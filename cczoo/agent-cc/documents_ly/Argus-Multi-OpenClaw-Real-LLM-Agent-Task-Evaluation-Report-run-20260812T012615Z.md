@@ -179,4 +179,12 @@
 
 ---
 
-*报告按用户既定约束生成：未修改模型/Provider/温度/最大输出/提示词/超时/重试参数以美化结果；未引入通用适配层、自动重试、Fallback 或清理框架；未重置/隐藏未提交改动；未停止/修改源 OpenClaw；保留全部失败收据；未把 Provider 限制描述为系统容量。归档 VLM 替换为本地 ollama（qwen3:8b via litellm）为用户批准的配置变更，本轮结果标注「归档 VLM 非原外部网关配置」。pilot 中止（P1 阶段）与两次容器重启均为环境保护/恢复动作，非评测行为变更。*
+## 11. 运行后配置变更记录（2026-08-12，非本轮基准测试量）
+
+- 本轮（run-20260812T012615Z）在**本地 ollama 归档 VLM** 配置下测得（如上）。**运行结束后**，按用户决定将 OpenViking 归档 VLM **恢复为原始外部网关配置**：`provider=openai`、`api_base=https://gateway.aichina.intel.com/v1`、`model=minimax-m2.7`、`max_retries=2`（与切换前 `ov.conf.bak.ollama-swap` 一致；本地 litellm 配置另存为 guest `/app/.openviking/ov.conf.bak.ollama-current-20260812` 以备回退）。
+- 恢复后受控探针（直连 API，tiny 会话）：**commit→overview 30.2s**，task `completed`，overview 1064 chars → 外部网关在探针时刻**健康可用**（符合其"成功时快"画像）。
+- 按用户决定**暂不重跑 pilot**；后续若重跑，需重新记录当前网关状态（网关为间歇性，前两轮网关状态下 P0 均为 0/2）。
+
+---
+
+*报告按用户既定约束生成：未修改模型/Provider/温度/最大输出/提示词/超时/重试参数以美化结果；未引入通用适配层、自动重试、Fallback 或清理框架；未重置/隐藏未提交改动；未停止/修改源 OpenClaw；保留全部失败收据；未把 Provider 限制描述为系统容量。归档 VLM 替换为本地 ollama（qwen3:8b via litellm）为用户批准的配置变更，本轮结果标注「归档 VLM 非原外部网关配置」；运行后已恢复原外部网关配置（§11）。pilot 中止（P1 阶段）与容器重启均为环境保护/恢复动作，非评测行为变更。*
