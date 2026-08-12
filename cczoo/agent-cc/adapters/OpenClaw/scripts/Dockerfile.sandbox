@@ -24,7 +24,7 @@
 # Build:
 #   docker build -f Dockerfile.sandbox -t openclaw-sandbox:bookworm-slim .
 #
-# Or run setup-sbx.sh which builds this automatically.
+# Or build it explicitly with the command above.
 
 FROM debian:bookworm-slim
 

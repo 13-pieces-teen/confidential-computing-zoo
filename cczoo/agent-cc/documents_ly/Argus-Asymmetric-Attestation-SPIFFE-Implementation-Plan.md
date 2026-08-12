@@ -33,16 +33,17 @@ exporter/body hash/receipt 绑定、不可绕过 PEP、service mesh 或“OpenCl
 
 ```text
 core/spire/
-  components/       svid-materializer、mTLS diagnostic、docker-gate
+  components/       svid-materializer
   plugins/          argus-tdx-nodeattestor
+  benchmarks/       非对称 runtime 与 Agent Task 评测工具
   runtime/
     asymmetric/     正式 Compose、配置、启动与远程验收脚本
   tests/            nodeattestor-mock、tdvm
-  compatibility/    旧命令 wrapper 与 proxy-era WP2/WP3
 ```
 
-正式数据路径不再引用 `mtls-diagnostic` 或 `docker-gate`。后两者仅保留为诊断/历史
-能力，`prepare.sh` 默认不构建 proxy diagnostic。
+正式数据路径不引用独立 mTLS proxy 或 Docker-gate。旧命令 wrapper、proxy-era
+WP2/WP3、`mtls-diagnostic` 与 `docker-gate` 已在 native asymmetric 路径完成远程
+验证后删除；实现及当时的验证证据由 Git 历史和归档报告保留。
 
 ### 2.2 Rust Guard
 
@@ -107,7 +108,6 @@ API-key/application authorization。
 - `prepare.sh` 生成 Guard policy，并构建真实 Guard/OpenClaw workload image；
 - OpenViking launcher 支持 `build` / `launch` 两阶段，先固定 image digest 再注册；
 - `start-openclaw-workload.sh` 直接启动带 Workload API mount 的真实 OpenClaw；
-- `migrate-from-proxy-profile.sh` 的 `apply` 只删除两个明确的旧 proxy container，不删除 volume/image/state；
 - `remote-test.sh` 统一执行远程 unit/integration/business E2E。
 
 ## 3. 远程执行顺序

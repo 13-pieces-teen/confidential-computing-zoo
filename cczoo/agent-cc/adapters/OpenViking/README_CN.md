@@ -59,37 +59,6 @@ curl -fsS http://127.0.0.1:1933/health
 curl -fsS http://127.0.0.1:1933/ready
 ```
 
-## TD VM 验证模式
-
-在 v2 架构验证中，可以将真实 OpenViking 放入 TD VM，同时暂时使用 mock
-Evidence Provider 与 mock Trustee。该模式验证部署位置和集成链路，不等同于真实
-Quote 安全验收。迁移时必须复制完整 OpenViking 状态目录，包括
-`data/viking/_system`，以保留既有 User API Key；启动恢复实例前只删除快照中的
-`data/.openviking.pid`。
-
-可以使用 `127.0.0.1:2933 -> TD VM:1933` 的 QEMU loopback 转发，避免将 API
-暴露到外部网卡。OpenClaw Gateway 使用 host network 时，将既有插件指向该地址：
-
-```bash
-export TARGET_URI=http://127.0.0.1:2933
-export OPENVIKING_API_KEY=<existing-openclaw-user-key>
-adapters/OpenClaw/scripts/connect_openclaw_openviking.sh
-```
-
-使用 `core/spire/tests/tdvm/test-architecture.sh` 同时验证真实业务链路与历史 mock
-认证链路。
-
-对于已经配置好的插件，可以在保留的 Host 服务与 TD VM 转发之间切换，无需重新
-输入或输出 User API Key：
-
-```bash
-core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:1934
-core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:2933
-```
-
-切换脚本以 OpenClaw `node` 用户运行，保留配置备份，重启 Gateway，并验证带认证的
-sessions 请求。
-
 ## 接入 OpenClaw
 
 使用 Root Key 创建 OpenClaw 专用 User API Key，不能将 Root Key 交给

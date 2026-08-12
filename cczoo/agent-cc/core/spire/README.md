@@ -24,17 +24,19 @@ workload identities.
 
 ```text
 spire/
-  components/       reusable helpers (SVID materializer) and diagnostics
+  components/       reusable identity helpers (SVID materializer)
   plugins/          argus_tdx Agent/Server NodeAttestor plug-ins
+  benchmarks/       asymmetric runtime and agent-task evaluation tooling
   runtime/
     asymmetric/     formal deployment, config, scripts, and remote validation
   tests/            isolated NodeAttestor and TDVM fixtures
-  compatibility/    legacy wrappers and archived proxy-era hardening
 ```
 
 The current business path has no standalone mTLS client or server proxy.
-`components/mtls-diagnostic` remains useful for isolated SPIFFE diagnostics,
-but is built only when `V2_BUILD_DIAGNOSTICS=1`.
+Legacy proxy-era wrappers, Docker-gate code, and the standalone mTLS diagnostic
+were removed after the native asymmetric path was remotely validated. Their
+implementation and validation evidence remain available in Git history and the
+archived reports under `documents_ly/archive/`.
 
 See [runtime/asymmetric/README.md](runtime/asymmetric/README.md) for the remote
 host execution sequence and the current verification boundary.

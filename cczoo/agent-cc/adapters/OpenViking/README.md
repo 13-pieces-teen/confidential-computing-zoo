@@ -74,39 +74,6 @@ curl -fsS http://127.0.0.1:1933/health
 curl -fsS http://127.0.0.1:1933/ready
 ```
 
-## TD VM validation profile
-
-For v2 architecture validation, OpenViking may run inside a TD VM while the
-Evidence Provider and Trustee remain mocks. This is a placement and integration
-profile, not real-Quote security acceptance. Keep the OpenViking API real and
-preserve its complete state directory, including `data/viking/_system`, so
-existing User API keys remain valid. Remove only the copied
-`data/.openviking.pid` before starting the restored instance.
-
-A QEMU loopback forward such as `127.0.0.1:2933 -> TD VM :1933` keeps the API off
-external interfaces. With an OpenClaw gateway using host networking, point the
-existing plugin at the forwarded endpoint:
-
-```bash
-export TARGET_URI=http://127.0.0.1:2933
-export OPENVIKING_API_KEY=<existing-openclaw-user-key>
-adapters/OpenClaw/scripts/connect_openclaw_openviking.sh
-```
-
-Validate the combined real business path and mock v2 attestation path with
-`core/spire/tests/tdvm/test-architecture.sh`.
-
-For an already configured plugin, switch between the retained Host service and
-the TD VM forward without re-entering the User API key:
-
-```bash
-core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:1934
-core/spire/tests/tdvm/switch-openclaw-openviking.sh http://127.0.0.1:2933
-```
-
-The switch script runs as the OpenClaw `node` user, preserves a configuration
-backup, restarts the Gateway, and verifies an authenticated sessions request.
-
 ## Connect OpenClaw
 
 The OpenClaw gateway must meet the official plugin's Node.js and OpenClaw version
