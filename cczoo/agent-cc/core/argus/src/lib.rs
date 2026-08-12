@@ -27,14 +27,14 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,no_run
 //! use argus::{ArgusEngine, TargetService, GuardContext, engine::MockEvidenceFetcher, policy::AllowAllPolicyEvaluator};
 //! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Create engine with mock evidence fetcher for testing
-//!     // In production, use ArgusEngine::new() with a real EvidenceFetcherHttp
+//!     // Compile-only wiring example. A mock evidence fetcher is not accepted
+//!     // as production attestation evidence by the strict RA adapter.
 //!     let engine = ArgusEngine::with_components(
 //!         Arc::new(MockEvidenceFetcher::new()),
 //!         Arc::new(argus::RaAdapter::new()),
@@ -49,25 +49,32 @@
 //! }
 //! ```
 
-pub mod types;
-pub mod errors;
-pub mod engine;
-pub mod verifier;
-pub mod policy;
 pub mod binding;
+mod crypto_verifier;
+pub mod engine;
+pub mod errors;
+pub mod policy;
 pub mod service;
-pub mod tc_api_client;
 pub mod spiffe_guard;
+pub mod tc_api_client;
+pub mod tdx_verifier;
+pub mod types;
+pub mod verifier;
 
-pub use errors::{ArgusError, EvidenceError, Result};
-pub use types::*;
-pub use engine::{ArgusEngine, EvidenceFetcher, MockEvidenceFetcher, RaVerifier, PolicyEvaluatorTrait};
 pub use binding::ServiceRuntimeBinding;
-pub use verifier::RaAdapter;
-pub use policy::{PolicyEvaluator, AllowAllPolicyEvaluator, DenyAllPolicyEvaluator, ConfigurablePolicyEvaluator, PolicyConfig, CompositeRequirementConfig};
-pub use service::EvidenceEngine;
-pub use tc_api_client::{TcApiClient, ServiceMetadataFetcher, ServiceMetadataResponse};
-pub use spiffe_guard::{
-    SpiffeAuthorizationDecision, SpiffeAuthorizationRequest,
-    SpiffeAuthorizationResponse, SpiffeGuard, SpiffeGuardPolicy,
+pub use engine::{
+    ArgusEngine, EvidenceFetcher, MockEvidenceFetcher, PolicyEvaluatorTrait, RaVerifier,
 };
+pub use errors::{ArgusError, EvidenceError, Result};
+pub use policy::{
+    AllowAllPolicyEvaluator, CompositeRequirementConfig, ConfigurablePolicyEvaluator,
+    DenyAllPolicyEvaluator, PolicyConfig, PolicyEvaluator,
+};
+pub use service::EvidenceEngine;
+pub use spiffe_guard::{
+    SpiffeAuthorizationDecision, SpiffeAuthorizationRequest, SpiffeAuthorizationResponse,
+    SpiffeGuard, SpiffeGuardPolicy,
+};
+pub use tc_api_client::{ServiceMetadataFetcher, ServiceMetadataResponse, TcApiClient};
+pub use types::*;
+pub use verifier::RaAdapter;

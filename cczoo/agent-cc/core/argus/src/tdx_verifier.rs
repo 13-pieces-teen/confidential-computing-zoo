@@ -26,8 +26,8 @@
 //! PCK CRL, TCB Info, QE Identity matching, or Intel's `sgx_ql_qv_result_t`).
 //! That is a separate, heavier concern (Intel's DCAP Quote Verification
 //! Library / a remote attestation service such as Trustee) and is explicitly
-//! out of scope for Argus v1. See `docs/design-decisions.md` ("TCB Status
-//! Checking") for the rationale.
+//! out of scope for Argus v1. See the "Verifier Contract" in
+//! `docs/architecture.md` for the rationale.
 
 use crate::errors::{ArgusError, Result};
 use crate::types::*;
@@ -286,7 +286,7 @@ impl TdxQuoteVerifier {
     /// materially heavier verifier — out of scope for Argus's basic quote
     /// verification. Rather than fabricate a status value, this always
     /// reports `Unknown` so callers cannot mistake it for a real freshness
-    /// check. See `docs/design-decisions.md` ("TCB Status Checking") for the
+    /// check. See the "Verifier Contract" in `docs/architecture.md` for the
     /// scope decision.
     fn check_tcb_status(&self, _quote_bytes: &[u8]) -> Result<TcbStatus> {
         Ok(TcbStatus {
@@ -348,6 +348,26 @@ impl RaVerifier for TdxQuoteVerifier {
         expected_binding: &ExpectedBinding,
         options: &VerificationOptions,
     ) -> Result<VerifiedClaims> {
+        if options.require_quote
+            && (evidence.evidence_type != "tee_quote" || evidence.tee_type != "tdx")
+        {
+            return Err(ArgusError::Unsupported {
+                feature: "TDX quote evidence is required".to_string(),
+            });
+        }
+        if options.require_attested_identity {
+            return Err(ArgusError::MissingRequiredClaim {
+                claim_path: "attested_issuance".to_string(),
+            });
+        }
+        if let Some(expected_verifier) = options.expected_verifier.as_deref() {
+            if expected_verifier != self.expected_verifier_id {
+                return Err(ArgusError::Unsupported {
+                    feature: format!("verifier {expected_verifier}"),
+                });
+            }
+        }
+
         tracing::debug!(
             target: "argus::verifier",
             "Starting TDX quote verification"

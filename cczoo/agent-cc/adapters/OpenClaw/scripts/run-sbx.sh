@@ -201,9 +201,15 @@ if [[ "$ARGUS_SPIFFE_ENABLED" == "1" ]]; then
   : "${ARGUS_SPIFFE_WORKLOAD_API_DIR:?ARGUS_SPIFFE_WORKLOAD_API_DIR is required when ARGUS_SPIFFE_ENABLED=1}"
   : "${ARGUS_OPENVIKING_ORIGIN:?ARGUS_OPENVIKING_ORIGIN is required when ARGUS_SPIFFE_ENABLED=1}"
   : "${ARGUS_GUARD_URL:?ARGUS_GUARD_URL is required when ARGUS_SPIFFE_ENABLED=1}"
+  : "${ARGUS_GUARD_API_TOKEN_FILE:?ARGUS_GUARD_API_TOKEN_FILE is required when ARGUS_SPIFFE_ENABLED=1}"
+  [[ -f "$ARGUS_GUARD_API_TOKEN_FILE" ]] \
+    || fail "Guard API token file not found: $ARGUS_GUARD_API_TOKEN_FILE"
   [[ -S "$ARGUS_SPIFFE_WORKLOAD_API_DIR/agent.sock" ]] \
     || fail "SPIFFE Workload API socket not found: $ARGUS_SPIFFE_WORKLOAD_API_DIR/agent.sock"
-  SPIFFE_MOUNT_ARGS=(-v "${ARGUS_SPIFFE_WORKLOAD_API_DIR}:/run/spire/agent:ro")
+  SPIFFE_MOUNT_ARGS=(
+    -v "${ARGUS_SPIFFE_WORKLOAD_API_DIR}:/run/spire/agent:ro"
+    -v "${ARGUS_GUARD_API_TOKEN_FILE}:/run/secrets/argus_guard_api_token:ro"
+  )
   SPIFFE_ENV_ARGS=(
     -e "ARGUS_SPIFFE_ENABLED=1"
     -e "NODE_OPTIONS=--import=/opt/argus/openclaw-spiffe/preload.mjs"
@@ -213,6 +219,7 @@ if [[ "$ARGUS_SPIFFE_ENABLED" == "1" ]]; then
     -e "ARGUS_TARGET_SERVICE=${ARGUS_TARGET_SERVICE:-openviking-cmem}"
     -e "ARGUS_OPENVIKING_ORIGIN=${ARGUS_OPENVIKING_ORIGIN}"
     -e "ARGUS_GUARD_URL=${ARGUS_GUARD_URL}"
+    -e "ARGUS_GUARD_API_TOKEN_FILE=/run/secrets/argus_guard_api_token"
     -e "ARGUS_GUARD_DATA_CLASS=${ARGUS_GUARD_DATA_CLASS:-sensitive}"
     -e "ARGUS_GUARD_TIMEOUT_MS=${ARGUS_GUARD_TIMEOUT_MS:-2000}"
     -e "ARGUS_SPIFFE_KEEPALIVE_TIMEOUT_MS=${ARGUS_SPIFFE_KEEPALIVE_TIMEOUT_MS:-10000}"

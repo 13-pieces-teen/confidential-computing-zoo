@@ -129,10 +129,18 @@ async function authorize(configuration, requestURL, method) {
   const requestID = randomUUID();
   let response;
   try {
+    const guardAPIToken = (await readFile(configuration.guardAPITokenFile, "utf8"))
+      .replace(/[\r\n]+$/u, "");
+    if (!guardAPIToken || /\s/u.test(guardAPIToken)) {
+      throw new Error("Argus Guard API token is empty or contains whitespace");
+    }
     try {
       response = await originalFetch(configuration.guardURL, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${guardAPIToken}`,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           request_id: requestID,
           caller_spiffe_id: configuration.callerSPIFFEID,
@@ -192,6 +200,7 @@ export function configurationFromEnvironment() {
   return {
     targetOrigin,
     guardURL: guardURL.toString(),
+    guardAPITokenFile: requiredEnvironment("ARGUS_GUARD_API_TOKEN_FILE"),
     callerSPIFFEID: requiredEnvironment("ARGUS_CALLER_SPIFFE_ID"),
     targetSPIFFEID: requiredEnvironment("ARGUS_TARGET_SPIFFE_ID"),
     targetService: requiredEnvironment("ARGUS_TARGET_SERVICE"),

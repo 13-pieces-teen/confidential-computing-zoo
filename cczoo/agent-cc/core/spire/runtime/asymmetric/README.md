@@ -19,8 +19,8 @@ This is the formal implementation of the current Argus Initial phase.
   TLS authentication. There is no OpenViking-side Argus Guard.
 
 The profile does not attempt to defend against a compromised trusted OpenClaw
-runtime or Docker administrator. The old proxy/Docker-gate work is retained
-under `../../compatibility/` and is not a prerequisite here.
+runtime or Docker administrator. Proxy-era Guard and Docker-gate compatibility
+paths are not part of this runtime or its validation contract.
 
 ## Components
 
@@ -160,15 +160,3 @@ bash core/spire/runtime/asymmetric/scripts/verify-architecture.sh
 bash core/spire/runtime/asymmetric/scripts/verify-guard-gate-failures.sh
 bash core/spire/runtime/asymmetric/scripts/verify-openclaw-plugin-e2e.sh
 ```
-
-## Migration and rollback
-
-Inventory the old proxy containers without changing state:
-
-```bash
-bash core/spire/runtime/asymmetric/scripts/migrate-from-proxy-profile.sh plan
-```
-
-`apply` removes only the two named legacy mTLS proxy containers. It does not
-delete application volumes, images, SPIRE data, or OpenViking state. The old
-code remains under `compatibility/proxy-hardening/` for reference.

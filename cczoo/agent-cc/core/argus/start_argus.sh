@@ -155,18 +155,32 @@ start_evidence_provider() {
 start_guard_service() {
     log_info "Starting Argus Guard on port 8007..."
 
-    if [[ -z "${GUARD_MODE:-}" ]]; then
-        log_error "GUARD_MODE must be explicitly set to mock_allow or evidence."
-        exit 1
-    fi
-    
+    case "${GUARD_MODE:-evidence}" in
+        evidence)
+            if [[ -z "${INTEL_CA_CERT_PATH:-}" || ! -f "$INTEL_CA_CERT_PATH" ]]; then
+                log_error "INTEL_CA_CERT_PATH must point to a readable trusted Intel CA certificate"
+                exit 1
+            fi
+            ;;
+        spiffe_identity)
+            if [[ -z "${GUARD_SPIFFE_POLICY_FILE:-}" || ! -f "$GUARD_SPIFFE_POLICY_FILE" ]]; then
+                log_error "GUARD_SPIFFE_POLICY_FILE must point to a readable policy for spiffe_identity mode"
+                exit 1
+            fi
+            ;;
+        *)
+            log_error "GUARD_MODE must be evidence or spiffe_identity"
+            exit 1
+            ;;
+    esac
+
     # Set environment
     export RUST_LOG=${RUST_LOG:-info}
-    export HOST=${HOST:-0.0.0.0}
+    export GUARD_MODE=${GUARD_MODE:-evidence}
+    export HOST=${GUARD_HOST:-127.0.0.1}
     export PORT=8007
-    export GUARD_MODE
     export EVIDENCE_ENDPOINT=${EVIDENCE_ENDPOINT:-http://localhost:8008}
-    
+
     # Check if binary exists
     if [[ ! -f ./target/release/argus-guard ]]; then
         log_error "Guard binary not found. Building..."
@@ -249,7 +263,25 @@ test_attestation() {
         exit 1
     fi
     
+    local auth_header=()
+    local api_token="${ARGUS_API_TOKEN:-}"
+    if [[ -n "${ARGUS_API_TOKEN_FILE:-}" ]]; then
+        if [[ -n "$api_token" ]]; then
+            log_error "Set only one of ARGUS_API_TOKEN or ARGUS_API_TOKEN_FILE."
+            exit 1
+        fi
+        if [[ ! -r "$ARGUS_API_TOKEN_FILE" ]]; then
+            log_error "ARGUS_API_TOKEN_FILE is not readable."
+            exit 1
+        fi
+        api_token=$(tr -d '\r\n' <"$ARGUS_API_TOKEN_FILE")
+    fi
+    if [[ -n "$api_token" ]]; then
+        auth_header=(-H "Authorization: Bearer $api_token")
+    fi
+
     local response=$(curl -s -X POST http://localhost:8007/ra/v1/verify \
+        "${auth_header[@]}" \
         -H "Content-Type: application/json" \
         -d '{
             "target": {

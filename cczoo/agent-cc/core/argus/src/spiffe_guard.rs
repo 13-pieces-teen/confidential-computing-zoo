@@ -115,7 +115,9 @@ impl SpiffeGuardPolicy {
             ));
         }
         if self.rules.is_empty() {
-            return Err(anyhow!("SPIFFE Guard policy must contain at least one rule"));
+            return Err(anyhow!(
+                "SPIFFE Guard policy must contain at least one rule"
+            ));
         }
 
         let mut rule_ids = HashSet::new();
@@ -125,7 +127,10 @@ impl SpiffeGuardPolicy {
                 return Err(anyhow!("duplicate SPIFFE Guard rule id {:?}", rule.id));
             }
             if rule.callers.is_empty() {
-                return Err(anyhow!("rule {:?} must contain at least one caller", rule.id));
+                return Err(anyhow!(
+                    "rule {:?} must contain at least one caller",
+                    rule.id
+                ));
             }
             for caller in &rule.callers {
                 validate_spiffe_id(caller, &self.trust_domain, "caller")?;
@@ -183,7 +188,10 @@ impl SpiffeGuard {
         };
 
         for rule in &self.policy.rules {
-            if !rule.callers.iter().any(|value| value == &request.caller_spiffe_id)
+            if !rule
+                .callers
+                .iter()
+                .any(|value| value == &request.caller_spiffe_id)
                 || rule.target_spiffe_id != request.target_spiffe_id
                 || rule.target_service != request.target_service
                 || !rule.target_origins.iter().any(|value| {

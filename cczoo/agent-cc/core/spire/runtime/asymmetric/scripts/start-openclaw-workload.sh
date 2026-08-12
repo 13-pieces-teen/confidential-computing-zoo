@@ -22,6 +22,8 @@ fail() {
 [[ "$OPENCLAW_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] \
     || fail "invalid OpenClaw container name: $OPENCLAW_CONTAINER"
 [[ -f "$OPENCLAW_RUN_SCRIPT" ]] || fail "missing OpenClaw launcher: $OPENCLAW_RUN_SCRIPT"
+[[ -f "$RUNTIME_DIR/secrets/openclaw-guard-api-token" ]] \
+    || fail 'Guard API token is missing; run prepare.sh first'
 [[ -S "$RUNTIME_DIR/openclaw-agent-run/agent.sock" ]] \
     || fail 'OpenClaw Workload API socket is missing; start the OpenClaw SPIRE Agent first'
 docker network inspect "$CONTROL_NETWORK" >/dev/null 2>&1 \
@@ -38,6 +40,7 @@ ARGUS_SPIFFE_DOCKER_NETWORK="$CONTROL_NETWORK" \
 ARGUS_OPENVIKING_ORIGIN="$OPENVIKING_ORIGIN" \
 ARGUS_OPENVIKING_HOST_ADDRESS="$OPENVIKING_HOST_ADDRESS" \
 ARGUS_GUARD_URL="$GUARD_URL" \
+ARGUS_GUARD_API_TOKEN_FILE="$RUNTIME_DIR/secrets/openclaw-guard-api-token" \
 ARGUS_CALLER_SPIFFE_ID=spiffe://argus.local/agent/openclaw \
 ARGUS_TARGET_SPIFFE_ID=spiffe://argus.local/service/openviking-cmem \
 ARGUS_TARGET_SERVICE=openviking-cmem \

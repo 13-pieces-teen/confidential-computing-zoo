@@ -33,8 +33,6 @@ import sys
 value = json.load(sys.stdin)
 if value.get("status") != "OK" or value.get("mode") != "spiffe_identity":
     raise SystemExit(1)
-if value.get("authorization_context_required") is not False:
-    raise SystemExit(1)
 ttl = value.get("decision_ttl_seconds")
 if not isinstance(ttl, int) or not 1 <= ttl <= 300:
     raise SystemExit(1)

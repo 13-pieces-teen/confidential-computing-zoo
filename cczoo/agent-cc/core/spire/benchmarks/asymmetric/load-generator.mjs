@@ -119,11 +119,14 @@ function guardRequestBody(targetURL) {
   };
 }
 
-async function authorize(guardURL, targetURL, timeoutMs) {
+async function authorize(guardURL, targetURL, timeoutMs, guardAPIToken) {
   const request = guardRequestBody(targetURL);
   const response = await fetch(guardURL, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${guardAPIToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(request),
     redirect: "error",
     signal: AbortSignal.timeout(timeoutMs),
@@ -191,10 +194,22 @@ async function createExecutor(configuration) {
   if (!new Set(["http:", "https:"]).has(guardURL.protocol)) {
     throw new Error("--guard-url must use HTTP or HTTPS");
   }
+  const guardAPIToken = (await readFile(
+    requiredEnvironment("ARGUS_GUARD_API_TOKEN_FILE"),
+    "utf8",
+  )).replace(/[\r\n]+$/u, "");
+  if (!guardAPIToken || /\s/u.test(guardAPIToken)) {
+    throw new Error("Argus Guard API token is empty or contains whitespace");
+  }
 
   if (configuration.mode === "guard") {
     return async () => {
-      const decision = await authorize(guardURL, targetURL, configuration.timeoutMs);
+      const decision = await authorize(
+        guardURL,
+        targetURL,
+        configuration.timeoutMs,
+        guardAPIToken,
+      );
       return { status: 200, responseBytes: 0, decisionID: decision.decision_id };
     };
   }
@@ -219,7 +234,12 @@ async function createExecutor(configuration) {
   return async () => {
     let decisionID;
     if (configuration.mode === "guarded-new-connection") {
-      const decision = await authorize(guardURL, targetURL, configuration.timeoutMs);
+      const decision = await authorize(
+        guardURL,
+        targetURL,
+        configuration.timeoutMs,
+        guardAPIToken,
+      );
       decisionID = decision.decision_id;
     }
     // Re-read the SVID before every new mTLS connection. The workload SVID

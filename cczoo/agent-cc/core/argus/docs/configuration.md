@@ -37,10 +37,15 @@ This document provides a comprehensive reference for all configuration options a
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOST` | `0.0.0.0` | Host address to bind the Guard HTTP server |
+| `HOST` | `127.0.0.1` | Host address to bind the Guard HTTP server |
 | `PORT` | `8007` | Port number for the Guard HTTP server |
 | `RUST_LOG` | `info` | Logging level (trace, debug, info, warn, error) |
+| `GUARD_MODE` | `evidence` | `evidence` for Intel TDX verification or `spiffe_identity` for the Argus v2 caller-local policy path |
 | `EVIDENCE_ENDPOINT` | `http://localhost:8008` | Peer Evidence Provider endpoint URL |
+| `INTEL_CA_CERT_PATH` | _(required in `evidence` mode)_ | Trusted Intel CA certificate used by the TDX verifier |
+| `GUARD_SPIFFE_POLICY_FILE` | _(required in `spiffe_identity` mode)_ | Strict Argus v2 SPIFFE authorization policy |
+| `ARGUS_API_TOKEN` | _(required for non-loopback listeners)_ | Bearer token protecting the active Guard decision endpoint |
+| `ARGUS_API_TOKEN_FILE` | _(optional alternative)_ | Mounted bearer-token file; mutually exclusive with `ARGUS_API_TOKEN` |
 | `VERIFIER_KIND` | `trustee` | TDX verifier backend (trustee, mock) |
 | `BINDING_ASSURANCE_LEVEL` | `L2` | Minimum binding assurance level required |
 | `POLICY_STRICT_MODE` | `false` | Enable strict policy evaluation |
@@ -270,9 +275,9 @@ requires fetching PCCS/QGS collateral (PCK certificate chain, TCB Info, QE
 Identity) and matching it against the quote, which is a materially heavier
 verifier (Intel's DCAP Quote Verification Library, or a hosted
 Trustee/Attestation Service) that Argus does not implement. No shipped
-policy evaluator gates on this field. See [Design Decisions § TCB Status
-Checking](./design-decisions.md#1-tcb-status-checking-is-it-needed-and-where-does-it-belong)
-for the full rationale and scope decision.
+policy evaluator gates on this field. See the
+[Verifier Contract](./architecture.md#verifier-contract) for the current scope
+and result rules.
 
 ### Trust Anchor Verification
 
@@ -280,17 +285,16 @@ for the full rationale and scope decision.
 certificate validity checking for TDX attestation quotes (`SignatureVerifier`),
 and it **is called** by `TdxQuoteVerifier::verify_quote_signature` — the
 actual `RaVerifier` path used by Argus Guard. This is the real cryptographic
-check Argus performs; certificate-chain pinning to a specific Intel CA is
-optional and enabled via `TdxQuoteVerifier::with_intel_ca_cert`.
+check Argus performs. The Guard service requires `INTEL_CA_CERT_PATH` in
+`evidence` mode and constructs the verifier with that configured trust anchor.
 
 **Known limitation:** the certificate/signature extraction logic uses fixed
 byte offsets and a simplified assumption that a PEM certificate is embedded
 verbatim in the quote bytes. This has not yet been validated against a real
 hardware-generated TDX quote's actual TLV-encoded `auth_data`/`cert_data`
 layout. Validate against real quotes and adjust the extraction logic before
-relying on this in production. See [Design Decisions § TCB Status
-Checking](./design-decisions.md#1-tcb-status-checking-is-it-needed-and-where-does-it-belong)
-for the full scope decision.
+relying on this in production. See the
+[Verifier Contract](./architecture.md#verifier-contract) for the full scope.
 
 #### Certificate Chain Structure
 

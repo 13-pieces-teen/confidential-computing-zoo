@@ -6,6 +6,7 @@ OPENCLAW_CONTAINER="${V2_REAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
 OPENVIKING_CONTAINER="${V2_REAL_OPENVIKING_CONTAINER:-agentcc-openviking-service}"
 OPENVIKING_ORIGIN="${V2_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
 GUARD_BASE_URL="${V2_GUARD_URL:-http://127.0.0.1:${V2_GUARD_PORT:-18007}}"
+GUARD_TOKEN_FILE="${V2_GUARD_API_TOKEN_FILE:-${V2_RUNTIME_DIR:-$SCRIPT_DIR/../runtime}/secrets/openclaw-guard-api-token}"
 TDVM_SSH_TARGET="${TDVM_SSH_TARGET:-tdx@127.0.0.1}"
 TDVM_SSH_PORT="${TDVM_SSH_PORT:-2222}"
 TDVM_SSH_IDENTITY="${TDVM_SSH_IDENTITY:-}"
@@ -14,6 +15,10 @@ ssh_options=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=acce
 [[ -n "$TDVM_SSH_IDENTITY" ]] && ssh_options+=(-i "$TDVM_SSH_IDENTITY")
 
 fail() { printf 'native SPIFFE mTLS verification: FAIL: %s\n' "$1" >&2; exit 1; }
+
+[[ -r "$GUARD_TOKEN_FILE" ]] || fail "Guard API token file is not readable: $GUARD_TOKEN_FILE"
+GUARD_API_TOKEN="$(tr -d '\r\n' <"$GUARD_TOKEN_FILE")"
+[[ -n "$GUARD_API_TOKEN" ]] || fail 'Guard API token is empty'
 
 bash "$SCRIPT_DIR/verify-svid.sh"
 
@@ -29,6 +34,7 @@ authorize() {
     local target_id="$1"
     curl -fsS --noproxy '127.0.0.1,localhost' --max-time 5 \
         -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $GUARD_API_TOKEN" \
         -d "{\"request_id\":\"verify-native-$RANDOM\",\"caller_spiffe_id\":\"spiffe://argus.local/agent/openclaw\",\"target_spiffe_id\":\"$target_id\",\"target_service\":\"openviking-cmem\",\"target_origin\":\"$OPENVIKING_ORIGIN\",\"operation\":\"memory.read\",\"data_class\":\"sensitive\"}" \
         "$GUARD_BASE_URL/guard/v1/authorize"
 }

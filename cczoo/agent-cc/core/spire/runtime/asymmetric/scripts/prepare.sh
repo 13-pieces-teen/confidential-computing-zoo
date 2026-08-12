@@ -7,12 +7,10 @@ SPIRE_ROOT="$(cd "$PROFILE_DIR/../.." && pwd)"
 AGENT_CC_ROOT="$(cd "$SPIRE_ROOT/../.." && pwd)"
 CORE_DIR="$AGENT_CC_ROOT/core"
 PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-nodeattestor"
-MTLS_MODULE_DIR="$SPIRE_ROOT/components/mtls-diagnostic"
 OPENCLAW_DOCKERFILE="$AGENT_CC_ROOT/adapters/OpenClaw/scripts/Dockerfile.sbx"
 RUNTIME_DIR="${V2_RUNTIME_DIR:-$PROFILE_DIR/runtime}"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-spire-v2-go-cache}"
 GO_PROXY="${ARGUS_GO_PROXY:-https://proxy.golang.org,direct}"
-MTLS_GO_PROXY="${ARGUS_MTLS_GO_PROXY:-$GO_PROXY}"
 TDVM_SPIRE_SERVER_ADDRESS="${V2_TDVM_SPIRE_SERVER_ADDRESS:-10.0.2.2}"
 SPIRE_SERVER_PORT="${V2_SPIRE_SERVER_PORT:-18081}"
 TDVM_INSTANCE_ID="${V2_TDVM_INSTANCE_ID:-tdvm-v2-0001}"
@@ -59,6 +57,7 @@ install -d -m 0755 \
     "$RUNTIME_DIR/openclaw-agent-run"
 install -d -m 0700 \
     "$RUNTIME_DIR/certs" \
+    "$RUNTIME_DIR/secrets" \
     "$RUNTIME_DIR/server-data" \
     "$RUNTIME_DIR/openclaw-agent-data"
 install -d -m 0755 "$GO_CACHE_DIR"
@@ -114,14 +113,6 @@ build_go_binary \
     mock-trustee \
     "$GO_PROXY" \
     readonly
-if [[ "${V2_BUILD_DIAGNOSTICS:-0}" == "1" ]]; then
-    build_go_binary \
-        "$MTLS_MODULE_DIR" \
-        . \
-        spire-mtls \
-        "$MTLS_GO_PROXY" \
-        mod
-fi
 chmod 0755 "$RUNTIME_DIR/plugins"/*
 
 generate_ca() {
@@ -201,6 +192,16 @@ issue_certificate \
     clientAuth \
     "URI:x509pop://argus.local/role/openclaw"
 
+if [[ ! -s "$RUNTIME_DIR/secrets/guard-api-token" ]]; then
+    openssl rand -hex 32 >"$RUNTIME_DIR/secrets/guard-api-token"
+fi
+cp "$RUNTIME_DIR/secrets/guard-api-token" \
+    "$RUNTIME_DIR/secrets/openclaw-guard-api-token"
+chown 65532:65532 "$RUNTIME_DIR/secrets/guard-api-token"
+chown 1000:1000 "$RUNTIME_DIR/secrets/openclaw-guard-api-token"
+chmod 0400 "$RUNTIME_DIR/secrets/guard-api-token" \
+    "$RUNTIME_DIR/secrets/openclaw-guard-api-token"
+
 chmod 0600 "$RUNTIME_DIR/certs"/*-key.pem
 for cert in "$RUNTIME_DIR"/certs/*.pem; do
     [[ "$cert" == *-key.pem ]] || chmod 0644 "$cert"
@@ -249,13 +250,6 @@ docker build -q \
     -f "$PROFILE_DIR/images/Dockerfile.mock-trustee" \
     -t argus-spire-v2-mock-trustee:local \
     "$RUNTIME_DIR" >/dev/null
-if [[ "${V2_BUILD_DIAGNOSTICS:-0}" == "1" ]]; then
-    docker build -q \
-        -f "$SPIRE_ROOT/components/mtls-diagnostic/Dockerfile.runtime" \
-        -t argus-spire-v2-mtls:local \
-        "$RUNTIME_DIR" >/dev/null
-fi
-
 if [[ "${V2_BUILD_GUARD:-1}" == "1" ]]; then
     docker build -q \
         --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}" \

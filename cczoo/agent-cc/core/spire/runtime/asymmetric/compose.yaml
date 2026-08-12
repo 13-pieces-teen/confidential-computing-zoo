@@ -78,9 +78,11 @@ services:
       PORT: 8007
       GUARD_MODE: spiffe_identity
       GUARD_SPIFFE_POLICY_FILE: /opt/argus/conf/guard-policy.yaml
+      ARGUS_API_TOKEN_FILE: /run/secrets/argus_guard_api_token
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - "${V2_RUNTIME_DIR:-./runtime}/conf/guard-policy.yaml:/opt/argus/conf/guard-policy.yaml:ro"
+      - "${V2_RUNTIME_DIR:-./runtime}/secrets/guard-api-token:/run/secrets/argus_guard_api_token:ro"
     ports:
       - "127.0.0.1:${V2_GUARD_PORT:-18007}:8007"
     restart: unless-stopped

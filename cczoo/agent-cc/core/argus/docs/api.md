@@ -8,6 +8,23 @@ Argus is designed around Intel TDX quote verification. It keeps TDX verifier-spe
 
 Current API scope: the caller is an agent or agent-hosting runtime. This draft does not yet specify a separate service-to-service caller model.
 
+### Guard Runtime Modes
+
+The Intel Guard binary has two explicit, non-overlapping runtime modes:
+
+- `evidence` is the default and exposes `POST /ra/v1/verify` plus
+  `POST /ra/v1/verify/batch`.
+- `spiffe_identity` is the Argus v2 caller-local authorization mode and exposes
+  `POST /guard/v1/authorize` plus `GET /metrics`.
+
+The SPIFFE authorization request contains `request_id`, `caller_spiffe_id`,
+`target_spiffe_id`, `target_service`, `target_origin`, and optional `operation`
+and `data_class` fields. The response returns `ALLOW` or `DENY` together with a
+decision ID, policy ID, optional rule ID, reason, and expiry time. The
+workload transport is responsible for authenticating the SPIFFE identities
+before it asks Guard to evaluate them. Guard API bearer authentication is
+independent of workload mTLS authentication.
+
 ## Core Interfaces
 
 ### Phase 1: Caller Orchestration And Request Construction
@@ -1207,4 +1224,4 @@ async fn test_evidence_fetcher_http_fetches_successfully() {
 ## Related Documents
 
 - [Architecture](./architecture.md)
-- [Testing And Validation](./tests.md)
+- [Project README](../README.md)
