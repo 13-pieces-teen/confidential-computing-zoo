@@ -75,7 +75,14 @@ function result(payload, label) {
 let sessionID = "";
 for (let attempt = 0; attempt < captureAttempts && !sessionID; attempt += 1) {
   const sessions = result(await request("/api/v1/sessions"), "sessions");
-  for (const session of sessions.slice(0, 100)) {
+  // The sessions list is ordered by session_id, so digit-led UUIDs crowd out
+  // newer letter-led sessions once the store grows beyond 100 entries. Poll
+  // the most recently modified sessions instead of the first 100 by id.
+  const recentSessions = sessions
+    .slice()
+    .sort((a, b) => String(b.mod_time ?? "").localeCompare(String(a.mod_time ?? "")))
+    .slice(0, 100);
+  for (const session of recentSessions) {
     const candidate = String(session.session_id ?? "");
     if (!candidate || candidate.startsWith("memory-store-")) continue;
     let context;
