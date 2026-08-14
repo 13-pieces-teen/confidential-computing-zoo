@@ -1,0 +1,18 @@
+version: v1
+policy_id: argus-dual-tdvm-openviking-v1
+trust_domain: argus.local
+decision_ttl_seconds: __DECISION_TTL_SECONDS__
+rules:
+  - id: openclaw-to-openviking-cmem
+    callers:
+      - spiffe://argus.local/agent/openclaw
+    target_spiffe_id: spiffe://argus.local/service/openviking-cmem
+    target_service: openviking-cmem
+    target_origins:
+      - "__OPENVIKING_ORIGIN__"
+    operations:
+      - memory.read
+      - memory.write
+      - memory.delete
+    data_classes:
+      - sensitive

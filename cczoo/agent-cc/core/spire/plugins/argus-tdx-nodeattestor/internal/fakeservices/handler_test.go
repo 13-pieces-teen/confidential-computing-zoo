@@ -73,11 +73,66 @@ func TestTrusteeRejectsAttestationKeyTargetMismatch(t *testing.T) {
 	}
 }
 
+func TestTrusteeAcceptsTwoConfiguredInstances(t *testing.T) {
+	openclawProvider := newTestHandlerForInstance(t, "tdvm-openclaw-0001", nil)
+	trustee := newTestHandlerForInstance(t, "tdvm-openclaw-0001", []string{
+		"tdvm-openclaw-0001",
+		"tdvm-openviking-0001",
+	})
+	requestBody, requestDigest, keyDigest := testEvidenceRequest(t)
+	evidence := requestEvidence(t, openclawProvider, requestBody)
+	response := requestVerification(t, trustee, verifyRequest{
+		ProtocolVersion: trusteeProtocolVersion,
+		SessionID:       base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, protocol.SessionIDSize)),
+		Evidence:        evidence, EvidenceRequest: requestBody, EvidenceRequestDigest: requestDigest,
+		AttestationKeyDigest: keyDigest, PolicyID: "dual-tdvm-v1", PolicyDigest: testPolicyDigest(),
+	})
+	if response.VerifiedClaims == nil || response.VerifiedClaims.InstanceID != "tdvm-openclaw-0001" {
+		t.Fatalf("response = %#v", response)
+	}
+
+	openvikingProvider := newTestHandlerForInstance(t, "tdvm-openviking-0001", nil)
+	evidence = requestEvidence(t, openvikingProvider, requestBody)
+	response = requestVerification(t, trustee, verifyRequest{
+		ProtocolVersion: trusteeProtocolVersion,
+		SessionID:       base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{2}, protocol.SessionIDSize)),
+		Evidence:        evidence, EvidenceRequest: requestBody, EvidenceRequestDigest: requestDigest,
+		AttestationKeyDigest: keyDigest, PolicyID: "dual-tdvm-v1", PolicyDigest: testPolicyDigest(),
+	})
+	if response.VerifiedClaims == nil || response.VerifiedClaims.InstanceID != "tdvm-openviking-0001" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestTrusteeRejectsUnconfiguredInstance(t *testing.T) {
+	provider := newTestHandlerForInstance(t, "tdvm-other-0001", nil)
+	trustee := newTestHandlerForInstance(t, "tdvm-openclaw-0001", []string{
+		"tdvm-openclaw-0001",
+		"tdvm-openviking-0001",
+	})
+	requestBody, requestDigest, keyDigest := testEvidenceRequest(t)
+	evidence := requestEvidence(t, provider, requestBody)
+	status := verificationStatus(t, trustee, verifyRequest{
+		ProtocolVersion: trusteeProtocolVersion,
+		SessionID:       base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{3}, protocol.SessionIDSize)),
+		Evidence:        evidence, EvidenceRequest: requestBody, EvidenceRequestDigest: requestDigest,
+		AttestationKeyDigest: keyDigest, PolicyID: "dual-tdvm-v1", PolicyDigest: testPolicyDigest(),
+	})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", status, http.StatusUnprocessableEntity)
+	}
+}
+
 func newTestHandler(t *testing.T) *Handler {
+	return newTestHandlerForInstance(t, "tdvm-m3-0001", nil)
+}
+
+func newTestHandlerForInstance(t *testing.T, instanceID string, allowedInstanceIDs []string) *Handler {
 	t.Helper()
 	rtmr0 := "0011"
 	handler, err := NewHandler(Config{
-		InstanceID: "tdvm-m3-0001", TCBStatus: "up_to_date", MRTD: "aabb",
+		InstanceID: instanceID, AllowedInstanceIDs: allowedInstanceIDs,
+		TCBStatus: "up_to_date", MRTD: "aabb",
 		RTMR: map[string]*string{"0": &rtmr0, "1": nil, "2": nil, "3": nil},
 		Now:  func() time.Time { return time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC) },
 	})

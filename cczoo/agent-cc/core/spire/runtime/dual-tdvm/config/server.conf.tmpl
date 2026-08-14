@@ -1,0 +1,57 @@
+server {
+    bind_address = "0.0.0.0"
+    bind_port = 8081
+    socket_path = "/opt/spire/run/server/api.sock"
+    trust_domain = "argus.local"
+    data_dir = "/opt/spire/data/server"
+    log_level = "DEBUG"
+    default_x509_svid_ttl = "10m"
+}
+
+telemetry {
+    Prometheus {
+        host = "0.0.0.0"
+        port = 9988
+    }
+}
+
+plugins {
+    DataStore "sql" {
+        plugin_data {
+            database_type = "sqlite3"
+            connection_string = "/opt/spire/data/server/datastore.sqlite3"
+        }
+    }
+
+    NodeAttestor "argus_tdx" {
+        plugin_cmd = "/opt/spire/plugins/argus-tdx-nodeattestor-server"
+        plugin_checksum = "__SERVER_CHECKSUM__"
+        plugin_data {
+            trustee_url = "https://mock-trustee:18443"
+            trustee_ca_path = "/opt/spire/conf/certs/trustee-ca.pem"
+            trustee_client_cert_path = "/opt/spire/conf/certs/trustee-client.pem"
+            trustee_client_key_path = "/opt/spire/conf/certs/trustee-client-key.pem"
+            trustee_server_name = "trustee.argus.local"
+            trustee_expected_spiffe_id = "spiffe://argus.local/service/trustee"
+            trustee_auth_mode = "mtls_files"
+            policy_path = "/opt/spire/conf/policy.yaml"
+            binding_state_dir = "/opt/spire/data/server/argus-tdx-bindings"
+            challenge_ttl = "30s"
+            verifier_timeout = "15s"
+            max_evidence_bytes = 4194304
+        }
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            keys_path = "/opt/spire/data/server/keys.json"
+        }
+    }
+
+    UpstreamAuthority "disk" {
+        plugin_data {
+            key_file_path = "/opt/spire/conf/certs/upstream-ca-key.pem"
+            cert_file_path = "/opt/spire/conf/certs/upstream-ca.pem"
+        }
+    }
+}

@@ -1,0 +1,54 @@
+name: argus-spire-dual-tdvm-center
+
+services:
+  mock-trustee:
+    image: argus-spire-dual-mock-trustee:local
+    container_name: argus-dual-mock-trustee
+    hostname: trustee.argus.local
+    command:
+      - -listen=0.0.0.0:18443
+      - -tls-cert=/opt/argus/certs/trustee-server.pem
+      - -tls-key=/opt/argus/certs/trustee-server-key.pem
+      - -client-ca=/opt/argus/certs/trustee-ca.pem
+      - -instance-id=${DUAL_OPENCLAW_TDVM_INSTANCE_ID:-tdvm-openclaw-0001}
+      - -instance-id=${DUAL_OPENVIKING_TDVM_INSTANCE_ID:-tdvm-openviking-0001}
+      - -tcb-status=up_to_date
+      - -mrtd=aabb
+      - -rtmr-0=0011
+      - -trustee-status=${DUAL_TRUSTEE_STATUS:-0}
+      - -trustee-delay=${DUAL_TRUSTEE_DELAY:-0s}
+    volumes:
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-server.pem:/opt/argus/certs/trustee-server.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-server-key.pem:/opt/argus/certs/trustee-server-key.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-ca.pem:/opt/argus/certs/trustee-ca.pem:ro"
+    restart: unless-stopped
+    networks:
+      - center
+
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.15.1
+    container_name: argus-dual-spire-server
+    hostname: spire-server
+    depends_on:
+      - mock-trustee
+    command: ["-config", "/opt/spire/conf/server.conf"]
+    volumes:
+      - "${DUAL_RUNTIME_DIR:-./runtime}/conf/server.conf:/opt/spire/conf/server.conf:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/conf/policy.yaml:/opt/spire/conf/policy.yaml:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/upstream-ca-key.pem:/opt/spire/conf/certs/upstream-ca-key.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-ca.pem:/opt/spire/conf/certs/trustee-ca.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-client.pem:/opt/spire/conf/certs/trustee-client.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-client-key.pem:/opt/spire/conf/certs/trustee-client-key.pem:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/plugins:/opt/spire/plugins:ro"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/server-data:/opt/spire/data/server"
+      - "${DUAL_RUNTIME_DIR:-./runtime}/server-run:/opt/spire/run/server"
+    ports:
+      - "${DUAL_SPIRE_BIND_ADDRESS:-0.0.0.0}:${DUAL_SPIRE_SERVER_PORT:-18081}:8081"
+      - "127.0.0.1:${DUAL_SPIRE_METRICS_PORT:-29988}:9988"
+    restart: unless-stopped
+    networks:
+      - center
+
+networks:
+  center: {}

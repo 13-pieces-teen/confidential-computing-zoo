@@ -1,0 +1,42 @@
+agent {
+    data_dir = "/opt/spire/data/__ROLE__-agent"
+    log_level = "DEBUG"
+    server_address = "__SPIRE_SERVER_ADDRESS__"
+    server_port = __SPIRE_SERVER_PORT__
+    socket_path = "/opt/spire/run/__ROLE__/agent.sock"
+    trust_bundle_path = "/opt/spire/conf/certs/upstream-ca.pem"
+    trust_domain = "argus.local"
+}
+
+telemetry {
+    Prometheus {
+        host = "0.0.0.0"
+        port = 9991
+    }
+}
+
+plugins {
+    NodeAttestor "argus_tdx" {
+        plugin_cmd = "/opt/spire/plugins/argus-tdx-nodeattestor-agent"
+        plugin_checksum = "__AGENT_CHECKSUM__"
+        plugin_data {
+            evidence_endpoint = "http://127.0.0.1:18080/ra/v1/evidence"
+            attestation_key_path = "/opt/spire/data/__ROLE__-agent/argus-tdx/attestation-key"
+            evidence_timeout = "10s"
+            max_evidence_bytes = 4194304
+            instance_hint = "__TDVM_INSTANCE_ID__"
+        }
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            directory = "/opt/spire/data/__ROLE__-agent"
+        }
+    }
+
+    WorkloadAttestor "docker" {
+        plugin_data {
+            docker_socket_path = "unix:///var/run/docker.sock"
+        }
+    }
+}

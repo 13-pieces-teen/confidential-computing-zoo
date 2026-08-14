@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,7 +24,7 @@ type options struct {
 	serverCertPath string
 	serverKeyPath  string
 	clientCAPath   string
-	instanceID     string
+	instanceIDs    stringListFlag
 	tcbStatus      string
 	mrtd           string
 	rtmr           [4]string
@@ -41,9 +42,10 @@ func main() {
 func run() error {
 	options := parseFlags()
 	handler, err := fakeservices.NewHandler(fakeservices.Config{
-		InstanceID: options.instanceID,
-		TCBStatus:  options.tcbStatus,
-		MRTD:       options.mrtd,
+		InstanceID:         options.instanceIDs[0],
+		AllowedInstanceIDs: []string(options.instanceIDs),
+		TCBStatus:          options.tcbStatus,
+		MRTD:               options.mrtd,
 		RTMR: map[string]*string{
 			"0": optionalString(options.rtmr[0]),
 			"1": optionalString(options.rtmr[1]),
@@ -97,12 +99,12 @@ func run() error {
 }
 
 func parseFlags() options {
-	var result options
+	result := options{instanceIDs: stringListFlag{"tdvm-v2-0001"}}
 	flag.StringVar(&result.listen, "listen", "0.0.0.0:18443", "Trustee listen address")
 	flag.StringVar(&result.serverCertPath, "tls-cert", "", "Trustee server certificate path")
 	flag.StringVar(&result.serverKeyPath, "tls-key", "", "Trustee server private key path")
 	flag.StringVar(&result.clientCAPath, "client-ca", "", "CA used to verify Trustee clients")
-	flag.StringVar(&result.instanceID, "instance-id", "tdvm-v2-0001", "mock TD instance ID")
+	flag.Var(&result.instanceIDs, "instance-id", "approved mock TD instance ID; repeat for multiple TDVMs")
 	flag.StringVar(&result.tcbStatus, "tcb-status", "up_to_date", "mock TCB status")
 	flag.StringVar(&result.mrtd, "mrtd", "aabb", "mock MRTD")
 	flag.StringVar(&result.rtmr[0], "rtmr-0", "0011", "mock RTMR 0, empty means null")
@@ -114,6 +116,23 @@ func parseFlags() options {
 	flag.DurationVar(&result.trusteeDelay, "trustee-delay", 0, "delay Trustee responses")
 	flag.Parse()
 	return result
+}
+
+type stringListFlag []string
+
+func (values *stringListFlag) Set(value string) error {
+	if value == "" {
+		return fmt.Errorf("instance-id must not be empty")
+	}
+	if len(*values) == 1 && (*values)[0] == "tdvm-v2-0001" {
+		*values = nil
+	}
+	*values = append(*values, value)
+	return nil
+}
+
+func (values *stringListFlag) String() string {
+	return strings.Join(*values, ",")
 }
 
 func loadServerTLS(options options) (*tls.Config, error) {

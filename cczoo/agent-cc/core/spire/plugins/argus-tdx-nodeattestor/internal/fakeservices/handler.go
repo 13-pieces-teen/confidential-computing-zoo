@@ -18,17 +18,18 @@ import (
 const trusteeProtocolVersion = 1
 
 type Config struct {
-	InstanceID     string
-	TCBStatus      string
-	MRTD           string
-	RTMR           map[string]*string
-	DebugEnabled   bool
-	ReplayEvidence bool
-	EvidenceStatus int
-	EvidenceDelay  time.Duration
-	TrusteeStatus  int
-	TrusteeDelay   time.Duration
-	Now            func() time.Time
+	InstanceID         string
+	AllowedInstanceIDs []string
+	TCBStatus          string
+	MRTD               string
+	RTMR               map[string]*string
+	DebugEnabled       bool
+	ReplayEvidence     bool
+	EvidenceStatus     int
+	EvidenceDelay      time.Duration
+	TrusteeStatus      int
+	TrusteeDelay       time.Duration
+	Now                func() time.Time
 }
 
 type Handler struct {
@@ -97,6 +98,14 @@ func NewHandler(config Config) (*Handler, error) {
 	}
 	if config.Now == nil {
 		config.Now = time.Now
+	}
+	if len(config.AllowedInstanceIDs) == 0 {
+		config.AllowedInstanceIDs = []string{config.InstanceID}
+	}
+	for _, instanceID := range config.AllowedInstanceIDs {
+		if instanceID == "" {
+			return nil, fmt.Errorf("allowed instance ID must not be empty")
+		}
 	}
 	return &Handler{config: config, counters: make(map[counterKey]uint64)}, nil
 }
@@ -302,7 +311,7 @@ func (handler *Handler) verify(input verifyRequest) (trustee.VerifiedNodeClaims,
 	if err != nil || !strings.EqualFold(evidence.Quote.ReportData, hex.EncodeToString(reportData[:])) {
 		return trustee.VerifiedNodeClaims{}, fmt.Errorf("report data mismatch")
 	}
-	if claims.ServiceIdentity.InstanceID != handler.config.InstanceID {
+	if !handler.allowsInstance(claims.ServiceIdentity.InstanceID) {
 		return trustee.VerifiedNodeClaims{}, fmt.Errorf("instance ID mismatch")
 	}
 	return trustee.VerifiedNodeClaims{
@@ -312,6 +321,15 @@ func (handler *Handler) verify(input verifyRequest) (trustee.VerifiedNodeClaims,
 		InstanceID: claims.ServiceIdentity.InstanceID, PolicyID: input.PolicyID, PolicyDigest: input.PolicyDigest,
 		AttestationKeyDigest: input.AttestationKeyDigest, EvidenceRequestDigest: input.EvidenceRequestDigest,
 	}, nil
+}
+
+func (handler *Handler) allowsInstance(instanceID string) bool {
+	for _, allowed := range handler.config.AllowedInstanceIDs {
+		if instanceID == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (handler *Handler) cachedEvidence() []byte {
