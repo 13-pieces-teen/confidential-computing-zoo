@@ -359,7 +359,7 @@ BindingClaims = {
 }
 ```
 
-字段语义与 [Argus API](../core/argus/docs/api.md) 保持一致；上面的 wire schema 冻结类型、可空性和嵌套结构，Argus API 负责更完整的业务说明。
+字段语义与 [Argus API](../../../core/argus/docs/api.md) 保持一致；上面的 wire schema 冻结类型、可空性和嵌套结构，Argus API 负责更完整的业务说明。
 
 TDX 写入规则固定为：
 
@@ -454,7 +454,7 @@ ServerChallenge 中携带完整的 Argus `EvidenceRequest`。建议映射为：
 - `target.target_uri` 中的摘要是 raw Ed25519 public key 的 SHA-256 小写十六进制；
 - `requested_claims` 固定按 `TeeQuote`、`IdentityClaims` 排序；
 - `profile_digest` 必须出现且非 `null`；
-- 其余字段类型和可空性遵循 [Argus API](../core/argus/docs/api.md) 的 `EvidenceRequest`，未知字段被拒绝。
+- 其余字段类型和可空性遵循 [Argus API](../../../core/argus/docs/api.md) 的 `EvidenceRequest`，未知字段被拒绝。
 
 Evidence Provider 继续使用 Argus 已定义的绑定算法：
 
@@ -1284,5 +1284,5 @@ M0 至 M5 是自定义 NodeAttestor v2 的主路线。M6 是后续生命周期�
 - [SPIRE 1.15.1 Docker WorkloadAttestor](https://github.com/spiffe/spire/blob/v1.15.1/doc/plugin_agent_workloadattestor_docker.md)
 - [SPIRE 1.15.1 Docker WorkloadAttestor selector implementation](https://github.com/spiffe/spire/blob/v1.15.1/pkg/agent/plugin/workloadattestor/docker/docker.go)
 - [SPIRE 1.15.1 Unix WorkloadAttestor](https://github.com/spiffe/spire/blob/v1.15.1/doc/plugin_agent_workloadattestor_unix.md)
-- [Argus API](../core/argus/docs/api.md)
-- [Argus architecture](../core/argus/docs/architecture.md)
+- [Argus API](../../../core/argus/docs/api.md)
+- [Argus architecture](../../../core/argus/docs/architecture.md)

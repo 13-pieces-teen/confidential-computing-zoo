@@ -1,10 +1,15 @@
 # OpenViking Workload Attestation 架构逻辑与工作流
 
-> 状态：架构逻辑基线
+> 状态：Broker Sidecar 决策前的架构逻辑记录
 >
 > 来源：[自定义 SPIRE WorkloadAttestor 与 TC-API 集成技术方案研讨会会议纪要](./Custom-Workload-Attestor-TC-API-Meeting-Notes-CN.md)
 >
 > 文档边界：本文只说明整体架构、组件关系以及时间与触发顺序，不定义协议字段、接口格式、selector 形式或具体实现。
+>
+> 后续决策：文中的“OpenViking Python 直接调用 Workload API 并持有 SVID”已经由
+> [Broker Sidecar 当前架构](./Argus-Asymmetric-Attestation-SPIFFE-Architecture.md)
+> 取代。Node Attestation、TC-API、Evidence Provider、Trustee、selector 与静态
+> Registration Entry 的整体逻辑仍作为历史背景保留。
 
 ## 1. 文档目的
 

@@ -1,5 +1,9 @@
 # Argus 非对称 SPIFFE E3–E7 评估 —— 原始证据清单与校验
 
+> **历史证据清单：** 本清单只对应 2026-08-10
+> [旧 Profile 评估报告](./Argus-Asymmetric-Attestation-SPIFFE-Benchmark-Report.md)，
+> 不包含当前 Broker Sidecar 的远程运行证据。
+>
 > 全部结果只属于 **Mock Evidence Provider + Mock Trustee** 软件链路；不代表真实 TDX Quote/QGS、
 > production Trustee、多 Agent、或生产容量结论。本清单只含文件路径、大小与 SHA256 摘要，
 > **不含任何密钥/证书/凭据内容**（生成前已做秘密模式扫描，命中即拒绝输出）。

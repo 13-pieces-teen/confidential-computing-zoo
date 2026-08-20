@@ -1,5 +1,8 @@
 # E8：多 OpenClaw 对单 OpenViking 的真实 LLM Agent 任务评估报告
 
+> **历史运行快照：** 本报告基于旧 OpenViking Python TLS/materializer Profile，
+> 不验证当前 Broker Sidecar 链路。
+>
 > 评估对象：`multi_openclaw_real_llm_shared_x509pop_agent`（单 OpenViking、多 OpenClaw、共享 x509pop SPIRE Agent、Mock Evidence Provider + Mock Trustee）。
 > 本报告是当前配置下的探索性快照，不代表生产容量或真实 Quote/QGS 性能。
 

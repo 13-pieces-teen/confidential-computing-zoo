@@ -5,6 +5,10 @@
 > 会议时段：00:00:48—00:52:16，约 51 分钟
 > 参会人：Speaker 1、Speaker 2（原始转写未提供姓名）
 > 文档性质：经术语校正和语义整理的会议纪要，不是实现完成证明或最终协议规范
+> 后续决策：OpenViking Python 直接调用 Workload API 的讨论已被 Broker Sidecar
+> 方案取代；当前实现以
+> [Argus 非对称 Attestation-backed SPIFFE 架构](./Argus-Asymmetric-Attestation-SPIFFE-Architecture.md)
+> 为准
 
 ## 一、会议目标
 

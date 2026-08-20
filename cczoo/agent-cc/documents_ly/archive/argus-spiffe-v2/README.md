@@ -5,7 +5,8 @@
 
 当前主方案：
 
-- [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../../Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)
+- [Argus 非对称 Attestation-backed SPIFFE 架构](../../Argus-Asymmetric-Attestation-SPIFFE-Architecture.md)
+- [documents_ly 文档索引](../../README.md)
 
 归档内容：
 
@@ -18,4 +19,4 @@
 | `Argus-SPIFFE-v2-Evaluation-and-Capacity-Plan.md` | 基于代理链路的旧评测合同，需按direct Profile重写后才能重新启用 |
 
 归档文件仍保留历史结论和证据边界。引用它们时应注明对应提交、Profile、Mock/Real
-状态和验证日期，不得用历史PASS替代当前`argus-initial-direct` Profile的远程验收。
+状态和验证日期，不得用历史 PASS 替代当前 Broker Sidecar Profile 的远程验收。

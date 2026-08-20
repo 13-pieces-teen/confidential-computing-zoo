@@ -4,7 +4,7 @@
 >
 > 本文原有正式 C 类样本以 Guard-gated mTLS Egress Proxy 为固定前置条件。默认
 > 威胁模型现已由
-> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../../Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)
+> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)
 > 调整为 `argus-initial-direct`：受信 OpenClaw caller-side Guard 加应用原生
 > SPIFFE mTLS。本文的指标合同和容量方法仍可复用，但 hardening gate、G0-G3、
 > proxy/source-IP 指标和正式 C 类拓扑需要在 direct Profile 实现前按新方案修订；

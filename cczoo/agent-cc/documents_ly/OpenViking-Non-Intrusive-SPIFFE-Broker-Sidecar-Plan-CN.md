@@ -6,9 +6,15 @@
 | --- | --- |
 | 方案目标 | 不修改 OpenViking 上游 Python 业务源码，对实际运行的 OpenViking Python 进程完成 Workload Attestation，并由 sidecar 代表它进行 SPIFFE mTLS |
 | 主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
-| 当前仓库基线 | SPIRE 1.15.1；OpenViking 容器内由 `argus-svid-materializer` 调普通 Workload API，再由 Python ASGI wrapper 使用落盘证书 |
-| 文档性质 | 目标架构与落地计划，不代表当前代码已实现或真实 TDX 环境已验收 |
-| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental，需要在升级验证后使用 |
+| 当前仓库基线 | SPIRE 1.15.2；Broker Sidecar、自定义 WorkloadAttestor 和 Mock ALLOW/DENY 链路已经实现 |
+| 文档性质 | 方案决策与详细设计记录；当前实现状态和执行命令以架构文档及实施方案为准 |
+| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental；当前实现仍需完成远程 Linux/TDVM 验证 |
+
+> 当前状态：本机单元、交叉编译和静态检查已经完成；远程 Linux/TDVM 的 Broker
+> ALLOW、DENY、PID namespace、pidfd 与完整 mTLS 链路待验证。本文中的阶段性实施
+> 描述用于保留设计过程，不应覆盖
+> [当前架构](./Argus-Asymmetric-Attestation-SPIFFE-Architecture.md)和
+> [当前实施方案](./Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md)。
 
 ### 方案决策
 
@@ -84,14 +90,17 @@ type.googleapis.com/spiffe.broker.WorkloadPIDReference
 
 ### 3.2 版本决定
 
-当前仓库使用 SPIRE 1.15.1，而 Broker Endpoint/API 在 SPIRE 1.15.2 中加入。因此目标方案要求：
+当前仓库已经将 SPIRE Agent/Server 和新 WorkloadAttestor Plugin SDK 统一到 1.15.2：
 
 ```text
-SPIRE Agent/Server: 1.15.1 -> 1.15.2
+SPIRE Agent/Server: 1.15.2
 新 WorkloadAttestor Plugin SDK: 1.15.2
 ```
 
-现有 `argus_tdx` NodeAttestor 不因 Broker API 被强制改写；先验证它与1.15.2 Agent的兼容性，只有确有需要时再单独升级其依赖。按照 SPIRE 官方版本兼容规则，应先升级 Server，再升级 Agent，避免 Agent 高于它连接的最旧 Server。Broker API 在1.15.2中仍属于 experimental。升级后必须先完成配置校验、插件兼容性测试和mock E2E，再进入真实TDVM验证。整个OpenViking身份链只按Broker API实现。
+现有 `argus_tdx` NodeAttestor 没有因 Broker API 被改写。本机插件测试、配置检查和
+Mock 软件链路检查已经完成；Broker API 在 1.15.2 中仍属于 experimental，因此完整
+兼容性结论要以远程 Linux/TDVM 验证为准。整个 OpenViking 身份链只按 Broker API
+实现。
 
 ## 4. 总体架构
 

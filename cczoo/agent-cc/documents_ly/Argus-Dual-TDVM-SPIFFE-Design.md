@@ -1,7 +1,8 @@
 # Argus 双 TDVM Attestation-backed SPIFFE 架构设计
 
-> 状态：代码部署骨架已实现，尚未在双 TDVM 远程主机跑通或验收
+> 状态：备选架构；代码部署骨架已实现，尚未在双 TDVM 远程主机跑通或验收
 > 范围：OpenClaw 与 OpenViking 分别运行在独立 Intel TDX TDVM 中，并取得各自独立的、由远程证明支撑的 SPIFFE workload identity
+> 当前关系：不属于 Broker Sidecar 当前主线，也不作为当前方案的回退路径
 
 对应实现位于 `core/spire/runtime/dual-tdvm/`。当前实现使用 Mock Evidence
 Provider/Trustee；远程执行顺序和验收命令见该目录的 `README.md`。

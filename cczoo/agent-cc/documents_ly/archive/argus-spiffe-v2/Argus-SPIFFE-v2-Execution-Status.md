@@ -2,7 +2,7 @@
 
 > **归档状态（2026-08-07）**：本文是早期完成度快照，不代表当前默认架构或当前验收状态。
 > 当前主方案见
-> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../../Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)。
+> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)。
 
 ## 1. 报告信息
 

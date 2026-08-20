@@ -1,5 +1,11 @@
 # Argus Asymmetric Attestation + SPIFFE/SPIRE — Remote Validation Report
 
+> **历史证据：** 本报告验证的是 2026-08-10 对应提交中的 OpenViking Python
+> ASGI TLS/materializer Profile，不包含后来实现的 Broker Sidecar、
+> WorkloadPIDReference 或自定义 WorkloadAttestor。报告中的 PASS 不能作为当前
+> Broker Sidecar 链路的远程验收结果；当前状态见
+> [实施与远程验证方案](./Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md)。
+
 - **Profile:** `Argus-Asymmetric-Attestation-SPIFFE` (asymmetric: OpenClaw attested by **x509pop**, OpenViking attested by the custom **argus_tdx** NodeAttestor)
 - **Host:** remote Linux TDX host, working dir `/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc`
 - **Branch:** `feat/argus-spiffe-v2`

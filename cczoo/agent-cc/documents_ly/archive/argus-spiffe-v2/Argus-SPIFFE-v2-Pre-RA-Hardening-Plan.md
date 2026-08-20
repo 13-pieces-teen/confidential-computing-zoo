@@ -4,7 +4,7 @@
 >
 > 本文保留为已实现 Pre-RA 能力和 `enhanced-enforcement` Profile 的历史执行基线。
 > 默认 Argus 核心威胁模型、无代理目标架构和后续实施优先级已由
-> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../../Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)
+> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)
 > 重新冻结。本文中的 WP1 同请求代理门控、WP2 Egress 网络链和 WP3-WP7 完整
 > hardening gate 不再共同构成默认 Argus initial direct Profile 的完成前置条件。
 
@@ -29,8 +29,8 @@
 
 它不等于真实 TDX 远程证明或生产安全闭环完成。当前状态和远程证据分别见：
 
-- [Argus-SPIFFE-v2-Remote-TDX-Verification-Report.md](../../Argus-SPIFFE-v2-Remote-TDX-Verification-Report.md)
-- [Argus-SPIFFE-v2-Implementation.md](../../Argus-SPIFFE-v2-Implementation.md)
+- [Argus-SPIFFE-v2-Remote-TDX-Verification-Report.md](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Remote-TDX-Verification-Report.md)
+- [Argus-SPIFFE-v2-Implementation.md](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Implementation.md)
 - [Argus-SPIFFE-v2-Execution-Status.md](Argus-SPIFFE-v2-Execution-Status.md)
 
 ### 1.1 当前实施快照

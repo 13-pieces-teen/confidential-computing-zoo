@@ -22,7 +22,7 @@ SPIFFE 身份、mTLS、Guard 和 sandbox 隔离工作，而是重新划分它们
 5. **真实 RA 阶段**：Real Quote/QGS、Production Trustee 和正式 TCB policy。
 
 本文现已取代已归档的
-[Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md](archive/argus-spiffe-v2/Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md)
+[Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md](../argus-spiffe-v2/Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md)
 作为后续架构和实施优先级的主方案。旧计划和远程报告继续作为已经实现能力、
 历史验证和增强 Profile 的证据，不再作为默认链路的完成定义。
 
@@ -48,9 +48,9 @@ SPIFFE 身份、mTLS、Guard 和 sandbox 隔离工作，而是重新划分它们
 
 当前Guard无需重写为完整的OpenClaw进程内SDK。仓库已经存在可复用的两层实现：
 
-- [`argus` library](../core/argus/src/engine.rs)：`ArgusEngine`、Evidence Fetcher、
+- [`argus` library](../../../core/argus/src/engine.rs)：`ArgusEngine`、Evidence Fetcher、
   Verifier和`PolicyEvaluatorTrait`抽象；
-- [`guard` binary](../core/argus/src/bin/guard.rs)：Axum服务、`POST /ra/v1/verify`、
+- [`guard` binary](../../../core/argus/src/bin/guard.rs)：Axum服务、`POST /ra/v1/verify`、
   `POST /ra/v1/verify/batch`、`GET /health`、结构化日志、decision receipt和TTL。
 
 现有实现可直接保留其服务框架、ALLOW/DENY响应、`decision_id`、`expires_at_unix`

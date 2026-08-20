@@ -1,12 +1,16 @@
 # Argus 多 OpenClaw 真实 LLM Agent 任务评估方案
 
+> 历史状态：本文是旧 OpenViking Python TLS/materializer Profile 的 E8
+> 评估合同。多个 pilot 已执行，但正式 C1/C2/C4/C8 矩阵未完成；当前 Broker Sidecar
+> 完成功能验收前不直接复用其中的结果。
+>
 > 前置评估：[Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md](./Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md)
 >
 > 当前基准结果：[Argus-Asymmetric-Attestation-SPIFFE-Benchmark-Report.md](./Argus-Asymmetric-Attestation-SPIFFE-Benchmark-Report.md)
 >
 > 真实业务 E2E：[verify-openclaw-plugin-e2e.sh](../core/spire/runtime/asymmetric/scripts/verify-openclaw-plugin-e2e.sh)
 >
-> 文档状态：**方案已确定，尚未实现或执行 E8 正式测试**
+> 文档状态：**历史评估方案；pilot 已执行，E8 正式矩阵未完成**
 
 ## 1. 文档目的
 

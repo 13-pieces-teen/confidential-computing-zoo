@@ -2,7 +2,7 @@
 
 > **归档状态（2026-08-07）**：早期双Agent与Mock阶段执行基线，不再定义当前计划。
 > 当前主方案见
-> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../../Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)。
+> [Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Threat-Model-Realignment-Plan.md)。
 
 ## 1. 文档目的
 
@@ -673,5 +673,5 @@ core/spire/plugins/argus-tdx-nodeattestor/cmd/mock-trustee/
 
 - [SPIRE - Configuring node attestation](https://spiffe.io/docs/latest/deploying/configuring/)
 - [SPIRE Agent configuration reference](https://spiffe.io/docs/latest/deploying/spire_agent/)
-- [Argus-SPIFFE Integration](../../Argus-SPIFFE-Integration.md)
-- [Argus-SPIFFE v2 Implementation](../../Argus-SPIFFE-v2-Implementation.md)
+- [Argus-SPIFFE Integration](../pre-asymmetric-architecture/Argus-SPIFFE-Integration.md)
+- [Argus-SPIFFE v2 Implementation](../pre-asymmetric-architecture/Argus-SPIFFE-v2-Implementation.md)

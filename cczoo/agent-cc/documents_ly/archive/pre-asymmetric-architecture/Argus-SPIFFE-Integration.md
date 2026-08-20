@@ -124,7 +124,7 @@ SPIFFE/SPIRE 不替代 Argus，而是把一次成功的节点准入转化为可�
 
 ## 4. 系统架构
 
-![Argus-SPIFFE 目标架构：TDX 节点证明、SPIRE 身份签发与运行时授权](assets/argus-spiffe-target-architecture.svg)
+> 历史 SVG 未随归档保留；下方 Mermaid 是该架构图的可编辑源。
 
 <details>
 <summary>查看可编辑 Mermaid 源图</summary>

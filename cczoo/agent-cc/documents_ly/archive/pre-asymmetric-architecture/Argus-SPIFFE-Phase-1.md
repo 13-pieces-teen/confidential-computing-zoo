@@ -2,8 +2,8 @@
 
 > 历史文档：本文件记录已移除的单 Agent Join Token阶段。文中的
 > `core/spire/conf/agent.conf`、`server.conf` 和相关启动命令不再是可执行
-> 入口。正式实现请使用
-> [`core/spire/v2/README.md`](../core/spire/v2/README.md)。
+> 入口。当前实现请从
+> [documents_ly 文档索引](../../README.md)进入。
 
 ## 1. 文档说明
 

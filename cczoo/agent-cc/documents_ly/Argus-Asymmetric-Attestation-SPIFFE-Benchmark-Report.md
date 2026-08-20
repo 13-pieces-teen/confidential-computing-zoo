@@ -1,5 +1,10 @@
 # Argus 非对称 SPIFFE 远程评估报告（E3–E7，Mock RA + Mock Trustee）
 
+> **历史证据：** 本报告测量的是 2026-08-10 旧 OpenViking
+> Python TLS/materializer Profile。数据继续保留，但不能外推为当前 Broker Sidecar
+> 的功能、轮换、资源或容量结果。Broker Sidecar 的评估方法以
+> [当前评估方案](./Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md)为准。
+>
 > 对应评估方案：[Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md](./Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md)
 >
 > 功能验收报告：[Argus-Asymmetric-Attestation-SPIFFE-Remote-Validation-Report.md](./Argus-Asymmetric-Attestation-SPIFFE-Remote-Validation-Report.md)
