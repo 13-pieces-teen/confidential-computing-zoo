@@ -166,5 +166,5 @@ printf '%s\n' \
     "OpenViking image config digest: $openviking_digest" \
     "OpenViking Broker image config digest: $openviking_broker_digest"
 spire_server entry show -entryID dual-openclaw-workload
-spire_server entry show -entryID dual-openviking-broke
+spire_server entry show -entryID dual-openviking-broker
 spire_server entry show -entryID dual-openviking-target

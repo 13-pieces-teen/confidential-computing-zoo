@@ -471,21 +471,18 @@ class LaunchServiceMixin:
                 tlog.add_entry(record_id, Entry(key=EventEntryKey.launch_result.value, value="failed"))
                 return False
 
-            # docker ps -q --latest
-            getID = [DOCKER_CMD, "ps", "-q", "--latest"]
-            getID_res = subprocess.run(getID, capture_output=True, text=True)
-            if getID_res.returncode == 0:
-                containerID = getID_res.stdout.strip()
+            containerID = dockerRUn.stdout.strip()
+            if containerID:
                 logger.info(f"Success get image ID {containerID}")
-                tlog.add_entry(record_id, Entry(key="getContainerID_cmd", value={"getContainerID_cmd": " ".join(getID),
+                tlog.add_entry(record_id, Entry(key="getContainerID_cmd", value={"getContainerID_cmd": " ".join(docker_cmd),
                                      "getContainerID_status": "success",
                                      "getID_stdout": containerID
                                      }))
                 tlog.add_entry(record_id, Entry(key=EventEntryKey.instance_id.value, value=containerID))
             else:
-                logger.info("Failed get container ID.")
+                logger.info("Docker run returned an empty container ID.")
                 tlog.add_entry(record_id, Entry(key="getContainerID_status", value={"getContainerID_status": "failed",
-                                     "getID_stderr": getID_res.stderr
+                                     "getID_stderr": "docker run returned an empty container ID"
                                      }))
                 return False
             

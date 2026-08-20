@@ -121,11 +121,11 @@ build_go_binary() {
 download_go_dependencies "$NODE_PLUGIN_MODULE_DIR"
 download_go_dependencies "$WORKLOAD_PLUGIN_MODULE_DIR"
 build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/agent argus-tdx-nodeattestor-agent
-build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/server argus-tdx-nodeattestor-serve
-build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/mock-evidence-provider mock-evidence-provide
+build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/server argus-tdx-nodeattestor-server
+build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/mock-evidence-provider mock-evidence-provider
 build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/mock-trustee mock-trustee
 build_go_binary "$WORKLOAD_PLUGIN_MODULE_DIR" \
-    ./cmd/argus-tdx-workloadattestor argus-tdx-workloadattesto
+    ./cmd/argus-tdx-workloadattestor argus-tdx-workloadattestor
 chmod 0755 "$RUNTIME_DIR/plugins"/*
 
 generate_ca() {

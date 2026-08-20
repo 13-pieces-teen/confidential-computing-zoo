@@ -101,7 +101,7 @@ if (( $(agent_count) != after_first )); then
     exit 1
 fi
 
-server_metrics="$(curl -fsS "http://127.0.0.1:${M3_SERVER_METRICS_PORT:-29988}/metrics")"
+server_metrics="$(curl -fsS "http://127.0.0.1:${M3_SERVER_METRICS_PORT:-39988}/metrics")"
 require_metric() {
     local expected="$1"
     if ! grep -Fq "$expected" <<<"$server_metrics"; then

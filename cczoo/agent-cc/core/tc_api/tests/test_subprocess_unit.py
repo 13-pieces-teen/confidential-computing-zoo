@@ -427,7 +427,6 @@ async def test_launch_containers_normalizes_local_oci_image_id(docker_service, t
     results = [
         SimpleNamespace(returncode=0, stdout="copied", stderr=""),
         SimpleNamespace(returncode=0, stdout="loaded", stderr=""),
-        SimpleNamespace(returncode=0, stdout="started", stderr=""),
         SimpleNamespace(returncode=0, stdout="container-1\n", stderr=""),
         SimpleNamespace(returncode=0, stdout="running\n", stderr=""),
     ]
@@ -447,5 +446,7 @@ async def test_launch_containers_normalizes_local_oci_image_id(docker_service, t
     assert launched == [{"container_ID": "container-1", "container_Status": "running"}]
     first_cmd = run_mock.call_args_list[0].args[0]
     third_cmd = run_mock.call_args_list[2].args[0]
+    assert run_mock.call_count == 4
     assert first_cmd[-1].endswith(":tc-api-launch-123:latest")
     assert third_cmd[-1] == "tc-api-launch-123:latest"
+    assert all(call.args[0][1:4] != ["ps", "-q", "--latest"] for call in run_mock.call_args_list)
