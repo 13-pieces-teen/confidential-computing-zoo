@@ -118,7 +118,11 @@ wait_for_agent() {
 
 wait_for_svid() {
     local expected_id="$1"
-    for _ in $(seq 1 45); do
+    # The OpenClaw gateway materializes its first SVID only after its own
+    # startup sequence completes (config/sandbox init), which can take a
+    # couple of minutes on a cold TDVM. Give the workload API plenty of
+    # time before declaring failure.
+    for _ in $(seq 1 180); do
         if remote_sudo /usr/local/bin/docker exec "$WORKLOAD_CONTAINER" \
             grep -q "\"spiffe_id\": \"$expected_id\"" \
             /run/argus-svid/status.json >/dev/null 2>&1; then
@@ -127,7 +131,7 @@ wait_for_svid() {
         read -r -t 1 _ || true
     done
     remote_sudo /usr/local/bin/docker logs --tail 120 "$WORKLOAD_CONTAINER" >&2 || true
-    fail "workload did not receive $expected_id"
+    fail "workload did not receive $expected_id within 180s"
 }
 
 deploy_agent() {
@@ -315,6 +319,15 @@ guard_container=argus-dual-openclaw-guard
 
 $docker network inspect "$network" >/dev/null 2>&1 \
     || $docker network create "$network" >/dev/null
+# dockerd runs with --ip-masq=false, so workload traffic leaving the TDVM's
+# slirp NIC is never NATed and business requests to the host relay (10.0.2.2)
+# time out. Masquerade the workload bridge for container egress.
+bridge_subnet="$($docker network inspect "$network" --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}')"
+slirp_nic="$(ip route | awk '/^default/ {print $5; exit}')"
+if [[ -n "$bridge_subnet" && -n "$slirp_nic" ]]; then
+    iptables -t nat -C POSTROUTING -s "$bridge_subnet" -o "$slirp_nic" -j MASQUERADE 2>/dev/null \
+        || iptables -t nat -A POSTROUTING -s "$bridge_subnet" -o "$slirp_nic" -j MASQUERADE
+fi
 $docker rm -f "$workload_container" "$guard_container" >/dev/null 2>&1 || true
 $docker run -d \
     --name "$guard_container" \
@@ -377,8 +390,9 @@ NODE
 }
 
 start_openviking() {
-    local port state_dir
+    local port state_dir network
     port="${DUAL_OPENVIKING_PORT:-1943}"
+    network="${DUAL_OPENVIKING_NETWORK:-argus-dual-openviking}"
     state_dir="/var/lib/argus-spire-dual/openviking-state"
     remote_sudo test -S "$REMOTE_RUN/agent.sock" \
         || fail 'OpenViking Workload API socket is missing; deploy its Agent first'
@@ -388,10 +402,17 @@ start_openviking() {
         || fail "image is not loaded in OpenViking TDVM: $WORKLOAD_IMAGE"
 
     remote_sudo /usr/local/bin/docker rm -f "$WORKLOAD_CONTAINER" >/dev/null 2>&1 || true
+    # The TDVM's static dockerd runs with --bridge=none, so the default bridge
+    # network does not exist and a bare -p publish silently allocates no ports.
+    # Put the workload on a dedicated user bridge (the same pattern the
+    # OpenClaw workload uses) so docker-proxy can publish the mTLS port.
+    remote_sudo /usr/local/bin/docker network inspect "$network" >/dev/null 2>&1 \
+        || remote_sudo /usr/local/bin/docker network create "$network" >/dev/null
     remote_sudo /usr/local/bin/docker run -d \
         --name "$WORKLOAD_CONTAINER" \
         --restart unless-stopped \
         --label argus.workload=openviking-cmem \
+        --network "$network" \
         -p "0.0.0.0:$port:1943" \
         -v "$REMOTE_RUN:/opt/spire/run/openviking:ro" \
         -v "$state_dir:/app/.openviking" \

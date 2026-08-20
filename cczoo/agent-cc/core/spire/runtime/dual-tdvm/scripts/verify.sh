@@ -59,7 +59,12 @@ make_ssh_options() {
         -o "UserKnownHostsFile=$known_hosts"
         -p "$port"
     )
-    [[ -n "$identity" ]] && destination+=(-i "$identity")
+    # Use an if so the function returns 0 when no identity is configured;
+    # a bare "[[ ]] &&" here makes the function exit 1 and, under set -e,
+    # silently aborts plain-statement remote_sudo calls.
+    if [[ -n "$identity" ]]; then
+        destination+=(-i "$identity")
+    fi
 }
 
 remote_sudo() {
@@ -149,12 +154,74 @@ with socket.create_connection(("127.0.0.1", 1943), timeout=5) as raw:
 PY
 
 remote_sudo openclaw "$OPENCLAW_TARGET" \
-    /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - "$OPENVIKING_ORIGIN" <<'NODE'
+    /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - \
+    "$OPENVIKING_ORIGIN" "$OPENCLAW_ID" "$OPENVIKING_ID" <<'NODE'
+const fs = require("fs");
+const https = require("https");
+
 const origin = process.argv[2];
-for (const path of ["/health", "/ready"]) {
-  const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(10000) });
-  if (!response.ok) throw new Error(`OpenViking ${path} returned HTTP ${response.status}`);
+const callerId = process.argv[3];
+const targetId = process.argv[4];
+
+(async () => {
+// The caller-local Guard must ALLOW the exact caller/target pair before any
+// business request leaves the OpenClaw workload.
+const guardToken = fs.readFileSync("/run/secrets/argus_guard_api_token", "utf8").trim();
+const guardResponse = await fetch(process.env.ARGUS_GUARD_URL, {
+  method: "POST",
+  headers: { authorization: `Bearer ${guardToken}`, "content-type": "application/json" },
+  body: JSON.stringify({
+    request_id: `dual-tdvm-verify-${process.pid}`,
+    caller_spiffe_id: callerId,
+    target_spiffe_id: targetId,
+    target_service: process.env.ARGUS_TARGET_SERVICE,
+    target_origin: origin,
+    operation: "memory.read",
+    data_class: process.env.ARGUS_GUARD_DATA_CLASS,
+  }),
+  signal: AbortSignal.timeout(5000),
+});
+if (!guardResponse.ok) throw new Error(`Guard authorize returned HTTP ${guardResponse.status}`);
+const guardDecision = await guardResponse.json();
+if (guardDecision.decision !== "ALLOW") {
+  throw new Error(`Guard denied the request: ${JSON.stringify(guardDecision)}`);
 }
+
+// Direct SPIFFE mTLS: present the materialized workload SVID and verify the
+// OpenViking server SVID chain plus its exact SPIFFE ID (URI SAN).
+const url = new URL(origin);
+const tls = {
+  key: fs.readFileSync("/run/argus-svid/svid-key.pem"),
+  cert: fs.readFileSync("/run/argus-svid/svid.pem"),
+  ca: fs.readFileSync("/run/argus-svid/bundle.pem"),
+  checkServerIdentity: (_hostname, certificate) => {
+    const uris = (certificate.subjectaltname || "")
+      .split(/,\s*/)
+      .filter((entry) => entry.startsWith("URI:"))
+      .map((entry) => entry.slice(4));
+    if (!uris.includes(targetId)) {
+      return new Error(
+        `OpenViking TLS peer SPIFFE ID mismatch: expected ${targetId}, got ${uris.join(",") || "none"}`
+      );
+    }
+  },
+};
+for (const path of ["/health", "/ready"]) {
+  const status = await new Promise((resolve, reject) => {
+    const request = https.get(url, { path, servername: url.hostname, timeout: 10000, ...tls }, (response) => {
+      response.resume();
+      resolve(response.statusCode);
+    });
+    request.on("timeout", () => request.destroy(new Error(`OpenViking ${path} timed out`)));
+    request.on("error", reject);
+  });
+  if (status !== 200) throw new Error(`OpenViking ${path} returned HTTP ${status}`);
+  console.log(`Guard ALLOW -> direct SPIFFE mTLS ${path} -> HTTP ${status}`);
+}
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
 NODE
 
 printf '%s\n' \

@@ -53,7 +53,11 @@ make_ssh_options() {
         -o "UserKnownHostsFile=$known_hosts"
         -p "$port"
     )
-    [[ -n "$identity" ]] && destination+=(-i "$identity")
+    # Use an if so the function returns 0 when no identity is configured
+    # (a bare "[[ ]] &&" here exits 1 and trips set -e in callers).
+    if [[ -n "$identity" ]]; then
+        destination+=(-i "$identity")
+    fi
 }
 
 remote_image_digest() {
