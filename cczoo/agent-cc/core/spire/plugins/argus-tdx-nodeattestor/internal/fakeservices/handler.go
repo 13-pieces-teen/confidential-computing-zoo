@@ -20,6 +20,9 @@ const trusteeProtocolVersion = 1
 type Config struct {
 	InstanceID         string
 	AllowedInstanceIDs []string
+	WorkloadID         string
+	WorkloadPolicyID   string
+	WorkloadDecision   string
 	TCBStatus          string
 	MRTD               string
 	RTMR               map[string]*string
@@ -84,6 +87,48 @@ type verifyResponse struct {
 	ExpiresAt             string                      `json:"expires_at"`
 }
 
+type workloadEvidenceRequest struct {
+	ProtocolVersion int    `json:"protocol_version"`
+	Nonce           string `json:"nonce"`
+	PID             int32  `json:"pid"`
+}
+
+type workloadEvidenceDocument struct {
+	ProtocolVersion   int               `json:"protocol_version"`
+	Nonce             string            `json:"nonce"`
+	PID               int32             `json:"pid"`
+	WorkloadID        string            `json:"workload_id"`
+	PolicyID          string            `json:"policy_id"`
+	LaunchID          string            `json:"launch_id"`
+	ContainerID       string            `json:"container_id"`
+	ProcessStartTime  string            `json:"process_start_time"`
+	ImageConfigDigest string            `json:"image_config_digest"`
+	RekorUUID         string            `json:"rekor_uuid"`
+	Quote             workloadFakeQuote `json:"quote"`
+}
+
+type workloadFakeQuote struct {
+	Format string `json:"format"`
+	Body   string `json:"body"`
+}
+
+type workloadVerifyRequest struct {
+	ProtocolVersion int             `json:"protocol_version"`
+	Nonce           string          `json:"nonce"`
+	PID             int32           `json:"pid"`
+	Evidence        json.RawMessage `json:"evidence"`
+}
+
+type workloadVerifyResponse struct {
+	ProtocolVersion int    `json:"protocol_version"`
+	Nonce           string `json:"nonce"`
+	PID             int32  `json:"pid"`
+	Decision        string `json:"decision"`
+	StableErrorCode string `json:"stable_error_code"`
+	WorkloadID      string `json:"workload_id"`
+	PolicyID        string `json:"policy_id"`
+}
+
 func NewHandler(config Config) (*Handler, error) {
 	if config.InstanceID == "" || config.TCBStatus == "" || config.MRTD == "" {
 		return nil, fmt.Errorf("instance ID, TCB status, and MRTD are required")
@@ -107,6 +152,12 @@ func NewHandler(config Config) (*Handler, error) {
 			return nil, fmt.Errorf("allowed instance ID must not be empty")
 		}
 	}
+	if config.WorkloadID == "" || config.WorkloadPolicyID == "" {
+		return nil, fmt.Errorf("workload ID and workload policy ID are required")
+	}
+	if config.WorkloadDecision != "allow" && config.WorkloadDecision != "deny" {
+		return nil, fmt.Errorf("workload decision must be allow or deny")
+	}
 	return &Handler{config: config, counters: make(map[counterKey]uint64)}, nil
 }
 
@@ -114,8 +165,12 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 	switch request.URL.Path {
 	case "/ra/v1/evidence":
 		handler.handleEvidence(writer, request)
+	case "/ra/v1/workload-evidence":
+		handler.handleWorkloadEvidence(writer, request)
 	case "/v1/verify/tdx-node":
 		handler.handleVerify(writer, request)
+	case "/v1/verify/tdx-workload":
+		handler.handleWorkloadVerify(writer, request)
 	case "/healthz":
 		writer.WriteHeader(http.StatusNoContent)
 	case "/metrics":
@@ -133,6 +188,8 @@ func (handler *Handler) EvidenceHTTPHandler() http.Handler {
 		switch request.URL.Path {
 		case "/ra/v1/evidence":
 			handler.handleEvidence(writer, request)
+		case "/ra/v1/workload-evidence":
+			handler.handleWorkloadEvidence(writer, request)
 		case "/healthz":
 			writer.WriteHeader(http.StatusNoContent)
 		case "/metrics":
@@ -150,6 +207,8 @@ func (handler *Handler) TrusteeHTTPHandler() http.Handler {
 		switch request.URL.Path {
 		case "/v1/verify/tdx-node":
 			handler.handleVerify(writer, request)
+		case "/v1/verify/tdx-workload":
+			handler.handleWorkloadVerify(writer, request)
 		case "/healthz":
 			writer.WriteHeader(http.StatusNoContent)
 		case "/metrics":
@@ -158,6 +217,107 @@ func (handler *Handler) TrusteeHTTPHandler() http.Handler {
 			http.NotFound(writer, request)
 		}
 	})
+}
+
+func (handler *Handler) handleWorkloadEvidence(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		handler.record("workload_evidence", "error")
+		writeError(writer, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
+		return
+	}
+	if handler.config.EvidenceDelay > 0 {
+		timer := time.NewTimer(handler.config.EvidenceDelay)
+		defer timer.Stop()
+		select {
+		case <-request.Context().Done():
+			handler.record("workload_evidence", "timeout")
+			return
+		case <-timer.C:
+		}
+	}
+	if handler.config.EvidenceStatus != 0 {
+		handler.record("workload_evidence", "error")
+		writeError(writer, handler.config.EvidenceStatus, "EVIDENCE_PROVIDER_FAULT")
+		return
+	}
+	var input workloadEvidenceRequest
+	if err := decodeJSON(request, &input); err != nil || input.ProtocolVersion != trusteeProtocolVersion || input.Nonce == "" || input.PID <= 0 {
+		handler.record("workload_evidence", "error")
+		writeError(writer, http.StatusBadRequest, "INVALID_WORKLOAD_EVIDENCE_REQUEST")
+		return
+	}
+	now := handler.config.Now().UTC().Truncate(time.Second)
+	document := workloadEvidenceDocument{
+		ProtocolVersion:   trusteeProtocolVersion,
+		Nonce:             input.Nonce,
+		PID:               input.PID,
+		WorkloadID:        handler.config.WorkloadID,
+		PolicyID:          handler.config.WorkloadPolicyID,
+		LaunchID:          fmt.Sprintf("mock-launch-%d", input.PID),
+		ContainerID:       fmt.Sprintf("mock-container-%d", input.PID),
+		ProcessStartTime:  now.Format(time.RFC3339),
+		ImageConfigDigest: "sha256:" + strings.Repeat("a", 64),
+		RekorUUID:         fmt.Sprintf("mock-rekor-%d", input.PID),
+		Quote:             workloadFakeQuote{Format: "mock-tdx", Body: "mock-quote"},
+	}
+	handler.record("workload_evidence", "ok")
+	writeJSON(writer, http.StatusOK, document)
+}
+
+func (handler *Handler) handleWorkloadVerify(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		handler.record("workload_trustee", "error")
+		writeError(writer, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
+		return
+	}
+	if handler.config.TrusteeDelay > 0 {
+		timer := time.NewTimer(handler.config.TrusteeDelay)
+		defer timer.Stop()
+		select {
+		case <-request.Context().Done():
+			handler.record("workload_trustee", "timeout")
+			return
+		case <-timer.C:
+		}
+	}
+	if handler.config.TrusteeStatus != 0 {
+		handler.record("workload_trustee", "error")
+		writeError(writer, handler.config.TrusteeStatus, "TRUSTEE_FAULT")
+		return
+	}
+	var input workloadVerifyRequest
+	if err := decodeJSON(request, &input); err != nil || input.ProtocolVersion != trusteeProtocolVersion || input.Nonce == "" || input.PID <= 0 {
+		handler.record("workload_trustee", "error")
+		writeError(writer, http.StatusBadRequest, "INVALID_WORKLOAD_VERIFY_REQUEST")
+		return
+	}
+	var evidence workloadEvidenceDocument
+	if err := decodeBytes(input.Evidence, &evidence); err != nil || evidence.ProtocolVersion != trusteeProtocolVersion || evidence.Nonce != input.Nonce || evidence.PID != input.PID {
+		handler.record("workload_trustee", "denied")
+		writeError(writer, http.StatusUnprocessableEntity, "WORKLOAD_EVIDENCE_REJECTED")
+		return
+	}
+	response := workloadVerifyResponse{
+		ProtocolVersion: trusteeProtocolVersion,
+		Nonce:           input.Nonce,
+		PID:             input.PID,
+		Decision:        handler.config.WorkloadDecision,
+		StableErrorCode: "POLICY_MISMATCH",
+	}
+	if handler.config.WorkloadDecision == "allow" {
+		if evidence.WorkloadID != handler.config.WorkloadID || evidence.PolicyID != handler.config.WorkloadPolicyID {
+			handler.record("workload_trustee", "denied")
+			writeError(writer, http.StatusUnprocessableEntity, "WORKLOAD_EVIDENCE_REJECTED")
+			return
+		}
+		response.StableErrorCode = "OK"
+		response.WorkloadID = handler.config.WorkloadID
+		response.PolicyID = handler.config.WorkloadPolicyID
+		handler.record("workload_trustee", "ok")
+	} else {
+		handler.record("workload_trustee", "denied")
+	}
+	writeJSON(writer, http.StatusOK, response)
 }
 
 func (handler *Handler) handleEvidence(writer http.ResponseWriter, request *http.Request) {

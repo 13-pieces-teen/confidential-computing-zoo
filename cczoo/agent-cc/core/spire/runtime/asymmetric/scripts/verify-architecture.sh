@@ -14,19 +14,6 @@ if [[ "$RUNTIME_DIR" != /* ]]; then
 fi
 bash "$SCRIPT_DIR/verify-mtls.sh"
 
-services="$(docker compose -f "$COMPOSE_FILE" config --services)"
-if printf '%s\n' "$services" | grep -Eq '^(openclaw-mtls-client|openviking-mtls-server)$'; then
-    printf 'Formal Compose still contains a business-path mTLS proxy service.\n' >&2
-    exit 1
-fi
-for legacy in argus-v2-openclaw-mtls argus-v2-openviking-mtls; do
-    if docker inspect "$legacy" >/dev/null 2>&1 \
-        && [[ "$(docker inspect "$legacy" --format '{{.State.Running}}')" == true ]]; then
-        printf 'Legacy proxy container is still running: %s\n' "$legacy" >&2
-        exit 1
-    fi
-done
-
 entries="$(
     docker compose -f "$COMPOSE_FILE" exec -T spire-server \
         /opt/spire/bin/spire-server entry show \
@@ -41,7 +28,10 @@ entries = json.load(sys.stdin).get("entries", [])
 expected = {
     "spiffe://argus.local/agent/openclaw": None,
     "spiffe://argus.local/service/openviking-cmem": None,
+    "spiffe://argus.local/infra/openviking-broker": None,
 }
+selectors = {}
+additional_attributes = {}
 for entry in entries:
     identity = entry.get("spiffe_id")
     if isinstance(identity, dict):
@@ -52,6 +42,11 @@ for entry in entries:
     if isinstance(parent, dict):
         parent = "spiffe://{}{}".format(parent["trust_domain"], parent["path"])
     expected[identity] = str(parent)
+    selectors[identity] = {
+        "{}:{}".format(selector.get("type"), selector.get("value"))
+        for selector in entry.get("selectors", [])
+    }
+    additional_attributes[identity] = entry.get("additional_attributes") or {}
 if any(parent is None for parent in expected.values()):
     raise SystemExit("one or more v2 workload registration entries are missing")
 if expected["spiffe://argus.local/agent/openclaw"] == expected[
@@ -66,9 +61,38 @@ if "/spire/agent/argus_tdx/" not in expected[
     "spiffe://argus.local/service/openviking-cmem"
 ]:
     raise SystemExit("OpenViking workload is not parented by the argus_tdx Agent")
+if expected["spiffe://argus.local/infra/openviking-broker"] != expected[
+    "spiffe://argus.local/service/openviking-cmem"
+]:
+    raise SystemExit("Broker and OpenViking target entries do not share the OpenViking Agent parent")
+
+target_selectors = selectors["spiffe://argus.local/service/openviking-cmem"]
+required_target = {
+    "docker:label:argus.workload:openviking-cmem",
+    "argus_tdx_workload:verified:true",
+    "argus_tdx_workload:workload_id:openviking-cmem",
+    "argus_tdx_workload:policy:openviking-cmem-v1",
+}
+missing_target = required_target - target_selectors
+if missing_target:
+    raise SystemExit("OpenViking target entry is missing selectors: {}".format(sorted(missing_target)))
+if not additional_attributes["spiffe://argus.local/service/openviking-cmem"].get(
+    "disable_x509_svid_prefetch", False
+):
+    raise SystemExit("OpenViking target entry does not disable X.509-SVID prefetch")
+for prefix in ("docker:image_id:", "docker:image_config_digest:sha256:"):
+    if not any(selector.startswith(prefix) for selector in target_selectors):
+        raise SystemExit("OpenViking target entry is missing a {} selector".format(prefix))
+
+broker_selectors = selectors["spiffe://argus.local/infra/openviking-broker"]
+if "docker:label:argus.component:openviking-broker" not in broker_selectors:
+    raise SystemExit("Broker entry is missing its dedicated Docker label selector")
+for prefix in ("docker:image_id:", "docker:image_config_digest:sha256:"):
+    if not any(selector.startswith(prefix) for selector in broker_selectors):
+        raise SystemExit("Broker entry is missing a {} selector".format(prefix))
 '
 
 printf '%s\n' \
     'Argus SPIFFE v2 architecture validation passed.' \
-    'Two independent Agents, two Workload APIs, x509pop plus argus_tdx, caller-local Guard, and native SPIFFE mTLS were observed.' \
-    'No standalone mTLS business-path proxy service or legacy proxy container was active.'
+    'Two independent Agents, x509pop plus argus_tdx, caller-local Guard, and Broker Sidecar SPIFFE mTLS were observed.' \
+    'The OpenViking target entry requires both Docker identity and verified argus_tdx_workload selectors.'

@@ -10,7 +10,7 @@ OPENCLAW_CONTAINER="${V2_REAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
 OPENCLAW_RUN_SCRIPT="$AGENT_CC_DIR/adapters/OpenClaw/scripts/run-sbx.sh"
 CONTROL_NETWORK="${V2_OPENCLAW_CONTROL_NETWORK:-argus-spire-v2-center_center}"
 OPENVIKING_ORIGIN="${V2_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
-OPENVIKING_HOST_ADDRESS="${V2_OPENVIKING_HOST_ADDRESS:-host-gateway}"
+OPENVIKING_HOST_ADDRESS="${V2_OPENVIKING_HOST_ADDRESS:-}"
 GUARD_URL="${V2_GUARD_INTERNAL_URL:-http://guard:8007/guard/v1/authorize}"
 
 fail() {
@@ -28,6 +28,13 @@ fail() {
     || fail 'OpenClaw Workload API socket is missing; start the OpenClaw SPIRE Agent first'
 docker network inspect "$CONTROL_NETWORK" >/dev/null 2>&1 \
     || fail "Guard control network is missing: $CONTROL_NETWORK"
+if [[ -z "$OPENVIKING_HOST_ADDRESS" ]]; then
+    OPENVIKING_HOST_ADDRESS="$(
+        docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}'
+    )"
+fi
+[[ -n "$OPENVIKING_HOST_ADDRESS" ]] \
+    || fail 'Docker bridge gateway address is unavailable for the OpenViking mTLS route'
 
 run_arguments=(--name "$OPENCLAW_CONTAINER")
 # The image digest was pinned into the workload registration entry. Rebuilding
@@ -76,7 +83,7 @@ if (health.status !== "OK" || health.mode !== "spiffe_identity") {
 NODE
 
 printf '%s\n' \
-    'OpenClaw native Guard + SPIFFE HTTP workload is ready.' \
+    'OpenClaw caller-local Guard + SPIFFE HTTP workload is ready.' \
     "Container: $OPENCLAW_CONTAINER" \
     "Guard: $GUARD_URL" \
     "OpenViking origin: $OPENVIKING_ORIGIN" \

@@ -4,12 +4,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 MODULE_DIR="$REPO_ROOT/core/spire/plugins/argus-tdx-nodeattestor"
+WORKLOAD_MODULE_DIR="$REPO_ROOT/core/spire/plugins/argus-tdx-workloadattestor"
 RUNTIME_DIR="$SCRIPT_DIR/runtime"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-go-cache}"
 
-mkdir -p "$RUNTIME_DIR"/{plugins,conf,certs,server-data,server-run,agent-data/argus-tdx,agent-run}
+mkdir -p "$RUNTIME_DIR"/{plugins,conf,certs,server-data,server-run,agent-data/argus-tdx,agent-run,broker-run}
 chmod 0700 "$RUNTIME_DIR/certs" "$RUNTIME_DIR/server-data" "$RUNTIME_DIR/agent-data" "$RUNTIME_DIR/agent-data/argus-tdx"
-chown 1000:1000 "$RUNTIME_DIR/server-data" "$RUNTIME_DIR/server-run"
+chown -R 1000:1000 \
+    "$RUNTIME_DIR/server-data" \
+    "$RUNTIME_DIR/server-run" \
+    "$RUNTIME_DIR/agent-data" \
+    "$RUNTIME_DIR/agent-run" \
+    "$RUNTIME_DIR/broker-run"
 
 docker run --rm \
     -e GOPROXY=off -e GOSUMDB=off -e GOMODCACHE=/gomodcache -e CGO_ENABLED=0 \
@@ -20,6 +26,13 @@ docker run --rm \
         go build -mod=readonly -trimpath -o /out/fake-services ./cmd/fake-services
     '
 chmod 0755 "$RUNTIME_DIR/plugins"/*
+
+docker run --rm \
+    -e GOPROXY=off -e GOSUMDB=off -e GOMODCACHE=/gomodcache -e CGO_ENABLED=0 \
+    -v "$WORKLOAD_MODULE_DIR:/workspace" -v "$GO_CACHE_DIR:/gomodcache" -v "$RUNTIME_DIR/plugins:/out" \
+    -w /workspace golang:1.24-bookworm \
+    go build -mod=readonly -trimpath -o /out/argus-tdx-workloadattestor ./cmd/argus-tdx-workloadattestor
+chmod 0755 "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor"
 
 if [[ ! -f "$RUNTIME_DIR/certs/upstream-ca.pem" ]]; then
     openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 7 \
@@ -76,10 +89,20 @@ chown -R 1000:1000 "$RUNTIME_DIR/certs"
 
 server_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-server" | awk '{print $1}')"
 agent_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" | awk '{print $1}')"
+workload_attestor_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor" | awk '{print $1}')"
 sed "s/__SERVER_CHECKSUM__/$server_checksum/g" "$SCRIPT_DIR/server.conf.tmpl" > "$RUNTIME_DIR/conf/server.conf"
-sed "s/__AGENT_CHECKSUM__/$agent_checksum/g" "$SCRIPT_DIR/agent.conf.tmpl" > "$RUNTIME_DIR/conf/agent.conf"
+sed \
+    -e "s/__AGENT_CHECKSUM__/$agent_checksum/g" \
+    -e "s/__WORKLOAD_ATTESTOR_CHECKSUM__/$workload_attestor_checksum/g" \
+    "$SCRIPT_DIR/agent.conf.tmpl" > "$RUNTIME_DIR/conf/agent.conf"
 cp "$SCRIPT_DIR/policy.yaml" "$RUNTIME_DIR/conf/policy.yaml"
 
 docker build -q -f "$SCRIPT_DIR/Dockerfile.fake" -t argus-spire-m3-fake:local "$RUNTIME_DIR" >/dev/null
 docker build -q -f "$SCRIPT_DIR/Dockerfile.negative-workload" -t argus-spire-m3-negative-workload:local "$SCRIPT_DIR" >/dev/null
-printf 'M3 runtime prepared\nAgent checksum: %s\nServer checksum: %s\n' "$agent_checksum" "$server_checksum"
+docker build -q -f "$SCRIPT_DIR/Dockerfile.broker-target" -t argus-spire-m3-broker-target:local "$SCRIPT_DIR" >/dev/null
+docker build -q \
+    -f "$REPO_ROOT/adapters/OpenViking/configs/Dockerfile.broker-sidecar" \
+    -t argus-openviking-broker-sidecar:local \
+    "$REPO_ROOT" >/dev/null
+printf 'M3 runtime prepared\nAgent checksum: %s\nWorkloadAttestor checksum: %s\nServer checksum: %s\n' \
+    "$agent_checksum" "$workload_attestor_checksum" "$server_checksum"

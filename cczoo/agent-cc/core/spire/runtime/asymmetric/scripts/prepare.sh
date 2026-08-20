@@ -7,12 +7,15 @@ SPIRE_ROOT="$(cd "$PROFILE_DIR/../.." && pwd)"
 AGENT_CC_ROOT="$(cd "$SPIRE_ROOT/../.." && pwd)"
 CORE_DIR="$AGENT_CC_ROOT/core"
 PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-nodeattestor"
+WORKLOAD_PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-workloadattestor"
 OPENCLAW_DOCKERFILE="$AGENT_CC_ROOT/adapters/OpenClaw/scripts/Dockerfile.sbx"
 RUNTIME_DIR="${V2_RUNTIME_DIR:-$PROFILE_DIR/runtime}"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-spire-v2-go-cache}"
 GO_PROXY="${ARGUS_GO_PROXY:-https://proxy.golang.org,direct}"
 TDVM_SPIRE_SERVER_ADDRESS="${V2_TDVM_SPIRE_SERVER_ADDRESS:-10.0.2.2}"
 SPIRE_SERVER_PORT="${V2_SPIRE_SERVER_PORT:-18081}"
+TDVM_TRUSTEE_ADDRESS="${V2_TDVM_TRUSTEE_ADDRESS:-$TDVM_SPIRE_SERVER_ADDRESS}"
+TDVM_TRUSTEE_PORT="${V2_TDVM_TRUSTEE_PORT:-18443}"
 TDVM_INSTANCE_ID="${V2_TDVM_INSTANCE_ID:-tdvm-v2-0001}"
 OPENVIKING_ORIGIN="${V2_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
 GUARD_DECISION_TTL_SECONDS="${V2_GUARD_DECISION_TTL_SECONDS:-15}"
@@ -111,6 +114,12 @@ build_go_binary \
     "$PLUGIN_MODULE_DIR" \
     ./cmd/mock-trustee \
     mock-trustee \
+    "$GO_PROXY" \
+    readonly
+build_go_binary \
+    "$WORKLOAD_PLUGIN_MODULE_DIR" \
+    ./cmd/argus-tdx-workloadattestor \
+    argus-tdx-workloadattestor \
     "$GO_PROXY" \
     readonly
 chmod 0755 "$RUNTIME_DIR/plugins"/*
@@ -221,6 +230,10 @@ agent_checksum="$(
     sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" |
         awk '{print $1}'
 )"
+workload_attestor_checksum="$(
+    sha256sum "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor" |
+        awk '{print $1}'
+)"
 
 sed \
     "s/__SERVER_CHECKSUM__/$server_checksum/g" \
@@ -231,7 +244,10 @@ sed \
     -e "s/__SPIRE_SERVER_ADDRESS__/$TDVM_SPIRE_SERVER_ADDRESS/g" \
     -e "s/__SPIRE_SERVER_PORT__/$SPIRE_SERVER_PORT/g" \
     -e "s/__AGENT_CHECKSUM__/$agent_checksum/g" \
+    -e "s/__WORKLOAD_ATTESTOR_CHECKSUM__/$workload_attestor_checksum/g" \
     -e "s/__TDVM_INSTANCE_ID__/$TDVM_INSTANCE_ID/g" \
+    -e "s/__TRUSTEE_ADDRESS__/$TDVM_TRUSTEE_ADDRESS/g" \
+    -e "s/__TRUSTEE_PORT__/$TDVM_TRUSTEE_PORT/g" \
     "$PROFILE_DIR/config/openviking-agent.conf.tmpl" \
     >"$RUNTIME_DIR/conf/openviking-agent.conf"
 cp "$PROFILE_DIR/config/policy.yaml" "$RUNTIME_DIR/conf/policy.yaml"

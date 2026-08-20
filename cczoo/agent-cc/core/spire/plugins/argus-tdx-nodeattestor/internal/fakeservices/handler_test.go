@@ -36,6 +36,87 @@ func TestEvidenceAndTrusteeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWorkloadEvidenceAndTrusteeRoundTrip(t *testing.T) {
+	handler := newTestHandler(t)
+	evidenceRequest := workloadEvidenceRequest{
+		ProtocolVersion: 1,
+		Nonce:           "workload-nonce",
+		PID:             4321,
+	}
+	evidenceBody, err := json.Marshal(evidenceRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceHTTP := httptest.NewRequest(http.MethodPost, "/ra/v1/workload-evidence", bytes.NewReader(evidenceBody))
+	evidenceHTTP.Header.Set("Content-Type", "application/json")
+	evidenceRecorder := httptest.NewRecorder()
+	handler.EvidenceHTTPHandler().ServeHTTP(evidenceRecorder, evidenceHTTP)
+	if evidenceRecorder.Code != http.StatusOK {
+		t.Fatalf("workload evidence status = %d, body = %s", evidenceRecorder.Code, evidenceRecorder.Body.String())
+	}
+
+	verifyBody, err := json.Marshal(workloadVerifyRequest{
+		ProtocolVersion: 1,
+		Nonce:           "workload-nonce",
+		PID:             4321,
+		Evidence:        evidenceRecorder.Body.Bytes(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyHTTP := httptest.NewRequest(http.MethodPost, "/v1/verify/tdx-workload", bytes.NewReader(verifyBody))
+	verifyHTTP.Header.Set("Content-Type", "application/json")
+	verifyRecorder := httptest.NewRecorder()
+	handler.TrusteeHTTPHandler().ServeHTTP(verifyRecorder, verifyHTTP)
+	if verifyRecorder.Code != http.StatusOK {
+		t.Fatalf("workload verification status = %d, body = %s", verifyRecorder.Code, verifyRecorder.Body.String())
+	}
+	var verdict workloadVerifyResponse
+	if err := json.Unmarshal(verifyRecorder.Body.Bytes(), &verdict); err != nil {
+		t.Fatal(err)
+	}
+	if verdict.Decision != "allow" || verdict.StableErrorCode != "OK" {
+		t.Fatalf("workload verdict = %#v", verdict)
+	}
+	if verdict.PID != 4321 || verdict.Nonce != "workload-nonce" {
+		t.Fatalf("workload verdict binding = %#v", verdict)
+	}
+	if verdict.WorkloadID != "openviking-cmem" || verdict.PolicyID != "openviking-cmem-v1" {
+		t.Fatalf("workload verdict selectors = %#v", verdict)
+	}
+}
+
+func TestWorkloadTrusteeDenyPreservesRequestBinding(t *testing.T) {
+	handler := newTestHandler(t)
+	handler.config.WorkloadDecision = "deny"
+	requestBody, err := json.Marshal(workloadVerifyRequest{
+		ProtocolVersion: 1,
+		Nonce:           "workload-nonce",
+		PID:             4321,
+		Evidence:        json.RawMessage(`{"protocol_version":1,"nonce":"workload-nonce","pid":4321}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/verify/tdx-workload", bytes.NewReader(requestBody))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	handler.TrusteeHTTPHandler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var verdict workloadVerifyResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &verdict); err != nil {
+		t.Fatal(err)
+	}
+	if verdict.Decision != "deny" || verdict.StableErrorCode != "POLICY_MISMATCH" {
+		t.Fatalf("verdict = %#v", verdict)
+	}
+	if verdict.PID != 4321 || verdict.Nonce != "workload-nonce" {
+		t.Fatalf("verdict binding = %#v", verdict)
+	}
+}
+
 func TestTrusteeRejectsTamperedReportData(t *testing.T) {
 	handler := newTestHandler(t)
 	requestBody, requestDigest, keyDigest := testEvidenceRequest(t)
@@ -132,6 +213,7 @@ func newTestHandlerForInstance(t *testing.T, instanceID string, allowedInstanceI
 	rtmr0 := "0011"
 	handler, err := NewHandler(Config{
 		InstanceID: instanceID, AllowedInstanceIDs: allowedInstanceIDs,
+		WorkloadID: "openviking-cmem", WorkloadPolicyID: "openviking-cmem-v1", WorkloadDecision: "allow",
 		TCBStatus: "up_to_date", MRTD: "aabb",
 		RTMR: map[string]*string{"0": &rtmr0, "1": nil, "2": nil, "3": nil},
 		Now:  func() time.Time { return time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC) },

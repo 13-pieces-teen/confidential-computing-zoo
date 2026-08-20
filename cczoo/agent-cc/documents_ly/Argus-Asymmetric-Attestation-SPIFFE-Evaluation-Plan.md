@@ -6,7 +6,7 @@
 >
 > 当前评估环境：Mock Evidence Provider + Mock Trustee
 >
-> 评估状态：评估工具源码已实现，尚未在远程主机执行正式性能与容量测试
+> 评估状态：Broker Sidecar 资源/SVID 采集适配待完成；不属于本次 A-F 功能验收
 
 ## 1. 文档目的
 
@@ -34,7 +34,7 @@ Trustee 503 和 timeout 故障矩阵作为性能实验。上述内容属于功�
 - caller-local Rust Argus Guard，`GUARD_MODE=spiffe_identity`；
 - OpenClaw 进程内 fetch preload 和原生 SPIFFE HTTPS client；
 - 单个已经完成 Node Attestation 的 OpenViking 服务；
-- OpenViking 原生 ASGI SPIFFE mTLS server；
+- OpenViking Broker Sidecar SPIFFE mTLS server 与回环 HTTP upstream；
 - OpenClaw `x509pop` SPIRE Agent；
 - OpenViking `argus_tdx` SPIRE Agent；
 - Mock Evidence Provider 和 Mock Trustee；
@@ -74,16 +74,18 @@ flowchart LR
     subgraph OV["OpenViking"]
         OVA["SPIRE Agent<br/>argus_tdx"]
         EP["Mock Evidence Provider"]
-        OVS["OpenViking HTTPS API"]
+        BS["Broker Sidecar<br/>目标 SVID + mTLS"]
+        OVS["OpenViking HTTP API<br/>loopback:1933"]
     end
 
     OCR -->|"1. 请求 ALLOW / DENY"| G
     G -->|"2. Decision"| OCR
     OCR -->|"3. ALLOW 后发送"| HC
-    HC ==>|"4. SPIFFE mTLS + HTTP"| OVS
+    HC ==>|"4. SPIFFE mTLS + HTTP"| BS
+    BS -->|"5. loopback HTTP"| OVS
 
     OCA -. "OpenClaw SVID" .-> HC
-    OVA -. "OpenViking SVID" .-> OVS
+    OVA -. "Broker API + OpenViking target SVID" .-> BS
     OVA --> EP
     OVA -->|"Node Attestation"| SS
     SS -->|"Mock verification"| TR

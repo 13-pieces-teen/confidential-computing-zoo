@@ -1,49 +1,78 @@
-# Argus asymmetric attestation + SPIFFE runtime
+# Argus asymmetric SPIFFE runtime
 
-This is the formal implementation of the current Argus Initial phase.
+This profile implements the Broker Sidecar design for non-intrusive OpenViking
+workload attestation. OpenViking remains the official Python process: it neither
+calls the SPIRE Workload API nor receives an SVID, private key, or SPIRE socket.
 
-## Boundary
+## Current-stage boundary
 
-- OpenViking is the attested workload. Its Evidence Provider supplies evidence
-  only to the OpenViking Agent-side `argus_tdx` NodeAttestor. The Server-side
-  plug-in verifies that evidence through Trustee before the Agent is admitted.
-- OpenClaw is the trusted Relying Party. Its Agent uses `x509pop`; it has no
-  Evidence Provider and no remote-attestation claim.
-- The caller-local Rust Guard evaluates an explicit YAML allowlist at
-  `POST /guard/v1/authorize` in `spiffe_identity` mode.
-- OpenClaw's own Node process calls Guard before sending a sensitive body, then
-  directly uses its rotating X509-SVID for HTTPS.
-- OpenViking's own Uvicorn/FastAPI process requires a SPIRE-validated client
-  certificate and exactly `spiffe://argus.local/agent/openclaw`.
-- OpenViking still applies its native API-key and application permissions after
-  TLS authentication. There is no OpenViking-side Argus Guard.
+Only the Evidence Provider and Trustee are mocks in this profile. The following
+parts use the real implementation path:
 
-The profile does not attempt to defend against a compromised trusted OpenClaw
-runtime or Docker administrator. Proxy-era Guard and Docker-gate compatibility
-paths are not part of this runtime or its validation contract.
+- SPIRE Server and Agent 1.15.2;
+- the experimental SPIRE Broker Endpoint and Broker API;
+- a real host PID for the running OpenViking container;
+- the external `argus_tdx_workload` WorkloadAttestor;
+- selector matching and X.509-SVID issuance by SPIRE;
+- the Broker Sidecar subscription and in-memory SVID rotation;
+- mTLS termination and reverse proxying to OpenViking loopback port 1933.
+
+The mock Evidence Provider returns PID-bound launch evidence. The mock Trustee
+checks that binding and returns ALLOW or DENY. Therefore this profile does not
+claim a real TDX Quote, TC-API/Rekor evidence, QGS result, or production Trustee
+decision.
+
+The design does not add a new protection boundary around a Docker administrator
+or a compromised TDVM. It only proves and exercises the identity flow currently
+in scope.
+
+## Identity flow
+
+1. The OpenViking SPIRE Agent completes `argus_tdx` Node Attestation.
+2. The Broker Sidecar gets only its own
+   `spiffe://argus.local/infra/openviking-broker` SVID through the ordinary
+   Workload API.
+3. The launcher obtains the actual host PID of the TC-API-launched OpenViking
+   container and passes it to the Sidecar.
+4. The Sidecar sends a `WorkloadPIDReference` over the Broker API. The Agent
+   invokes `argus_tdx_workload` for that referenced PID.
+5. The WorkloadAttestor calls the mock Evidence Provider and mock Trustee. An
+   ALLOW result emits `verified`, `workload_id`, and `policy` selectors.
+6. SPIRE matches those selectors together with the Docker selectors in the
+   OpenViking Registration Entry and streams the target SVID to the Sidecar.
+7. The Sidecar keeps the target key material in memory, accepts only the exact
+   OpenClaw SPIFFE ID over mTLS, and proxies the request to
+   `http://127.0.0.1:1933`.
+
+The target Registration Entry has X.509 prefetch disabled so issuance is tied
+to the Broker PID-reference request rather than background prefetch.
 
 ## Components
 
-| Location | Responsibility |
+| Component | Responsibility |
 |---|---|
-| `plugins/argus-tdx-nodeattestor` | OpenViking Agent/Server Node Attestation plug-ins |
-| `components/svid-materializer` | Watch one exact Workload API identity and atomically publish rotating PEM files inside the same workload container |
-| `core/argus/src/spiffe_guard.rs` | Caller-local SPIFFE policy parsing, validation, ALLOW/DENY, TTL, and audit IDs |
-| `adapters/OpenClaw/spiffe-transport` | In-process fetch gate and direct SPIFFE mTLS client |
-| `adapters/OpenViking/spiffe_server` | Native OpenViking ASGI TLS listener with exact client SPIFFE ID enforcement |
+| `plugins/argus-tdx-nodeattestor` | Node Attestation plus mock Evidence Provider and Trustee processes |
+| `plugins/argus-tdx-workloadattestor` | PID-reference attestation and verified selector emission |
+| `adapters/OpenViking/broker_sidecar` | Broker subscription, in-memory target SVID, mTLS, and loopback proxy |
+| `adapters/OpenViking/scripts/launch_openviking.sh` | TC-API launch, real PID lookup, and Sidecar start |
+| `adapters/OpenClaw/spiffe-transport` | OpenClaw caller-local Guard gate and SPIFFE mTLS client |
+| `components/svid-materializer` | OpenClaw credentials only; it is not used by OpenViking |
 
-The materializer is credential plumbing, not a data-plane proxy: it never
-accepts or forwards a business request.
+## Local and remote verification boundary
 
-## Remote-host preparation
+This checkout can run Go tests, shell syntax checks, and Linux cross-builds on
+Windows. Docker, Linux PID namespace, `pidfd_open`, SPIRE UDS permissions, and
+the complete A-F flow must be run on the remote Linux/TDVM environment.
 
-Run these commands only on the remote validation host. This repository change
-was intentionally not built or tested on the local Windows checkout.
+## Remote deployment order
+
+On the remote validation host:
 
 ```bash
 cd cczoo/agent-cc
 export V2_RUNTIME_DIR=/var/lib/argus-spire-asymmetric/run-001
 export V2_OPENVIKING_ORIGIN=https://openviking.argus.local:1943
+
 sudo env \
   V2_RUNTIME_DIR="$V2_RUNTIME_DIR" \
   V2_OPENVIKING_ORIGIN="$V2_OPENVIKING_ORIGIN" \
@@ -53,110 +82,84 @@ bash core/spire/runtime/asymmetric/scripts/start-openclaw-agent.sh
 bash core/spire/runtime/asymmetric/scripts/start-openviking-agent.sh
 ```
 
-`prepare.sh` builds the real Guard and OpenClaw workload images. The mock-stage
-Evidence Provider and Trustee remain explicit; a real Quote/QGS/production
-Trustee result is not claimed by this profile.
-
-## Build, register, then launch OpenViking
-
-The workload registration is pinned to the real application image digests, so
-build the OpenViking image in the TD Guest before registration:
+In the TD Guest, build the pinned OpenViking image and Broker Sidecar image
+before registration so their config digests are available:
 
 ```bash
-export OPENVIKING_SPIFFE_ENABLED=1
-export OPENVIKING_SPIFFE_WORKLOAD_API_DIR=/run/argus-spire-v2/openviking
+cd cczoo/agent-cc
 export OPENVIKING_LAUNCH_ACTION=build
 bash adapters/OpenViking/scripts/launch_openviking.sh
 ```
 
-From the validation host, create the two workload entries:
+Back on the validation host, register the OpenClaw, Broker, and strong
+OpenViking target entries:
 
 ```bash
 bash core/spire/runtime/asymmetric/scripts/register-workloads.sh
 ```
 
-Then launch the already-built OpenViking image in the TD Guest:
+The command prints the exact OpenViking Agent SPIFFE ID. In the TD Guest, use
+that value to launch OpenViking and its Sidecar:
 
 ```bash
-export OPENVIKING_SPIFFE_ENABLED=1
-export OPENVIKING_SPIFFE_WORKLOAD_API_DIR=/run/argus-spire-v2/openviking
-# Optional: required only when the model provider uses a private CA. This path
-# must exist in the TD Guest; the launcher mounts it read-only into the workload.
-# export OPENVIKING_MODEL_CA_BUNDLE=/path/on/td-guest/model-ca-bundle.pem
+export OPENVIKING_WORKLOAD_API_DIR=/run/argus-spire-v2/openviking
+export OPENVIKING_BROKER_API_DIR=/run/argus-spire-v2/openviking-broker
+export OPENVIKING_AGENT_SPIFFE_ID='spiffe://argus.local/spire/agent/argus_tdx/<exact-id>'
 export OPENVIKING_LAUNCH_ACTION=launch
+# Optional and unrelated to SPIFFE:
+# export OPENVIKING_MODEL_CA_BUNDLE=/path/on/td-guest/model-ca-bundle.pem
 bash adapters/OpenViking/scripts/launch_openviking.sh
 ```
 
-The native workload mounts only the OpenViking Workload API directory, listens
-on mTLS port 1943, and does not publish plaintext port 1933.
+By default TC API reloads `IMAGE_ID=openviking-cmem` as
+`openviking-cmem:latest`. The registration script deliberately matches that
+runtime `docker:image_id` while taking `docker:image_config_digest` from the
+prebuilt source image. If `IMAGE_ID` is changed, set
+`V2_OPENVIKING_RUNTIME_IMAGE_ID` to the exact resulting runtime tag before
+running `register-workloads.sh`.
 
-## Start OpenClaw and configure the plugin
-
-The target hostname defaults to `openviking.argus.local`. Set
-`V2_OPENVIKING_HOST_ADDRESS` to the TDVM/forwarded host address when it is not
-available through DNS; the launcher adds only this exact host mapping.
+On the validation host, confirm the runtime relationship and then start the
+OpenClaw workload:
 
 ```bash
-# export V2_MODEL_CA_BUNDLE=/path/on/validation-host/model-ca-bundle.pem  # optional
+bash core/spire/runtime/asymmetric/scripts/deploy-v2-guest.sh start-workload
 bash core/spire/runtime/asymmetric/scripts/start-openclaw-workload.sh
 export OPENVIKING_API_KEY='<non-root OpenViking user key>'
 bash core/spire/runtime/asymmetric/scripts/connect-openclaw-plugin.sh
 ```
 
-The OpenClaw container joins the Compose control network to reach Guard and
-mounts its own Workload API directory read-only. `NODE_OPTIONS` loads the
-in-process transport for the gateway and explicit `docker exec node` probes.
+OpenViking publishes plaintext only on TD Guest loopback port 1933. The Broker
+Sidecar publishes the protected mTLS endpoint on port 1943. The TDVM launcher
+forwards that port to both host loopback and the Docker bridge gateway, so the
+OpenClaw control-network container can reach it without exposing 1943 on
+external host interfaces. Restart a TDVM that was started with the previous
+loopback-only QEMU command before running this profile.
 
 ## Remote verification
 
-Run the complete unit, isolated Node Attestation, native mTLS, Guard failure,
-and business coverage from the remote host:
+Run the complete remote checks from the validation host:
 
 ```bash
 OPENVIKING_API_KEY='<non-root key>' \
   bash core/spire/runtime/asymmetric/scripts/remote-test.sh all
 ```
 
-The stages can also be run independently as `unit`, `attestation`, and
-`integration`. Every selected check runs even when an earlier check fails; the
-script prints a consolidated failure list and returns non-zero at the end. The
-isolated attestation stack uses host metrics ports 29988 and 29989 by default,
-so it does not collide with the formal profile.
-
-Integration verification covers:
-
-- one live `x509pop` OpenClaw Agent and one live `argus_tdx` OpenViking Agent;
-- isolated `argus_tdx` admission, replay rejection, Evidence Provider failure,
-  Trustee failure, and Trustee timeout coverage;
-- real workload SVIDs and expected Workload API mounts;
-- Guard ALLOW and policy DENY;
-- direct OpenClaw HTTPS success;
-- missing client certificate and wrong client SPIFFE ID rejection;
-- Guard DENY, malformed response, 503, timeout, and outage fail-closed;
-- real OpenClaw turn, OpenViking session capture, commit, and archive.
-
-## Remote evaluation
-
-After functional validation passes, E3-E7 Guard, mTLS, capacity, SVID rotation,
-resource, and attestation-amortization measurements are available under
-[`../../benchmarks/asymmetric`](../../benchmarks/asymmetric/README.md). They run
-only against the already-admitted asymmetric runtime and keep Mock RA/Mock
-Trustee explicit in every manifest and report.
+The isolated hardware-free matrix exercises Broker ALLOW and DENY separately:
 
 ```bash
-V2_RUNTIME_DIR=/var/lib/argus-spire-asymmetric/run-001 \
-ARGUS_BENCHMARK_RESULT_ROOT=/var/lib/argus-spire-asymmetric/benchmarks \
-  bash core/spire/runtime/asymmetric/scripts/remote-benchmark.sh all
+bash core/spire/tests/nodeattestor-mock/test.sh
+M4_WORKLOAD_DECISION=deny bash core/spire/tests/nodeattestor-mock/test.sh
 ```
 
-The benchmark's mTLS-only profile is diagnostic. Formal capacity results use
-the real OpenClaw preload, caller-local Guard, rotating SVID, and native
-OpenViking mTLS server.
+The positive flow must observe the Sidecar becoming ready with the target SVID
+and then exiting when the referenced process exits. The DENY flow must never
+receive the target SVID.
 
-For a staged run, the scripts can also be invoked individually:
+Individual runtime checks remain available:
 
 ```bash
+bash core/spire/runtime/asymmetric/scripts/verify-svid.sh
+bash core/spire/runtime/asymmetric/scripts/verify-mtls.sh
 bash core/spire/runtime/asymmetric/scripts/verify-architecture.sh
-bash core/spire/runtime/asymmetric/scripts/verify-guard-gate-failures.sh
 bash core/spire/runtime/asymmetric/scripts/verify-openclaw-plugin-e2e.sh
 ```

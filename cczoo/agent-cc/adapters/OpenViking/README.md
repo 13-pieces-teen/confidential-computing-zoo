@@ -1,19 +1,26 @@
-# OpenViking Adapter
+# OpenViking Broker Sidecar adapter
 
-This adapter deploys the official OpenViking server as the `openviking-cmem`
-workload and connects it to OpenClaw through the official plugin.
+This adapter launches the official OpenViking Python server without changing
+its source code and represents it to SPIRE through a separate Broker Sidecar.
 
-## Security model
+## Runtime boundary
 
-The launched container has the label `argus.workload=openviking-cmem`, publishes
-only `127.0.0.1:1933`, and uses `/app/.openviking` for all OpenViking state.
-It does not run privileged and does not use host networking.
+- OpenViking listens on TD Guest loopback port 1933.
+- OpenViking does not mount the Workload API or Broker API socket.
+- OpenViking does not receive an SVID or private key.
+- The launcher passes OpenViking's actual host PID to the Broker Sidecar.
+- The Sidecar requests the target identity through the SPIRE Broker API, keeps
+  the resulting key material in memory, and publishes mTLS port 1943.
+- The Sidecar accepts only
+  `spiffe://argus.local/agent/openclaw` and proxies accepted requests to
+  OpenViking loopback.
 
-## Prerequisites
+The Sidecar is not configured to restart automatically because a restarted
+container must not reuse a stale target PID.
 
-Before launching, select an embedding provider/model and VLM provider/model.
-From `cczoo/agent-cc/adapters/OpenViking`, create a restricted configuration
-file in the selected storage mount:
+## Prepare OpenViking
+
+Select a pinned OpenViking image and create its normal model/API configuration:
 
 ```bash
 export OPENVIKING_LUKS_MOUNT_ROOT="<mounted-storage-path>"
@@ -23,68 +30,63 @@ mkdir -p "$OPENVIKING_HOST_DATA_DIR"
 cp configs/ov.conf.example "$OPENVIKING_HOST_DATA_DIR/ov.conf"
 chmod 700 "$OPENVIKING_HOST_DATA_DIR"
 chmod 600 "$OPENVIKING_HOST_DATA_DIR/ov.conf"
-```
 
-Pull and record an official, tested image digest. Do not use `latest` for a
-launchable image.
-
-```bash
-docker pull "ghcr.io/volcengine/openviking:<tested-version>"
-docker image inspect "ghcr.io/volcengine/openviking:<tested-version>" \
-  --format '{{index .RepoDigests 0}}'
-```
-
-Validate the configuration against that digest before deployment:
-
-```bash
-docker run --rm \
-  -v "$OPENVIKING_HOST_DATA_DIR:/app/.openviking" \
-  "ghcr.io/volcengine/openviking@sha256:<digest>" \
-  openviking-server doctor
-```
-
-## Launch
-
-`launch_openviking.sh` creates a thin local image from
-`configs/Dockerfile.openviking`, pushes it to the local registry, and
-submits the deployment to TC API. It requires a release identifier and a pinned
-base image digest.
-
-```bash
 export OPENVIKING_VERSION="<tested-version>"
 export OPENVIKING_BASE="ghcr.io/volcengine/openviking@sha256:<digest>"
-(cd scripts && ./launch_openviking.sh)
 ```
 
-The default launch command is equivalent to:
+## Build, register, and launch
 
-```text
-docker run -d --name=agentcc-openviking-service \
-  --label=argus.workload=openviking-cmem \
-  --publish=127.0.0.1:1933:1933 \
-  --env=OPENVIKING_CONFIG_FILE=/app/.openviking/ov.conf \
-  --env=OPENVIKING_WITH_BOT=0 \
-  --volume="${OPENVIKING_HOST_DATA_DIR}:/app/.openviking"
-```
-
-## Verify
+First build the OpenViking and Broker Sidecar images in the TD Guest:
 
 ```bash
-curl -fsS http://127.0.0.1:1933/health
-curl -fsS http://127.0.0.1:1933/ready
+export OPENVIKING_LAUNCH_ACTION=build
+bash scripts/launch_openviking.sh
 ```
 
-## Connect OpenClaw
-
-The OpenClaw gateway must meet the official plugin's Node.js and OpenClaw version
-requirements. Provide the user key only through the environment and configure the
-official plugin:
+Create the Broker and target Registration Entries from the SPIRE Server host.
+For the asymmetric profile:
 
 ```bash
-export OPENVIKING_API_KEY="<openclaw-user-key>"
-../OpenClaw/scripts/connect_openclaw_openviking.sh
+bash ../../core/spire/runtime/asymmetric/scripts/register-workloads.sh
 ```
 
-The script checks both service probes, installs the official plugin, configures
-`http://127.0.0.1:1933`, and displays plugin status. Ensure the gateway state is
-persistent so the installed plugin and its configuration survive recreation.
+Use the exact Agent SPIFFE ID printed by that command and launch from the TD
+Guest:
+
+```bash
+export OPENVIKING_WORKLOAD_API_DIR=/run/argus-spire-v2/openviking
+export OPENVIKING_BROKER_API_DIR=/run/argus-spire-v2/openviking-broker
+export OPENVIKING_AGENT_SPIFFE_ID='spiffe://argus.local/spire/agent/argus_tdx/<exact-id>'
+export OPENVIKING_LAUNCH_ACTION=launch
+bash scripts/launch_openviking.sh
+```
+
+The launcher submits OpenViking through TC API, waits for the launch result,
+extracts the single returned container ID, resolves its host PID, and starts the
+Sidecar with that PID.
+
+TC API reloads the default `IMAGE_ID=openviking-cmem` as
+`openviking-cmem:latest`. The asymmetric registration script matches that
+runtime image ID and separately pins the config digest of the source image.
+
+## Verification
+
+Run these checks on the remote Linux/TDVM environment:
+
+```bash
+docker inspect agentcc-openviking-service +  --format '{{.State.Pid}} {{json .Mounts}}'
+docker inspect agentcc-openviking-broker-sidecar +  --format '{{json .Config.Cmd}} {{json .Mounts}}'
+docker logs agentcc-openviking-broker-sidecar
+```
+
+The expected result is:
+
+- no SPIRE socket mount in `agentcc-openviking-service`;
+- the Sidecar command references the current OpenViking host PID;
+- the Sidecar mounts both SPIRE socket directories;
+- the Sidecar log reports that the target identity is ready.
+
+Go unit tests and Linux cross-builds can run in the local checkout. Docker,
+Broker UDS permissions, PID namespaces, `pidfd_open`, and end-to-end SPIRE
+issuance are remote-only verification items.

@@ -8,6 +8,12 @@ asymmetric runtime has passed its functional validation. It does not start a
 new OpenViking identity, repeat the attestation failure matrix, or claim real
 Quote/QGS/production Trustee performance.
 
+The E3-E7 runner has not yet been adapted to the Broker Sidecar ownership
+model: its collector still expects an OpenViking-local SVID status file. Run
+only its unit tests for now; do not use E3-E7 as a Broker Sidecar acceptance
+result until the collector measures the Sidecar without exporting target key
+material.
+
 The separate [`agent-tasks/`](./agent-tasks/) harness implements E8: real LLM
 generation from `1/2/4/8` OpenClaw containers into one OpenViking, measured in
 completed Agent tasks/minute rather than raw QPS.
@@ -37,7 +43,7 @@ same OpenClaw preload and rotating workload SVID as the application. The
 4. Ensure the current user can write the benchmark result root.
 
 The benchmark does not require an OpenViking API key because its capacity path
-uses the deterministic native `/health` endpoint through the real Guard and
+uses the deterministic `/health` endpoint through the real Guard and
 SPIFFE mTLS transport. The model-backed `commit/archive` path remains a
 separate low-rate functional acceptance check.
 

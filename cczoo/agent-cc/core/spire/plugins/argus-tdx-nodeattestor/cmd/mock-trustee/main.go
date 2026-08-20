@@ -20,17 +20,20 @@ import (
 )
 
 type options struct {
-	listen         string
-	serverCertPath string
-	serverKeyPath  string
-	clientCAPath   string
-	instanceIDs    stringListFlag
-	tcbStatus      string
-	mrtd           string
-	rtmr           [4]string
-	debugEnabled   bool
-	trusteeStatus  int
-	trusteeDelay   time.Duration
+	listen           string
+	serverCertPath   string
+	serverKeyPath    string
+	clientCAPath     string
+	instanceIDs      stringListFlag
+	workloadID       string
+	workloadPolicy   string
+	workloadDecision string
+	tcbStatus        string
+	mrtd             string
+	rtmr             [4]string
+	debugEnabled     bool
+	trusteeStatus    int
+	trusteeDelay     time.Duration
 }
 
 func main() {
@@ -44,6 +47,9 @@ func run() error {
 	handler, err := fakeservices.NewHandler(fakeservices.Config{
 		InstanceID:         options.instanceIDs[0],
 		AllowedInstanceIDs: []string(options.instanceIDs),
+		WorkloadID:         options.workloadID,
+		WorkloadPolicyID:   options.workloadPolicy,
+		WorkloadDecision:   options.workloadDecision,
 		TCBStatus:          options.tcbStatus,
 		MRTD:               options.mrtd,
 		RTMR: map[string]*string{
@@ -105,6 +111,9 @@ func parseFlags() options {
 	flag.StringVar(&result.serverKeyPath, "tls-key", "", "Trustee server private key path")
 	flag.StringVar(&result.clientCAPath, "client-ca", "", "CA used to verify Trustee clients")
 	flag.Var(&result.instanceIDs, "instance-id", "approved mock TD instance ID; repeat for multiple TDVMs")
+	flag.StringVar(&result.workloadID, "workload-id", "openviking-cmem", "approved workload ID")
+	flag.StringVar(&result.workloadPolicy, "workload-policy-id", "openviking-cmem-v1", "approved workload policy ID")
+	flag.StringVar(&result.workloadDecision, "workload-decision", "allow", "workload Trustee decision: allow or deny")
 	flag.StringVar(&result.tcbStatus, "tcb-status", "up_to_date", "mock TCB status")
 	flag.StringVar(&result.mrtd, "mrtd", "aabb", "mock MRTD")
 	flag.StringVar(&result.rtmr[0], "rtmr-0", "0011", "mock RTMR 0, empty means null")

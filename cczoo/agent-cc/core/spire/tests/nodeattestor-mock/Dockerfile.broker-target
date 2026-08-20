@@ -1,0 +1,2 @@
+FROM busybox:1.37.0-uclibc
+ENTRYPOINT ["sleep", "3600"]

@@ -53,12 +53,13 @@ run_unit() {
         cargo test --manifest-path "$AGENT_CC_DIR/core/argus/Cargo.toml"
     run_check 'SPIRE NodeAttestor plug-in' \
         run_in_directory "$SPIRE_ROOT/plugins/argus-tdx-nodeattestor" go test ./...
+    run_check 'SPIRE WorkloadAttestor plug-in' \
+        run_in_directory "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" go test ./...
     run_check 'SVID materializer' \
         run_in_directory "$SPIRE_ROOT/components/svid-materializer" go test ./...
     run_check 'OpenClaw SPIFFE transport' run_openclaw_transport_tests
-    run_check 'OpenViking native SPIFFE server helpers' \
-        run_in_directory "$AGENT_CC_DIR/adapters/OpenViking" \
-        python3 -m unittest spiffe_server.test_server
+    run_check 'OpenViking Broker Sidecar' \
+        run_in_directory "$AGENT_CC_DIR/adapters/OpenViking/broker_sidecar" go test ./...
     run_check 'Asymmetric evaluation tooling' run_benchmark_tool_tests
 }
 
@@ -73,10 +74,16 @@ run_attestation() {
     export no_proxy="fake-services,spire-server${no_proxy:+,$no_proxy}"
     export NO_PROXY="fake-services,spire-server${NO_PROXY:+,$NO_PROXY}"
 
-    run_check 'Isolated argus_tdx Node Attestation success and rejection matrix' \
+    run_check 'Isolated Node Attestation and Broker Workload Attestation ALLOW matrix' \
         env \
         M3_SERVER_METRICS_PORT="${M3_SERVER_METRICS_PORT:-29988}" \
         M3_AGENT_METRICS_PORT="${M3_AGENT_METRICS_PORT:-29989}" \
+        bash "$SPIRE_ROOT/tests/nodeattestor-mock/test.sh"
+    run_check 'Isolated Broker Workload Attestation Trustee DENY' \
+        env \
+        M3_SERVER_METRICS_PORT="${M3_SERVER_METRICS_PORT:-29988}" \
+        M3_AGENT_METRICS_PORT="${M3_AGENT_METRICS_PORT:-29989}" \
+        M4_WORKLOAD_DECISION=deny \
         bash "$SPIRE_ROOT/tests/nodeattestor-mock/test.sh"
     run_check 'Isolated argus_tdx software failure matrix' \
         env \
@@ -88,7 +95,7 @@ run_attestation() {
 run_integration() {
     run_check 'Asymmetric runtime architecture' \
         bash "$SCRIPT_DIR/verify-architecture.sh"
-    run_check 'Native Guard failure matrix' \
+    run_check 'Caller-local Guard failure matrix' \
         bash "$SCRIPT_DIR/verify-guard-gate-failures.sh"
     if [[ "${V2_RUN_BUSINESS_E2E:-1}" == "1" ]]; then
         if [[ -z "${OPENVIKING_API_KEY:-}" ]]; then

@@ -25,7 +25,7 @@ docker inspect "$OPENCLAW_CONTAINER" >/dev/null 2>&1 \
     || fail 'OpenClaw container is not running'
 container_environment="$(docker inspect "$OPENCLAW_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}')"
 [[ "$container_environment" == *$'ARGUS_SPIFFE_ENABLED=1\n'* || "$container_environment" == ARGUS_SPIFFE_ENABLED=1* ]] \
-    || fail 'OpenClaw container is not running the native SPIFFE profile'
+    || fail 'OpenClaw container is not running the SPIFFE transport profile'
 
 TARGET_URI="$TARGET_URI" \
 OPENCLAW_CONTAINER="$OPENCLAW_CONTAINER" \
@@ -51,7 +51,7 @@ if (plugin?.mode !== "remote" || plugin?.baseUrl?.replace(/\/+$/, "") !== target
   throw new Error(`OpenViking plugin does not target ${target}`);
 }
 if (typeof plugin.apiKey !== "string" || !plugin.apiKey) throw new Error("plugin API key is missing");
-console.log(`OpenViking context engine uses native SPIFFE origin ${target}`);
+console.log(`OpenViking context engine uses Broker Sidecar SPIFFE origin ${target}`);
 NODE
 
 printf '%s\n' \

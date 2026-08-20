@@ -18,6 +18,8 @@ import (
 type options struct {
 	listen         string
 	instanceID     string
+	workloadID     string
+	workloadPolicy string
 	tcbStatus      string
 	mrtd           string
 	rtmr           [4]string
@@ -36,9 +38,12 @@ func main() {
 func run() error {
 	options := parseFlags()
 	handler, err := fakeservices.NewHandler(fakeservices.Config{
-		InstanceID: options.instanceID,
-		TCBStatus:  options.tcbStatus,
-		MRTD:       options.mrtd,
+		InstanceID:       options.instanceID,
+		WorkloadID:       options.workloadID,
+		WorkloadPolicyID: options.workloadPolicy,
+		WorkloadDecision: "allow",
+		TCBStatus:        options.tcbStatus,
+		MRTD:             options.mrtd,
 		RTMR: map[string]*string{
 			"0": optionalString(options.rtmr[0]),
 			"1": optionalString(options.rtmr[1]),
@@ -87,6 +92,8 @@ func parseFlags() options {
 	var result options
 	flag.StringVar(&result.listen, "listen", "127.0.0.1:18080", "Evidence Provider listen address")
 	flag.StringVar(&result.instanceID, "instance-id", "tdvm-v2-0001", "mock TD instance ID")
+	flag.StringVar(&result.workloadID, "workload-id", "openviking-cmem", "mock workload ID")
+	flag.StringVar(&result.workloadPolicy, "workload-policy-id", "openviking-cmem-v1", "mock workload policy ID")
 	flag.StringVar(&result.tcbStatus, "tcb-status", "up_to_date", "mock TCB status")
 	flag.StringVar(&result.mrtd, "mrtd", "aabb", "mock MRTD")
 	flag.StringVar(&result.rtmr[0], "rtmr-0", "0011", "mock RTMR 0, empty means null")

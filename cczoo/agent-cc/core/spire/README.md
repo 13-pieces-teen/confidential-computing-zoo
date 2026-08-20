@@ -7,12 +7,14 @@ The formal runtime is the asymmetric Argus profile under
 OpenClaw (trusted RP)
   x509pop SPIRE Agent -> OpenClaw X509-SVID
   Argus Guard (caller-local policy)
-  in-process HTTP transport -> direct SPIFFE mTLS
+  in-process HTTP transport -> SPIFFE mTLS
 
 OpenViking (attested workload)
   Evidence Provider -> argus_tdx NodeAttestor
   -> SPIRE Server -> Trustee
-  -> OpenViking X509-SVID -> native HTTPS API
+  -> Broker PID reference -> argus_tdx_workload
+  -> OpenViking target X509-SVID -> Broker Sidecar
+  -> loopback OpenViking HTTP API
 ```
 
 Only the OpenViking Agent is remotely attested. OpenClaw has no Evidence
@@ -24,19 +26,18 @@ workload identities.
 
 ```text
 spire/
-  components/       reusable identity helpers (SVID materializer)
-  plugins/          argus_tdx Agent/Server NodeAttestor plug-ins
+  components/       OpenClaw identity helpers (SVID materializer)
+  plugins/          argus_tdx NodeAttestor and WorkloadAttestor plug-ins
   benchmarks/       asymmetric runtime and agent-task evaluation tooling
   runtime/
     asymmetric/     formal deployment, config, scripts, and remote validation
   tests/            isolated NodeAttestor and TDVM fixtures
 ```
 
-The current business path has no standalone mTLS client or server proxy.
-Legacy proxy-era wrappers, Docker-gate code, and the standalone mTLS diagnostic
-were removed after the native asymmetric path was remotely validated. Their
-implementation and validation evidence remain available in Git history and the
-archived reports under `documents_ly/archive/`.
+OpenViking itself has no SPIRE integration. The dedicated Broker Sidecar owns
+the target SVID in memory, terminates mTLS, and forwards only to OpenViking's
+TD Guest loopback listener. The old Python TLS wrapper and OpenViking-side
+materializer path have been removed.
 
 See [runtime/asymmetric/README.md](runtime/asymmetric/README.md) for the remote
 host execution sequence and the current verification boundary.

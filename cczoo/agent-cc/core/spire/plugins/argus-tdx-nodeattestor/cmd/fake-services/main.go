@@ -19,21 +19,24 @@ import (
 )
 
 type options struct {
-	evidenceListen string
-	trusteeListen  string
-	serverCertPath string
-	serverKeyPath  string
-	clientCAPath   string
-	instanceID     string
-	tcbStatus      string
-	mrtd           string
-	rtmr           [4]string
-	debugEnabled   bool
-	replayEvidence bool
-	evidenceStatus int
-	evidenceDelay  time.Duration
-	trusteeStatus  int
-	trusteeDelay   time.Duration
+	evidenceListen   string
+	trusteeListen    string
+	serverCertPath   string
+	serverKeyPath    string
+	clientCAPath     string
+	instanceID       string
+	workloadID       string
+	workloadPolicy   string
+	workloadDecision string
+	tcbStatus        string
+	mrtd             string
+	rtmr             [4]string
+	debugEnabled     bool
+	replayEvidence   bool
+	evidenceStatus   int
+	evidenceDelay    time.Duration
+	trusteeStatus    int
+	trusteeDelay     time.Duration
 }
 
 func main() {
@@ -45,14 +48,24 @@ func main() {
 func run() error {
 	options := parseFlags()
 	handler, err := fakeservices.NewHandler(fakeservices.Config{
-		InstanceID: options.instanceID, TCBStatus: options.tcbStatus, MRTD: options.mrtd,
+		InstanceID:       options.instanceID,
+		TCBStatus:        options.tcbStatus,
+		MRTD:             options.mrtd,
+		WorkloadID:       options.workloadID,
+		WorkloadPolicyID: options.workloadPolicy,
+		WorkloadDecision: options.workloadDecision,
 		RTMR: map[string]*string{
-			"0": optionalString(options.rtmr[0]), "1": optionalString(options.rtmr[1]),
-			"2": optionalString(options.rtmr[2]), "3": optionalString(options.rtmr[3]),
+			"0": optionalString(options.rtmr[0]),
+			"1": optionalString(options.rtmr[1]),
+			"2": optionalString(options.rtmr[2]),
+			"3": optionalString(options.rtmr[3]),
 		},
-		DebugEnabled: options.debugEnabled, ReplayEvidence: options.replayEvidence,
-		EvidenceStatus: options.evidenceStatus, TrusteeStatus: options.trusteeStatus,
-		EvidenceDelay: options.evidenceDelay, TrusteeDelay: options.trusteeDelay,
+		DebugEnabled:   options.debugEnabled,
+		ReplayEvidence: options.replayEvidence,
+		EvidenceStatus: options.evidenceStatus,
+		TrusteeStatus:  options.trusteeStatus,
+		EvidenceDelay:  options.evidenceDelay,
+		TrusteeDelay:   options.trusteeDelay,
 	})
 	if err != nil {
 		return fmt.Errorf("configure fake services: %w", err)
@@ -107,6 +120,9 @@ func parseFlags() options {
 	flag.StringVar(&result.serverKeyPath, "tls-key", "", "Trustee server private key path")
 	flag.StringVar(&result.clientCAPath, "client-ca", "", "CA used to verify Trustee clients")
 	flag.StringVar(&result.instanceID, "instance-id", "tdvm-m3-0001", "verified TD instance ID")
+	flag.StringVar(&result.workloadID, "workload-id", "openviking-cmem", "verified workload ID")
+	flag.StringVar(&result.workloadPolicy, "workload-policy-id", "openviking-cmem-v1", "verified workload policy ID")
+	flag.StringVar(&result.workloadDecision, "workload-decision", "allow", "workload Trustee decision: allow or deny")
 	flag.StringVar(&result.tcbStatus, "tcb-status", "up_to_date", "verified TCB status")
 	flag.StringVar(&result.mrtd, "mrtd", "aabb", "verified MRTD")
 	flag.StringVar(&result.rtmr[0], "rtmr-0", "0011", "verified RTMR 0, empty means null")

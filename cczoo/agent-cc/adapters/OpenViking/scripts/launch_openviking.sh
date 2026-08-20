@@ -30,9 +30,12 @@ OPENVIKING_USE_LUKS="${OPENVIKING_USE_LUKS:-1}"
 OPENVIKING_LUKS_MOUNT_ROOT="${OPENVIKING_LUKS_MOUNT_ROOT:-/home/encrypted_storage}"
 OPENVIKING_LUKS_SUBDIR="${OPENVIKING_LUKS_SUBDIR:-openviking}"
 OPENVIKING_CONTAINER_STATE_DIR="${OPENVIKING_CONTAINER_STATE_DIR:-/app/.openviking}"
-OPENVIKING_SPIFFE_ENABLED="${OPENVIKING_SPIFFE_ENABLED:-0}"
-OPENVIKING_SPIFFE_WORKLOAD_API_DIR="${OPENVIKING_SPIFFE_WORKLOAD_API_DIR:-}"
-OPENVIKING_SPIFFE_PORT="${OPENVIKING_SPIFFE_PORT:-1943}"
+OPENVIKING_WORKLOAD_API_DIR="${OPENVIKING_WORKLOAD_API_DIR:-}"
+OPENVIKING_BROKER_API_DIR="${OPENVIKING_BROKER_API_DIR:-}"
+OPENVIKING_AGENT_SPIFFE_ID="${OPENVIKING_AGENT_SPIFFE_ID:-}"
+OPENVIKING_MTLS_PORT="${OPENVIKING_MTLS_PORT:-1943}"
+OPENVIKING_BROKER_CONTAINER="${OPENVIKING_BROKER_CONTAINER:-agentcc-openviking-broker-sidecar}"
+OPENVIKING_BROKER_IMAGE="${OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
 OPENVIKING_MODEL_CA_BUNDLE="${OPENVIKING_MODEL_CA_BUNDLE:-}"
 OPENVIKING_LAUNCH_ACTION="${OPENVIKING_LAUNCH_ACTION:-all}"
 ATTESTATION_REQUIRED="${ATTESTATION_REQUIRED:-false}"
@@ -42,6 +45,7 @@ WAIT_ATTEMPTS="${WAIT_ATTEMPTS:-60}"
 WAIT_INTERVAL="${WAIT_INTERVAL:-2}"
 AUTO_START_INFRA="${AUTO_START_INFRA:-1}"
 DOCKERFILE_PATH="${DOCKERFILE_PATH:-$REPO_ROOT/adapters/OpenViking/configs/Dockerfile.openviking}"
+BROKER_DOCKERFILE_PATH="${BROKER_DOCKERFILE_PATH:-$REPO_ROOT/adapters/OpenViking/configs/Dockerfile.broker-sidecar}"
 COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-$REPO_ROOT/adapters/OpenViking/configs/docker-compose.tc-api.yml}"
 
 export IMAGE_URL IMAGE_ID WORKLOAD_ID ATTESTATION_REQUIRED
@@ -107,26 +111,16 @@ prepare_openviking_storage() {
 
     export OPENVIKING_DOCKER_CMD="docker run -d --name=agentcc-openviking-service --label=argus.workload=${WORKLOAD_ID} --env=OPENVIKING_CONFIG_FILE=${OPENVIKING_CONTAINER_STATE_DIR}/ov.conf --env=OPENVIKING_WITH_BOT=0"
 
-    if [[ "$OPENVIKING_SPIFFE_ENABLED" == "1" ]]; then
-        [[ -n "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR" ]] \
-            || { echo "OPENVIKING_SPIFFE_WORKLOAD_API_DIR is required for the SPIFFE profile." >&2; exit 1; }
-        [[ "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR" == /* ]] \
-            || { echo "OPENVIKING_SPIFFE_WORKLOAD_API_DIR must be absolute." >&2; exit 1; }
-        [[ -S "$OPENVIKING_SPIFFE_WORKLOAD_API_DIR/agent.sock" ]] \
-            || { echo "SPIFFE Workload API socket is missing: $OPENVIKING_SPIFFE_WORKLOAD_API_DIR/agent.sock" >&2; exit 1; }
-        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=0.0.0.0:${OPENVIKING_SPIFFE_PORT}:1943 --volume=${OPENVIKING_SPIFFE_WORKLOAD_API_DIR}:/opt/spire/run/openviking:ro --env=ARGUS_SPIFFE_ENABLED=1 --env=SPIFFE_ENDPOINT_SOCKET=unix:///opt/spire/run/openviking/agent.sock --env=ARGUS_WORKLOAD_SPIFFE_ID=spiffe://argus.local/service/openviking-cmem --env=ARGUS_EXPECTED_CLIENT_SPIFFE_ID=spiffe://argus.local/agent/openclaw --env=ARGUS_OPENVIKING_MTLS_PORT=1943 --env=ARGUS_SPIFFE_KEEPALIVE_SECONDS=${ARGUS_SPIFFE_KEEPALIVE_SECONDS:-15}"
-        # Optional model-gateway CA. The supplied path is on the TD Guest and
-        # is mounted read-only at a fixed container path so the launch remains
-        # reproducible without disabling TLS verification.
-        if [[ -n "$OPENVIKING_MODEL_CA_BUNDLE" ]]; then
-            [[ "$OPENVIKING_MODEL_CA_BUNDLE" == /* ]] \
-                || { echo "OPENVIKING_MODEL_CA_BUNDLE must be absolute." >&2; exit 1; }
-            [[ -f "$OPENVIKING_MODEL_CA_BUNDLE" ]] \
-                || { echo "OpenViking model CA bundle is missing: $OPENVIKING_MODEL_CA_BUNDLE" >&2; exit 1; }
-            export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --volume=${OPENVIKING_MODEL_CA_BUNDLE}:/opt/model-ca/argus-ca-bundle.pem:ro --env=SSL_CERT_FILE=/opt/model-ca/argus-ca-bundle.pem"
-        fi
-    else
-        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=127.0.0.1:1933:1933"
+    export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=127.0.0.1:1933:1933"
+
+    # Optional model-gateway CA. This is unrelated to SPIFFE identity and
+    # remains mounted only into the unmodified OpenViking process.
+    if [[ -n "$OPENVIKING_MODEL_CA_BUNDLE" ]]; then
+        [[ "$OPENVIKING_MODEL_CA_BUNDLE" == /* ]] \
+            || { echo "OPENVIKING_MODEL_CA_BUNDLE must be absolute." >&2; exit 1; }
+        [[ -f "$OPENVIKING_MODEL_CA_BUNDLE" ]] \
+            || { echo "OpenViking model CA bundle is missing: $OPENVIKING_MODEL_CA_BUNDLE" >&2; exit 1; }
+        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --volume=${OPENVIKING_MODEL_CA_BUNDLE}:/opt/model-ca/argus-ca-bundle.pem:ro --env=SSL_CERT_FILE=/opt/model-ca/argus-ca-bundle.pem"
     fi
 
     if [[ "$OPENVIKING_USE_LUKS" != "1" ]]; then
@@ -153,6 +147,21 @@ prepare_openviking_storage() {
         export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --volume=${OPENVIKING_HOST_DATA_DIR}:${OPENVIKING_CONTAINER_STATE_DIR}"
         echo "OpenViking encrypted storage: host=${OPENVIKING_HOST_DATA_DIR} -> container=${OPENVIKING_CONTAINER_STATE_DIR}" >&2
     fi
+}
+
+validate_broker_runtime() {
+    [[ "$OPENVIKING_WORKLOAD_API_DIR" == /* ]] \
+        || { echo "OPENVIKING_WORKLOAD_API_DIR must be absolute." >&2; exit 1; }
+    [[ "$OPENVIKING_BROKER_API_DIR" == /* ]] \
+        || { echo "OPENVIKING_BROKER_API_DIR must be absolute." >&2; exit 1; }
+    [[ -S "$OPENVIKING_WORKLOAD_API_DIR/agent.sock" ]] \
+        || { echo "SPIRE Workload API socket is missing: $OPENVIKING_WORKLOAD_API_DIR/agent.sock" >&2; exit 1; }
+    [[ -S "$OPENVIKING_BROKER_API_DIR/broker.sock" ]] \
+        || { echo "SPIRE Broker API socket is missing: $OPENVIKING_BROKER_API_DIR/broker.sock" >&2; exit 1; }
+    [[ "$OPENVIKING_AGENT_SPIFFE_ID" == spiffe://*/* ]] \
+        || { echo "OPENVIKING_AGENT_SPIFFE_ID must be the exact SPIRE Agent SPIFFE ID." >&2; exit 1; }
+    [[ "$OPENVIKING_MTLS_PORT" =~ ^[0-9]+$ ]] \
+        || { echo "OPENVIKING_MTLS_PORT must be numeric." >&2; exit 1; }
 }
 
 resolve_tc_client_cmd() {
@@ -273,9 +282,12 @@ if [[ ! -f "$DOCKERFILE_PATH" ]]; then
     echo "Missing Dockerfile: $DOCKERFILE_PATH" >&2
     exit 1
 fi
+if [[ ! -f "$BROKER_DOCKERFILE_PATH" ]]; then
+    echo "Missing Broker Sidecar Dockerfile: $BROKER_DOCKERFILE_PATH" >&2
+    exit 1
+fi
 
 ensure_infra_stack
-prepare_openviking_storage
 
 auth_args=()
 if [[ -n "${TC_API_BEARER_TOKEN:-}" ]]; then
@@ -286,6 +298,9 @@ if [[ "$OPENVIKING_LAUNCH_ACTION" != launch ]]; then
     echo "[1/5] Building OpenViking workload image: ${IMAGE_NAME}"
     docker build --build-arg "OPENVIKING_BASE=${OPENVIKING_BASE}" -t "${IMAGE_NAME}" -f "${DOCKERFILE_PATH}" "${REPO_ROOT}"
 
+    echo "     Building OpenViking Broker Sidecar image: ${OPENVIKING_BROKER_IMAGE}"
+    docker build -t "${OPENVIKING_BROKER_IMAGE}" -f "${BROKER_DOCKERFILE_PATH}" "${REPO_ROOT}"
+
     echo "[2/5] Pushing image to local registry"
     docker push "$IMAGE_NAME"
     echo "     tc-api pull reference: ${IMAGE_URL}"
@@ -293,11 +308,18 @@ fi
 
 if [[ "$OPENVIKING_LAUNCH_ACTION" == build ]]; then
     docker image inspect "$IMAGE_NAME" --format 'OpenViking build-only complete: image={{.RepoTags}} config_digest={{.Id}}'
+    docker image inspect "$OPENVIKING_BROKER_IMAGE" --format 'Broker Sidecar build-only complete: image={{.RepoTags}} config_digest={{.Id}}'
     exit 0
 fi
 
+prepare_openviking_storage
+
 docker image inspect "$IMAGE_NAME" >/dev/null 2>&1 \
     || { echo "OpenViking image is missing for launch-only action: $IMAGE_NAME" >&2; exit 1; }
+docker image inspect "$OPENVIKING_BROKER_IMAGE" >/dev/null 2>&1 \
+    || { echo "Broker Sidecar image is missing for launch-only action: $OPENVIKING_BROKER_IMAGE" >&2; exit 1; }
+
+validate_broker_runtime
 
 ensure_tc_api_identity_token
 
@@ -382,6 +404,7 @@ launch_id=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.lo
 echo "Launch ID: ${launch_id}"
 
 echo "[4/5] Polling launch result"
+launch_result=""
 for ((attempt=1; attempt<=POLL_ATTEMPTS; attempt++)); do
     result=$(curl -fsS "${TC_API_URL}/api/launch-result/${launch_id}")
     status=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", "unknown"))')
@@ -403,7 +426,8 @@ print(f"  ARGUS_WORKLOAD_IDENTITY={evidence.get('workload_id')}")
 print(f"  ARGUS_SERVICE_ID={evidence.get('workload_id')}")
 print(f"  TC_API_WORKLOAD_ID={evidence.get('workload_id')}")
 PY
-        exit 0
+        launch_result="$result"
+        break
     fi
     if [[ "$status" == "failed" ]]; then
         printf '%s\n' "$result"
@@ -412,5 +436,66 @@ PY
     sleep "$POLL_INTERVAL"
 done
 
-echo "Timed out waiting for launch ${launch_id}" >&2
+if [[ -z "$launch_result" ]]; then
+    echo "Timed out waiting for launch ${launch_id}" >&2
+    exit 1
+fi
+
+container_id="$(RESULT_JSON="$launch_result" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["RESULT_JSON"])
+instances = data.get("evidence", {}).get("instance_ids") or data.get("instance_ids") or []
+if len(instances) != 1 or not isinstance(instances[0], dict) or not instances[0].get("container_ID"):
+    raise SystemExit("expected exactly one launched OpenViking container")
+print(instances[0]["container_ID"])
+PY
+)"
+target_pid="$(docker inspect "$container_id" --format '{{.State.Pid}}')"
+target_started_at="$(docker inspect "$container_id" --format '{{.State.StartedAt}}')"
+[[ "$target_pid" =~ ^[1-9][0-9]*$ ]] \
+    || { echo "Invalid OpenViking host PID: $target_pid" >&2; exit 1; }
+
+echo "[5/5] Starting Broker Sidecar for OpenViking PID ${target_pid}"
+docker rm -f "$OPENVIKING_BROKER_CONTAINER" >/dev/null 2>&1 || true
+docker run -d \
+    --name "$OPENVIKING_BROKER_CONTAINER" \
+    --network host \
+    --pid host \
+    --label argus.component=openviking-broker \
+    --volume "$OPENVIKING_WORKLOAD_API_DIR:/opt/spire/run/agent:ro" \
+    --volume "$OPENVIKING_BROKER_API_DIR:/opt/spire/run/broker:ro" \
+    "$OPENVIKING_BROKER_IMAGE" \
+    -workload-api=unix:///opt/spire/run/agent/agent.sock \
+    -broker-socket=/opt/spire/run/broker/broker.sock \
+    -broker-spiffe-id=spiffe://argus.local/infra/openviking-broker \
+    "-agent-spiffe-id=$OPENVIKING_AGENT_SPIFFE_ID" \
+    -target-spiffe-id=spiffe://argus.local/service/openviking-cmem \
+    -client-spiffe-id=spiffe://argus.local/agent/openclaw \
+    "-target-pid=$target_pid" \
+    "-listen=0.0.0.0:$OPENVIKING_MTLS_PORT" \
+    -upstream=http://127.0.0.1:1933 >/dev/null
+
+for ((attempt=1; attempt<=WAIT_ATTEMPTS; attempt++)); do
+    if docker logs "$OPENVIKING_BROKER_CONTAINER" 2>&1 | grep -Fq 'OpenViking mTLS listener is ready'; then
+        printf '%s\n' \
+            'OpenViking Broker Sidecar is ready.' \
+            "  launch_id: $launch_id" \
+            "  container_id: $container_id" \
+            "  host_pid: $target_pid" \
+            "  process_started_at: $target_started_at" \
+            "  mTLS_port: $OPENVIKING_MTLS_PORT"
+        exit 0
+    fi
+    if [[ "$(docker inspect "$OPENVIKING_BROKER_CONTAINER" --format '{{.State.Running}}')" != true ]]; then
+        docker logs "$OPENVIKING_BROKER_CONTAINER" >&2 || true
+        echo "OpenViking Broker Sidecar exited before identity became ready." >&2
+        exit 1
+    fi
+    sleep "$WAIT_INTERVAL"
+done
+
+docker logs "$OPENVIKING_BROKER_CONTAINER" >&2 || true
+echo "Timed out waiting for OpenViking Broker Sidecar identity." >&2
 exit 1

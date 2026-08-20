@@ -18,6 +18,9 @@ services:
       - -evidence-status=${M4_EVIDENCE_STATUS:-0}
       - -trustee-status=${M4_TRUSTEE_STATUS:-0}
       - -trustee-delay=${M4_TRUSTEE_DELAY:-0s}
+      - -workload-id=openviking-cmem
+      - -workload-policy-id=openviking-cmem-v1
+      - -workload-decision=${M4_WORKLOAD_DECISION:-allow}
     volumes:
       - ./runtime/certs:/opt/argus/certs:ro
     ports:
@@ -26,7 +29,7 @@ services:
       - m3
 
   spire-server:
-    image: ghcr.io/spiffe/spire-server:1.15.1
+    image: ghcr.io/spiffe/spire-server:1.15.2
     hostname: spire-server
     depends_on:
       - fake-services
@@ -49,7 +52,7 @@ services:
       - m3
 
   spire-agent:
-    image: ghcr.io/spiffe/spire-agent:1.15.1
+    image: ghcr.io/spiffe/spire-agent:1.15.2
     depends_on:
       - fake-services
       - spire-server
@@ -63,10 +66,11 @@ services:
       retries: 30
     volumes:
       - ./runtime/conf/agent.conf:/opt/spire/conf/agent.conf:ro
-      - ./runtime/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro
+      - ./runtime/certs:/opt/spire/conf/certs:ro
       - ./runtime/plugins:/opt/spire/plugins:ro
       - ${M4_AGENT_DATA_DIR:-./runtime/agent-data}:/opt/spire/data/agent
       - ./runtime/agent-run:/opt/spire/run/agent
+      - ./runtime/broker-run:/opt/spire/run/broker
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
 networks:

@@ -15,6 +15,7 @@ TDVM_MEMORY="${TDVM_MEMORY:-8G}"
 TDVM_SSH_PORT="${TDVM_SSH_PORT:-2222}"
 TDVM_OPENVIKING_PORT="${TDVM_OPENVIKING_PORT:-2933}"
 TDVM_MTLS_PORT="${TDVM_MTLS_PORT:-1943}"
+TDVM_DOCKER_MTLS_BIND_ADDRESS="${TDVM_DOCKER_MTLS_BIND_ADDRESS:-}"
 TDVM_RUNTIME_DIR="${TDVM_RUNTIME_DIR:-/tmp/argus-spiffe-m4-$UID/$TDVM_NAME}"
 PID_FILE="$TDVM_RUNTIME_DIR/qemu.pid"
 CONSOLE_LOG="$TDVM_RUNTIME_DIR/console.log"
@@ -78,9 +79,23 @@ GUESTFISH
 }
 
 start() {
+    local command_line docker_mtls_bind_address
+
     require_command qemu-system-x86_64
+    require_command docker
+    docker_mtls_bind_address="$TDVM_DOCKER_MTLS_BIND_ADDRESS"
+    if [[ -z "$docker_mtls_bind_address" ]]; then
+        docker_mtls_bind_address="$(
+            docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}'
+        )"
+    fi
+    [[ -n "$docker_mtls_bind_address" && "$docker_mtls_bind_address" != 127.0.0.1 ]] \
+        || fail 'Docker bridge gateway address is unavailable for the mTLS forward'
     mkdir -p "$TDVM_RUNTIME_DIR"
     if pid="$(running_pid)"; then
+        command_line="$(ps -p "$pid" -o args=)"
+        [[ "$command_line" == *"hostfwd=tcp:$docker_mtls_bind_address:$TDVM_MTLS_PORT-:1943"* ]] \
+            || fail "running TD VM is missing the Docker mTLS forward on $docker_mtls_bind_address:$TDVM_MTLS_PORT; stop and restart it"
         printf '%s\n' "$pid" >"$PID_FILE"
         printf 'TD VM already running: pid=%s\n' "$pid"
         return
@@ -89,7 +104,7 @@ start() {
     rm -f "$PID_FILE"
     for port in "$TDVM_SSH_PORT" "$TDVM_OPENVIKING_PORT" "$TDVM_MTLS_PORT"; do
         if ss -ltn "sport = :$port" | grep -q LISTEN; then
-            fail "host loopback port is already in use: $port"
+            fail "host forwarding port is already in use: $port"
         fi
     done
 
@@ -100,7 +115,7 @@ start() {
         -machine q35,confidential-guest-support=tdx0,kernel_irqchip=split,smm=off \
         -bios "$TDVM_FIRMWARE" \
         -drive "file=$TDVM_OVERLAY_IMAGE,if=virtio,format=qcow2" \
-        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$TDVM_SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$TDVM_OPENVIKING_PORT-:1933,hostfwd=tcp:127.0.0.1:$TDVM_MTLS_PORT-:1943" \
+        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$TDVM_SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$TDVM_OPENVIKING_PORT-:1933,hostfwd=tcp:127.0.0.1:$TDVM_MTLS_PORT-:1943,hostfwd=tcp:$docker_mtls_bind_address:$TDVM_MTLS_PORT-:1943" \
         -device virtio-net-pci,netdev=net0 \
         -display none -serial "file:$CONSOLE_LOG" -monitor none \
         -daemonize -pidfile "$PID_FILE" -no-reboot
@@ -108,8 +123,9 @@ start() {
     for _ in $(seq 1 60); do
         pid="$(running_pid)" || fail "QEMU exited; inspect $CONSOLE_LOG"
         if ss -ltn "sport = :$TDVM_SSH_PORT" | grep -q LISTEN; then
-            printf 'TD VM started: pid=%s ssh=127.0.0.1:%s openviking=127.0.0.1:%s mtls=127.0.0.1:%s\n' \
-                "$pid" "$TDVM_SSH_PORT" "$TDVM_OPENVIKING_PORT" "$TDVM_MTLS_PORT"
+            printf 'TD VM started: pid=%s ssh=127.0.0.1:%s openviking=127.0.0.1:%s mtls=127.0.0.1:%s docker_mtls=%s:%s\n' \
+                "$pid" "$TDVM_SSH_PORT" "$TDVM_OPENVIKING_PORT" "$TDVM_MTLS_PORT" \
+                "$docker_mtls_bind_address" "$TDVM_MTLS_PORT"
             return
         fi
         read -r -t 1 _ || true

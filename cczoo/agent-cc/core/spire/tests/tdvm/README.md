@@ -23,6 +23,15 @@ core/spire/tests/tdvm/tdvm.sh status
 running QEMU process with the same `TDVM_NAME`; `stop` sends SIGTERM only to
 that process and leaves both disk images intact.
 
+The mTLS guest port is forwarded twice: to host loopback for host-side checks,
+and to the Docker default bridge gateway for the OpenClaw container. This keeps
+port 1943 off external host interfaces. Override the latter only when the
+Docker daemon uses another host-gateway address:
+
+```bash
+export TDVM_DOCKER_MTLS_BIND_ADDRESS=<docker-host-gateway-address>
+```
+
 ## Host and guest preflight
 
 Run the Host check before launching a TD VM:

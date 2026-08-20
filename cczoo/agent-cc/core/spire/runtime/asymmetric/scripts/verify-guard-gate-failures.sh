@@ -8,7 +8,7 @@ OPENVIKING_ORIGIN="${V2_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
 GUARD_CONTAINER="${V2_GUARD_CONTAINER:-argus-v2-guard}"
 FAULT_CONTAINER="${V2_GUARD_FAULT_CONTAINER:-argus-guard-fault-stub}"
 
-fail() { printf 'native Guard failure matrix: FAIL: %s\n' "$1" >&2; exit 1; }
+fail() { printf 'caller-local Guard failure matrix: FAIL: %s\n' "$1" >&2; exit 1; }
 
 restore() {
     local status=$?
@@ -116,4 +116,4 @@ docker rm -f "$FAULT_CONTAINER" >/dev/null 2>&1 || true
 printf '%s\n' \
     'Native Guard failure matrix passed.' \
     'DENY, malformed response, HTTP 503, timeout, and Guard outage all failed before the OpenViking fetch.' \
-    'The real Guard and direct SPIFFE mTLS path recovered successfully.'
+    'The real Guard and Broker Sidecar SPIFFE mTLS path recovered successfully.'

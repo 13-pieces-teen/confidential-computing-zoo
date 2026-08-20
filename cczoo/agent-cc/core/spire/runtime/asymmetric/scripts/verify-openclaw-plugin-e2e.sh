@@ -7,14 +7,14 @@ OPENCLAW_CONFIG="${V2_REAL_OPENCLAW_CONFIG:-/home/node/.openclaw/openclaw.json}"
 EXPECTED_BASE_URL="${V2_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
 GUARD_CONTAINER="${V2_GUARD_CONTAINER:-argus-v2-guard}"
 RUN_ID="${V2_E2E_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$RANDOM}"
-MARKER="${V2_E2E_MARKER:-ARGUS-NATIVE-SPIFFE-E2E-$RUN_ID}"
-SESSION_KEY="${V2_E2E_SESSION_KEY:-argus-native-spiffe-e2e-$RUN_ID}"
-MESSAGE="${V2_E2E_MESSAGE:-[ARGUS asymmetric E2E] 请确认收到唯一标识 $MARKER。本轮验证 OpenClaw 经 caller-local Guard 与原生 SPIFFE mTLS 写入 OpenViking。}"
+MARKER="${V2_E2E_MARKER:-ARGUS-BROKER-SPIFFE-E2E-$RUN_ID}"
+SESSION_KEY="${V2_E2E_SESSION_KEY:-argus-broker-spiffe-e2e-$RUN_ID}"
+MESSAGE="${V2_E2E_MESSAGE:-[ARGUS asymmetric E2E] 请确认收到唯一标识 $MARKER。本轮验证 OpenClaw 经 caller-local Guard 与 Broker Sidecar SPIFFE mTLS 写入 OpenViking。}"
 AGENT_TIMEOUT="${V2_E2E_AGENT_TIMEOUT:-180}"
 CAPTURE_ATTEMPTS="${V2_E2E_CAPTURE_ATTEMPTS:-30}"
 COMMIT_ATTEMPTS="${V2_E2E_COMMIT_ATTEMPTS:-60}"
 
-fail() { printf 'native OpenClaw plugin E2E: FAIL: %s\n' "$1" >&2; exit 1; }
+fail() { printf 'Broker Sidecar OpenClaw plugin E2E: FAIL: %s\n' "$1" >&2; exit 1; }
 [[ -n "${OPENVIKING_API_KEY:-}" ]] || fail 'OPENVIKING_API_KEY is required'
 docker inspect "$OPENCLAW_CONTAINER" >/dev/null 2>&1 || fail 'OpenClaw container is missing'
 
@@ -50,7 +50,7 @@ const plugin = config("plugins.entries.openviking.config");
 const slot = config("plugins.slots.contextEngine");
 const base = plugin?.baseUrl?.replace(/\/+$/, "");
 if (slot !== "openviking" || plugin?.mode !== "remote" || base !== expectedBase) {
-  throw new Error("OpenViking plugin is not configured for the native SPIFFE origin");
+  throw new Error("OpenViking plugin is not configured for the Broker Sidecar SPIFFE origin");
 }
 const headers = {
   "X-API-Key": process.env.OPENVIKING_API_KEY,
@@ -130,8 +130,8 @@ printf '%s' "$guard_logs" | grep -F 'caller-local SPIFFE authorization decision'
     || fail 'no matching Guard ALLOW audit decision was observed for the E2E turn'
 
 printf '%s\n' \
-    'Real OpenClaw -> OpenViking native SPIFFE plugin E2E passed.' \
+    'Real OpenClaw -> Broker Sidecar -> OpenViking SPIFFE plugin E2E passed.' \
     "Marker: $MARKER" \
     "OpenClaw session key: $SESSION_KEY" \
     "OpenViking processing: $processing_summary" \
-    'The business turn was Guard-authorized, transmitted over direct SPIFFE mTLS, captured, committed, and archived.'
+    'The business turn was Guard-authorized, transmitted through Broker Sidecar SPIFFE mTLS, captured, committed, and archived.'

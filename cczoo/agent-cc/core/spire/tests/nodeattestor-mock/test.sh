@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENT_CC_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 MODULE_DIR="$AGENT_CC_DIR/core/spire/plugins/argus-tdx-nodeattestor"
+WORKLOAD_MODULE_DIR="$AGENT_CC_DIR/core/spire/plugins/argus-tdx-workloadattestor"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-go-cache}"
 
 bash "$SCRIPT_DIR/prepare.sh"
@@ -14,11 +15,16 @@ export M4_SERVER_DATA_DIR="$case_directory/server-data"
 export M4_AGENT_DATA_DIR="$case_directory/agent-data"
 mkdir -p "$M4_SERVER_DATA_DIR" "$M4_AGENT_DATA_DIR/argus-tdx"
 chmod 0700 "$M4_SERVER_DATA_DIR" "$M4_AGENT_DATA_DIR" "$M4_AGENT_DATA_DIR/argus-tdx"
-chown 1000:1000 "$M4_SERVER_DATA_DIR"
+chown -R 1000:1000 "$M4_SERVER_DATA_DIR" "$M4_AGENT_DATA_DIR"
 
 docker run --rm \
     -e GOPROXY=off -e GOSUMDB=off -e GOMODCACHE=/gomodcache \
     -v "$MODULE_DIR:/workspace" -v "$GO_CACHE_DIR:/gomodcache" \
+    -w /workspace golang:1.24-bookworm go test -mod=readonly ./...
+
+docker run --rm \
+    -e GOPROXY=off -e GOSUMDB=off -e GOMODCACHE=/gomodcache \
+    -v "$WORKLOAD_MODULE_DIR:/workspace" -v "$GO_CACHE_DIR:/gomodcache" \
     -w /workspace golang:1.24-bookworm go test -mod=readonly ./...
 
 cd "$SCRIPT_DIR"

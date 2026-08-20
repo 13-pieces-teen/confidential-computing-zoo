@@ -1,9 +1,9 @@
-# M3 hardware-free integration
+# M3/M4 hardware-free SPIRE integration
 
-This environment runs SPIRE Server and Agent 1.15.1 with the external `argus_tdx`
-NodeAttestor plugins. A local fake Evidence Provider produces binding-aware evidence,
-and an mTLS fake Trustee independently verifies the request digest, attestation-key
-target, and REPORTDATA before returning verified claims.
+This environment runs SPIRE Server and Agent 1.15.2 with the external
+`argus_tdx` NodeAttestor and `argus_tdx_workload` WorkloadAttestor. A local mock
+Evidence Provider produces binding-aware node and workload evidence. An mTLS
+mock Trustee validates those bindings and returns ALLOW or DENY.
 
 The M3 files are isolated from the Phase 1 `join_token` configuration. Generated
 keys, certificates, rendered configuration, plugin binaries, and SPIRE state live
@@ -24,11 +24,26 @@ cd core/spire/tests/nodeattestor-mock
 bash test.sh
 ```
 
-The test builds all three static binaries, generates short-lived M3 certificates,
-validates both SPIRE configurations, completes Node Attestation, and checks the
-workload identity matrix. The positive workload must match its attested parent,
-role label, immutable image ID, and image config digest. Wrong labels and an
-unauthorized image config digest must receive no identity.
+The default test builds the plug-ins and Broker Sidecar, generates short-lived
+certificates, validates both SPIRE configurations, and completes two flows:
+
+1. the existing Node Attestation and Docker selector matrix;
+2. a real Broker PID-reference request for a running target process, custom
+   Workload Attestation, strong Registration Entry matching, target SVID
+   delivery, and Sidecar exit after the referenced process exits.
+
+The Broker target is a BusyBox fixture used to exercise the software chain. It
+does not claim to be a real OpenViking/TC-API launch or hardware evidence.
+
+Run the Trustee DENY path separately:
+
+```bash
+M4_WORKLOAD_DECISION=deny bash test.sh
+```
+
+The DENY run requires all three observations: the mock Trustee records a
+`workload_trustee/denied` request, the Broker API returns permission denied, and
+the OpenViking target SVID is never delivered to the Broker Sidecar.
 
 The Agent uses the fake service container's network namespace so the Evidence
 Provider remains a loopback-only channel. It uses the host PID namespace because
@@ -47,5 +62,5 @@ The isolated stack defaults to host metrics ports `29988` and `29989` so it
 can run beside the formal asymmetric profile. Override them with
 `M3_SERVER_METRICS_PORT` and `M3_AGENT_METRICS_PORT` when required.
 
-Deleting `runtime/` resets the generated keys and SPIRE state. Do this only when a
-fresh Node Attestation identity is required.
+Deleting `runtime/` resets the generated keys and SPIRE state. Do this only when
+a fresh isolated identity environment is required.
