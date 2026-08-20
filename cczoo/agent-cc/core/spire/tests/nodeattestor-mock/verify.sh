@@ -15,7 +15,7 @@ BROKER_TARGET_ID="spiffe://argus.local/service/openviking-cmem"
 BROKER_CONTAINER="argus-m3-openviking-broker"
 BROKER_TARGET_CONTAINER="argus-m3-broker-target"
 WORKLOAD_DECISION="${M4_WORKLOAD_DECISION:-allow}"
-FAKE_METRICS_URL="http://127.0.0.1:${M3_AGENT_METRICS_PORT:-29989}/metrics"
+FAKE_METRICS_URL="http://127.0.0.1:${M3_AGENT_METRICS_PORT:-39989}/metrics"
 
 spire_server() {
     docker compose exec -T spire-server /opt/spire/bin/spire-server \
@@ -40,6 +40,10 @@ if len(agents) != 1:
 identity = agents[0]["id"]
 print("spiffe://{}{}".format(identity["trust_domain"], identity["path"]))
 ' <<<"$agent_json")"
+
+broker_socket_stat="$(stat -c '%u:%g %a' "$SCRIPT_DIR/runtime/broker-run/broker.sock")"
+[[ "$broker_socket_stat" == "0:1000 770" ]] \
+    || { echo "Broker API socket permissions are $broker_socket_stat, expected 0:1000 770" >&2; exit 1; }
 
 workload_image="$(docker image inspect ghcr.io/spiffe/spire-agent:1.15.2 --format '{{.Id}}')"
 wrong_image="$(docker image inspect argus-spire-m3-negative-workload:local --format '{{.Id}}')"

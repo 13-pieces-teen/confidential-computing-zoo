@@ -17,16 +17,21 @@ services:
       - -rtmr-0=0011
       - -trustee-status=${DUAL_TRUSTEE_STATUS:-0}
       - -trustee-delay=${DUAL_TRUSTEE_DELAY:-0s}
+      - -workload-id=openviking-cmem
+      - -workload-policy-id=openviking-cmem-v1
+      - -workload-decision=${DUAL_WORKLOAD_DECISION:-allow}
     volumes:
       - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-server.pem:/opt/argus/certs/trustee-server.pem:ro"
       - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-server-key.pem:/opt/argus/certs/trustee-server-key.pem:ro"
       - "${DUAL_RUNTIME_DIR:-./runtime}/certs/trustee-ca.pem:/opt/argus/certs/trustee-ca.pem:ro"
+    ports:
+      - "${DUAL_TRUSTEE_BIND_ADDRESS:-0.0.0.0}:${DUAL_TDVM_TRUSTEE_PORT:-18443}:18443"
     restart: unless-stopped
     networks:
       - center
 
   spire-server:
-    image: ghcr.io/spiffe/spire-server:1.15.1
+    image: ghcr.io/spiffe/spire-server:1.15.2
     container_name: argus-dual-spire-server
     hostname: spire-server
     depends_on:

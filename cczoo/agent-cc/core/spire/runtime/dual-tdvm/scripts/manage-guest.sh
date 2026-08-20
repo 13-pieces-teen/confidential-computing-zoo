@@ -6,7 +6,7 @@ ACTION="${2:-status}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUNTIME_DIR="${DUAL_RUNTIME_DIR:-$PROFILE_DIR/runtime}"
-SPIRE_AGENT_IMAGE="${DUAL_SPIRE_AGENT_IMAGE:-ghcr.io/spiffe/spire-agent:1.15.1}"
+SPIRE_AGENT_IMAGE="${DUAL_SPIRE_AGENT_IMAGE:-ghcr.io/spiffe/spire-agent:1.15.2}"
 PROVIDER_IMAGE="${DUAL_PROVIDER_IMAGE:-argus-spire-dual-mock-evidence-provider:local}"
 REMOTE_ROOT="${DUAL_GUEST_ROOT:-/opt/argus-spire-dual}"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
@@ -26,6 +26,7 @@ case "$ROLE" in
         INSTANCE_ID="${DUAL_OPENCLAW_TDVM_INSTANCE_ID:-tdvm-openclaw-0001}"
         REMOTE_DATA="${DUAL_OPENCLAW_GUEST_DATA:-/var/lib/argus-spire-dual/openclaw-agent}"
         REMOTE_RUN="${DUAL_OPENCLAW_GUEST_RUN:-/run/argus-spire-dual/openclaw}"
+        REMOTE_BROKER_RUN=""
         AGENT_CONFIG="openclaw-agent.conf"
         PROVIDER_CONTAINER="argus-dual-openclaw-evidence"
         AGENT_CONTAINER="argus-dual-openclaw-agent"
@@ -40,11 +41,14 @@ case "$ROLE" in
         INSTANCE_ID="${DUAL_OPENVIKING_TDVM_INSTANCE_ID:-tdvm-openviking-0001}"
         REMOTE_DATA="${DUAL_OPENVIKING_GUEST_DATA:-/var/lib/argus-spire-dual/openviking-agent}"
         REMOTE_RUN="${DUAL_OPENVIKING_GUEST_RUN:-/run/argus-spire-dual/openviking}"
+        REMOTE_BROKER_RUN="${DUAL_OPENVIKING_GUEST_BROKER_RUN:-/run/argus-spire-dual/openviking-broker}"
         AGENT_CONFIG="openviking-agent.conf"
         PROVIDER_CONTAINER="argus-dual-openviking-evidence"
         AGENT_CONTAINER="argus-dual-openviking-agent"
         WORKLOAD_CONTAINER="${DUAL_OPENVIKING_CONTAINER:-agentcc-openviking-service}"
         WORKLOAD_IMAGE="${DUAL_OPENVIKING_WORKLOAD_IMAGE:-argus-dual-openviking:v0.4.8}"
+        BROKER_CONTAINER="${DUAL_OPENVIKING_BROKER_CONTAINER:-agentcc-openviking-broker-sidecar}"
+        BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
         ;;
     *) fail 'role must be openclaw or openviking' ;;
 esac
@@ -55,6 +59,10 @@ esac
     || fail "DUAL_RUNTIME_DIR must be an absolute host path: $RUNTIME_DIR"
 [[ "$REMOTE_ROOT" == /* && "$REMOTE_DATA" == /* && "$REMOTE_RUN" == /* ]] \
     || fail 'Guest root, data, and run paths must be absolute'
+if [[ "$ROLE" == openviking ]]; then
+    [[ "$REMOTE_BROKER_RUN" == /* ]] \
+        || fail 'OpenViking Broker run path must be absolute'
+fi
 
 ssh_options=(
     -o BatchMode=yes
@@ -142,6 +150,14 @@ deploy_agent() {
         || fail 'missing generated SPIRE upstream CA'
     [[ -x "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" ]] \
         || fail 'missing argus_tdx Agent plugin'
+    if [[ "$ROLE" == openviking ]]; then
+        [[ -x "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor" ]] \
+            || fail 'missing argus_tdx_workload plugin'
+        for certificate in trustee-ca.pem trustee-client.pem trustee-client-key.pem; do
+            [[ -s "$RUNTIME_DIR/certs/$certificate" ]] \
+                || fail "missing generated Trustee client material: $certificate"
+        done
+    fi
     require_local_image "$PROVIDER_IMAGE"
     require_local_image "$SPIRE_AGENT_IMAGE"
 
@@ -158,12 +174,28 @@ deploy_agent() {
         "$REMOTE_ROOT/certs" \
         "$REMOTE_ROOT/plugins" \
         "$REMOTE_RUN"
+    if [[ "$ROLE" == openviking ]]; then
+        remote_sudo install -d -m 2770 "$REMOTE_BROKER_RUN"
+    fi
     remote_sudo install -d -m 0700 "$REMOTE_DATA" "$REMOTE_DATA/argus-tdx"
     tar -C "$RUNTIME_DIR" -cpf - \
         "conf/$AGENT_CONFIG" \
         certs/upstream-ca.pem \
         plugins/argus-tdx-nodeattestor-agent \
         | remote_sudo tar -C "$REMOTE_ROOT" -xpf -
+    if [[ "$ROLE" == openviking ]]; then
+        tar -C "$RUNTIME_DIR" -cpf - \
+            certs/trustee-ca.pem \
+            certs/trustee-client.pem \
+            certs/trustee-client-key.pem \
+            plugins/argus-tdx-workloadattestor \
+            | remote_sudo tar -C "$REMOTE_ROOT" -xpf -
+        remote_sudo chmod 0755 "$REMOTE_ROOT/plugins/argus-tdx-workloadattestor"
+        remote_sudo chmod 0644 \
+            "$REMOTE_ROOT/certs/trustee-ca.pem" \
+            "$REMOTE_ROOT/certs/trustee-client.pem"
+        remote_sudo chmod 0600 "$REMOTE_ROOT/certs/trustee-client-key.pem"
+    fi
     remote_sudo chmod 0755 "$REMOTE_ROOT/plugins/argus-tdx-nodeattestor-agent"
     remote_sudo chmod 0644 \
         "$REMOTE_ROOT/conf/$AGENT_CONFIG" \
@@ -174,6 +206,10 @@ deploy_agent() {
         "$REMOTE_ROOT/plugins" \
         "$REMOTE_DATA" \
         "$REMOTE_RUN"
+    if [[ "$ROLE" == openviking ]]; then
+        remote_sudo chown -R 1000:1000 "$REMOTE_BROKER_RUN"
+        remote_sudo chmod 2770 "$REMOTE_BROKER_RUN"
+    fi
 
     remote_sudo /usr/local/bin/docker rm -f "$PROVIDER_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker run -d \
@@ -186,31 +222,48 @@ deploy_agent() {
         -tcb-status=up_to_date \
         -mrtd=aabb \
         -rtmr-0=0011 \
+        -workload-id=openviking-cmem \
+        -workload-policy-id=openviking-cmem-v1 \
         "-replay-evidence=${DUAL_REPLAY_EVIDENCE:-false}" \
         "-evidence-status=${DUAL_EVIDENCE_STATUS:-0}" \
         "-evidence-delay=${DUAL_EVIDENCE_DELAY:-0s}" >/dev/null
     wait_for_provider
 
     remote_sudo /usr/local/bin/docker rm -f "$AGENT_CONTAINER" >/dev/null 2>&1 || true
+    agent_mounts=(
+        -v "$REMOTE_ROOT/conf/$AGENT_CONFIG:/opt/spire/conf/$AGENT_CONFIG:ro"
+        -v "$REMOTE_ROOT/certs:/opt/spire/conf/certs:ro"
+        -v "$REMOTE_ROOT/plugins:/opt/spire/plugins:ro"
+        -v "$REMOTE_DATA:/opt/spire/data/$ROLE-agent"
+        -v "$REMOTE_RUN:/opt/spire/run/$ROLE"
+        -v /var/run/docker.sock:/var/run/docker.sock:ro
+    )
+    if [[ "$ROLE" == openviking ]]; then
+        agent_mounts+=(
+            -v "$REMOTE_BROKER_RUN:/opt/spire/run/openviking-broker"
+        )
+    fi
     remote_sudo /usr/local/bin/docker run -d \
         --name "$AGENT_CONTAINER" \
         --network host \
         --pid host \
         --restart unless-stopped \
-        -v "$REMOTE_ROOT/conf/$AGENT_CONFIG:/opt/spire/conf/$AGENT_CONFIG:ro" \
-        -v "$REMOTE_ROOT/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro" \
-        -v "$REMOTE_ROOT/plugins/argus-tdx-nodeattestor-agent:/opt/spire/plugins/argus-tdx-nodeattestor-agent:ro" \
-        -v "$REMOTE_DATA:/opt/spire/data/$ROLE-agent" \
-        -v "$REMOTE_RUN:/opt/spire/run/$ROLE" \
-        -v /var/run/docker.sock:/var/run/docker.sock:ro \
+        "${agent_mounts[@]}" \
         "$SPIRE_AGENT_IMAGE" \
         -config "/opt/spire/conf/$AGENT_CONFIG" >/dev/null
     wait_for_agent
+
+    if [[ "$ROLE" == openviking ]]; then
+        broker_socket_stat="$(remote_sudo stat -c '%u:%g %a' "$REMOTE_BROKER_RUN/broker.sock")"
+        [[ "$broker_socket_stat" == '0:1000 770' ]] \
+            || fail "Broker API socket permissions are $broker_socket_stat, expected 0:1000 770"
+    fi
 
     printf '%s\n' \
         "$ROLE TDVM SPIRE Agent is healthy." \
         "TDVM instance ID: $INSTANCE_ID" \
         "Workload API directory: $REMOTE_RUN" \
+        "Broker API directory: ${REMOTE_BROKER_RUN:-not-enabled}" \
         'Attestation path: Guest-local mock Evidence Provider -> center mock Trustee.'
 }
 
@@ -255,10 +308,25 @@ load_workload() {
             "$REMOTE_ROOT/secrets/openclaw-guard-api-token" \
             "$REMOTE_ROOT/secrets/openclaw-gateway-token"
     else
-        local openviking_config
+        local openviking_config source_image tc_api_url
         openviking_config="${DUAL_OPENVIKING_CONFIG:-}"
+        source_image="${DUAL_OPENVIKING_SOURCE_IMAGE:-localhost:5000/openviking:v0.4.8}"
+        tc_api_url="${DUAL_TC_API_URL:-http://127.0.0.1:8000}"
         [[ -n "$openviking_config" && "$openviking_config" == /* && -s "$openviking_config" ]] \
             || fail 'DUAL_OPENVIKING_CONFIG must name an absolute, non-empty ov.conf file'
+        require_local_image "$BROKER_IMAGE"
+        stream_image "$BROKER_IMAGE"
+        remote curl -fsS --max-time 5 "$tc_api_url/" >/dev/null \
+            || fail "existing TC-API is not healthy at $tc_api_url"
+        remote curl -fsS --max-time 5 http://127.0.0.1:5000/v2/ >/dev/null \
+            || fail 'existing OpenViking TDVM registry is not healthy at http://127.0.0.1:5000/v2/'
+        remote_sudo /usr/local/bin/docker tag "$WORKLOAD_IMAGE" "$source_image"
+        remote_sudo /usr/local/bin/docker push "$source_image" >/dev/null
+
+        remote_sudo install -d -m 0755 "$REMOTE_ROOT/bin"
+        remote_sudo tee "$REMOTE_ROOT/bin/launch_openviking.sh" \
+            <"$PROFILE_DIR/../../../../adapters/OpenViking/scripts/launch_openviking.sh" >/dev/null
+        remote_sudo chmod 0755 "$REMOTE_ROOT/bin/launch_openviking.sh"
         remote_sudo install -d -m 0700 \
             /var/lib/argus-spire-dual/openviking-state
         remote_sudo tee \
@@ -390,44 +458,70 @@ NODE
 }
 
 start_openviking() {
-    local port state_dir network
+    local port state_dir source_image image_url runtime_image_id tc_api_url agent_id identity_token bearer_token network
     port="${DUAL_OPENVIKING_PORT:-1943}"
-    network="${DUAL_OPENVIKING_NETWORK:-argus-dual-openviking}"
     state_dir="/var/lib/argus-spire-dual/openviking-state"
+    source_image="${DUAL_OPENVIKING_SOURCE_IMAGE:-localhost:5000/openviking:v0.4.8}"
+    image_url="${DUAL_OPENVIKING_TC_API_IMAGE_URL:-docker://registry:5000/openviking:v0.4.8}"
+    runtime_image_id="${DUAL_OPENVIKING_RUNTIME_IMAGE_ID:-openviking-cmem:latest}"
+    tc_api_url="${DUAL_TC_API_URL:-http://127.0.0.1:8000}"
+    agent_id="${DUAL_OPENVIKING_PARENT_ID:-}"
+    identity_token="${DUAL_TC_API_IDENTITY_TOKEN:-}"
+    bearer_token="${DUAL_TC_API_BEARER_TOKEN:-}"
+    network="${DUAL_OPENVIKING_NETWORK:-argus-dual-openviking}"
+    [[ "$agent_id" == spiffe://argus.local/spire/agent/argus_tdx/* ]] \
+        || fail 'DUAL_OPENVIKING_PARENT_ID must be the current OpenViking Agent SPIFFE ID'
+    [[ -z "$identity_token" || -z "$bearer_token" ]] \
+        || fail 'set only one of DUAL_TC_API_IDENTITY_TOKEN or DUAL_TC_API_BEARER_TOKEN'
+    [[ -n "$identity_token" || -n "$bearer_token" ]] \
+        || fail 'non-interactive launch requires DUAL_TC_API_IDENTITY_TOKEN or DUAL_TC_API_BEARER_TOKEN'
     remote_sudo test -S "$REMOTE_RUN/agent.sock" \
         || fail 'OpenViking Workload API socket is missing; deploy its Agent first'
+    remote_sudo test -S "$REMOTE_BROKER_RUN/broker.sock" \
+        || fail 'OpenViking Broker API socket is missing; deploy its Agent first'
     remote_sudo test -s "$state_dir/ov.conf" \
         || fail 'OpenViking ov.conf is missing; load its workload first'
-    remote_sudo /usr/local/bin/docker image inspect "$WORKLOAD_IMAGE" >/dev/null \
-        || fail "image is not loaded in OpenViking TDVM: $WORKLOAD_IMAGE"
+    remote_sudo test -x "$REMOTE_ROOT/bin/launch_openviking.sh" \
+        || fail 'OpenViking launcher is missing; load its workload first'
+    for image in "$source_image" "$BROKER_IMAGE"; do
+        remote_sudo /usr/local/bin/docker image inspect "$image" >/dev/null \
+            || fail "image is not loaded in OpenViking TDVM: $image"
+    done
+    remote curl -fsS --max-time 5 "$tc_api_url/" >/dev/null \
+        || fail "existing TC-API is not healthy at $tc_api_url"
 
-    remote_sudo /usr/local/bin/docker rm -f "$WORKLOAD_CONTAINER" >/dev/null 2>&1 || true
-    # The TDVM's static dockerd runs with --bridge=none, so the default bridge
-    # network does not exist and a bare -p publish silently allocates no ports.
-    # Put the workload on a dedicated user bridge (the same pattern the
-    # OpenClaw workload uses) so docker-proxy can publish the mTLS port.
+    remote_sudo /usr/local/bin/docker rm -f \
+        "$BROKER_CONTAINER" "$WORKLOAD_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker network inspect "$network" >/dev/null 2>&1 \
         || remote_sudo /usr/local/bin/docker network create "$network" >/dev/null
-    remote_sudo /usr/local/bin/docker run -d \
-        --name "$WORKLOAD_CONTAINER" \
-        --restart unless-stopped \
-        --label argus.workload=openviking-cmem \
-        --network "$network" \
-        -p "0.0.0.0:$port:1943" \
-        -v "$REMOTE_RUN:/opt/spire/run/openviking:ro" \
-        -v "$state_dir:/app/.openviking" \
-        -e OPENVIKING_CONFIG_FILE=/app/.openviking/ov.conf \
-        -e OPENVIKING_WITH_BOT=0 \
-        -e ARGUS_SPIFFE_ENABLED=1 \
-        -e SPIFFE_ENDPOINT_SOCKET=unix:///opt/spire/run/openviking/agent.sock \
-        -e ARGUS_WORKLOAD_SPIFFE_ID="$OPENVIKING_ID" \
-        -e ARGUS_EXPECTED_CLIENT_SPIFFE_ID="$OPENCLAW_ID" \
-        -e ARGUS_OPENVIKING_MTLS_PORT=1943 \
-        "$WORKLOAD_IMAGE" >/dev/null
-    wait_for_svid "$OPENVIKING_ID"
+    launch_env=(
+        "AUTO_START_INFRA=0"
+        "OPENVIKING_LAUNCH_ACTION=launch"
+        "TC_API_URL=$tc_api_url"
+        "WORKLOAD_ID=openviking-cmem"
+        "IMAGE_NAME=$source_image"
+        "IMAGE_URL=$image_url"
+        "IMAGE_ID=$runtime_image_id"
+        "OPENVIKING_HOST_DATA_DIR=$state_dir"
+        "OPENVIKING_USE_LUKS=0"
+        "OPENVIKING_DOCKER_NETWORK=$network"
+        "OPENVIKING_WORKLOAD_API_DIR=$REMOTE_RUN"
+        "OPENVIKING_BROKER_API_DIR=$REMOTE_BROKER_RUN"
+        "OPENVIKING_AGENT_SPIFFE_ID=$agent_id"
+        "OPENVIKING_MTLS_PORT=$port"
+        "OPENVIKING_BROKER_CONTAINER=$BROKER_CONTAINER"
+        "OPENVIKING_BROKER_IMAGE=$BROKER_IMAGE"
+        "ATTESTATION_REQUIRED=false"
+    )
+    if [[ -n "$identity_token" ]]; then
+        launch_env+=("TC_API_IDENTITY_TOKEN=$identity_token")
+    else
+        launch_env+=("TC_API_BEARER_TOKEN=$bearer_token")
+    fi
+    remote_sudo env "${launch_env[@]}" "$REMOTE_ROOT/bin/launch_openviking.sh"
     printf '%s\n' \
-        'OpenViking SPIFFE mTLS service is ready in the OpenViking TDVM.' \
-        "Published TDVM port: $port" \
+        'Unmodified OpenViking and its Broker Sidecar are ready in the OpenViking TDVM.' \
+        "Broker mTLS port: $port" \
         "Accepted client identity: $OPENCLAW_ID"
 }
 
@@ -443,6 +537,7 @@ status() {
     remote test -c /dev/tdx_guest || fail 'SSH target is not a TD Guest'
     containers=("$PROVIDER_CONTAINER" "$AGENT_CONTAINER" "$WORKLOAD_CONTAINER")
     [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard)
+    [[ "$ROLE" == openviking ]] && containers+=("$BROKER_CONTAINER")
     for container in "${containers[@]}"; do
         if remote_sudo /usr/local/bin/docker inspect "$container" >/dev/null 2>&1; then
             remote_sudo /usr/local/bin/docker inspect "$container" \
@@ -456,6 +551,7 @@ status() {
 stop() {
     containers=("$WORKLOAD_CONTAINER" "$AGENT_CONTAINER" "$PROVIDER_CONTAINER")
     [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard)
+    [[ "$ROLE" == openviking ]] && containers=("$BROKER_CONTAINER" "${containers[@]}")
     remote_sudo /usr/local/bin/docker rm -f "${containers[@]}" >/dev/null 2>&1 || true
     printf 'Stopped %s dual-TDVM containers; persistent data and Docker volumes were retained.\n' "$ROLE"
 }

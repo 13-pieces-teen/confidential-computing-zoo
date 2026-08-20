@@ -58,8 +58,8 @@ docker compose logs --no-color spire-server spire-agent fake-services
 docker compose down
 ```
 
-The isolated stack defaults to host metrics ports `29988` and `29989` so it
-can run beside the formal asymmetric profile. Override them with
+The isolated stack defaults to host metrics ports `39988` and `39989` so it
+can run beside the dual-TDVM profile on `29988`. Override them with
 `M3_SERVER_METRICS_PORT` and `M3_AGENT_METRICS_PORT` when required.
 
 Deleting `runtime/` resets the generated keys and SPIRE state. Do this only when

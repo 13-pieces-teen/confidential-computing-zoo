@@ -1,0 +1,78 @@
+agent {
+    data_dir = "/opt/spire/data/openviking-agent"
+    log_level = "DEBUG"
+    server_address = "__SPIRE_SERVER_ADDRESS__"
+    server_port = __SPIRE_SERVER_PORT__
+    socket_path = "/opt/spire/run/openviking/agent.sock"
+    trust_bundle_path = "/opt/spire/conf/certs/upstream-ca.pem"
+    trust_domain = "argus.local"
+
+    experimental {
+        broker {
+            socket_path = "/opt/spire/run/openviking-broker/broker.sock"
+            brokers = [
+                {
+                    id = "spiffe://argus.local/infra/openviking-broker"
+                    allowed_reference_types = [
+                        {
+                            type_url = "type.googleapis.com/spiffe.broker.WorkloadPIDReference"
+                        },
+                    ]
+                },
+            ]
+        }
+    }
+}
+
+telemetry {
+    Prometheus {
+        host = "0.0.0.0"
+        port = 9991
+    }
+}
+
+plugins {
+    NodeAttestor "argus_tdx" {
+        plugin_cmd = "/opt/spire/plugins/argus-tdx-nodeattestor-agent"
+        plugin_checksum = "__AGENT_CHECKSUM__"
+        plugin_data {
+            evidence_endpoint = "http://127.0.0.1:18080/ra/v1/evidence"
+            attestation_key_path = "/opt/spire/data/openviking-agent/argus-tdx/attestation-key"
+            evidence_timeout = "10s"
+            max_evidence_bytes = 4194304
+            instance_hint = "__TDVM_INSTANCE_ID__"
+        }
+    }
+
+    KeyManager "disk" {
+        plugin_data {
+            directory = "/opt/spire/data/openviking-agent"
+        }
+    }
+
+    WorkloadAttestor "docker" {
+        plugin_data {
+            docker_socket_path = "unix:///var/run/docker.sock"
+        }
+    }
+
+    WorkloadAttestor "unix" {
+        plugin_data {}
+    }
+
+    WorkloadAttestor "argus_tdx_workload" {
+        plugin_cmd = "/opt/spire/plugins/argus-tdx-workloadattestor"
+        plugin_checksum = "__WORKLOAD_ATTESTOR_CHECKSUM__"
+        plugin_data {
+            evidence_endpoint = "http://127.0.0.1:18080/ra/v1/workload-evidence"
+            trustee_endpoint = "https://__TRUSTEE_ADDRESS__:__TRUSTEE_PORT__/v1/verify/tdx-workload"
+            trustee_ca_path = "/opt/spire/conf/certs/trustee-ca.pem"
+            trustee_client_cert_path = "/opt/spire/conf/certs/trustee-client.pem"
+            trustee_client_key_path = "/opt/spire/conf/certs/trustee-client-key.pem"
+            trustee_server_name = "trustee.argus.local"
+            trustee_spiffe_id = "spiffe://argus.local/service/trustee"
+            request_timeout = "10s"
+            max_response_bytes = 1048576
+        }
+    }
+}

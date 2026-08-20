@@ -7,8 +7,10 @@ MODULE_DIR="$REPO_ROOT/core/spire/plugins/argus-tdx-nodeattestor"
 WORKLOAD_MODULE_DIR="$REPO_ROOT/core/spire/plugins/argus-tdx-workloadattestor"
 RUNTIME_DIR="$SCRIPT_DIR/runtime"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-go-cache}"
+GO_PROXY="${ARGUS_GO_PROXY:-https://proxy.golang.org,direct}"
 
 mkdir -p "$RUNTIME_DIR"/{plugins,conf,certs,server-data,server-run,agent-data/argus-tdx,agent-run,broker-run}
+mkdir -p "$GO_CACHE_DIR"
 chmod 0700 "$RUNTIME_DIR/certs" "$RUNTIME_DIR/server-data" "$RUNTIME_DIR/agent-data" "$RUNTIME_DIR/agent-data/argus-tdx"
 chown -R 1000:1000 \
     "$RUNTIME_DIR/server-data" \
@@ -16,6 +18,17 @@ chown -R 1000:1000 \
     "$RUNTIME_DIR/agent-data" \
     "$RUNTIME_DIR/agent-run" \
     "$RUNTIME_DIR/broker-run"
+chmod 2770 "$RUNTIME_DIR/broker-run"
+
+docker run --rm \
+    -e "GOPROXY=$GO_PROXY" -e "GOSUMDB=${ARGUS_GOSUMDB:-sum.golang.org}" -e GOMODCACHE=/gomodcache -e GOFLAGS=-mod=readonly \
+    -v "$MODULE_DIR:/workspace:ro" -v "$GO_CACHE_DIR:/gomodcache" \
+    -w /workspace golang:1.24-bookworm go mod download
+
+docker run --rm \
+    -e "GOPROXY=$GO_PROXY" -e "GOSUMDB=${ARGUS_GOSUMDB:-sum.golang.org}" -e GOMODCACHE=/gomodcache -e GOFLAGS=-mod=readonly \
+    -v "$WORKLOAD_MODULE_DIR:/workspace:ro" -v "$GO_CACHE_DIR:/gomodcache" \
+    -w /workspace golang:1.24-bookworm go mod download
 
 docker run --rm \
     -e GOPROXY=off -e GOSUMDB=off -e GOMODCACHE=/gomodcache -e CGO_ENABLED=0 \
@@ -34,16 +47,34 @@ docker run --rm \
     go build -mod=readonly -trimpath -o /out/argus-tdx-workloadattestor ./cmd/argus-tdx-workloadattestor
 chmod 0755 "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor"
 
-if [[ ! -f "$RUNTIME_DIR/certs/upstream-ca.pem" ]]; then
+regenerate_certs=0
+for key in upstream-ca-key.pem trustee-ca-key.pem trustee-server-key.pem trustee-client-key.pem; do
+    if [[ ! -s "$RUNTIME_DIR/certs/$key" ]]; then
+        regenerate_certs=1
+        break
+    fi
+done
+for cert in upstream-ca.pem trustee-ca.pem trustee-server.pem trustee-client.pem; do
+    if ! openssl x509 -checkend 86400 -noout -in "$RUNTIME_DIR/certs/$cert" >/dev/null 2>&1; then
+        regenerate_certs=1
+        break
+    fi
+done
+
+if [[ "$regenerate_certs" == "1" ]]; then
+    rm -f \
+        "$RUNTIME_DIR/certs"/upstream-ca* \
+        "$RUNTIME_DIR/certs"/trustee-ca* \
+        "$RUNTIME_DIR/certs"/trustee-server* \
+        "$RUNTIME_DIR/certs"/trustee-client*
+
     openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 7 \
         -subj "/CN=Argus M3 Upstream CA" \
         -addext "basicConstraints=critical,CA:TRUE" \
         -addext "keyUsage=critical,keyCertSign,cRLSign" \
         -keyout "$RUNTIME_DIR/certs/upstream-ca-key.pem" \
         -out "$RUNTIME_DIR/certs/upstream-ca.pem" >/dev/null 2>&1
-fi
 
-if [[ ! -f "$RUNTIME_DIR/certs/trustee-ca.pem" ]]; then
     openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 7 \
         -subj "/CN=Argus M3 Trustee CA" \
         -addext "basicConstraints=critical,CA:TRUE" \

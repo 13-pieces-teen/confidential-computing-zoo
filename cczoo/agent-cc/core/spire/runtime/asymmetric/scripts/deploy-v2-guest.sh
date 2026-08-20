@@ -186,6 +186,7 @@ deploy_agent() {
         "$REMOTE_ROOT/plugins/argus-tdx-nodeattestor-agent" \
         "$REMOTE_ROOT/plugins/argus-tdx-workloadattestor"
     remote_sudo chown -R 1000:1000 "$REMOTE_DATA" "$REMOTE_RUN" "$REMOTE_BROKER_RUN"
+    remote_sudo chmod 2770 "$REMOTE_BROKER_RUN"
 
     remote_sudo /usr/local/bin/docker rm -f "$PROVIDER_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker run -d \
@@ -221,6 +222,10 @@ deploy_agent() {
         "$SPIRE_AGENT_IMAGE" \
         -config /opt/spire/conf/openviking-agent.conf >/dev/null
     wait_for_agent
+
+    broker_socket_stat="$(remote_sudo stat -c '%u:%g %a' "$REMOTE_BROKER_RUN/broker.sock")"
+    [[ "$broker_socket_stat" == '0:1000 770' ]] \
+        || fail "Broker API socket permissions are $broker_socket_stat, expected 0:1000 770"
 
     printf '%s\n' \
         'OpenViking v2 Agent is healthy inside the TDVM.' \

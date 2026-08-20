@@ -24,7 +24,7 @@ services:
     volumes:
       - ./runtime/certs:/opt/argus/certs:ro
     ports:
-      - "127.0.0.1:${M3_AGENT_METRICS_PORT:-29989}:9989"
+      - "127.0.0.1:${M3_AGENT_METRICS_PORT:-39989}:9989"
     networks:
       - m3
 
@@ -47,7 +47,7 @@ services:
       - ${M4_SERVER_DATA_DIR:-./runtime/server-data}:/opt/spire/data/server
       - ./runtime/server-run:/opt/spire/run/server
     ports:
-      - "127.0.0.1:${M3_SERVER_METRICS_PORT:-29988}:9988"
+      - "127.0.0.1:${M3_SERVER_METRICS_PORT:-39988}:9988"
     networks:
       - m3
 

@@ -6,13 +6,16 @@ PROFILE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SPIRE_ROOT="$(cd "$PROFILE_DIR/../.." && pwd)"
 AGENT_CC_ROOT="$(cd "$SPIRE_ROOT/../.." && pwd)"
 CORE_DIR="$AGENT_CC_ROOT/core"
-PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-nodeattestor"
+NODE_PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-nodeattestor"
+WORKLOAD_PLUGIN_MODULE_DIR="$CORE_DIR/spire/plugins/argus-tdx-workloadattestor"
 RUNTIME_DIR="${DUAL_RUNTIME_DIR:-$PROFILE_DIR/runtime}"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-spire-dual-go-cache}"
 GO_PROXY="${ARGUS_GO_PROXY:-https://proxy.golang.org,direct}"
 SPIRE_SERVER_PORT="${DUAL_SPIRE_SERVER_PORT:-18081}"
 OPENCLAW_SERVER_ADDRESS="${DUAL_OPENCLAW_SPIRE_SERVER_ADDRESS:-10.0.2.2}"
 OPENVIKING_SERVER_ADDRESS="${DUAL_OPENVIKING_SPIRE_SERVER_ADDRESS:-10.0.2.2}"
+OPENVIKING_TRUSTEE_ADDRESS="${DUAL_OPENVIKING_TRUSTEE_ADDRESS:-$OPENVIKING_SERVER_ADDRESS}"
+TRUSTEE_PORT="${DUAL_TDVM_TRUSTEE_PORT:-18443}"
 OPENCLAW_INSTANCE_ID="${DUAL_OPENCLAW_TDVM_INSTANCE_ID:-tdvm-openclaw-0001}"
 OPENVIKING_INSTANCE_ID="${DUAL_OPENVIKING_TDVM_INSTANCE_ID:-tdvm-openviking-0001}"
 OPENVIKING_ORIGIN="${DUAL_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
@@ -20,8 +23,9 @@ GUARD_DECISION_TTL_SECONDS="${DUAL_GUARD_DECISION_TTL_SECONDS:-15}"
 OPENCLAW_IMAGE="${DUAL_OPENCLAW_WORKLOAD_IMAGE:-argus-dual-openclaw:local}"
 OPENCLAW_SANDBOX_IMAGE="${DUAL_OPENCLAW_SANDBOX_IMAGE:-openclaw-sandbox:bookworm-slim}"
 OPENVIKING_IMAGE="${DUAL_OPENVIKING_WORKLOAD_IMAGE:-argus-dual-openviking:v0.4.8}"
+OPENVIKING_BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
 OPENVIKING_BASE="${DUAL_OPENVIKING_BASE:-ghcr.io/volcengine/openviking@sha256:27d3c97bddbe81f31d2c5af1f31e9d504b5928506c88f559a23faf86358169b7}"
-SPIRE_AGENT_IMAGE="${DUAL_SPIRE_AGENT_IMAGE:-ghcr.io/spiffe/spire-agent:1.15.1}"
+SPIRE_AGENT_IMAGE="${DUAL_SPIRE_AGENT_IMAGE:-ghcr.io/spiffe/spire-agent:1.15.2}"
 
 fail() {
     printf 'dual TDVM prepare: FAIL: %s\n' "$1" >&2
@@ -72,19 +76,37 @@ install -d -m 0700 \
     "$RUNTIME_DIR/server-data"
 install -d -m 0755 "$GO_CACHE_DIR"
 
-build_go_binary() {
-    local package_path="$1"
-    local output_name="$2"
+download_go_dependencies() {
+    local module_dir="$1"
 
     docker run --rm \
         -e "GOPROXY=$GO_PROXY" \
         -e "GOSUMDB=${ARGUS_GOSUMDB:-sum.golang.org}" \
         -e GOMODCACHE=/gomodcache \
+        -e GOFLAGS=-mod=readonly \
+        -e "HTTPS_PROXY=${HTTPS_PROXY:-}" \
+        -e "HTTP_PROXY=${HTTP_PROXY:-}" \
+        -e "NO_PROXY=${NO_PROXY:-}" \
+        -v "$module_dir:/workspace:ro" \
+        -v "$GO_CACHE_DIR:/gomodcache" \
+        -w /workspace \
+        golang:1.24-bookworm go mod download
+}
+
+build_go_binary() {
+    local module_dir="$1"
+    local package_path="$2"
+    local output_name="$3"
+
+    docker run --rm \
+        -e GOPROXY=off \
+        -e GOSUMDB=off \
+        -e GOMODCACHE=/gomodcache \
         -e CGO_ENABLED=0 \
         -e "HTTPS_PROXY=${HTTPS_PROXY:-}" \
         -e "HTTP_PROXY=${HTTP_PROXY:-}" \
         -e "NO_PROXY=${NO_PROXY:-}" \
-        -v "$PLUGIN_MODULE_DIR:/source:ro" \
+        -v "$module_dir:/source:ro" \
         -v "$GO_CACHE_DIR:/gomodcache" \
         -v "$RUNTIME_DIR/plugins:/out" \
         golang:1.24-bookworm sh -ceu "
@@ -96,10 +118,14 @@ build_go_binary() {
         "
 }
 
-build_go_binary ./cmd/agent argus-tdx-nodeattestor-agent
-build_go_binary ./cmd/server argus-tdx-nodeattestor-server
-build_go_binary ./cmd/mock-evidence-provider mock-evidence-provider
-build_go_binary ./cmd/mock-trustee mock-trustee
+download_go_dependencies "$NODE_PLUGIN_MODULE_DIR"
+download_go_dependencies "$WORKLOAD_PLUGIN_MODULE_DIR"
+build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/agent argus-tdx-nodeattestor-agent
+build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/server argus-tdx-nodeattestor-serve
+build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/mock-evidence-provider mock-evidence-provide
+build_go_binary "$NODE_PLUGIN_MODULE_DIR" ./cmd/mock-trustee mock-trustee
+build_go_binary "$WORKLOAD_PLUGIN_MODULE_DIR" \
+    ./cmd/argus-tdx-workloadattestor argus-tdx-workloadattesto
 chmod 0755 "$RUNTIME_DIR/plugins"/*
 
 generate_ca() {
@@ -188,6 +214,7 @@ chown -R 1000:1000 \
 
 server_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-server" | awk '{print $1}')"
 agent_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" | awk '{print $1}')"
+workload_attestor_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor" | awk '{print $1}')"
 
 sed "s/__SERVER_CHECKSUM__/$server_checksum/g" \
     "$PROFILE_DIR/config/server.conf.tmpl" \
@@ -197,14 +224,17 @@ render_agent_config() {
     local role="$1"
     local server_address="$2"
     local instance_id="$3"
+    local template="$PROFILE_DIR/config/$role-agent.conf.tmpl"
 
     sed \
-        -e "s/__ROLE__/$role/g" \
         -e "s/__SPIRE_SERVER_ADDRESS__/$server_address/g" \
         -e "s/__SPIRE_SERVER_PORT__/$SPIRE_SERVER_PORT/g" \
         -e "s/__AGENT_CHECKSUM__/$agent_checksum/g" \
+        -e "s/__WORKLOAD_ATTESTOR_CHECKSUM__/$workload_attestor_checksum/g" \
         -e "s/__TDVM_INSTANCE_ID__/$instance_id/g" \
-        "$PROFILE_DIR/config/agent.conf.tmpl" \
+        -e "s/__TRUSTEE_ADDRESS__/$OPENVIKING_TRUSTEE_ADDRESS/g" \
+        -e "s/__TRUSTEE_PORT__/$TRUSTEE_PORT/g" \
+        "$template" \
         >"$RUNTIME_DIR/conf/$role-agent.conf"
 }
 
@@ -227,6 +257,16 @@ docker build -q \
     -t argus-spire-dual-mock-trustee:local \
     "$RUNTIME_DIR" >/dev/null
 docker pull "$SPIRE_AGENT_IMAGE" >/dev/null
+
+if [[ "${DUAL_BUILD_OPENVIKING_BROKER:-1}" == "1" ]]; then
+    docker build -q \
+        --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}" \
+        --build-arg "HTTP_PROXY=${HTTP_PROXY:-}" \
+        --build-arg "NO_PROXY=${NO_PROXY:-}" \
+        -f "$AGENT_CC_ROOT/adapters/OpenViking/configs/Dockerfile.broker-sidecar" \
+        -t "$OPENVIKING_BROKER_IMAGE" \
+        "$AGENT_CC_ROOT" >/dev/null
+fi
 
 if [[ "${DUAL_BUILD_GUARD:-1}" == "1" ]]; then
     docker build -q \
@@ -260,5 +300,6 @@ printf '%s\n' \
     "OpenClaw instance: $OPENCLAW_INSTANCE_ID" \
     "OpenViking instance: $OPENVIKING_INSTANCE_ID" \
     "OpenViking origin: $OPENVIKING_ORIGIN" \
-    'Both workload Agents use argus_tdx.' \
+    "OpenViking Broker image: $OPENVIKING_BROKER_IMAGE" \
+    'Both workload Agents use argus_tdx; only OpenViking enables Broker and PID-reference attestation.' \
     'Evidence Provider and Trustee images are mock-stage only.'

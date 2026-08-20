@@ -7,13 +7,13 @@
 | 方案目标 | 不修改 OpenViking 上游 Python 业务源码，对实际运行的 OpenViking Python 进程完成 Workload Attestation，并由 sidecar 代表它进行 SPIFFE mTLS |
 | 当前拓扑 | OpenClaw 与 OpenViking 分别运行在独立 TDVM；Broker Sidecar 位于 OpenViking TDVM |
 | 主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
-| 当前仓库基线 | 双 TDVM 骨架和 Broker 组件分别存在；统一 Profile 尚未完成 |
+| 当前仓库基线 | Broker 组件已接入统一双 TDVM Profile；本地静态验证完成，远程验收待执行 |
 | 文档性质 | 方案决策与详细设计记录；当前实现状态和执行命令以架构文档及实施方案为准 |
-| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental；双 TDVM Broker Profile 需完成代码集成和远程验证 |
+| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental；双 TDVM Broker Profile 仍需远程验证 |
 
-> 当前状态：Broker Sidecar、自定义 WorkloadAttestor 和隔离 Mock 链路已实现；
-> `runtime/dual-tdvm` 仍是 OpenViking 直接挂载 Workload API 的旧骨架。两部分
-> 合并、远程 ALLOW/DENY 与跨 TDVM mTLS 尚未完成。当前状态以
+> 当前状态：Broker Sidecar、自定义 WorkloadAttestor 和统一 `runtime/dual-tdvm`
+> Profile 已完成代码集成；OpenViking 不再直接挂载 Workload API。远程 ALLOW/DENY
+> 与跨 TDVM mTLS 尚未执行。当前状态以
 > [双 TDVM + Broker Sidecar 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)和
 > [实施计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)为准。
 
@@ -488,7 +488,7 @@ plugins {
 
 ## 12. 对当前仓库的改造边界
 
-### 12.1 需要新增
+### 12.1 已新增并复用
 
 | 位置 | 作用 |
 | --- | --- |
@@ -496,18 +496,18 @@ plugins {
 | `cczoo/agent-cc/core/spire/plugins/argus-tdx-workloadattestor/` | 对目标 PID执行 OpenViking Workload Attestation |
 | Broker/WorkloadAttestor测试与故障用例 | 验证 PID、selector、轮换、退出和拒绝路径 |
 
-### 12.2 需要修改
+### 12.2 当前统一 Profile 实现
 
 | 文件 | 目标变化 |
 | --- | --- |
-| `core/spire/runtime/asymmetric/config/openviking-agent.conf.tmpl` | 升级配置，增加 Broker Endpoint和自定义 WorkloadAttestor |
-| `core/spire/runtime/asymmetric/scripts/deploy-v2-guest.sh` | SPIRE镜像升级到1.15.2；部署 sidecar；分别挂载 Workload/Broker UDS；保持 Agent与Broker的PID视图一致 |
-| `core/spire/runtime/asymmetric/scripts/register-workloads.sh` | 新增 Broker Entry；替换当前同 ID 的 Docker-only OpenViking Entry；确保所有目标 ID Entry都包含自定义可信 selectors；设置按需SVID路径 |
+| `core/spire/runtime/dual-tdvm/config/openviking-agent.conf.tmpl` | Broker Endpoint、自定义 WorkloadAttestor 和 Trustee mTLS |
+| `core/spire/runtime/dual-tdvm/scripts/manage-guest.sh` | 部署 Agent/Sidecar，通过既有 TC-API 启动 OpenViking，并分别挂载 Workload/Broker UDS |
+| `core/spire/runtime/dual-tdvm/scripts/register-workloads.sh` | 创建 OpenClaw、Broker、OpenViking target 三个 Entry，删除已知旧弱 Entry |
 | `adapters/OpenViking/scripts/launch_openviking.sh` | 不再把 Workload API挂入 OpenViking；只开放内部HTTP；把启动结果交给受信PID绑定路径 |
 | `adapters/OpenViking/configs/Dockerfile.openviking` | OpenViking镜像不再内置其自己的 materializer和TLS wrapper，恢复原生服务入口 |
-| 验证脚本 | 从检查 `/run/argus-svid/status.json` 改为检查 Broker目标订阅、实际证书URI SAN和mTLS结果 |
+| `core/spire/runtime/dual-tdvm/scripts/verify.sh` | 检查 Broker目标订阅、实际 PID、URI SAN、ALLOW/DENY 和跨 TDVM mTLS结果 |
 
-### 12.3 删除旧 OpenViking 身份路径
+### 12.3 已移除的旧 OpenViking 身份路径
 
 Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的代码和配置：
 
@@ -547,7 +547,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 
 ## 14. 分阶段落地
 
-以下 M0-M5 保留 Broker 组件的落地过程。M0-M3 已在非对称 Profile 中完成组件实现；将这些组件接入双 TDVM Profile，仍以当前实施计划为准。
+以下 M0-M5 保留 Broker 组件的落地过程。M0-M3 及双 TDVM Profile 代码接入已经完成；远程验收仍以当前实施计划为准。
 
 ### M0：接口与版本基线
 

@@ -14,24 +14,26 @@
 
 当前 Evidence Provider 和 Trustee 均为 Mock。
 
-仓库已经分别具备双 TDVM 部署骨架和 Broker Sidecar 组件，但二者尚未合并成一个可运行
-Profile：现有 `runtime/dual-tdvm` 仍让 OpenViking 直接挂载 Workload API。因此当前
-状态是“目标架构已确定，代码集成与远程验收待完成”，不能引用旧报告中的 PASS 作为
-最新方案证据。
+`runtime/dual-tdvm` 已完成 Broker Endpoint、PID-reference WorkloadAttestor、TC-API
+launch-only 启动、三个 Registration Entry 和 Sidecar mTLS 验证脚本的代码集成；
+OpenViking 不再挂载 Workload API。当前状态是“本地实现与静态验证完成，远程双 TDVM
+ALLOW/DENY 验收待执行”，不能引用旧报告中的 PASS 作为最新方案证据。
 
 ## 推荐阅读顺序
 
 1. [双 TDVM + OpenViking Broker Sidecar 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
 2. [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
 3. [OpenViking Broker Sidecar 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
+4. [远程验证报告（待执行）](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
 
 ## 顶层文档职责
 
 | 文档 | 职责 | 状态 |
 |---|---|---|
 | [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 当前架构事实源：组件、身份、A-F 时序和边界 | 已确定 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 双 TDVM 骨架与 Broker 组件的合并步骤、测试和完成条件 | 待实施 |
-| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | Broker API、PID reference、Sidecar 生命周期和取舍 | 组件已实现，待接入双 TDVM |
+| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 双 TDVM 骨架与 Broker 组件的合并步骤、测试和完成条件 | 代码已实施，远程待验收 |
+| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | Broker API、PID reference、Sidecar 生命周期和取舍 | 已接入双 TDVM，远程待验收 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md) | 记录 Parent ID、Entry、PID、UDS 权限、Trustee metrics 和 mTLS 远程证据 | 待远程填写 |
 
 ## 历史归档
 
@@ -51,4 +53,5 @@ Profile：现有 `runtime/dual-tdvm` 仍让 OpenViking 直接挂载 Workload API
 3. Registration Entry 是静态匹配规则；WorkloadAttestor 在验证成功后返回 selector。
 4. Mock Evidence Provider/Trustee 只证明软件链路，不代表真实 Quote、QGS、
    TC-API/Rekor 或生产 Trustee 验证。
-5. 新的远程验证完成后，应新增双 TDVM Broker 专用报告，不覆盖历史报告。
+5. 双 TDVM Broker 专用报告保留“待验证”状态；远程执行后在该报告补入实测证据，
+   不覆盖历史报告。

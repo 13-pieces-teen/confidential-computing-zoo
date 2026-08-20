@@ -2,7 +2,7 @@
 
 > 对应架构：[双 TDVM + OpenViking Broker Sidecar 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
 >
-> 状态：待实施；本文不表示统一 Profile 已经运行或远程验收
+> 状态：代码实施与本地静态验证完成；统一 Profile 的远程双 TDVM 验收待执行
 
 ## 1. 实施目标
 
@@ -11,16 +11,16 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 
 不重新设计 Broker，不恢复 OpenViking Python 直接获取 SVID，也不增加新的安全边界。
 
-## 2. 当前代码差距
+## 2. 实施结果
 
-| 范围 | 当前代码 | 目标 |
+| 范围 | 实施前 | 当前结果 |
 |---|---|---|
 | 双 TDVM | 两个 `argus_tdx` Agent、独立 Parent 和直接 workload SVID 已有骨架 | 保留两个独立 TDVM 和 Agent |
 | OpenClaw | 使用自己 TDVM 的 Workload API 和 SPIFFE mTLS | 保持现状 |
-| OpenViking | `runtime/dual-tdvm` 仍把 Workload API 直接挂给 OpenViking | 移除 OpenViking SPIRE mount |
-| Broker | Broker Sidecar 和 `argus_tdx_workload` 已在 asymmetric Profile 实现 | 接入 OpenViking TDVM |
-| Registration | 双 TDVM 当前只有 OpenClaw/OpenViking 两个普通 Entry | 改为 OpenClaw、Broker、OpenViking target 三个 Entry |
-| 验证 | 双 TDVM 骨架与 Broker 软件链分别验证 | 新增统一 ALLOW/DENY 与跨 TDVM mTLS 验证 |
+| OpenViking | 直接挂载 Workload API | TC-API 启动原生服务；无 SPIRE mount |
+| Broker | 只在 asymmetric Profile 实现 | 已接入 OpenViking TDVM，引用 TC-API 返回 PID |
+| Registration | 两个普通 Entry | OpenClaw、Broker、OpenViking target 三个强 Entry |
+| 验证 | 两条软件链分别验证 | 已提供统一 ALLOW/DENY、错误客户端、pidfd 与跨 TDVM mTLS 脚本；远程待执行 |
 
 ## 3. 实施步骤
 
@@ -30,11 +30,15 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 - OpenViking Agent 增加 Broker Endpoint 和只允许
   `WorkloadPIDReference` 的配置；
 - OpenViking Agent 加载外部 `argus_tdx_workload`；
-- OpenViking TDVM 的 Evidence Provider 同时提供 Node 和 workload Mock evidence。
+- OpenViking TDVM 的 Evidence Provider 同时提供 Node 和 workload Mock evidence；
+- Agent 保持 root，Sidecar 保持 `1000:1000`；Broker 目录使用
+  `1000:1000/2770`，Agent 创建的 UDS 验证为 `root:1000/0770`。
 
 ### W2. 构建与部署 Broker 组件
 
 - 在 dual-tdvm prepare 阶段构建 WorkloadAttestor 和 Broker Sidecar；
+- SPIRE Server 与两个 Agent 统一到 `1.15.2`；
+- NodeAttestor、WorkloadAttestor 构建前自动下载只读模块依赖；
 - 把 WorkloadAttestor 二进制和校验值写入 OpenViking Agent 配置；
 - 把 Broker Sidecar 镜像传入 OpenViking TDVM；
 - 不向 OpenViking Python 镜像重新加入 materializer、TLS wrapper 或 SPIRE SDK。
@@ -50,7 +54,8 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 
 ### W4. 修改 OpenViking TDVM 启动流程
 
-- 使用 TC-API 启动原生 OpenViking；
+- 复用 OpenViking TDVM 既有 TC-API 和 Registry，不由该 Profile 重建；
+- launch-only 非交互启动必须显式提供 identity token 或 bearer token；
 - 从启动结果解析唯一 container ID 和实际宿主机 PID；
 - OpenViking 只监听回环 HTTP 1933；
 - Sidecar 使用 `--pid host` 和 pidfd 引用该 PID；
@@ -89,6 +94,9 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 - 修改脚本 `bash -n`；
 - dual-tdvm Compose 和 SPIRE 配置渲染检查；
 - 所有 Registration Entry 的静态 selector 审计。
+
+M3 隔离测试默认使用 `39988/39989`，避免与 dual-tdvm 的 `29988` 冲突；
+prepare 会在测试证书缺失或不足 24 小时有效期时重建整套证书。
 
 ### 4.2 远程软件链验证
 

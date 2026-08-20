@@ -29,7 +29,9 @@ IMAGE_ID="${IMAGE_ID:-openviking-cmem}"
 OPENVIKING_USE_LUKS="${OPENVIKING_USE_LUKS:-1}"
 OPENVIKING_LUKS_MOUNT_ROOT="${OPENVIKING_LUKS_MOUNT_ROOT:-/home/encrypted_storage}"
 OPENVIKING_LUKS_SUBDIR="${OPENVIKING_LUKS_SUBDIR:-openviking}"
+OPENVIKING_HOST_DATA_DIR="${OPENVIKING_HOST_DATA_DIR:-}"
 OPENVIKING_CONTAINER_STATE_DIR="${OPENVIKING_CONTAINER_STATE_DIR:-/app/.openviking}"
+OPENVIKING_DOCKER_NETWORK="${OPENVIKING_DOCKER_NETWORK:-}"
 OPENVIKING_WORKLOAD_API_DIR="${OPENVIKING_WORKLOAD_API_DIR:-}"
 OPENVIKING_BROKER_API_DIR="${OPENVIKING_BROKER_API_DIR:-}"
 OPENVIKING_AGENT_SPIFFE_ID="${OPENVIKING_AGENT_SPIFFE_ID:-}"
@@ -106,11 +108,11 @@ ensure_infra_stack() {
 }
 
 prepare_openviking_storage() {
-    export OPENVIKING_HOST_DATA_DIR=""
-
-
     export OPENVIKING_DOCKER_CMD="docker run -d --name=agentcc-openviking-service --label=argus.workload=${WORKLOAD_ID} --env=OPENVIKING_CONFIG_FILE=${OPENVIKING_CONTAINER_STATE_DIR}/ov.conf --env=OPENVIKING_WITH_BOT=0"
 
+    if [[ -n "$OPENVIKING_DOCKER_NETWORK" ]]; then
+        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --network=${OPENVIKING_DOCKER_NETWORK}"
+    fi
     export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --publish=127.0.0.1:1933:1933"
 
     # Optional model-gateway CA. This is unrelated to SPIFFE identity and
@@ -123,7 +125,14 @@ prepare_openviking_storage() {
         export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --volume=${OPENVIKING_MODEL_CA_BUNDLE}:/opt/model-ca/argus-ca-bundle.pem:ro --env=SSL_CERT_FILE=/opt/model-ca/argus-ca-bundle.pem"
     fi
 
-    if [[ "$OPENVIKING_USE_LUKS" != "1" ]]; then
+    if [[ -n "$OPENVIKING_HOST_DATA_DIR" ]]; then
+        [[ "$OPENVIKING_HOST_DATA_DIR" == /* ]] \
+            || { echo "OPENVIKING_HOST_DATA_DIR must be absolute." >&2; exit 1; }
+        [[ -f "$OPENVIKING_HOST_DATA_DIR/ov.conf" ]] \
+            || { echo "Missing OpenViking configuration: $OPENVIKING_HOST_DATA_DIR/ov.conf" >&2; exit 1; }
+        export OPENVIKING_DOCKER_CMD="$OPENVIKING_DOCKER_CMD --volume=${OPENVIKING_HOST_DATA_DIR}:${OPENVIKING_CONTAINER_STATE_DIR}"
+        echo "OpenViking storage: host=${OPENVIKING_HOST_DATA_DIR} -> container=${OPENVIKING_CONTAINER_STATE_DIR}" >&2
+    elif [[ "$OPENVIKING_USE_LUKS" != "1" ]]; then
         echo "OPENVIKING_USE_LUKS=0, using container-local storage only." >&2
     else
         if ! command -v mountpoint >/dev/null 2>&1; then
@@ -278,15 +287,6 @@ if [[ "$OPENVIKING_BASE" != *@sha256:* ]]; then
     exit 1
 fi
 
-if [[ ! -f "$DOCKERFILE_PATH" ]]; then
-    echo "Missing Dockerfile: $DOCKERFILE_PATH" >&2
-    exit 1
-fi
-if [[ ! -f "$BROKER_DOCKERFILE_PATH" ]]; then
-    echo "Missing Broker Sidecar Dockerfile: $BROKER_DOCKERFILE_PATH" >&2
-    exit 1
-fi
-
 ensure_infra_stack
 
 auth_args=()
@@ -295,6 +295,15 @@ if [[ -n "${TC_API_BEARER_TOKEN:-}" ]]; then
 fi
 
 if [[ "$OPENVIKING_LAUNCH_ACTION" != launch ]]; then
+    if [[ ! -f "$DOCKERFILE_PATH" ]]; then
+        echo "Missing Dockerfile: $DOCKERFILE_PATH" >&2
+        exit 1
+    fi
+    if [[ ! -f "$BROKER_DOCKERFILE_PATH" ]]; then
+        echo "Missing Broker Sidecar Dockerfile: $BROKER_DOCKERFILE_PATH" >&2
+        exit 1
+    fi
+
     echo "[1/5] Building OpenViking workload image: ${IMAGE_NAME}"
     docker build --build-arg "OPENVIKING_BASE=${OPENVIKING_BASE}" -t "${IMAGE_NAME}" -f "${DOCKERFILE_PATH}" "${REPO_ROOT}"
 

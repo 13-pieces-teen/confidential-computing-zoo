@@ -2,7 +2,7 @@
 
 > 状态：当前唯一目标架构
 >
-> 当前实现边界：双 TDVM 骨架与 Broker Sidecar 组件分别存在，尚未完成统一 Profile
+> 当前实现边界：统一 Profile 已完成代码集成与本地静态验证，远程双 TDVM 验收待执行
 >
 > 当前 Mock：两个 TDVM 的 Evidence Provider、中心 Trustee
 
@@ -172,17 +172,17 @@ Broker stream 的每次响应按完整身份快照处理。目标身份消失后
 
 ## 8. 当前实施状态
 
-仓库目前有两块可复用实现：
+仓库当前已经把以下实现合并到统一 Profile：
 
-- `core/spire/runtime/dual-tdvm`：双 TDVM、双 `argus_tdx` Agent 和独立 Parent
-  的部署骨架；
+- `core/spire/runtime/dual-tdvm`：双 TDVM、双 `argus_tdx` Agent、独立 Parent、
+  Broker Endpoint、三个 Entry、TC-API 启动和统一验证入口；
 - `adapters/OpenViking/broker_sidecar`、
   `core/spire/plugins/argus-tdx-workloadattestor` 和
   `core/spire/runtime/asymmetric`：Broker PID-reference 链路。
 
-尚未完成的关键工作是把 Broker Endpoint、WorkloadAttestor、Broker Entry、目标 Entry
-和 Sidecar 生命周期接入 `runtime/dual-tdvm`。在此之前，不能声明当前组合方案已经
-远程跑通。
+本地已经完成代码、Go 测试、配置校验和脚本静态检查。尚未完成的是在远程两台 TDVM
+上执行 M3 ALLOW/DENY、双 TDVM ALLOW/DENY、Guard 与跨 TDVM mTLS 验收；在远程
+报告填入实测证据前，不能声明当前组合方案已经远程跑通。
 
 ## 9. 完成标准
 
@@ -200,6 +200,7 @@ Broker stream 的每次响应按完整身份快照处理。目标身份消失后
 
 - [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
 - [Broker Sidecar 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
-- [现有双 TDVM 骨架](../core/spire/runtime/dual-tdvm/README.md)
+- [双 TDVM 运行 Profile](../core/spire/runtime/dual-tdvm/README.md)
+- [双 TDVM 远程验证报告](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
 - [Broker Sidecar](../adapters/OpenViking/broker_sidecar)
 - [自定义 WorkloadAttestor](../core/spire/plugins/argus-tdx-workloadattestor)
