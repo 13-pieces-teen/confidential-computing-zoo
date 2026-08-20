@@ -5,7 +5,7 @@
 
 当前主方案：
 
-- [Argus 非对称 Attestation-backed SPIFFE 架构](../../Argus-Asymmetric-Attestation-SPIFFE-Architecture.md)
+- [双 TDVM + OpenViking Broker Sidecar 架构](../../Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
 - [documents_ly 文档索引](../../README.md)
 
 归档内容：

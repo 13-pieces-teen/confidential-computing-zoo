@@ -1,7 +1,7 @@
 # Argus asymmetric SPIFFE benchmark
 
 This directory implements E3-E7 from
-[`Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md`](../../../../documents_ly/Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md).
+[历史非对称 Profile 评估方案](../../../../documents_ly/archive/pre-dual-tdvm-broker-sidecar/Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md)。
 
 The benchmark runs only on the remote Linux validation host after the formal
 asymmetric runtime has passed its functional validation. It does not start a

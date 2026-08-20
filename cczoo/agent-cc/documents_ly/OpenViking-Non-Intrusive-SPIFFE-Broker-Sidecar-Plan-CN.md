@@ -5,16 +5,17 @@
 | 项目 | 内容 |
 | --- | --- |
 | 方案目标 | 不修改 OpenViking 上游 Python 业务源码，对实际运行的 OpenViking Python 进程完成 Workload Attestation，并由 sidecar 代表它进行 SPIFFE mTLS |
+| 当前拓扑 | OpenClaw 与 OpenViking 分别运行在独立 TDVM；Broker Sidecar 位于 OpenViking TDVM |
 | 主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
-| 当前仓库基线 | SPIRE 1.15.2；Broker Sidecar、自定义 WorkloadAttestor 和 Mock ALLOW/DENY 链路已经实现 |
+| 当前仓库基线 | 双 TDVM 骨架和 Broker 组件分别存在；统一 Profile 尚未完成 |
 | 文档性质 | 方案决策与详细设计记录；当前实现状态和执行命令以架构文档及实施方案为准 |
-| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental；当前实现仍需完成远程 Linux/TDVM 验证 |
+| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental；双 TDVM Broker Profile 需完成代码集成和远程验证 |
 
-> 当前状态：本机单元、交叉编译和静态检查已经完成；远程 Linux/TDVM 的 Broker
-> ALLOW、DENY、PID namespace、pidfd 与完整 mTLS 链路待验证。本文中的阶段性实施
-> 描述用于保留设计过程，不应覆盖
-> [当前架构](./Argus-Asymmetric-Attestation-SPIFFE-Architecture.md)和
-> [当前实施方案](./Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md)。
+> 当前状态：Broker Sidecar、自定义 WorkloadAttestor 和隔离 Mock 链路已实现；
+> `runtime/dual-tdvm` 仍是 OpenViking 直接挂载 Workload API 的旧骨架。两部分
+> 合并、远程 ALLOW/DENY 与跨 TDVM mTLS 尚未完成。当前状态以
+> [双 TDVM + Broker Sidecar 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)和
+> [实施计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)为准。
 
 ### 方案决策
 
@@ -435,7 +436,7 @@ expected_agent_spiffe_id = <由当前部署的Node Attestation/Agent身份结果
 
 ## 11. SPIRE Agent 配置草案
 
-以下是目标结构，具体字段需在升级到 1.15.2 后用 `spire-agent validate`确认：
+以下结构基于仓库当前使用的 SPIRE 1.15.2；接入双 TDVM 运行配置后仍需用 `spire-agent validate` 确认最终配置：
 
 ```hcl
 agent {
@@ -546,9 +547,11 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 
 ## 14. 分阶段落地
 
+以下 M0-M5 保留 Broker 组件的落地过程。M0-M3 已在非对称 Profile 中完成组件实现；将这些组件接入双 TDVM Profile，仍以当前实施计划为准。
+
 ### M0：接口与版本基线
 
-- 先将 SPIRE Server升级到1.15.2，再将 Agent升级到1.15.2；新 WorkloadAttestor使用1.15.2 Plugin SDK。
+- SPIRE Server、Agent 与新 WorkloadAttestor统一使用仓库当前的1.15.2版本基线。
 - 先对现有 `argus_tdx` NodeAttestor做兼容性回归，不把依赖升级和Broker改造捆绑为一个不可拆分变更。
 - 运行配置校验和现有 NodeAttestor回归。
 - 用最小测试 Broker验证自身SVID、双向精确身份认证和PID reference权限。
@@ -686,7 +689,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 | --- | --- |
 | OpenViking源码零侵入 | 身份私钥和TLS握手由sidecar持有/执行 |
 | 验证真实Python PID | pidfd用于监听原进程退出；启动时间、容器关系和launch record用于拒绝PID复用 |
-| 使用官方Broker语义 | 需要从SPIRE 1.15.1升级到1.15.2，并接受experimental接口风险 |
+| 使用官方Broker语义 | 采用SPIRE 1.15.2版本基线，并接受experimental接口风险 |
 | Sidecar只传PID | WorkloadAttestor/Evidence Provider必须独立重建和验证进程属性 |
 | mTLS入口外置 | 必须封闭OpenViking明文外部访问，避免代理旁路 |
 | 长流处理SVID轮换 | 普通轮换不代表新的Quote；新鲜度策略需要显式触发重新attest |

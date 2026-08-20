@@ -8,7 +8,7 @@
 >
 > 当前基准结果：[Argus-Asymmetric-Attestation-SPIFFE-Benchmark-Report.md](./Argus-Asymmetric-Attestation-SPIFFE-Benchmark-Report.md)
 >
-> 真实业务 E2E：[verify-openclaw-plugin-e2e.sh](../core/spire/runtime/asymmetric/scripts/verify-openclaw-plugin-e2e.sh)
+> 真实业务 E2E：[verify-openclaw-plugin-e2e.sh](../../../core/spire/runtime/asymmetric/scripts/verify-openclaw-plugin-e2e.sh)
 >
 > 文档状态：**历史评估方案；pilot 已执行，E8 正式矩阵未完成**
 
