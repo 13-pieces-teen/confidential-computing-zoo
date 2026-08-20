@@ -15,7 +15,8 @@ BROKER_TARGET_ID="spiffe://argus.local/service/openviking-cmem"
 BROKER_CONTAINER="argus-m3-openviking-broker"
 BROKER_TARGET_CONTAINER="argus-m3-broker-target"
 WORKLOAD_DECISION="${M4_WORKLOAD_DECISION:-allow}"
-FAKE_METRICS_URL="http://127.0.0.1:${M3_AGENT_METRICS_PORT:-39989}/metrics"
+FAKE_METRICS_PORT="${M4_FAKE_METRICS_PORT:-39990}"
+FAKE_METRICS_URL="https://trustee.argus.local:$FAKE_METRICS_PORT/metrics"
 
 spire_server() {
     docker compose exec -T spire-server /opt/spire/bin/spire-server \
@@ -186,15 +187,22 @@ done
 if [[ "$WORKLOAD_DECISION" == deny ]]; then
     [[ "$broker_ready" == 0 ]] \
         || { echo 'Broker Sidecar received a target SVID while Mock Trustee decision was deny' >&2; exit 1; }
-    [[ "$(docker inspect "$BROKER_CONTAINER" --format '{{.State.Running}}')" == false ]] \
-        || { echo 'Broker Sidecar did not stop after the Trustee DENY' >&2; exit 1; }
-    broker_logs="$(docker logs "$BROKER_CONTAINER" 2>&1)"
-    grep -Fq 'Broker subscription denied' <<<"$broker_logs" \
-        || { echo 'Broker Sidecar did not report the expected Broker permission denial' >&2; exit 1; }
-    fake_metrics="$(curl -fsS "$FAKE_METRICS_URL")"
+    [[ "$(docker inspect "$BROKER_CONTAINER" --format '{{.State.Running}}')" == true ]] \
+        || { echo 'Broker Sidecar stopped instead of waiting without a target identity' >&2; exit 1; }
+    if bash -c 'exec 3<>/dev/tcp/127.0.0.1/21943' >/dev/null 2>&1; then
+        echo 'Broker Sidecar listened on 21943 while Mock Trustee decision was deny' >&2
+        exit 1
+    fi
+    fake_metrics="$(curl -fsS \
+        --noproxy '*' \
+        --cacert "$SCRIPT_DIR/runtime/certs/trustee-ca.pem" \
+        --cert "$SCRIPT_DIR/runtime/certs/trustee-client.pem" \
+        --key "$SCRIPT_DIR/runtime/certs/trustee-client-key.pem" \
+        --resolve "trustee.argus.local:$FAKE_METRICS_PORT:127.0.0.1" \
+        "$FAKE_METRICS_URL")"
     grep -Eq '^argus_m4_fake_requests_total\{service="workload_trustee",result="denied"\} [1-9][0-9]*$' <<<"$fake_metrics" \
         || { echo 'Mock Trustee did not record a denied workload verification request' >&2; exit 1; }
-    printf 'M3 Broker deny matrix passed: Mock Trustee recorded DENY and no target SVID was delivered (PID %s).\n' "$target_pid"
+    printf 'M3 Broker deny matrix passed: Mock Trustee recorded DENY; no target SVID was delivered, port 21943 stayed closed, and the Sidecar remains waiting without identity (PID %s).\n' "$target_pid"
     exit 0
 fi
 if [[ "$broker_ready" != 1 ]]; then

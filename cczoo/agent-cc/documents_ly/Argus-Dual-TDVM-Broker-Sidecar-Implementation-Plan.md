@@ -78,7 +78,8 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 3. OpenViking 容器无 SPIRE socket；
 4. Sidecar 的目标 PID 与 OpenViking 实际 PID 一致；
 5. ALLOW 后才出现 mTLS listener ready；
-6. DENY 时 Trustee、Broker 和无目标 SVID 三项同时成立；
+6. DENY 时 Trustee metric 记录拒绝，Sidecar 无目标 SVID、无 ready、不监听 1943，
+   并保持无身份等待状态；
 7. OpenClaw 到 Sidecar 的跨 TDVM mTLS 成功；
 8. 无证书、错误客户端 ID 和明文 1933 访问失败；
 9. OpenViking 退出后 Sidecar 退出。

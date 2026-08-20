@@ -25,6 +25,7 @@ services:
       - ./runtime/certs:/opt/argus/certs:ro
     ports:
       - "127.0.0.1:${M3_AGENT_METRICS_PORT:-39989}:9989"
+      - "127.0.0.1:${M4_FAKE_METRICS_PORT:-39990}:18443"
     networks:
       - m3
 

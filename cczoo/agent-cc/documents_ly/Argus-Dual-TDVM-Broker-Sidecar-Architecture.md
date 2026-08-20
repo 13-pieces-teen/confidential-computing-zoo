@@ -190,7 +190,8 @@ Broker stream 的每次响应按完整身份快照处理。目标身份消失后
 2. OpenClaw 只取得自己的身份；
 3. OpenViking Python 无 SPIRE mount，Sidecar 引用的 PID 等于实际 OpenViking PID；
 4. ALLOW 时 Sidecar 获得目标 SVID 并监听 1943；
-5. DENY 时 Trustee 记录拒绝、Broker 返回 PermissionDenied、无目标 SVID；
+5. DENY 时 Trustee metric 记录拒绝；Sidecar 无目标 SVID、无 ready、不监听 1943，
+   并保持无身份等待状态；
 6. OpenClaw 经本地 Guard ALLOW 后完成跨 TDVM mTLS；
 7. 无客户端证书、错误 SPIFFE ID 和直接访问 1933 均失败；
 8. OpenViking 退出后 Sidecar 因 pidfd 退出；

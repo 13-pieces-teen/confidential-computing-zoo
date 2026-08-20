@@ -132,8 +132,10 @@ DUAL_EXPECT_WORKLOAD_DECISION=deny \
   bash "$PROFILE_DIR/scripts/verify.sh"
 ```
 
-TC-API 应已启动 OpenViking，但 Broker 订阅被拒绝：Sidecar 退出且从未监听 1943，
-日志包含 `Broker subscription denied`，Mock Trustee metrics 记录 `denied`。
+TC-API 应已启动 OpenViking。Mock Trustee 拒绝后，Sidecar 保持运行并等待身份，
+但没有目标 SVID、没有 ready 日志且不监听 1943；Mock Trustee metrics 记录
+`denied`。空身份快照本身不能区分永久 DENY、Entry 尚未同步或暂时不匹配，
+因此 DENY 结论由本轮配置的 Mock Trustee decision 与其 metric 共同确认。
 
 ## 6. ALLOW 和跨 TDVM mTLS 阶段
 
@@ -147,6 +149,9 @@ export DUAL_OPENVIKING_HOST_ADDRESS=192.0.2.22
 bash "$PROFILE_DIR/scripts/manage-guest.sh" openclaw start-workload
 bash "$PROFILE_DIR/scripts/verify.sh"
 ```
+
+从 DENY 切回 ALLOW 后必须再次执行 `start-workload`，以重启 Sidecar 并重新发起
+reference attestation；当前阶段不实现自动重新认证。
 
 `verify.sh` 检查三类关系：
 

@@ -263,12 +263,14 @@ trustee_metrics="$(curl -fsS \
     "https://trustee.argus.local:$TRUSTEE_PORT/metrics")"
 
 if [[ "$EXPECTED_DECISION" == deny ]]; then
-    [[ "$(container_running openviking "$OPENVIKING_TARGET" "$BROKER_CONTAINER")" == false ]] \
-        || fail 'Broker Sidecar did not stop after the Trustee DENY'
+    [[ "$(container_running openviking "$OPENVIKING_TARGET" "$BROKER_CONTAINER")" == true ]] \
+        || fail 'Broker Sidecar stopped instead of waiting without a target identity'
     ! grep -Fq 'OpenViking mTLS listener is ready' <<<"$broker_logs" \
         || fail 'Broker Sidecar listened on 1943 while Mock Trustee decision was DENY'
-    grep -Fq 'Broker subscription denied' <<<"$broker_logs" \
-        || fail 'Broker Sidecar did not report the expected Broker subscription denial'
+    if remote_sudo openviking "$OPENVIKING_TARGET" \
+        /bin/bash -c "exec 3<>/dev/tcp/127.0.0.1/$OPENVIKING_PORT" >/dev/null 2>&1; then
+        fail "Broker Sidecar listened on $OPENVIKING_PORT while Mock Trustee decision was DENY"
+    fi
     denied_metric="$(grep -E '^argus_m4_fake_requests_total\{service="workload_trustee",result="denied"\} [1-9][0-9]*$' <<<"$trustee_metrics" || true)"
     [[ -n "$denied_metric" ]] \
         || fail 'Mock Trustee did not record a denied workload verification request'
@@ -277,7 +279,8 @@ if [[ "$EXPECTED_DECISION" == deny ]]; then
         "OpenViking container: $target_container_id (PID $target_pid, still running)" \
         "Broker socket: $broker_socket_stat" \
         "Trustee metric: $denied_metric" \
-        'The Sidecar received no target SVID and never listened on 1943.' \
+        'The Sidecar received no target SVID, never listened on 1943, and remains waiting without identity.' \
+        'DENY is established by the configured Mock Trustee decision and its metric, not inferred from the empty Broker snapshot.' \
         'Evidence Provider and Trustee are still mock-stage.'
     exit 0
 fi

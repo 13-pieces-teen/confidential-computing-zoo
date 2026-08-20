@@ -78,17 +78,20 @@ run_attestation() {
         env \
         M3_SERVER_METRICS_PORT="${M3_SERVER_METRICS_PORT:-39988}" \
         M3_AGENT_METRICS_PORT="${M3_AGENT_METRICS_PORT:-39989}" \
+        M4_FAKE_METRICS_PORT="${M4_FAKE_METRICS_PORT:-39990}" \
         bash "$SPIRE_ROOT/tests/nodeattestor-mock/test.sh"
     run_check 'Isolated Broker Workload Attestation Trustee DENY' \
         env \
         M3_SERVER_METRICS_PORT="${M3_SERVER_METRICS_PORT:-39988}" \
         M3_AGENT_METRICS_PORT="${M3_AGENT_METRICS_PORT:-39989}" \
+        M4_FAKE_METRICS_PORT="${M4_FAKE_METRICS_PORT:-39990}" \
         M4_WORKLOAD_DECISION=deny \
         bash "$SPIRE_ROOT/tests/nodeattestor-mock/test.sh"
     run_check 'Isolated argus_tdx software failure matrix' \
         env \
         M3_SERVER_METRICS_PORT="${M3_SERVER_METRICS_PORT:-39988}" \
         M3_AGENT_METRICS_PORT="${M3_AGENT_METRICS_PORT:-39989}" \
+        M4_FAKE_METRICS_PORT="${M4_FAKE_METRICS_PORT:-39990}" \
         bash "$SPIRE_ROOT/tests/tdvm/test-failures.sh"
 }
 

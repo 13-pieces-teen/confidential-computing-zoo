@@ -41,9 +41,12 @@ Run the Trustee DENY path separately:
 M4_WORKLOAD_DECISION=deny bash test.sh
 ```
 
-The DENY run requires all three observations: the mock Trustee records a
-`workload_trustee/denied` request, the Broker API returns permission denied, and
-the OpenViking target SVID is never delivered to the Broker Sidecar.
+The DENY run requires these observations: the mock Trustee records a
+`workload_trustee/denied` request, the OpenViking target SVID is never delivered,
+the Sidecar never reports ready or listens on `21943`, and the Sidecar remains
+running while it waits without identity. An empty Broker snapshot does not tell
+the Sidecar whether the cause is a permanent Trustee denial or a transient Entry
+mismatch; the configured decision and Trustee metric establish the DENY result.
 
 The Agent uses the fake service container's network namespace so the Evidence
 Provider remains a loopback-only channel. It uses the host PID namespace because
@@ -58,9 +61,11 @@ docker compose logs --no-color spire-server spire-agent fake-services
 docker compose down
 ```
 
-The isolated stack defaults to host metrics ports `39988` and `39989` so it
-can run beside the dual-TDVM profile on `29988`. Override them with
-`M3_SERVER_METRICS_PORT` and `M3_AGENT_METRICS_PORT` when required.
+The isolated stack defaults to host metrics ports `39988` (SPIRE Server), `39989`
+(SPIRE Agent), and `39990` (mock Trustee). They can run beside the dual-TDVM
+profile on `29988`. Override them with `M3_SERVER_METRICS_PORT`,
+`M3_AGENT_METRICS_PORT`, and `M4_FAKE_METRICS_PORT` when required. All three
+host mappings are loopback-only.
 
 Deleting `runtime/` resets the generated keys and SPIRE state. Do this only when
 a fresh isolated identity environment is required.

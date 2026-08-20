@@ -29,8 +29,8 @@
 | 检查 | 结果 / 证据 |
 |---|---|
 | ALLOW：收到目标 SVID 后才 ready | |
-| DENY：无 ready 且 Sidecar 退出 | |
-| DENY：`Broker subscription denied` | |
+| DENY：无目标 SVID、无 ready、未监听 21943 | |
+| DENY：Sidecar 保持运行，处于无身份阻塞服务状态 | |
 | DENY：Trustee denied metric | |
 | 目标 PID 退出后 Sidecar 退出 | |
 
@@ -40,8 +40,12 @@
 |---|---|
 | 两个 Agent 的 Parent ID 不同 | |
 | TC-API 已启动 OpenViking | |
-| Sidecar 未监听 1943并退出 | |
+| Sidecar 无目标 SVID、无 ready、未监听 1943 | |
+| Sidecar 保持运行，处于无身份阻塞服务状态 | |
 | Trustee workload denied metric | |
+
+DENY 结论必须由本轮配置的 Mock Trustee decision 与 denied metric 共同确认；
+Sidecar 的空身份状态本身不能区分永久 DENY、Entry 尚未同步或暂时不匹配。
 
 ## 双 TDVM ALLOW 与 mTLS
 
