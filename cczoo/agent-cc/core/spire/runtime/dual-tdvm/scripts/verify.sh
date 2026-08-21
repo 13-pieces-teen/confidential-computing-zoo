@@ -6,11 +6,17 @@ PROFILE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPOSE_FILE="$PROFILE_DIR/compose.yaml"
 RUNTIME_DIR="${DUAL_RUNTIME_DIR:-$PROFILE_DIR/runtime}"
 export DUAL_RUNTIME_DIR="$RUNTIME_DIR"
+REMOTE_ROOT="${DUAL_GUEST_ROOT:-/opt/argus-spire-dual}"
 SERVER_SOCKET="/opt/spire/run/server/api.sock"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
+OPENCLAW_BROKER_ID="spiffe://argus.local/infra/openclaw-broker"
 OPENVIKING_ID="spiffe://argus.local/service/openviking-cmem"
 BROKER_ID="spiffe://argus.local/infra/openviking-broker"
 OPENCLAW_CONTAINER="${DUAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
+OPENCLAW_IMAGE="${DUAL_OPENCLAW_WORKLOAD_IMAGE:-argus-dual-openclaw:local}"
+OPENCLAW_BROKER_CONTAINER="${DUAL_OPENCLAW_BROKER_CONTAINER:-argus-dual-openclaw-egress}"
+DENY_BROKER_CONTAINER="argus-dual-openclaw-deny-egress"
+OPENCLAW_BROKER_IMAGE="${DUAL_OPENCLAW_BROKER_IMAGE:-argus-openclaw-egress-sidecar:local}"
 OPENVIKING_CONTAINER="${DUAL_OPENVIKING_CONTAINER:-agentcc-openviking-service}"
 BROKER_CONTAINER="${DUAL_OPENVIKING_BROKER_CONTAINER:-agentcc-openviking-broker-sidecar}"
 BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
@@ -22,11 +28,16 @@ OPENVIKING_PARENT_ID="${DUAL_OPENVIKING_PARENT_ID:-}"
 OPENCLAW_TARGET="${DUAL_OPENCLAW_TDVM_SSH_TARGET:-}"
 OPENVIKING_TARGET="${DUAL_OPENVIKING_TDVM_SSH_TARGET:-}"
 OPENCLAW_RUN="${DUAL_OPENCLAW_GUEST_RUN:-/run/argus-spire-dual/openclaw}"
+OPENCLAW_BROKER_RUN="${DUAL_OPENCLAW_GUEST_BROKER_RUN:-/run/argus-spire-dual/openclaw-broker}"
 OPENVIKING_RUN="${DUAL_OPENVIKING_GUEST_RUN:-/run/argus-spire-dual/openviking}"
 OPENVIKING_BROKER_RUN="${DUAL_OPENVIKING_GUEST_BROKER_RUN:-/run/argus-spire-dual/openviking-broker}"
 OPENVIKING_ORIGIN="${DUAL_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
 OPENVIKING_HOST_ADDRESS="${DUAL_OPENVIKING_HOST_ADDRESS:-}"
+OPENVIKING_HOST="${OPENVIKING_ORIGIN#https://}"
+OPENVIKING_HOST="${OPENVIKING_HOST%%:*}"
 OPENVIKING_PORT="${DUAL_OPENVIKING_PORT:-1943}"
+OPENCLAW_EGRESS_PORT="${DUAL_OPENCLAW_EGRESS_PORT:-1934}"
+OPENCLAW_NETWORK="${DUAL_OPENCLAW_NETWORK:-argus-dual-openclaw}"
 TRUSTEE_PORT="${DUAL_TDVM_TRUSTEE_PORT:-18443}"
 EXPECTED_DECISION="${DUAL_EXPECT_WORKLOAD_DECISION:-allow}"
 VERIFY_TARGET_EXIT="${DUAL_VERIFY_TARGET_EXIT:-1}"
@@ -48,9 +59,13 @@ done
     || fail 'DUAL_EXPECT_WORKLOAD_DECISION must be allow or deny'
 [[ "$EXPECT_APPLICATION_READY" == 0 || "$EXPECT_APPLICATION_READY" == 1 ]] \
     || fail 'DUAL_EXPECT_APPLICATION_READY must be 0 or 1'
+[[ "$VERIFY_TARGET_EXIT" == 0 || "$VERIFY_TARGET_EXIT" == 1 ]] \
+    || fail 'DUAL_VERIFY_TARGET_EXIT must be 0 or 1'
 if [[ "$EXPECTED_DECISION" == allow ]]; then
     [[ -n "$OPENVIKING_HOST_ADDRESS" ]] \
         || fail 'DUAL_OPENVIKING_HOST_ADDRESS is required for ALLOW verification'
+    [[ -n "${DUAL_OPENVIKING_API_KEY:-}" ]] \
+        || fail 'DUAL_OPENVIKING_API_KEY is required for the real plugin E2E'
 fi
 
 spire_server() {
@@ -106,11 +121,13 @@ for role in openclaw openviking; do
     if [[ "$role" == openclaw ]]; then
         target="$OPENCLAW_TARGET"
         run_dir="$OPENCLAW_RUN"
+        broker_run_dir="$OPENCLAW_BROKER_RUN"
         provider_container=argus-dual-openclaw-evidence
         agent_container=argus-dual-openclaw-agent
     else
         target="$OPENVIKING_TARGET"
         run_dir="$OPENVIKING_RUN"
+        broker_run_dir="$OPENVIKING_BROKER_RUN"
         provider_container=argus-dual-openviking-evidence
         agent_container=argus-dual-openviking-agent
     fi
@@ -118,6 +135,8 @@ for role in openclaw openviking; do
         || fail "$role SSH target is not a TD Guest"
     remote_sudo "$role" "$target" test -S "$run_dir/agent.sock" \
         || fail "$role Workload API socket is missing"
+    remote_sudo "$role" "$target" test -S "$broker_run_dir/broker.sock" \
+        || fail "$role Broker API socket is missing"
     [[ "$(container_running "$role" "$target" "$provider_container")" == true ]] \
         || fail "$role mock Evidence Provider is not running"
     [[ "$(container_running "$role" "$target" "$agent_container")" == true ]] \
@@ -146,6 +165,10 @@ if missing:
 
 [[ "$(container_running openviking "$OPENVIKING_TARGET" "$OPENVIKING_CONTAINER")" == true ]] \
     || fail 'TC-API OpenViking container is not running'
+openclaw_image_config_digest="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker image inspect "$OPENCLAW_IMAGE" --format '{{.Id}}')"
+openclaw_broker_image_config_digest="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker image inspect "$OPENCLAW_BROKER_IMAGE" --format '{{.Id}}')"
 target_pid="$(remote_sudo openviking "$OPENVIKING_TARGET" \
     /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.State.Pid}}')"
 target_container_id="$(remote_sudo openviking "$OPENVIKING_TARGET" \
@@ -158,6 +181,10 @@ container_image_config_digest="$(remote_sudo openviking "$OPENVIKING_TARGET" \
     /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.Image}}')"
 [[ "$source_image_config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
     || fail "source image config digest is invalid: $source_image_config_digest"
+[[ "$openclaw_image_config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "OpenClaw image config digest is invalid: $openclaw_image_config_digest"
+[[ "$openclaw_broker_image_config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "OpenClaw Broker image config digest is invalid: $openclaw_broker_image_config_digest"
 [[ "$runtime_image_config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
     || fail "runtime image config digest is invalid: $runtime_image_config_digest"
 [[ "$container_image_config_digest" == "$runtime_image_config_digest" ]] \
@@ -170,6 +197,7 @@ import sys
 
 expected_parents = {
     "spiffe://argus.local/agent/openclaw": sys.argv[1],
+    "spiffe://argus.local/infra/openclaw-broker": sys.argv[1],
     "spiffe://argus.local/service/openviking-cmem": sys.argv[2],
     "spiffe://argus.local/infra/openviking-broker": sys.argv[2],
 }
@@ -200,14 +228,31 @@ for identity, values in matched.items():
     attributes[identity] = entry.get("additional_attributes") or {}
 
 openclaw = selectors["spiffe://argus.local/agent/openclaw"]
+openclaw_broker = selectors["spiffe://argus.local/infra/openclaw-broker"]
 target = selectors["spiffe://argus.local/service/openviking-cmem"]
 broker = selectors["spiffe://argus.local/infra/openviking-broker"]
-if "docker:label:argus.workload:openclaw" not in openclaw:
-    raise SystemExit("OpenClaw entry is missing its workload label selector")
-required_target = {
-    "docker:label:argus.workload:openviking-cmem",
+required_openclaw = {
+    "docker:label:argus.workload:openclaw",
     "docker:image_id:{}".format(sys.argv[3]),
     "docker:image_config_digest:{}".format(sys.argv[4]),
+}
+missing = required_openclaw - openclaw
+if missing:
+    raise SystemExit("OpenClaw entry is missing selectors: {}".format(sorted(missing)))
+if not attributes["spiffe://argus.local/agent/openclaw"].get("disable_x509_svid_prefetch", False):
+    raise SystemExit("OpenClaw entry does not disable X.509-SVID prefetch")
+required_openclaw_broker = {
+    "docker:label:argus.component:openclaw-broker",
+    "docker:image_id:{}".format(sys.argv[5]),
+    "docker:image_config_digest:{}".format(sys.argv[6]),
+}
+missing = required_openclaw_broker - openclaw_broker
+if missing:
+    raise SystemExit("OpenClaw Broker entry is missing selectors: {}".format(sorted(missing)))
+required_target = {
+    "docker:label:argus.workload:openviking-cmem",
+    "docker:image_id:{}".format(sys.argv[7]),
+    "docker:image_config_digest:{}".format(sys.argv[8]),
     "argus_tdx_workload:verified:true",
     "argus_tdx_workload:workload_id:openviking-cmem",
     "argus_tdx_workload:policy:openviking-cmem-v1",
@@ -219,11 +264,13 @@ if not attributes["spiffe://argus.local/service/openviking-cmem"].get("disable_x
     raise SystemExit("OpenViking target entry does not disable X.509-SVID prefetch")
 if "docker:label:argus.component:openviking-broker" not in broker:
     raise SystemExit("Broker entry is missing its dedicated Docker label selector")
-for name, values in (("OpenClaw", openclaw), ("OpenViking target", target), ("Broker", broker)):
+for name, values in (("OpenClaw", openclaw), ("OpenClaw Broker", openclaw_broker), ("OpenViking target", target), ("OpenViking Broker", broker)):
     for prefix in ("docker:image_id:", "docker:image_config_digest:sha256:"):
         if not any(value.startswith(prefix) for value in values):
             raise SystemExit("{} entry is missing a {} selector".format(name, prefix))
 ' "$OPENCLAW_PARENT_ID" "$OPENVIKING_PARENT_ID" \
+    "$OPENCLAW_IMAGE" "$openclaw_image_config_digest" \
+    "$OPENCLAW_BROKER_IMAGE" "$openclaw_broker_image_config_digest" \
     "$OPENVIKING_RUNTIME_IMAGE_ID" "$runtime_image_config_digest"
 
 openviking_mounts="$(remote_sudo openviking "$OPENVIKING_TARGET" \
@@ -322,10 +369,75 @@ allowed_metric="$(grep -E '^argus_m4_fake_requests_total\{service="workload_trus
     || fail 'Mock Trustee did not record an allowed workload verification request'
 [[ "$(container_running openclaw "$OPENCLAW_TARGET" "$OPENCLAW_CONTAINER")" == true ]] \
     || fail 'OpenClaw workload is not running'
-openclaw_status="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
-    /usr/local/bin/docker exec "$OPENCLAW_CONTAINER" cat /run/argus-svid/status.json)"
-grep -Fq "\"spiffe_id\": \"$OPENCLAW_ID\"" <<<"$openclaw_status" \
-    || fail 'OpenClaw workload has the wrong X.509-SVID'
+[[ "$(container_running openclaw "$OPENCLAW_TARGET" "$OPENCLAW_BROKER_CONTAINER")" == true ]] \
+    || fail 'OpenClaw Egress Broker is not running'
+openclaw_pid="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" --format '{{.State.Pid}}')"
+openclaw_mounts="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" \
+    --format '{{range .Mounts}}{{println .Destination}}{{end}}')"
+if grep -Eq '^(/opt/spire|/run/spire|/run/argus-svid|/run/secrets/argus_guard_api_token)(/|$)' <<<"$openclaw_mounts"; then
+    fail 'OpenClaw directly mounts SPIRE, SVID, or Guard material'
+fi
+openclaw_env="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" \
+    --format '{{range .Config.Env}}{{println .}}{{end}}')"
+if grep -Eq '^(ARGUS_|SPIFFE_|NODE_OPTIONS=)' <<<"$openclaw_env"; then
+    fail 'OpenClaw contains Argus, SPIFFE, or NODE_OPTIONS injection'
+fi
+openclaw_entrypoint="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" \
+    --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}')"
+if grep -Eqi 'argus|preload|run-openclaw-spiffe' <<<"$openclaw_entrypoint"; then
+    fail "OpenClaw uses an Argus entrypoint or preload: $openclaw_entrypoint"
+fi
+openclaw_extra_hosts="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" --format '{{json .HostConfig.ExtraHosts}}')"
+if grep -Fq 'openviking.argus.local' <<<"$openclaw_extra_hosts"; then
+    fail 'OpenClaw directly maps the external OpenViking host'
+fi
+remote_sudo openclaw "$OPENCLAW_TARGET" /usr/local/bin/docker exec "$OPENCLAW_CONTAINER" \
+    sh -c 'test ! -e /usr/local/bin/argus-svid-materializer && test ! -e /opt/argus/openclaw-spiffe/preload.mjs && test ! -e /usr/local/bin/run-openclaw-spiffe.sh' \
+    || fail 'OpenClaw runtime image contains Argus materializer or preload code'
+
+openclaw_broker_command="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" --format '{{json .Config.Cmd}}')"
+[[ "$openclaw_broker_command" == *"-target-pid=$openclaw_pid"* ]] \
+    || fail "OpenClaw Egress Broker does not reference current host PID $openclaw_pid"
+[[ "$openclaw_broker_command" == *"-target=$OPENVIKING_ORIGIN"* \
+    && "$openclaw_broker_command" == *"-server-spiffe-id=$OPENVIKING_ID"* ]] \
+    || fail 'OpenClaw Egress Broker does not use the fixed OpenViking origin and SPIFFE ID'
+openclaw_broker_user="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" --format '{{.Config.User}}')"
+[[ "$openclaw_broker_user" == '1000:1000' ]] \
+    || fail "OpenClaw Egress Broker user is $openclaw_broker_user, expected 1000:1000"
+openclaw_broker_workload_mount="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" \
+    --format '{{range .Mounts}}{{if eq .Destination "/opt/spire/run/agent"}}{{.Source}}{{end}}{{end}}')"
+openclaw_broker_api_mount="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" \
+    --format '{{range .Mounts}}{{if eq .Destination "/opt/spire/run/broker"}}{{.Source}}{{end}}{{end}}')"
+[[ "$openclaw_broker_workload_mount" == "$OPENCLAW_RUN" ]] \
+    || fail "OpenClaw Broker Workload API mount is $openclaw_broker_workload_mount, expected $OPENCLAW_RUN"
+[[ "$openclaw_broker_api_mount" == "$OPENCLAW_BROKER_RUN" ]] \
+    || fail "OpenClaw Broker API mount is $openclaw_broker_api_mount, expected $OPENCLAW_BROKER_RUN"
+openclaw_broker_guard_mount="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" \
+    --format '{{range .Mounts}}{{if eq .Destination "/run/secrets/argus_guard_api_token"}}{{.Source}}{{end}}{{end}}')"
+[[ "$openclaw_broker_guard_mount" == "$REMOTE_ROOT/secrets/openclaw-guard-api-token" ]] \
+    || fail "OpenClaw Egress Guard token mount is $openclaw_broker_guard_mount"
+openclaw_broker_extra_hosts="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" --format '{{json .HostConfig.ExtraHosts}}')"
+[[ "$openclaw_broker_extra_hosts" == *"$OPENVIKING_HOST:$OPENVIKING_HOST_ADDRESS"* ]] \
+    || fail 'OpenClaw Egress Broker is missing the external OpenViking host mapping'
+openclaw_broker_ports="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker port "$OPENCLAW_BROKER_CONTAINER")"
+[[ -z "$openclaw_broker_ports" ]] \
+    || fail "OpenClaw Egress Broker unexpectedly publishes a TDVM host port: $openclaw_broker_ports"
+openclaw_broker_logs="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker logs "$OPENCLAW_BROKER_CONTAINER" 2>&1)"
+grep -Fq "OpenClaw Egress Broker is ready for identity $OPENCLAW_ID" <<<"$openclaw_broker_logs" \
+    || fail 'OpenClaw Egress Broker did not receive the real OpenClaw PID identity'
 
 if remote_sudo openclaw "$OPENCLAW_TARGET" \
     curl -kfsS --noproxy '*' --max-time 3 \
@@ -338,66 +450,78 @@ if remote_sudo openclaw "$OPENCLAW_TARGET" \
     fail 'OpenClaw TDVM can reach OpenViking plaintext port 1933'
 fi
 
+cleanup_guard_deny_broker() {
+    remote_sudo openclaw "$OPENCLAW_TARGET" \
+        /usr/local/bin/docker rm -f "$DENY_BROKER_CONTAINER" >/dev/null 2>&1 || true
+}
+trap cleanup_guard_deny_broker EXIT
+remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker run -d \
+    --name "$DENY_BROKER_CONTAINER" \
+    --network "$OPENCLAW_NETWORK" \
+    --pid host \
+    --label argus.component=openclaw-broker \
+    --add-host "$OPENVIKING_HOST:$OPENVIKING_HOST_ADDRESS" \
+    --volume "$OPENCLAW_RUN:/opt/spire/run/agent:ro" \
+    --volume "$OPENCLAW_BROKER_RUN:/opt/spire/run/broker:ro" \
+    --volume "$REMOTE_ROOT/secrets/openclaw-guard-api-token:/run/secrets/argus_guard_api_token:ro" \
+    "$OPENCLAW_BROKER_IMAGE" \
+    -workload-api=unix:///opt/spire/run/agent/agent.sock \
+    -broker-socket=/opt/spire/run/broker/broker.sock \
+    "-broker-spiffe-id=$OPENCLAW_BROKER_ID" \
+    "-agent-spiffe-id=$OPENCLAW_PARENT_ID" \
+    "-target-spiffe-id=$OPENCLAW_ID" \
+    "-server-spiffe-id=$OPENVIKING_ID" \
+    "-target-pid=$openclaw_pid" \
+    -listen=0.0.0.0:1935 \
+    "-target=$OPENVIKING_ORIGIN" \
+    -guard-url=http://argus-dual-openclaw-guard:8007/guard/v1/authorize \
+    -guard-token-file=/run/secrets/argus_guard_api_token \
+    -target-service=openviking-cmem-deny-test \
+    -data-class=sensitive >/dev/null
+deny_ready=0
+for _ in $(seq 1 30); do
+    deny_broker_logs="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+        /usr/local/bin/docker logs "$DENY_BROKER_CONTAINER" 2>&1)"
+    if grep -Fq "OpenClaw Egress Broker is ready for identity $OPENCLAW_ID" <<<"$deny_broker_logs"; then
+        deny_ready=1
+        break
+    fi
+    [[ "$(container_running openclaw "$OPENCLAW_TARGET" "$DENY_BROKER_CONTAINER")" == true ]] || break
+    sleep 1
+done
+[[ "$deny_ready" == 1 ]] || fail 'temporary Guard-DENY Egress Broker did not become ready'
 remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - \
-    "$OPENVIKING_ORIGIN" "$OPENCLAW_ID" "$OPENVIKING_ID" "$EXPECT_APPLICATION_READY" <<'NODE'
-const fs = require("fs");
-const https = require("https");
+    "http://$DENY_BROKER_CONTAINER:1935/health" <<'NODE'
+(async () => {
+  const response = await fetch(process.argv[2], { signal: AbortSignal.timeout(10000) });
+  if (response.status !== 403) {
+    throw new Error(`Guard-DENY Egress returned HTTP ${response.status}, expected 403`);
+  }
+  console.log("Guard DENY returned HTTP 403 before an OpenViking upstream request");
+})().catch((error) => { console.error(error); process.exit(1); });
+NODE
+deny_broker_logs="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker logs "$DENY_BROKER_CONTAINER" 2>&1)"
+grep -Eq 'request_id=[0-9a-f]+ method=GET path=/health decision_id=[^ ]+ status=403 duration=' <<<"$deny_broker_logs" \
+    || fail 'temporary Egress Broker did not log the Guard DENY result'
+cleanup_guard_deny_broker
+trap - EXIT
 
-const origin = process.argv[2];
-const callerId = process.argv[3];
-const targetId = process.argv[4];
-const expectApplicationReady = process.argv[5] === "1";
+remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - \
+    "http://$OPENCLAW_BROKER_CONTAINER:$OPENCLAW_EGRESS_PORT" "$EXPECT_APPLICATION_READY" <<'NODE'
+const baseUrl = process.argv[2].replace(/\/+$/, "");
+const expectApplicationReady = process.argv[3] === "1";
 
 (async () => {
-  const guardToken = fs.readFileSync("/run/secrets/argus_guard_api_token", "utf8").trim();
-  const guardResponse = await fetch(process.env.ARGUS_GUARD_URL, {
-    method: "POST",
-    headers: { authorization: `Bearer ${guardToken}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      request_id: `dual-tdvm-verify-${process.pid}`,
-      caller_spiffe_id: callerId,
-      target_spiffe_id: targetId,
-      target_service: process.env.ARGUS_TARGET_SERVICE,
-      target_origin: origin,
-      operation: "memory.read",
-      data_class: process.env.ARGUS_GUARD_DATA_CLASS,
-    }),
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!guardResponse.ok) throw new Error(`Guard authorize returned HTTP ${guardResponse.status}`);
-  const guardDecision = await guardResponse.json();
-  if (guardDecision.decision !== "ALLOW") {
-    throw new Error(`Guard denied the request: ${JSON.stringify(guardDecision)}`);
-  }
-
-  const url = new URL(origin);
-  const tls = {
-    key: fs.readFileSync("/run/argus-svid/svid-key.pem"),
-    cert: fs.readFileSync("/run/argus-svid/svid.pem"),
-    ca: fs.readFileSync("/run/argus-svid/bundle.pem"),
-    checkServerIdentity: (_hostname, certificate) => {
-      const uris = (certificate.subjectaltname || "")
-        .split(/,\s*/)
-        .filter((entry) => entry.startsWith("URI:"))
-        .map((entry) => entry.slice(4));
-      if (!uris.includes(targetId)) {
-        return new Error(`OpenViking TLS peer SPIFFE ID mismatch: expected ${targetId}, got ${uris.join(",") || "none"}`);
-      }
-    },
-  };
-  const requestStatus = (path) => new Promise((resolve, reject) => {
-    const request = https.get(url, { path, servername: url.hostname, timeout: 10000, ...tls }, (response) => {
-      response.resume();
-      resolve(response.statusCode);
-    });
-    request.on("timeout", () => request.destroy(new Error(`OpenViking ${path} timed out`)));
-    request.on("error", reject);
-  });
-
+  const requestStatus = async (path) => (await fetch(`${baseUrl}${path}`, {
+    signal: AbortSignal.timeout(10000),
+  })).status;
   const healthStatus = await requestStatus("/health");
   if (healthStatus !== 200) throw new Error(`OpenViking /health returned HTTP ${healthStatus}`);
-  console.log(`Guard ALLOW -> direct SPIFFE mTLS /health -> HTTP ${healthStatus}`);
+  console.log(`local Egress -> Guard ALLOW -> SPIFFE mTLS /health -> HTTP ${healthStatus}`);
 
   try {
     const readyStatus = await requestStatus("/ready");
@@ -417,6 +541,50 @@ const expectApplicationReady = process.argv[5] === "1";
   process.exit(1);
 });
 NODE
+
+remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker exec -i -u node "$OPENCLAW_CONTAINER" node - \
+    /home/node/.openclaw/openclaw.json \
+    "http://$OPENCLAW_BROKER_CONTAINER:$OPENCLAW_EGRESS_PORT" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const configPath = process.argv[2];
+const target = process.argv[3].replace(/\/+$/, "");
+function get(path) {
+  return JSON.parse(execFileSync("openclaw", ["config", "get", path, "--json"], {
+    encoding: "utf8",
+    env: { ...process.env, OPENCLAW_CONFIG_PATH: configPath },
+  }).trim());
+}
+const slot = get("plugins.slots.contextEngine");
+const plugin = get("plugins.entries.openviking.config");
+if (slot !== "openviking") throw new Error(`unexpected context engine ${slot}`);
+if (plugin?.mode !== "remote" || plugin?.baseUrl?.replace(/\/+$/, "") !== target) {
+  throw new Error(`OpenViking plugin does not target ${target}`);
+}
+if (typeof plugin.apiKey !== "string" || !plugin.apiKey) throw new Error("plugin API key is missing");
+console.log(`OpenViking plugin baseUrl: ${target}`);
+NODE
+remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker exec -u node \
+    -e OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json \
+    "$OPENCLAW_CONTAINER" openclaw openviking status --json >/dev/null
+openclaw_broker_logs="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+    /usr/local/bin/docker logs "$OPENCLAW_BROKER_CONTAINER" 2>&1)"
+grep -Eq 'request_id=[0-9a-f]+ method=GET path=/health decision_id=[^ ]+ status=200 duration=' <<<"$openclaw_broker_logs" \
+    || fail 'OpenClaw Egress Broker did not log the allowed /health decision result'
+remote_sudo openclaw "$OPENCLAW_TARGET" test -x "$REMOTE_ROOT/bin/verify_openclaw_plugin_e2e.sh" \
+    || fail 'real OpenClaw plugin E2E script is missing; load the OpenClaw workload again'
+plugin_e2e_result="$(remote_sudo openclaw "$OPENCLAW_TARGET" env \
+    PATH=/usr/local/bin:/usr/bin:/bin \
+    "OPENVIKING_API_KEY=$DUAL_OPENVIKING_API_KEY" \
+    "DUAL_OPENCLAW_CONTAINER=$OPENCLAW_CONTAINER" \
+    DUAL_OPENCLAW_USER=node \
+    DUAL_OPENCLAW_CONFIG=/home/node/.openclaw/openclaw.json \
+    "DUAL_OPENVIKING_PLUGIN_BASE_URL=http://$OPENCLAW_BROKER_CONTAINER:$OPENCLAW_EGRESS_PORT" \
+    DUAL_GUARD_CONTAINER=argus-dual-openclaw-guard \
+    "$REMOTE_ROOT/bin/verify_openclaw_plugin_e2e.sh")" \
+    || fail 'real OpenClaw agent turn, OpenViking session capture, or commit E2E failed'
+printf '%s\n' "$plugin_e2e_result"
 
 cleanup_wrong_client() {
     remote_sudo openviking "$OPENVIKING_TARGET" \
@@ -459,39 +627,16 @@ done
 
 remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - \
-    "$OPENVIKING_ORIGIN" "$OPENVIKING_ID" <<'NODE'
-const fs = require("fs");
-const https = require("https");
-const url = new URL(process.argv[2]);
-const targetId = process.argv[3];
-const request = https.get(url, {
-  path: "/health",
-  servername: url.hostname,
-  timeout: 5000,
-  key: fs.readFileSync("/run/argus-svid/svid-key.pem"),
-  cert: fs.readFileSync("/run/argus-svid/svid.pem"),
-  ca: fs.readFileSync("/run/argus-svid/bundle.pem"),
-  checkServerIdentity: (_hostname, certificate) => {
-    const uris = (certificate.subjectaltname || "")
-      .split(/,\s*/)
-      .filter((entry) => entry.startsWith("URI:"))
-      .map((entry) => entry.slice(4));
-    if (!uris.includes(targetId)) {
-      return new Error(`unexpected server SPIFFE ID: ${uris.join(",") || "none"}`);
-    }
-  },
-}, (response) => {
-  response.resume();
-  console.error(`wrong-client Sidecar unexpectedly returned HTTP ${response.statusCode}`);
+    "http://$OPENCLAW_BROKER_CONTAINER:$OPENCLAW_EGRESS_PORT/health" <<'NODE'
+(async () => {
+  const response = await fetch(process.argv[2], { signal: AbortSignal.timeout(10000) });
+  if (response.status !== 502) {
+    throw new Error(`wrong-client OpenViking Sidecar produced Egress HTTP ${response.status}, expected 502`);
+  }
+  console.log("Wrong expected client SPIFFE ID was rejected; Egress returned HTTP 502");
+})().catch((error) => {
+  console.error(error);
   process.exit(1);
-});
-request.on("timeout", () => {
-  console.error("wrong-client test timed out");
-  process.exit(1);
-});
-request.on("error", (error) => {
-  console.log(`Wrong-client SPIFFE ID rejected during mTLS handshake as expected: ${error.message}`);
-  process.exit(0);
 });
 NODE
 
@@ -526,7 +671,24 @@ if [[ "$VERIFY_TARGET_EXIT" == 1 ]]; then
         /bin/bash -c "exec 3<>/dev/tcp/127.0.0.1/$OPENVIKING_PORT" >/dev/null 2>&1; then
         fail "port $OPENVIKING_PORT remained reachable after the target PID and Broker Sidecar exited"
     fi
-    target_exit_result="OpenViking stopped; Sidecar exited through pidfd monitoring; port $OPENVIKING_PORT closed"
+    remote_sudo openclaw "$OPENCLAW_TARGET" \
+        /usr/local/bin/docker stop "$OPENCLAW_CONTAINER" >/dev/null
+    for _ in $(seq 1 15); do
+        [[ "$(container_running openclaw "$OPENCLAW_TARGET" "$OPENCLAW_BROKER_CONTAINER")" == false ]] && break
+        sleep 1
+    done
+    [[ "$(container_running openclaw "$OPENCLAW_TARGET" "$OPENCLAW_BROKER_CONTAINER")" == false ]] \
+        || fail 'OpenClaw Egress Broker did not stop after the target PID exited'
+    DUAL_RUNTIME_DIR="$RUNTIME_DIR" "$SCRIPT_DIR/manage-guest.sh" openclaw start-workload
+    restarted_openclaw_pid="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+        /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" --format '{{.State.Pid}}')"
+    [[ "$restarted_openclaw_pid" != "$openclaw_pid" ]] \
+        || fail "OpenClaw restarted with the same host PID $openclaw_pid"
+    restarted_broker_command="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
+        /usr/local/bin/docker inspect "$OPENCLAW_BROKER_CONTAINER" --format '{{json .Config.Cmd}}')"
+    [[ "$restarted_broker_command" == *"-target-pid=$restarted_openclaw_pid"* ]] \
+        || fail "restarted Egress Broker does not reference new OpenClaw PID $restarted_openclaw_pid"
+    target_exit_result="OpenViking Ingress and OpenClaw Egress Brokers exited with their target PIDs; OpenClaw Egress restarted against new PID $restarted_openclaw_pid"
 fi
 
 if [[ "$EXPECT_APPLICATION_READY" == 1 ]]; then
@@ -538,6 +700,7 @@ fi
 printf '%s\n' \
     'Dual-TDVM ALLOW verification passed.' \
     "OpenClaw Agent parent: $OPENCLAW_PARENT_ID" \
+    "OpenClaw container PID before lifecycle check: $openclaw_pid" \
     "OpenViking Agent parent: $OPENVIKING_PARENT_ID" \
     "OpenViking container: $target_container_id (PID $target_pid)" \
     "OpenViking source image config digest: $source_image_config_digest" \
@@ -552,7 +715,8 @@ printf '%s\n' \
     "Only the Broker Sidecar mounts Workload API ($broker_workload_mount) and Broker API ($broker_api_mount) for target PID $target_pid." \
     'No-client and wrong-expected-client mTLS checks failed as expected.' \
     'OpenClaw could not reach the OpenViking plaintext port 1933.' \
-    'OpenClaw Guard ALLOW preceded successful SPIFFE mTLS /health = 200.' \
+    'OpenClaw local HTTP Egress called Guard before successful SPIFFE mTLS /health = 200.' \
+    "OpenViking plugin baseUrl: http://$OPENCLAW_BROKER_CONTAINER:$OPENCLAW_EGRESS_PORT" \
     "$application_readiness_result" \
     "Target exit check: $target_exit_result" \
     'Evidence Provider and Trustee are still mock-stage; this is not real Quote/QGS or Rekor acceptance.'

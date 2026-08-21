@@ -1,10 +1,9 @@
 # TDVM and Node Attestation failure fixtures
 
 This directory keeps only the TDVM lifecycle/preflight utilities still used by
-the asymmetric evaluation environment and the isolated `argus_tdx` software
-failure matrix. The former pre-dual-Agent deployment, endpoint-switching, and
-business-path acceptance scripts were removed after the native asymmetric
-runtime became authoritative.
+the dual-TDVM runtime and the isolated `argus_tdx` software failure matrix.
+Former pre-dual-Agent deployment, endpoint-switching, and standalone
+business-path acceptance scripts are not maintained here.
 
 ## TD VM lifecycle
 
@@ -71,6 +70,6 @@ Run it directly with:
 core/spire/tests/tdvm/test-failures.sh
 ```
 
-It is also part of `runtime/asymmetric/scripts/remote-test.sh attestation` and
-`all`. The matrix uses fake Evidence Provider/Trustee services and is not TDX
-hardware security acceptance.
+The matrix uses fake Evidence Provider/Trustee services and is not TDX
+hardware security acceptance. The maintained integrated deployment is
+[`runtime/dual-tdvm`](../../runtime/dual-tdvm/README.md).

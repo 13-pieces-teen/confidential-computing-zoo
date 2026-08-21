@@ -226,30 +226,12 @@ The full payload shapes and additional operator notes remain in [`README.md`](..
 
 ### Build and run gateway Docker container
 
-**Notice: If you do not use TC API service, please refer to `run-sbx.sh`.**
-
+The maintained OpenClaw/OpenViking security runtime is the
+[dual-TDVM Broker profile](../../core/spire/runtime/dual-tdvm/README.md):
 
 ```bash
-cd <workdir>/confidential-computing-zoo/cczoo/agent-cc/adapters/OpenClaw/scripts
-
-# make slim image
-vim .env
-# OPENCLAW_GATEWAY_PORT=18789
-# OPENCLAW_BRIDGE_PORT=18790
-# OPENCLAW_GATEWAY_BIND=lan
-# OPENCLAW_GATEWAY_TOKEN=3eec2b1cdc012236e58e464f08b6092dc41f0cf6681670cf98bc2edf000e6182
-# OPENCLAW_IMAGE=openclaw:local
-# OPENCLAW_DOCKER_SOCKET=/var/run/docker.sock
-# DOCKER_GID=113
-# OPENCLAW_INSTALL_DOCKER_CLI=1
-# OPENCLAW_TZ=
-# OPENCLAW_CONFIG_VOLUME=openclaw-config
-# OPENCLAW_WORKSPACE_VOLUME=openclaw-workspace
-
-bahs setup.sh
-
-# make gateway image
-bash run-sbx.sh
+export PROFILE_DIR="$(pwd)/core/spire/runtime/dual-tdvm"
+sudo -E bash "$PROFILE_DIR/scripts/prepare.sh"
 ```
 
 **Notice: You can set openclaw configurate(such as mode & the api key) by interactivate:**

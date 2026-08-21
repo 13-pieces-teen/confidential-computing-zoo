@@ -8,21 +8,20 @@
 当前唯一主方案是：
 
 > OpenClaw 与 OpenViking 分别运行在独立 TDVM 中；两个 TDVM 各自完成 Node
-> Attestation。OpenClaw 使用自己的 workload identity 发起调用，OpenViking Python
-> 保持无侵入，由同一 OpenViking TDVM 内的 Broker Sidecar 代表实际 Python PID
-> 请求目标 SVID，并终止入站 mTLS。
+> Attestation。OpenClaw 和 OpenViking 均保持源码无侵入；OpenClaw 插件调用本地
+> Egress Broker，后者执行 Guard 授权并代表真实 OpenClaw PID 发起 mTLS；OpenViking
+> Ingress Broker 代表真实 Python PID 终止 mTLS。
 
 当前 Evidence Provider 和 Trustee 均为 Mock。
 
-`runtime/dual-tdvm` 已完成 Broker Endpoint、PID-reference WorkloadAttestor、TC-API
-launch-only 启动、三个 Registration Entry 和 Sidecar mTLS 验证脚本的代码集成；
-OpenViking 不再挂载 Workload API。`ea15713` 已完成远程双 TDVM ALLOW/DENY 验收；
-当前新增的 runtime digest 自动注册和可选 Application Readiness 模式仍需远程复验，
-不能直接沿用旧报告中的 PASS 作为这些新改动的运行证据。
+`runtime/dual-tdvm` 已完成双 Broker Endpoint、两个 PID reference、四个 Registration
+Entry、TC-API launch-only 和统一验证脚本集成；两个业务容器均不挂载 Workload API。
+`ea15713` 的远程结果早于 OpenClaw Egress 改造，不能作为当前代码的验收结论；当前
+方案仍需重新执行远程双 TDVM ALLOW/DENY 和真实插件 E2E。
 
 ## 推荐阅读顺序
 
-1. [双 TDVM + OpenViking Broker Sidecar 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
+1. [双 TDVM + Egress/Ingress Broker 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
 2. [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
 3. [OpenViking Broker Sidecar 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
 4. [远程验证报告（`ea15713`）](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
@@ -31,10 +30,10 @@ OpenViking 不再挂载 Workload API。`ea15713` 已完成远程双 TDVM ALLOW/D
 
 | 文档 | 职责 | 状态 |
 |---|---|---|
-| [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 当前架构事实源：组件、身份、A-F 时序和边界 | 已确定 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 双 TDVM 骨架与 Broker 组件的合并步骤、测试和完成条件 | 基线已验收；最新增强待复验 |
-| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | Broker API、PID reference、Sidecar 生命周期和取舍 | 已接入并完成基线远程验收 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md) | 记录 Parent ID、Entry、PID、UDS 权限、Trustee metrics 和 mTLS 远程证据 | `ea15713` 已完成 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 当前架构事实源：组件、身份、请求时序和边界 | 已确定 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 当前双 Broker 代码、测试和完成条件 | 本地验证中；远程待复验 |
+| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | OpenViking Broker API、PID reference 与生命周期详细设计 | 当前组件设计参考 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md) | 历史远程证据；记录 Parent、Entry、PID、UDS 和 mTLS | 早于当前 Egress 改造，不能复用为当前 PASS |
 
 ## 历史归档
 

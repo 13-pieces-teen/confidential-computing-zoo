@@ -22,6 +22,7 @@ OPENVIKING_ORIGIN="${DUAL_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943
 GUARD_DECISION_TTL_SECONDS="${DUAL_GUARD_DECISION_TTL_SECONDS:-15}"
 OPENCLAW_IMAGE="${DUAL_OPENCLAW_WORKLOAD_IMAGE:-argus-dual-openclaw:local}"
 OPENCLAW_SANDBOX_IMAGE="${DUAL_OPENCLAW_SANDBOX_IMAGE:-openclaw-sandbox:bookworm-slim}"
+OPENCLAW_BROKER_IMAGE="${DUAL_OPENCLAW_BROKER_IMAGE:-argus-openclaw-egress-sidecar:local}"
 OPENVIKING_IMAGE="${DUAL_OPENVIKING_WORKLOAD_IMAGE:-argus-dual-openviking:v0.4.8}"
 OPENVIKING_BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
 OPENVIKING_BASE="${DUAL_OPENVIKING_BASE:-ghcr.io/volcengine/openviking@sha256:27d3c97bddbe81f31d2c5af1f31e9d504b5928506c88f559a23faf86358169b7}"
@@ -268,6 +269,16 @@ if [[ "${DUAL_BUILD_OPENVIKING_BROKER:-1}" == "1" ]]; then
         "$AGENT_CC_ROOT" >/dev/null
 fi
 
+if [[ "${DUAL_BUILD_OPENCLAW_BROKER:-1}" == "1" ]]; then
+    docker build -q \
+        --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}" \
+        --build-arg "HTTP_PROXY=${HTTP_PROXY:-}" \
+        --build-arg "NO_PROXY=${NO_PROXY:-}" \
+        -f "$AGENT_CC_ROOT/adapters/OpenClaw/scripts/Dockerfile.egress-sidecar" \
+        -t "$OPENCLAW_BROKER_IMAGE" \
+        "$AGENT_CC_ROOT" >/dev/null
+fi
+
 if [[ "${DUAL_BUILD_GUARD:-1}" == "1" ]]; then
     docker build -q \
         --build-arg "HTTPS_PROXY=${HTTPS_PROXY:-}" \
@@ -279,7 +290,7 @@ if [[ "${DUAL_BUILD_GUARD:-1}" == "1" ]]; then
 fi
 if [[ "${DUAL_BUILD_OPENCLAW:-1}" == "1" ]]; then
     docker build -q \
-        -f "$AGENT_CC_ROOT/adapters/OpenClaw/scripts/Dockerfile.sbx" \
+        -f "$AGENT_CC_ROOT/adapters/OpenClaw/scripts/Dockerfile.sbx-runtime" \
         -t "$OPENCLAW_IMAGE" \
         "$AGENT_CC_ROOT" >/dev/null
     docker build -q \
@@ -300,6 +311,7 @@ printf '%s\n' \
     "OpenClaw instance: $OPENCLAW_INSTANCE_ID" \
     "OpenViking instance: $OPENVIKING_INSTANCE_ID" \
     "OpenViking origin: $OPENVIKING_ORIGIN" \
+    "OpenClaw Egress Broker image: $OPENCLAW_BROKER_IMAGE" \
     "OpenViking Broker image: $OPENVIKING_BROKER_IMAGE" \
-    'Both workload Agents use argus_tdx; only OpenViking enables Broker and PID-reference attestation.' \
+    'Both workload Agents use argus_tdx and expose Broker API only to their local Broker Sidecar.' \
     'Evidence Provider and Trustee images are mock-stage only.'

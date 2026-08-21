@@ -11,8 +11,8 @@ register-workloads.sh 可执行位修复）后在干净状态下单独重跑：D
 ## 构建信息
 
 - 验证日期：2026-08-21（阶段验证）
-- Git commit：Round 1–3 于 `ea15713`；Round 4 同步至 `e253767`（fast-forward，无本地提交）；Round 4.1 在 `e253767` 之上新增本地提交 `8882144`（fix(dual-tdvm): make register-workloads.sh executable and add Ollama proxy injection）
-- Git 工作区状态：代码 clean（HEAD `8882144`）；仅本报告文档为未提交的本地修改
+- 验证代码 commit：Round 1–3 于 `ea15713`；Round 4 同步至 `e253767`；Round 4.1 验证 `8882144`（fix(dual-tdvm): make register-workloads.sh executable and add Ollama proxy injection）
+- 报告基线 / 当前状态：Round 4.1 报告由 `2d17f79` 提交；本次一致性修订基于该 commit，文档修改尚未提交
 - 验证主机：`cwf-bkc`（本地双 TDVM：QEMU slirp 127.0.0.1:2223/2222，center compose 本机运行）
 - SPIRE Server / Agent：`1.15.2`
 - 结论：Mock Evidence Provider + Mock Trustee 软件链路通过（见文末）
@@ -44,7 +44,7 @@ register-workloads.sh 可执行位修复）后在干净状态下单独重跑：D
 | OpenViking 无 X.509-SVID/private-key mount | 通过。同上，无 SVID/密钥挂载 |
 | OpenViking 无直接获取 SPIFFE 身份的环境配置 | 通过。env 仅 `OPENVIKING_CONFIG_FILE=/app/.openviking/ov.conf`、`OPENVIKING_WITH_BOT=0`、`OPENVIKING_CLI_CONFIG_FILE=…`；无 `SPIFFE_ENDPOINT_SOCKET`/`ARGUS_SPIFFE_ENABLED`/`ARGUS_WORKLOAD_SPIFFE_ID` |
 | Workload API、Broker API 与目标 SVID 只由 Broker Sidecar 使用 | 通过。Sidecar mounts 恰为：`/opt/spire/run/agent <- /run/argus-spire-dual/openviking`、`/opt/spire/run/broker <- /run/argus-spire-dual/openviking-broker`；Sidecar cmd `-workload-api=unix:///opt/spire/run/agent/agent.sock -broker-socket=/opt/spire/run/broker/broker.sock` |
-| Sidecar `-target-pid` 等于 OpenViking 实际 host PID | 通过：`-target-pid=100068` == inspect `{{.State.Pid}}` = `100068` |
+| Sidecar `-target-pid` 等于 OpenViking 实际 host PID | 通过：Round 4.1 中 `-target-pid=141702` == OpenViking 启动后的实际 host PID `141702` |
 | 用户隔离 | Agent `0:0`（需要 Docker/pid 访问），Broker Sidecar `1000:1000`（非特权） |
 
 Sidecar 完整启动参数（docker inspect `{{json .Config.Cmd}}`）：
@@ -56,7 +56,7 @@ Sidecar 完整启动参数（docker inspect `{{json .Config.Cmd}}`）：
  "-agent-spiffe-id=spiffe://argus.local/spire/agent/argus_tdx/6619d9ab1a8ff1ddfdb216e8b938133d20ad757fa897876a959dc0b039443d9c",
  "-target-spiffe-id=spiffe://argus.local/service/openviking-cmem",
  "-client-spiffe-id=spiffe://argus.local/agent/openclaw",
- "-target-pid=100068",
+ "-target-pid=141702",
  "-listen=0.0.0.0:1943",
  "-upstream=http://127.0.0.1:1933"]
 ```
@@ -102,15 +102,15 @@ Sidecar 的空身份状态本身不能区分永久 DENY、Entry 尚未同步或�
 | 检查 | 结果 / 证据 |
 |---|---|
 | OpenViking 无 SPIRE mount / SVID | 通过。docker inspect 摘录见 Non-intrusive 证据表 |
-| Sidecar PID 与 OpenViking PID 一致 | 通过：`-target-pid=100068` == `{{.State.Pid}}` = `100068` |
-| Trustee decision / metric 为 ALLOW | 通过：`argus_m4_fake_requests_total{service="workload_trustee",result="ok"} 2` |
+| Sidecar PID 与 OpenViking PID 一致 | 通过：Round 4.1 中 `-target-pid=141702` == OpenViking 实际 host PID `141702` |
+| Trustee decision / metric 为 ALLOW | 通过：Round 4.1 独立计数 `argus_m4_fake_requests_total{service="workload_trustee",result="ok"} 1` |
 | verified selectors + runtime digest 命中强 Entry | 通过。Entry `dual-openviking-target` 的 config digest == 运行容器实际 digest == `sha256:71f9ba968fcb…`（精确选择器匹配） |
-| Sidecar 获得目标 SVID 后监听 1943 | 通过。Sidecar 日志：`2026/08/21 03:20:02 OpenViking mTLS listener is ready for identity spiffe://argus.local/service/openviking-cmem` |
+| Sidecar 获得目标 SVID 后监听 1943 | 通过。Round 4.1 Sidecar 日志：`OpenViking mTLS listener is ready for identity spiffe://argus.local/service/openviking-cmem` |
 | Guard ALLOW 后 SPIFFE mTLS `/health=200` | 通过：`Guard ALLOW -> direct SPIFFE mTLS /health -> HTTP 200` |
 | 无客户端证书访问失败 | 通过。Sidecar 日志：`tls: client didn't provide a certificate`（TLS 握手被拒） |
 | 错误 expected-client ID 握手失败 | 通过：`Wrong-client SPIFFE ID rejected during mTLS handshake as expected: … ssl/tls alert bad certificate` |
 | OpenClaw 无法访问明文 1933 | 通过。脚本断言 `http://10.0.2.2:1933/health` 不可达 |
-| OpenViking 退出后 Sidecar 经 pidfd/lifecycle 退出 | 通过：`Target exit check: OpenViking stopped; Sidecar exited through pidfd monitoring`（Sidecar 日志：`2026/08/21 03:20:09 OpenViking target PID 100068 exited`） |
+| OpenViking 退出后 Sidecar 经 pidfd/lifecycle 退出 | 通过：Round 4.1 验证输出 `Target exit check: OpenViking stopped; Sidecar exited through pidfd monitoring`；随后确认 1943 关闭 |
 | Sidecar 退出后 1943 不再提供服务 | 通过。脚本断言 `port 1943 closed` |
 
 对称链路结论：
@@ -125,17 +125,18 @@ Trustee ALLOW
   -> SPIFFE mTLS /health = 200
 ```
 
-## Application Readiness（非安全链路硬验收）
+## Application Readiness（Round 4.1 最终状态；非安全链路硬验收）
 
 | 检查 | 结果 / 证据 |
 |---|---|
-| `/ready` HTTP 状态 | `503`（实测） |
-| OpenViking readiness 响应 | `{"status":"not_ready","checks":{"agfs":{"status":"ok",…},"vectordb":"ok","api_key_manager":"ok","embedding":"error: provider=ollama model=bge-m3: OpenAI API error: Connection error.","ollama":"unreachable at 172.18.0.1:11434"}}` |
-| 结论 | `Application Readiness: NOT READY - /ready HTTP 503; this profile does not deploy Ollama/bge-m3` |
-| 原因 | dual-TDVM profile 未部署 Ollama/bge-m3 |
+| `/ready` HTTP 状态 | `200`（Round 4.1 跨 TDVM mTLS 实测） |
+| OpenViking readiness 响应 | `{"status":"ready"}` |
+| 结论 | `Application Readiness: READY - /ready HTTP 200` |
+| 依赖状态 | Ollama 容器已部署，`bge-m3:latest` 已加载；Ollama 无宿主机端口映射 |
 
-本轮验收不部署 Ollama。`/ready=503` 如实记录，不阻断 wrong-client、pidfd 与
-1943 关闭检查（上述均通过）。
+早期验证在未部署 Ollama/bge-m3 时曾得到 `/ready=503`；该历史结果保留在前序轮次
+记录中。Round 4.1 显式启用 Application Readiness 后最终结果为 `/ready=200`。
+Readiness 仍与身份及 mTLS 安全链路分开标记。
 
 ## Round 4（e253767）：deferred Sidecar + Ollama readiness 验证
 
@@ -300,8 +301,8 @@ DENY 与 ALLOW 在干净状态下全链路重新验证通过：变更① 自动�
 
 ## Image digest 工程问题
 
-- 本轮以 `DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST=sha256:71f9ba968fcb…` 覆盖重注册
-  `dual-openviking-target`，使 Entry digest 与运行时镜像一致（脚本原生支持的 override，非代码修改）。
+- Round 4.1 之前的验证曾以 `DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST=sha256:71f9ba968fcb…`
+  覆盖重注册 `dual-openviking-target`，用于确认 Entry digest 与运行时镜像一致。
 - 报告同时保留 source（`2b952bca11d0…`）、runtime（`71f9ba968fcb…`）、运行容器
   （`71f9ba968fcb…`）和 Entry（`71f9ba968fcb…`）四个 digest。
 - 根因：TC-API 管线（skopeo copy → oci → docker-archive → docker load）确定性剥离

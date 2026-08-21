@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1.7
+
+FROM ghcr.io/openclaw/openclaw:latest
+
+USER root
+
+ARG DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+
+RUN --mount=type=cache,id=openclaw-sbx-runtime-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=openclaw-sbx-runtime-apt-lists,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      ca-certificates curl git gnupg && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /tmp/docker.gpg.asc && \
+    expected="$(printf '%s' "$DOCKER_GPG_FINGERPRINT" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')" && \
+    actual="$(gpg --batch --show-keys --with-colons /tmp/docker.gpg.asc \
+               | awk -F: '$1=="fpr"{print toupper($10); exit}')" && \
+    if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then \
+      echo "ERROR: Docker apt key fingerprint mismatch (expected $expected, got ${actual:-<empty>})" >&2; \
+      exit 1; \
+    fi && \
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg /tmp/docker.gpg.asc && \
+    rm -f /tmp/docker.gpg.asc && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable\n' \
+      "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      docker-ce-cli python3 python3-pip wget && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install Cython --break-system-packages && \
+    wget https://download.01.org/intel-sgx/sgx-dcap/1.22/linux/distro/Debian12_temp/sgx_debian_local_repo.tgz && \
+    tar xf sgx_debian_local_repo.tgz && \
+    dpkg -i sgx_debian_local_repo/pool/main/libt/libtdx-attest/* && \
+    rm -rf sgx_debian_local_repo sgx_debian_local_repo.tgz && \
+    git clone https://github.com/intel/confidential-computing-zoo.git /tmp/confidential-computing-zoo && \
+    python3 -m pip install /tmp/confidential-computing-zoo/cczoo/openclaw-cc/tdx_utility --break-system-packages && \
+    cp -r /tmp/confidential-computing-zoo/cczoo/openclaw-cc/cc_tdx_skills/* /app/skills && \
+    cd /app/skills/get_td_quote/scripts && \
+    python3 setup.py build_ext --inplace && \
+    rm -rf /tmp/confidential-computing-zoo
+
+WORKDIR /app
+USER node

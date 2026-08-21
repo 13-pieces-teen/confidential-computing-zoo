@@ -15,13 +15,15 @@
 
 set -euo pipefail
 
-TARGET_URI="${TARGET_URI:-http://127.0.0.1:1933}"
+TARGET_URI="${TARGET_URI:-http://argus-dual-openclaw-egress:1934}"
 OPENCLAW_CONTAINER="${OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
 OPENCLAW_USER="${OPENCLAW_USER:-node}"
 OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-/home/node/.openclaw/openclaw.json}"
 OPENCLAW_PLUGIN_SPEC="${OPENCLAW_PLUGIN_SPEC:-clawhub:@openviking/openclaw-plugin}"
 OPENCLAW_INSTALL_PLUGIN="${OPENCLAW_INSTALL_PLUGIN:-1}"
+OPENCLAW_RESTART_GATEWAY="${OPENCLAW_RESTART_GATEWAY:-1}"
 OPENVIKING_API_KEY="${OPENVIKING_API_KEY:-}"
+OPENVIKING_REQUIRE_READY="${OPENVIKING_REQUIRE_READY:-0}"
 WAIT_ATTEMPTS="${WAIT_ATTEMPTS:-60}"
 WAIT_INTERVAL="${WAIT_INTERVAL:-2}"
 
@@ -84,9 +86,19 @@ main() {
         echo "OPENVIKING_API_KEY must contain a non-root OpenViking user key." >&2
         exit 1
     fi
+    if [[ "$OPENCLAW_RESTART_GATEWAY" != 0 && "$OPENCLAW_RESTART_GATEWAY" != 1 ]]; then
+        echo "OPENCLAW_RESTART_GATEWAY must be 0 or 1." >&2
+        exit 1
+    fi
+    if [[ "$OPENVIKING_REQUIRE_READY" != 0 && "$OPENVIKING_REQUIRE_READY" != 1 ]]; then
+        echo "OPENVIKING_REQUIRE_READY must be 0 or 1." >&2
+        exit 1
+    fi
 
     wait_http "$TARGET_URI/health" "openviking health"
-    wait_http "$TARGET_URI/ready" "openviking readiness"
+    if [[ "$OPENVIKING_REQUIRE_READY" == 1 ]]; then
+        wait_http "$TARGET_URI/ready" "openviking readiness"
+    fi
 
     if [[ "$OPENCLAW_INSTALL_PLUGIN" == "1" ]]; then
         log "Installing the OpenViking OpenClaw plugin"
@@ -105,14 +117,16 @@ main() {
         --api-key "$OPENVIKING_API_KEY" \
         --json
 
-    log "Restarting the OpenClaw gateway"
-    docker restart "$OPENCLAW_CONTAINER" >/dev/null
+    if [[ "$OPENCLAW_RESTART_GATEWAY" == 1 ]]; then
+        log "Restarting the OpenClaw gateway"
+        docker restart "$OPENCLAW_CONTAINER" >/dev/null
 
-    log "Verifying the OpenViking plugin status"
-    docker exec -u "$OPENCLAW_USER" \
-        -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
-        "$OPENCLAW_CONTAINER" \
-        openclaw openviking status --json
+        log "Verifying the OpenViking plugin status"
+        docker exec -u "$OPENCLAW_USER" \
+            -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
+            "$OPENCLAW_CONTAINER" \
+            openclaw openviking status --json
+    fi
 }
 
 main "$@"

@@ -3,7 +3,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 
-//! Caller-local authorization for the asymmetric Argus SPIFFE profile.
+//! Caller-local authorization for the dual-TDVM Broker SPIFFE profile.
 //!
 //! SPIRE authenticates the remote workload and issues its SVID. This module
 //! deliberately does not re-verify attestation evidence or accept certificate

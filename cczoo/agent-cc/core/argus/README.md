@@ -201,7 +201,7 @@ and does not initialize the TDX evidence verifier. The default, including when
 `GUARD_MODE` is unset, remains Intel's evidence verification path.
 
 The maintained deployment and validation contract for this mode lives in the
-[asymmetric Argus v2 runtime](../spire/runtime/asymmetric/README.md). It combines
+[dual-TDVM Broker runtime](../spire/runtime/dual-tdvm/README.md). It combines
 the Guard decision with workload SVIDs and exact-peer SPIFFE mTLS; Guard policy
 evaluation alone is not a remote-attestation result.
 

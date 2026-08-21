@@ -10,6 +10,7 @@ SPIRE_AGENT_IMAGE="${DUAL_SPIRE_AGENT_IMAGE:-ghcr.io/spiffe/spire-agent:1.15.2}"
 PROVIDER_IMAGE="${DUAL_PROVIDER_IMAGE:-argus-spire-dual-mock-evidence-provider:local}"
 REMOTE_ROOT="${DUAL_GUEST_ROOT:-/opt/argus-spire-dual}"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
+OPENCLAW_BROKER_ID="spiffe://argus.local/infra/openclaw-broker"
 OPENVIKING_ID="spiffe://argus.local/service/openviking-cmem"
 OPENVIKING_APPLICATION_READY="${DUAL_OPENVIKING_APPLICATION_READY:-0}"
 OPENVIKING_OLLAMA_CONTAINER="${DUAL_OPENVIKING_OLLAMA_CONTAINER:-argus-dual-openviking-ollama}"
@@ -33,12 +34,14 @@ case "$ROLE" in
         INSTANCE_ID="${DUAL_OPENCLAW_TDVM_INSTANCE_ID:-tdvm-openclaw-0001}"
         REMOTE_DATA="${DUAL_OPENCLAW_GUEST_DATA:-/var/lib/argus-spire-dual/openclaw-agent}"
         REMOTE_RUN="${DUAL_OPENCLAW_GUEST_RUN:-/run/argus-spire-dual/openclaw}"
-        REMOTE_BROKER_RUN=""
+        REMOTE_BROKER_RUN="${DUAL_OPENCLAW_GUEST_BROKER_RUN:-/run/argus-spire-dual/openclaw-broker}"
         AGENT_CONFIG="openclaw-agent.conf"
         PROVIDER_CONTAINER="argus-dual-openclaw-evidence"
         AGENT_CONTAINER="argus-dual-openclaw-agent"
         WORKLOAD_CONTAINER="${DUAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
         WORKLOAD_IMAGE="${DUAL_OPENCLAW_WORKLOAD_IMAGE:-argus-dual-openclaw:local}"
+        BROKER_CONTAINER="${DUAL_OPENCLAW_BROKER_CONTAINER:-argus-dual-openclaw-egress}"
+        BROKER_IMAGE="${DUAL_OPENCLAW_BROKER_IMAGE:-argus-openclaw-egress-sidecar:local}"
         ;;
     openviking)
         SSH_TARGET="${DUAL_OPENVIKING_TDVM_SSH_TARGET:-}"
@@ -64,11 +67,9 @@ esac
     || fail "set DUAL_${ROLE^^}_TDVM_SSH_TARGET to the TDVM SSH destination"
 [[ "$RUNTIME_DIR" == /* ]] \
     || fail "DUAL_RUNTIME_DIR must be an absolute host path: $RUNTIME_DIR"
-[[ "$REMOTE_ROOT" == /* && "$REMOTE_DATA" == /* && "$REMOTE_RUN" == /* ]] \
+[[ "$REMOTE_ROOT" == /* && "$REMOTE_DATA" == /* && "$REMOTE_RUN" == /* && "$REMOTE_BROKER_RUN" == /* ]] \
     || fail 'Guest root, data, and run paths must be absolute'
 if [[ "$ROLE" == openviking ]]; then
-    [[ "$REMOTE_BROKER_RUN" == /* ]] \
-        || fail 'OpenViking Broker run path must be absolute'
     [[ "$OPENVIKING_APPLICATION_READY" == 0 || "$OPENVIKING_APPLICATION_READY" == 1 ]] \
         || fail 'DUAL_OPENVIKING_APPLICATION_READY must be 0 or 1'
     if [[ "$OPENVIKING_APPLICATION_READY" == 1 ]]; then
@@ -137,24 +138,6 @@ wait_for_agent() {
     fail 'SPIRE Agent did not become healthy'
 }
 
-wait_for_svid() {
-    local expected_id="$1"
-    # The OpenClaw gateway materializes its first SVID only after its own
-    # startup sequence completes (config/sandbox init), which can take a
-    # couple of minutes on a cold TDVM. Give the workload API plenty of
-    # time before declaring failure.
-    for _ in $(seq 1 180); do
-        if remote_sudo /usr/local/bin/docker exec "$WORKLOAD_CONTAINER" \
-            grep -q "\"spiffe_id\": \"$expected_id\"" \
-            /run/argus-svid/status.json >/dev/null 2>&1; then
-            return
-        fi
-        read -r -t 1 _ || true
-    done
-    remote_sudo /usr/local/bin/docker logs --tail 120 "$WORKLOAD_CONTAINER" >&2 || true
-    fail "workload did not receive $expected_id within 180s"
-}
-
 deploy_agent() {
     command -v docker >/dev/null 2>&1 || fail 'Docker is required on the deployment host'
     [[ -s "$RUNTIME_DIR/conf/$AGENT_CONFIG" ]] \
@@ -187,9 +170,7 @@ deploy_agent() {
         "$REMOTE_ROOT/certs" \
         "$REMOTE_ROOT/plugins" \
         "$REMOTE_RUN"
-    if [[ "$ROLE" == openviking ]]; then
-        remote_sudo install -d -m 2770 "$REMOTE_BROKER_RUN"
-    fi
+    remote_sudo install -d -m 2770 "$REMOTE_BROKER_RUN"
     remote_sudo install -d -m 0700 "$REMOTE_DATA" "$REMOTE_DATA/argus-tdx"
     tar -C "$RUNTIME_DIR" -cpf - \
         "conf/$AGENT_CONFIG" \
@@ -219,10 +200,8 @@ deploy_agent() {
         "$REMOTE_ROOT/plugins" \
         "$REMOTE_DATA" \
         "$REMOTE_RUN"
-    if [[ "$ROLE" == openviking ]]; then
-        remote_sudo chown -R 1000:1000 "$REMOTE_BROKER_RUN"
-        remote_sudo chmod 2770 "$REMOTE_BROKER_RUN"
-    fi
+    remote_sudo chown -R 1000:1000 "$REMOTE_BROKER_RUN"
+    remote_sudo chmod 2770 "$REMOTE_BROKER_RUN"
 
     remote_sudo /usr/local/bin/docker rm -f "$PROVIDER_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker run -d \
@@ -251,11 +230,9 @@ deploy_agent() {
         -v "$REMOTE_RUN:/opt/spire/run/$ROLE"
         -v /var/run/docker.sock:/var/run/docker.sock:ro
     )
-    if [[ "$ROLE" == openviking ]]; then
-        agent_mounts+=(
-            -v "$REMOTE_BROKER_RUN:/opt/spire/run/openviking-broker"
-        )
-    fi
+    agent_mounts+=(
+        -v "$REMOTE_BROKER_RUN:/opt/spire/run/$ROLE-broker"
+    )
     remote_sudo /usr/local/bin/docker run -d \
         --name "$AGENT_CONTAINER" \
         --network host \
@@ -266,11 +243,9 @@ deploy_agent() {
         -config "/opt/spire/conf/$AGENT_CONFIG" >/dev/null
     wait_for_agent
 
-    if [[ "$ROLE" == openviking ]]; then
-        broker_socket_stat="$(remote_sudo stat -c '%u:%g %a' "$REMOTE_BROKER_RUN/broker.sock")"
-        [[ "$broker_socket_stat" == '0:1000 770' ]] \
-            || fail "Broker API socket permissions are $broker_socket_stat, expected 0:1000 770"
-    fi
+    broker_socket_stat="$(remote_sudo stat -c '%u:%g %a' "$REMOTE_BROKER_RUN/broker.sock")"
+    [[ "$broker_socket_stat" == '0:1000 770' ]] \
+        || fail "Broker API socket permissions are $broker_socket_stat, expected 0:1000 770"
 
     printf '%s\n' \
         "$ROLE TDVM SPIRE Agent is healthy." \
@@ -291,8 +266,10 @@ load_workload() {
         sandbox_image="${DUAL_OPENCLAW_SANDBOX_IMAGE:-openclaw-sandbox:bookworm-slim}"
         require_local_image "$guard_image"
         require_local_image "$sandbox_image"
+        require_local_image "$BROKER_IMAGE"
         stream_image "$guard_image"
         stream_image "$sandbox_image"
+        stream_image "$BROKER_IMAGE"
         remote_sudo /usr/local/bin/docker tag \
             "$sandbox_image" openclaw-sandbox:bookworm-slim
 
@@ -320,6 +297,14 @@ load_workload() {
             "$REMOTE_ROOT/secrets/guard-api-token" \
             "$REMOTE_ROOT/secrets/openclaw-guard-api-token" \
             "$REMOTE_ROOT/secrets/openclaw-gateway-token"
+        remote_sudo install -d -m 0755 "$REMOTE_ROOT/bin"
+        remote_sudo tee "$REMOTE_ROOT/bin/connect_openclaw_openviking.sh" \
+            <"$PROFILE_DIR/../../../../adapters/OpenClaw/scripts/connect_openclaw_openviking.sh" >/dev/null
+        remote_sudo tee "$REMOTE_ROOT/bin/verify_openclaw_plugin_e2e.sh" \
+            <"$PROFILE_DIR/../../../../adapters/OpenClaw/scripts/verify_openclaw_plugin_e2e.sh" >/dev/null
+        remote_sudo chmod 0755 \
+            "$REMOTE_ROOT/bin/connect_openclaw_openviking.sh" \
+            "$REMOTE_ROOT/bin/verify_openclaw_plugin_e2e.sh"
     else
         local openviking_config source_image tc_api_url
         openviking_config="${DUAL_OPENVIKING_CONFIG:-}"
@@ -433,15 +418,100 @@ start_openviking_ollama() {
     printf 'OpenViking application dependency is ready: Ollama model %s\n' "$OPENVIKING_OLLAMA_MODEL"
 }
 
-start_openclaw() {
-    local guard_image sandbox_image network origin target_address target_host gateway_port bridge_port
-    guard_image="${DUAL_GUARD_IMAGE:-argus-spire-dual-guard:local}"
-    sandbox_image="${DUAL_OPENCLAW_SANDBOX_IMAGE:-openclaw-sandbox:bookworm-slim}"
+wait_openclaw_broker() {
+    local broker_logs running
+    for _ in $(seq 1 180); do
+        broker_logs="$(remote_sudo /usr/local/bin/docker logs "$BROKER_CONTAINER" 2>&1 || true)"
+        if grep -Fq "OpenClaw Egress Broker is ready for identity $OPENCLAW_ID" <<<"$broker_logs"; then
+            return
+        fi
+        running="$(remote_sudo /usr/local/bin/docker inspect "$BROKER_CONTAINER" \
+            --format '{{.State.Running}}' 2>/dev/null || true)"
+        if [[ "$running" != true ]]; then
+            remote_sudo /usr/local/bin/docker logs "$BROKER_CONTAINER" >&2 || true
+            fail 'OpenClaw Egress Broker exited before its target identity became ready'
+        fi
+        read -r -t 1 _ || true
+    done
+    remote_sudo /usr/local/bin/docker logs "$BROKER_CONTAINER" >&2 || true
+    fail 'OpenClaw Egress Broker did not receive the OpenClaw target identity within 180s'
+}
+
+start_openclaw_broker() {
+    local network origin target_address target_host agent_id egress_port
     network="${DUAL_OPENCLAW_NETWORK:-argus-dual-openclaw}"
     origin="${DUAL_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
     target_address="${DUAL_OPENVIKING_HOST_ADDRESS:-}"
     target_host="${origin#https://}"
     target_host="${target_host%%:*}"
+    agent_id="${DUAL_OPENCLAW_PARENT_ID:-}"
+    egress_port="${DUAL_OPENCLAW_EGRESS_PORT:-1934}"
+    [[ -n "$target_address" ]] \
+        || fail 'DUAL_OPENVIKING_HOST_ADDRESS must be reachable from the OpenClaw TDVM'
+    [[ "$agent_id" == spiffe://argus.local/spire/agent/argus_tdx/* ]] \
+        || fail 'DUAL_OPENCLAW_PARENT_ID must be the current OpenClaw Agent SPIFFE ID'
+
+    remote_sudo bash -s -- \
+        "$REMOTE_ROOT" "$REMOTE_RUN" "$REMOTE_BROKER_RUN" \
+        "$WORKLOAD_CONTAINER" "$BROKER_CONTAINER" "$BROKER_IMAGE" "$network" \
+        "$origin" "$target_address" "$target_host" "$OPENCLAW_ID" "$OPENVIKING_ID" \
+        "$OPENCLAW_BROKER_ID" "$agent_id" "$egress_port" <<'REMOTE'
+set -euo pipefail
+remote_root="$1"
+remote_run="$2"
+remote_broker_run="$3"
+workload_container="$4"
+broker_container="$5"
+broker_image="$6"
+network="$7"
+origin="$8"
+target_address="$9"
+target_host="${10}"
+openclaw_id="${11}"
+openviking_id="${12}"
+broker_id="${13}"
+agent_id="${14}"
+egress_port="${15}"
+docker=/usr/local/bin/docker
+
+[[ "$($docker inspect "$workload_container" --format '{{.State.Running}}')" == true ]]
+target_pid="$($docker inspect "$workload_container" --format '{{.State.Pid}}')"
+[[ "$target_pid" =~ ^[1-9][0-9]*$ ]]
+$docker rm -f "$broker_container" >/dev/null 2>&1 || true
+$docker run -d \
+    --name "$broker_container" \
+    --network "$network" \
+    --pid host \
+    --label argus.component=openclaw-broker \
+    --add-host "$target_host:$target_address" \
+    -v "$remote_run:/opt/spire/run/agent:ro" \
+    -v "$remote_broker_run:/opt/spire/run/broker:ro" \
+    -v "$remote_root/secrets/openclaw-guard-api-token:/run/secrets/argus_guard_api_token:ro" \
+    "$broker_image" \
+    -workload-api=unix:///opt/spire/run/agent/agent.sock \
+    -broker-socket=/opt/spire/run/broker/broker.sock \
+    "-broker-spiffe-id=$broker_id" \
+    "-agent-spiffe-id=$agent_id" \
+    "-target-spiffe-id=$openclaw_id" \
+    "-server-spiffe-id=$openviking_id" \
+    "-target-pid=$target_pid" \
+    "-listen=0.0.0.0:$egress_port" \
+    "-target=$origin" \
+    -guard-url=http://argus-dual-openclaw-guard:8007/guard/v1/authorize \
+    -guard-token-file=/run/secrets/argus_guard_api_token \
+    -target-service=openviking-cmem \
+    -data-class=sensitive >/dev/null
+REMOTE
+    wait_openclaw_broker
+}
+
+start_openclaw() {
+    local guard_image sandbox_image network origin target_address gateway_port bridge_port
+    guard_image="${DUAL_GUARD_IMAGE:-argus-spire-dual-guard:local}"
+    sandbox_image="${DUAL_OPENCLAW_SANDBOX_IMAGE:-openclaw-sandbox:bookworm-slim}"
+    network="${DUAL_OPENCLAW_NETWORK:-argus-dual-openclaw}"
+    origin="${DUAL_OPENVIKING_ORIGIN:-https://openviking.argus.local:1943}"
+    target_address="${DUAL_OPENVIKING_HOST_ADDRESS:-}"
     gateway_port="${DUAL_OPENCLAW_GATEWAY_PORT:-18789}"
     bridge_port="${DUAL_OPENCLAW_BRIDGE_PORT:-18790}"
     [[ -n "$target_address" ]] \
@@ -449,7 +519,9 @@ start_openclaw() {
 
     remote_sudo test -S "$REMOTE_RUN/agent.sock" \
         || fail 'OpenClaw Workload API socket is missing; deploy its Agent first'
-    for image in "$WORKLOAD_IMAGE" "$guard_image" "$sandbox_image"; do
+    remote_sudo test -S "$REMOTE_BROKER_RUN/broker.sock" \
+        || fail 'OpenClaw Broker API socket is missing; deploy its Agent first'
+    for image in "$WORKLOAD_IMAGE" "$BROKER_IMAGE" "$guard_image" "$sandbox_image"; do
         remote_sudo /usr/local/bin/docker image inspect "$image" >/dev/null \
             || fail "image is not loaded in OpenClaw TDVM: $image"
     done
@@ -459,25 +531,21 @@ start_openclaw() {
         || fail 'OpenClaw gateway token is not loaded'
 
     remote_sudo bash -s -- \
-        "$REMOTE_ROOT" "$REMOTE_RUN" "$WORKLOAD_CONTAINER" "$WORKLOAD_IMAGE" \
-        "$guard_image" "$network" "$origin" "$target_address" "$target_host" \
-        "$gateway_port" "$bridge_port" "$OPENCLAW_ID" "$OPENVIKING_ID" <<'REMOTE'
+        "$REMOTE_ROOT" "$WORKLOAD_CONTAINER" "$WORKLOAD_IMAGE" \
+        "$BROKER_CONTAINER" "$guard_image" "$network" "$gateway_port" "$bridge_port" <<'REMOTE'
 set -euo pipefail
 remote_root="$1"
-remote_run="$2"
-workload_container="$3"
-workload_image="$4"
+workload_container="$2"
+workload_image="$3"
+broker_container="$4"
 guard_image="$5"
 network="$6"
-origin="$7"
-target_address="$8"
-target_host="$9"
-gateway_port="${10}"
-bridge_port="${11}"
-openclaw_id="${12}"
-openviking_id="${13}"
+gateway_port="$7"
+bridge_port="$8"
 docker=/usr/local/bin/docker
 guard_container=argus-dual-openclaw-guard
+config_volume=argus-dual-openclaw-config
+workspace_volume=argus-dual-openclaw-workspace
 
 $docker network inspect "$network" >/dev/null 2>&1 \
     || $docker network create "$network" >/dev/null
@@ -490,7 +558,7 @@ if [[ -n "$bridge_subnet" && -n "$slirp_nic" ]]; then
     iptables -t nat -C POSTROUTING -s "$bridge_subnet" -o "$slirp_nic" -j MASQUERADE 2>/dev/null \
         || iptables -t nat -A POSTROUTING -s "$bridge_subnet" -o "$slirp_nic" -j MASQUERADE
 fi
-$docker rm -f "$workload_container" "$guard_container" >/dev/null 2>&1 || true
+$docker rm -f "$broker_container" "$workload_container" "$guard_container" >/dev/null 2>&1 || true
 $docker run -d \
     --name "$guard_container" \
     --network "$network" \
@@ -505,50 +573,62 @@ $docker run -d \
     "$guard_image" >/dev/null
 
 gateway_token="$(tr -d '\r\n' <"$remote_root/secrets/openclaw-gateway-token")"
+$docker run --rm \
+    --user root \
+    -v "$config_volume:/home/node/.openclaw" \
+    -v "$workspace_volume:/home/node/.openclaw/workspace" \
+    --entrypoint sh \
+    "$workload_image" -ceu '
+        chown -R node:node /home/node/.openclaw
+        mkdir -p /home/node/.openclaw/identity /home/node/.openclaw/agents/main/agent /home/node/.openclaw/agents/main/sessions
+        chown -R node:node /home/node/.openclaw
+    '
+
+openclaw_config() {
+    $docker run --rm \
+        --user node \
+        -e "OPENCLAW_GATEWAY_TOKEN=$gateway_token" \
+        -v "$config_volume:/home/node/.openclaw" \
+        -v "$workspace_volume:/home/node/.openclaw/workspace" \
+        --entrypoint node \
+        "$workload_image" /app/dist/index.js config set "$@" >/dev/null
+}
+openclaw_config gateway.mode local
+openclaw_config gateway.bind lan
+openclaw_config agents.defaults.sandbox.mode all
+openclaw_config agents.defaults.sandbox.scope agent
+openclaw_config agents.defaults.sandbox.workspaceAccess rw
+openclaw_config agents.defaults.sandbox.backend docker
+openclaw_config gateway.controlUi.allowedOrigins \
+    "[\"http://localhost:${gateway_port}\",\"http://127.0.0.1:${gateway_port}\"]" --strict-json
+
+docker_socket_gid="$(stat -c '%g' /var/run/docker.sock)"
 $docker run -d \
     --name "$workload_container" \
     --init \
     --restart unless-stopped \
     --network "$network" \
     --label argus.workload=openclaw \
-    --add-host "$target_host:$target_address" \
+    --group-add "$docker_socket_gid" \
     --device /dev/tdx_guest \
     -p "$gateway_port:18789" \
     -p "$bridge_port:18790" \
-    -v argus-dual-openclaw-config:/home/node/.openclaw \
-    -v argus-dual-openclaw-workspace:/home/node/.openclaw/workspace \
+    -v "$config_volume:/home/node/.openclaw" \
+    -v "$workspace_volume:/home/node/.openclaw/workspace" \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$remote_run:/run/spire/agent:ro" \
-    -v "$remote_root/secrets/openclaw-guard-api-token:/run/secrets/argus_guard_api_token:ro" \
     -e OPENCLAW_GATEWAY_TOKEN="$gateway_token" \
     -e OPENCLAW_GATEWAY_BIND=lan \
-    -e ARGUS_SPIFFE_ENABLED=1 \
-    -e SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/agent/agent.sock \
-    -e ARGUS_CALLER_SPIFFE_ID="$openclaw_id" \
-    -e ARGUS_TARGET_SPIFFE_ID="$openviking_id" \
-    -e ARGUS_TARGET_SERVICE=openviking-cmem \
-    -e ARGUS_OPENVIKING_ORIGIN="$origin" \
-    -e ARGUS_GUARD_URL=http://argus-dual-openclaw-guard:8007/guard/v1/authorize \
-    -e ARGUS_GUARD_API_TOKEN_FILE=/run/secrets/argus_guard_api_token \
-    -e ARGUS_GUARD_DATA_CLASS=sensitive \
-    "$workload_image" >/dev/null
-REMOTE
+    -e OPENCLAW_GATEWAY_PORT=18789 \
+    --entrypoint node \
+    "$workload_image" /app/dist/index.js gateway --bind lan --port 18789 >/dev/null
 
-    wait_for_svid "$OPENCLAW_ID"
-    remote_sudo /usr/local/bin/docker exec -i "$WORKLOAD_CONTAINER" node - <<'NODE'
-const response = await fetch("http://argus-dual-openclaw-guard:8007/health", {
-  signal: AbortSignal.timeout(3000),
-});
-if (!response.ok) throw new Error(`Guard health returned HTTP ${response.status}`);
-const health = await response.json();
-if (health.status !== "OK" || health.mode !== "spiffe_identity") {
-  throw new Error(`unexpected Guard health: ${JSON.stringify(health)}`);
-}
-NODE
+REMOTE
+    start_openclaw_broker
     printf '%s\n' \
-        'OpenClaw and its caller-local Guard are ready in the OpenClaw TDVM.' \
+        'OpenClaw, caller-local Guard, and Egress Broker are ready in the OpenClaw TDVM.' \
+        "OpenClaw Egress endpoint: http://$BROKER_CONTAINER:${DUAL_OPENCLAW_EGRESS_PORT:-1934}" \
         "OpenViking origin: $origin" \
-        'Guard authorizes metadata first; allowed business requests then go directly to OpenViking over SPIFFE mTLS.'
+        'OpenClaw has no SPIRE socket, SVID, Guard token, or Argus preload.'
 }
 
 start_openviking() {
@@ -648,6 +728,65 @@ start_openviking() {
         "Accepted client identity: $OPENCLAW_ID"
 }
 
+connect_openviking() {
+    local api_key target_uri
+    [[ "$ROLE" == openclaw ]] \
+        || fail 'connect-openviking is only valid for the openclaw role'
+    api_key="${DUAL_OPENVIKING_API_KEY:-}"
+    target_uri="http://$BROKER_CONTAINER:${DUAL_OPENCLAW_EGRESS_PORT:-1934}"
+    [[ -n "$api_key" ]] \
+        || fail 'DUAL_OPENVIKING_API_KEY must contain a non-root OpenViking user key'
+    remote_sudo test -x "$REMOTE_ROOT/bin/connect_openclaw_openviking.sh" \
+        || fail 'OpenViking plugin connector is missing; load the OpenClaw workload first'
+    for container in "$WORKLOAD_CONTAINER" "$BROKER_CONTAINER"; do
+        [[ "$(remote_sudo /usr/local/bin/docker inspect "$container" \
+            --format '{{.State.Running}}' 2>/dev/null || true)" == true ]] \
+            || fail "required container is not running: $container"
+    done
+
+    remote_sudo env \
+        PATH=/usr/local/bin:/usr/bin:/bin \
+        "TARGET_URI=$target_uri" \
+        "OPENCLAW_CONTAINER=$WORKLOAD_CONTAINER" \
+        OPENCLAW_USER=node \
+        OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json \
+        "OPENCLAW_INSTALL_PLUGIN=${DUAL_OPENCLAW_INSTALL_PLUGIN:-1}" \
+        "OPENCLAW_PLUGIN_SPEC=${DUAL_OPENCLAW_PLUGIN_SPEC:-clawhub:@openviking/openclaw-plugin}" \
+        OPENCLAW_RESTART_GATEWAY=0 \
+        "OPENVIKING_REQUIRE_READY=$OPENVIKING_APPLICATION_READY" \
+        "OPENVIKING_API_KEY=$api_key" \
+        "$REMOTE_ROOT/bin/connect_openclaw_openviking.sh"
+
+    remote_sudo /usr/local/bin/docker restart "$WORKLOAD_CONTAINER" >/dev/null
+    start_openclaw_broker
+    remote_sudo /usr/local/bin/docker exec -i -u node "$WORKLOAD_CONTAINER" \
+        node - /home/node/.openclaw/openclaw.json "$target_uri" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const configPath = process.argv[2];
+const target = process.argv[3].replace(/\/+$/, "");
+function get(path) {
+  return JSON.parse(execFileSync("openclaw", ["config", "get", path, "--json"], {
+    encoding: "utf8",
+    env: { ...process.env, OPENCLAW_CONFIG_PATH: configPath },
+  }).trim());
+}
+const slot = get("plugins.slots.contextEngine");
+const plugin = get("plugins.entries.openviking.config");
+if (slot !== "openviking") throw new Error(`unexpected context engine ${slot}`);
+if (plugin?.mode !== "remote" || plugin?.baseUrl?.replace(/\/+$/, "") !== target) {
+  throw new Error(`OpenViking plugin does not target ${target}`);
+}
+if (typeof plugin.apiKey !== "string" || !plugin.apiKey) throw new Error("plugin API key is missing");
+NODE
+    remote_sudo /usr/local/bin/docker exec -u node \
+        -e OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json \
+        "$WORKLOAD_CONTAINER" openclaw openviking status --json
+    printf '%s\n' \
+        'OpenClaw OpenViking plugin is configured through the Egress Broker.' \
+        "Plugin baseUrl: $target_uri" \
+        'API key: configured but not printed'
+}
+
 start_workload() {
     if [[ "$ROLE" == openclaw ]]; then
         start_openclaw
@@ -659,7 +798,7 @@ start_workload() {
 status() {
     remote test -c /dev/tdx_guest || fail 'SSH target is not a TD Guest'
     containers=("$PROVIDER_CONTAINER" "$AGENT_CONTAINER" "$WORKLOAD_CONTAINER")
-    [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard)
+    [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard "$BROKER_CONTAINER")
     [[ "$ROLE" == openviking ]] && containers+=("$BROKER_CONTAINER" "$OPENVIKING_OLLAMA_CONTAINER")
     for container in "${containers[@]}"; do
         if remote_sudo /usr/local/bin/docker inspect "$container" >/dev/null 2>&1; then
@@ -673,7 +812,7 @@ status() {
 
 stop() {
     containers=("$WORKLOAD_CONTAINER" "$AGENT_CONTAINER" "$PROVIDER_CONTAINER")
-    [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard)
+    [[ "$ROLE" == openclaw ]] && containers=("$BROKER_CONTAINER" argus-dual-openclaw-guard "${containers[@]}")
     [[ "$ROLE" == openviking ]] && containers=("$BROKER_CONTAINER" "$OPENVIKING_OLLAMA_CONTAINER" "${containers[@]}")
     remote_sudo /usr/local/bin/docker rm -f "${containers[@]}" >/dev/null 2>&1 || true
     printf 'Stopped %s dual-TDVM containers; persistent data and Docker volumes were retained.\n' "$ROLE"
@@ -683,7 +822,8 @@ case "$ACTION" in
     deploy-agent) deploy_agent ;;
     load-workload) load_workload ;;
     start-workload) start_workload ;;
+    connect-openviking) connect_openviking ;;
     status) status ;;
     stop) stop ;;
-    *) fail 'action must be deploy-agent, load-workload, start-workload, status, or stop' ;;
+    *) fail 'action must be deploy-agent, load-workload, start-workload, connect-openviking, status, or stop' ;;
 esac

@@ -224,30 +224,12 @@ venv/bin/python -m tc_api.cli.client   --base-url http://localhost:8000   --sigs
 
 ### 构建和运行网关 Docker 容器
 
-**注意：如果您不使用 TC API 服务，请参阅 `run-sbx.sh`。**
-
+当前受维护的 OpenClaw/OpenViking 安全运行入口是
+[双 TDVM Broker Profile](../../core/spire/runtime/dual-tdvm/README.md)：
 
 ```bash
-cd <workdir>/confidential-computing-zoo/cczoo/agent-cc/adapters/OpenClaw/scripts
-
-# 创建精简镜像
-vim .env
-# OPENCLAW_GATEWAY_PORT=18789
-# OPENCLAW_BRIDGE_PORT=18790
-# OPENCLAW_GATEWAY_BIND=lan
-# OPENCLAW_GATEWAY_TOKEN=3eec2b1cdc012236e58e464f08b6092dc41f0cf6681670cf98bc2edf000e6182
-# OPENCLAW_IMAGE=openclaw:local
-# OPENCLAW_DOCKER_SOCKET=/var/run/docker.sock
-# DOCKER_GID=113
-# OPENCLAW_INSTALL_DOCKER_CLI=1
-# OPENCLAW_TZ=
-# OPENCLAW_CONFIG_VOLUME=openclaw-config
-# OPENCLAW_WORKSPACE_VOLUME=openclaw-workspace
-
-bash setup.sh
-
-# 创建网关镜像
-bash run-sbx.sh
+export PROFILE_DIR="$(pwd)/core/spire/runtime/dual-tdvm"
+sudo -E bash "$PROFILE_DIR/scripts/prepare.sh"
 ```
 
 **注意：您可以通过交互方式设置 openclaw 配置（如模式和 API 密钥）：**

@@ -7,7 +7,7 @@ Agent-CC 适配器提供了将各种工作负载集成到 TDX 可信执行环境
 用于在 TDX 环境中部署 OpenClaw 工作负载，提供全面的容器保护。适用场景包括：
 
 - 容器化 AI 工作负载及安全沙箱，参考[中文指南](OpenClaw/openclaw_container_protection_CN.md)
-- Native Guard + SPIFFE A2S 安全通信，参考[非对称 SPIFFE Runtime](../core/spire/runtime/asymmetric/README.md)
+- 无源码注入的 Guard + Egress/Ingress Broker SPIFFE A2S 通信，参考[双 TDVM Runtime](../core/spire/runtime/dual-tdvm/README.md)
 
 ## 相关核心服务
 

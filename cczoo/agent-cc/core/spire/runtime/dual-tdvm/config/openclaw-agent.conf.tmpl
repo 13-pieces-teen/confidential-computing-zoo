@@ -6,6 +6,22 @@ agent {
     socket_path = "/opt/spire/run/openclaw/agent.sock"
     trust_bundle_path = "/opt/spire/conf/certs/upstream-ca.pem"
     trust_domain = "argus.local"
+
+    experimental {
+        broker {
+            socket_path = "/opt/spire/run/openclaw-broker/broker.sock"
+            brokers = [
+                {
+                    id = "spiffe://argus.local/infra/openclaw-broker"
+                    allowed_reference_types = [
+                        {
+                            type_url = "type.googleapis.com/spiffe.broker.WorkloadPIDReference"
+                        },
+                    ]
+                },
+            ]
+        }
+    }
 }
 
 telemetry {

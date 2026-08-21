@@ -8,9 +8,11 @@ RUNTIME_DIR="${DUAL_RUNTIME_DIR:-$PROFILE_DIR/runtime}"
 export DUAL_RUNTIME_DIR="$RUNTIME_DIR"
 SERVER_SOCKET="/opt/spire/run/server/api.sock"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
+OPENCLAW_BROKER_ID="spiffe://argus.local/infra/openclaw-broker"
 OPENVIKING_ID="spiffe://argus.local/service/openviking-cmem"
 OPENVIKING_BROKER_ID="spiffe://argus.local/infra/openviking-broker"
 OPENCLAW_IMAGE="${DUAL_OPENCLAW_WORKLOAD_IMAGE:-argus-dual-openclaw:local}"
+OPENCLAW_BROKER_IMAGE="${DUAL_OPENCLAW_BROKER_IMAGE:-argus-openclaw-egress-sidecar:local}"
 OPENVIKING_RUNTIME_IMAGE_ID="${DUAL_OPENVIKING_RUNTIME_IMAGE_ID:-openviking-cmem:latest}"
 OPENVIKING_BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
 OPENCLAW_PARENT_ID="${DUAL_OPENCLAW_PARENT_ID:-}"
@@ -112,6 +114,9 @@ if missing:
 openclaw_digest="${DUAL_OPENCLAW_IMAGE_CONFIG_DIGEST:-$(
     remote_image_digest openclaw "$OPENCLAW_SSH_TARGET" "$OPENCLAW_IMAGE"
 )}"
+openclaw_broker_digest="${DUAL_OPENCLAW_BROKER_IMAGE_CONFIG_DIGEST:-$(
+    remote_image_digest openclaw "$OPENCLAW_SSH_TARGET" "$OPENCLAW_BROKER_IMAGE"
+)}"
 openviking_digest="$(
     remote_image_digest openviking "$OPENVIKING_SSH_TARGET" "$OPENVIKING_RUNTIME_IMAGE_ID"
 )"
@@ -119,6 +124,7 @@ openviking_broker_digest="${DUAL_OPENVIKING_BROKER_IMAGE_CONFIG_DIGEST:-$(
     remote_image_digest openviking "$OPENVIKING_SSH_TARGET" "$OPENVIKING_BROKER_IMAGE"
 )}"
 require_digest DUAL_OPENCLAW_IMAGE_CONFIG_DIGEST "$openclaw_digest"
+require_digest DUAL_OPENCLAW_BROKER_IMAGE_CONFIG_DIGEST "$openclaw_broker_digest"
 require_digest DUAL_OPENVIKING_RUNTIME_IMAGE_ID "$openviking_digest"
 require_digest DUAL_OPENVIKING_BROKER_IMAGE_CONFIG_DIGEST "$openviking_broker_digest"
 
@@ -130,6 +136,17 @@ spire_server entry create \
     -selector docker:label:argus.workload:openclaw \
     -selector docker:image_id:"$OPENCLAW_IMAGE" \
     -selector docker:image_config_digest:"$openclaw_digest" \
+    -disableX509SVIDPrefetch \
+    -x509SVIDTTL 600 >/dev/null
+
+spire_server entry delete -entryID dual-openclaw-broker >/dev/null 2>&1 || true
+spire_server entry create \
+    -entryID dual-openclaw-broker \
+    -parentID "$OPENCLAW_PARENT_ID" \
+    -spiffeID "$OPENCLAW_BROKER_ID" \
+    -selector docker:label:argus.component:openclaw-broker \
+    -selector docker:image_id:"$OPENCLAW_BROKER_IMAGE" \
+    -selector docker:image_config_digest:"$openclaw_broker_digest" \
     -x509SVIDTTL 600 >/dev/null
 
 spire_server entry delete -entryID dual-openviking-workload >/dev/null 2>&1 || true
@@ -161,9 +178,11 @@ printf '%s\n' \
     "OpenClaw Agent parent: $OPENCLAW_PARENT_ID" \
     "OpenViking Agent parent: $OPENVIKING_PARENT_ID" \
     "OpenClaw image config digest: $openclaw_digest" \
+    "OpenClaw Egress Broker image config digest: $openclaw_broker_digest" \
     "OpenViking runtime image id: $OPENVIKING_RUNTIME_IMAGE_ID" \
     "OpenViking observed runtime image config digest: $openviking_digest" \
     "OpenViking Broker image config digest: $openviking_broker_digest"
 spire_server entry show -entryID dual-openclaw-workload
+spire_server entry show -entryID dual-openclaw-broker
 spire_server entry show -entryID dual-openviking-broker
 spire_server entry show -entryID dual-openviking-target

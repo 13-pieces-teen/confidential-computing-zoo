@@ -1,43 +1,33 @@
 # Argus SPIRE integration
 
-The formal runtime is the asymmetric Argus profile under
-`runtime/asymmetric/`:
+The maintained runtime is the dual-TDVM profile under
+[`runtime/dual-tdvm/`](runtime/dual-tdvm/README.md):
 
 ```text
-OpenClaw (trusted RP)
-  x509pop SPIRE Agent -> OpenClaw X509-SVID
-  Argus Guard (caller-local policy)
-  in-process HTTP transport -> SPIFFE mTLS
-
-OpenViking (attested workload)
-  Evidence Provider -> argus_tdx NodeAttestor
-  -> SPIRE Server -> Trustee
-  -> Broker PID reference -> argus_tdx_workload
-  -> OpenViking target X509-SVID -> Broker Sidecar
+OpenClaw official runtime
+  -> local HTTP -> Egress Broker -> caller-local Guard
+  -> OpenClaw PID reference -> in-memory OpenClaw X.509-SVID
+  -> cross-TDVM SPIFFE mTLS
+  -> OpenViking Ingress Broker
+  -> OpenViking PID reference -> in-memory OpenViking X.509-SVID
   -> loopback OpenViking HTTP API
 ```
 
-Only the OpenViking Agent is remotely attested. OpenClaw has no Evidence
-Provider in this phase. Guard does not verify a Quote or a certificate; it is
-the Relying Party's caller-local authorization policy. SPIRE and TLS verify the
-workload identities.
+Both TDVMs have independent SPIRE Agents and Node Attestation state. The two
+business containers do not mount SPIRE sockets and do not hold SVID private
+keys. Guard remains the caller-local policy decision point; the Egress Broker
+is the policy enforcement point for the normal OpenViking plugin path.
 
 ## Directory map
 
 ```text
 spire/
-  components/       OpenClaw identity helpers (SVID materializer)
   plugins/          argus_tdx NodeAttestor and WorkloadAttestor plug-ins
-  benchmarks/       asymmetric runtime and agent-task evaluation tooling
   runtime/
-    asymmetric/     formal deployment, config, scripts, and remote validation
+    dual-tdvm/      deployment, config, scripts, and remote validation
   tests/            isolated NodeAttestor and TDVM fixtures
 ```
 
-OpenViking itself has no SPIRE integration. The dedicated Broker Sidecar owns
-the target SVID in memory, terminates mTLS, and forwards only to OpenViking's
-TD Guest loopback listener. The old Python TLS wrapper and OpenViking-side
-materializer path have been removed.
-
-See [runtime/asymmetric/README.md](runtime/asymmetric/README.md) for the remote
-host execution sequence and the current verification boundary.
+The former asymmetric preload/materializer runtime and its benchmark harness
+have been removed. See the dual-TDVM README for the execution sequence and the
+current Mock-versus-real-attestation evidence boundary.

@@ -1,4 +1,0 @@
-FROM scratch
-COPY plugins/mock-evidence-provider /mock-evidence-provider
-USER 1000:1000
-ENTRYPOINT ["/mock-evidence-provider"]

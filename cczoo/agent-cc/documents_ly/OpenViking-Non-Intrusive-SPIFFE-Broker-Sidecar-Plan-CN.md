@@ -518,7 +518,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 - `deploy-v2-guest.sh` 中检查 `/run/argus-svid/status.json` 的旧就绪判断；
 - 仅供旧 OpenViking Python方案使用的环境变量、测试和文档说明。
 
-`cczoo/agent-cc/core/spire/components/svid-materializer` 是 OpenClaw仍在使用的共享组件，不属于OpenViking Python方案专用代码。本次只移除OpenViking对它的引用，不删除该共享组件。
+旧 `svid-materializer` 共享组件及 OpenClaw preload 链已经移除。当前 OpenClaw 也由独立 Egress Broker 通过真实 PID 获取内存态 SVID，业务容器不再直接持有身份材料。
 
 ## 13. 失败语义
 
