@@ -179,6 +179,20 @@ export DUAL_OPENVIKING_OLLAMA_MODEL=bge-m3
 docker pull "$DUAL_OPENVIKING_OLLAMA_IMAGE"
 ```
 
+模型下载发生在 OpenViking TDVM 内的 Ollama 容器（`ollama pull bge-m3`），因此
+部署主机与 TDVM 都必须能访问模型仓库 `registry.ollama.ai`。Intel DMZ 等只允许
+经 HTTP 代理出网的环境，通过 `DUAL_OPENVIKING_OLLAMA_EXTRA_ENV` 为容器注入
+代理（空格分隔的 `KEY=VALUE` 列表，作为额外 `--env` 传入）：
+
+```bash
+export DUAL_OPENVIKING_OLLAMA_EXTRA_ENV='HTTP_PROXY=http://proxy-dmz.intel.com:911 HTTPS_PROXY=http://proxy-dmz.intel.com:911'
+```
+
+容器内 `ollama` CLI 也是遵循 `HTTP(S)_PROXY` 的 Go 客户端：脚本会自动注入并合并
+`NO_PROXY`（含 `localhost`、`127.0.0.1`、`0.0.0.0`、`::1`、`10.0.0.0/8`、
+`172.16.0.0/12`），保证 API 自连与容器网络流量不会被代理劫持；用户不需要也不应
+在 `EXTRA_ENV` 里重复设置 `NO_PROXY`。
+
 对应的 `ov.conf` embedding 配置必须使用 `provider=ollama`、模型 `bge-m3`，并将
 `api_base` 指向 `http://argus-dual-openviking-ollama:11434/v1`。Profile 会把显式指定
 的 Ollama 镜像传入 OpenViking TDVM，在专用 Docker 网络内启动它并准备模型；不发布
@@ -201,6 +215,7 @@ Ollama 宿主机端口。启用后 `verify.sh` 默认要求跨 TDVM mTLS `/ready
 | `DUAL_OPENVIKING_OLLAMA_IMAGE` | 应用就绪模式必填；部署主机上已有的显式 Ollama image tag |
 | `DUAL_OPENVIKING_OLLAMA_MODEL` | `bge-m3` |
 | `DUAL_OPENVIKING_OLLAMA_API_BASE` | `http://argus-dual-openviking-ollama:11434/v1` |
+| `DUAL_OPENVIKING_OLLAMA_EXTRA_ENV` | 空；空格分隔的 `KEY=VALUE` 列表，作为额外 `--env` 传给 Ollama 容器（如 DMZ 环境的 `HTTP_PROXY`/`HTTPS_PROXY`）；`NO_PROXY` 由脚本自动注入，不需要也不应重复设置 |
 | `DUAL_EXPECT_APPLICATION_READY` | 默认跟随 `DUAL_OPENVIKING_APPLICATION_READY` |
 | `DUAL_OPENVIKING_TRUSTEE_ADDRESS` | `DUAL_OPENVIKING_SPIRE_SERVER_ADDRESS` |
 | `DUAL_TDVM_TRUSTEE_PORT` | `18443` |

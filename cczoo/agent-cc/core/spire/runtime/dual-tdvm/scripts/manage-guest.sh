@@ -17,6 +17,7 @@ OPENVIKING_OLLAMA_IMAGE="${DUAL_OPENVIKING_OLLAMA_IMAGE:-}"
 OPENVIKING_OLLAMA_MODEL="${DUAL_OPENVIKING_OLLAMA_MODEL:-bge-m3}"
 OPENVIKING_OLLAMA_VOLUME="${DUAL_OPENVIKING_OLLAMA_VOLUME:-argus-dual-openviking-ollama-data}"
 OPENVIKING_OLLAMA_API_BASE="${DUAL_OPENVIKING_OLLAMA_API_BASE:-http://${OPENVIKING_OLLAMA_CONTAINER}:11434/v1}"
+OPENVIKING_OLLAMA_EXTRA_ENV="${DUAL_OPENVIKING_OLLAMA_EXTRA_ENV:-}"
 
 fail() {
     printf 'dual TDVM %s %s: FAIL: %s\n' "${ROLE:-guest}" "$ACTION" "$1" >&2
@@ -373,17 +374,41 @@ PY
 start_openviking_ollama() {
     local network="$1"
     local ready=0
+    local -a ollama_envs=(--env "OLLAMA_HOST=0.0.0.0:11434")
+    local -a ollama_extra=()
+    local pair
+    local user_no_proxy=""
+    local no_proxy
+    local -a no_proxy_mandatory=(localhost 127.0.0.1 0.0.0.0 ::1 10.0.0.0/8 172.16.0.0/12)
 
     [[ "$OPENVIKING_APPLICATION_READY" == 1 ]] || return 0
     remote_sudo /usr/local/bin/docker image inspect "$OPENVIKING_OLLAMA_IMAGE" >/dev/null \
         || fail "Ollama image is not loaded in OpenViking TDVM: $OPENVIKING_OLLAMA_IMAGE"
     remote_sudo /usr/local/bin/docker rm -f "$OPENVIKING_OLLAMA_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker volume create "$OPENVIKING_OLLAMA_VOLUME" >/dev/null
+    # DMZ 等只允许经 HTTP 代理出网的环境：DUAL_OPENVIKING_OLLAMA_EXTRA_ENV
+    # 提供空格分隔的 KEY=VALUE 列表，作为额外 --env 传给 Ollama 容器。
+    if [[ -n "$OPENVIKING_OLLAMA_EXTRA_ENV" ]]; then
+        read -r -a ollama_extra <<<"$OPENVIKING_OLLAMA_EXTRA_ENV" || true
+        for pair in "${ollama_extra[@]}"; do
+            case "$pair" in
+                NO_PROXY=*|no_proxy=*) user_no_proxy="${pair#*=}" ;;
+            esac
+            ollama_envs+=(--env "$pair")
+        done
+    fi
+    # 容器内 Ollama CLI（Go 客户端）同样遵循 HTTP(S)_PROXY：即使目标是本容器
+    # 的 0.0.0.0:11434 也会被导向代理，导致 ls/pull 全部失败。回环与容器网络
+    # 必须强制豁免；用户已在 EXTRA_ENV 提供的 NO_PROXY 会合并保留。
+    no_proxy="$user_no_proxy"
+    [[ -n "$no_proxy" ]] && no_proxy="$no_proxy,"
+    no_proxy+="$(IFS=,; echo "${no_proxy_mandatory[*]}")"
+    ollama_envs+=(--env "NO_PROXY=$no_proxy" --env "no_proxy=$no_proxy")
     remote_sudo /usr/local/bin/docker run -d \
         --name "$OPENVIKING_OLLAMA_CONTAINER" \
         --network "$network" \
         --restart unless-stopped \
-        --env OLLAMA_HOST=0.0.0.0:11434 \
+        "${ollama_envs[@]}" \
         --volume "$OPENVIKING_OLLAMA_VOLUME:/root/.ollama" \
         "$OPENVIKING_OLLAMA_IMAGE" >/dev/null
     for _ in $(seq 1 60); do
