@@ -14,6 +14,8 @@ OPENCLAW_CONTAINER="${DUAL_OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
 OPENVIKING_CONTAINER="${DUAL_OPENVIKING_CONTAINER:-agentcc-openviking-service}"
 BROKER_CONTAINER="${DUAL_OPENVIKING_BROKER_CONTAINER:-agentcc-openviking-broker-sidecar}"
 BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
+OPENVIKING_SOURCE_IMAGE="${DUAL_OPENVIKING_SOURCE_IMAGE:-localhost:5000/openviking:v0.4.8}"
+OPENVIKING_RUNTIME_IMAGE_ID="${DUAL_OPENVIKING_RUNTIME_IMAGE_ID:-openviking-cmem:latest}"
 WRONG_CLIENT_CONTAINER="argus-dual-openviking-wrong-client-sidecar"
 OPENCLAW_PARENT_ID="${DUAL_OPENCLAW_PARENT_ID:-}"
 OPENVIKING_PARENT_ID="${DUAL_OPENVIKING_PARENT_ID:-}"
@@ -139,6 +141,25 @@ if missing:
     raise SystemExit("configured Agent parents are not live: {}".format(", ".join(sorted(missing))))
 ' "$OPENCLAW_PARENT_ID" "$OPENVIKING_PARENT_ID"
 
+[[ "$(container_running openviking "$OPENVIKING_TARGET" "$OPENVIKING_CONTAINER")" == true ]] \
+    || fail 'TC-API OpenViking container is not running'
+target_pid="$(remote_sudo openviking "$OPENVIKING_TARGET" \
+    /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.State.Pid}}')"
+target_container_id="$(remote_sudo openviking "$OPENVIKING_TARGET" \
+    /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.Id}}')"
+source_image_config_digest="$(remote_sudo openviking "$OPENVIKING_TARGET" \
+    /usr/local/bin/docker image inspect "$OPENVIKING_SOURCE_IMAGE" --format '{{.Id}}')"
+runtime_image_config_digest="$(remote_sudo openviking "$OPENVIKING_TARGET" \
+    /usr/local/bin/docker image inspect "$OPENVIKING_RUNTIME_IMAGE_ID" --format '{{.Id}}')"
+container_image_config_digest="$(remote_sudo openviking "$OPENVIKING_TARGET" \
+    /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.Image}}')"
+[[ "$source_image_config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "source image config digest is invalid: $source_image_config_digest"
+[[ "$runtime_image_config_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || fail "runtime image config digest is invalid: $runtime_image_config_digest"
+[[ "$container_image_config_digest" == "$runtime_image_config_digest" ]] \
+    || fail "OpenViking container image digest is $container_image_config_digest, expected runtime digest $runtime_image_config_digest"
+
 entries="$(spire_server entry show -output json)"
 printf '%s' "$entries" | python3 -c '
 import json
@@ -182,6 +203,8 @@ if "docker:label:argus.workload:openclaw" not in openclaw:
     raise SystemExit("OpenClaw entry is missing its workload label selector")
 required_target = {
     "docker:label:argus.workload:openviking-cmem",
+    "docker:image_id:{}".format(sys.argv[3]),
+    "docker:image_config_digest:{}".format(sys.argv[4]),
     "argus_tdx_workload:verified:true",
     "argus_tdx_workload:workload_id:openviking-cmem",
     "argus_tdx_workload:policy:openviking-cmem-v1",
@@ -197,10 +220,9 @@ for name, values in (("OpenClaw", openclaw), ("OpenViking target", target), ("Br
     for prefix in ("docker:image_id:", "docker:image_config_digest:sha256:"):
         if not any(value.startswith(prefix) for value in values):
             raise SystemExit("{} entry is missing a {} selector".format(name, prefix))
-' "$OPENCLAW_PARENT_ID" "$OPENVIKING_PARENT_ID"
+' "$OPENCLAW_PARENT_ID" "$OPENVIKING_PARENT_ID" \
+    "$OPENVIKING_RUNTIME_IMAGE_ID" "$runtime_image_config_digest"
 
-[[ "$(container_running openviking "$OPENVIKING_TARGET" "$OPENVIKING_CONTAINER")" == true ]] \
-    || fail 'TC-API OpenViking container is not running'
 openviking_mounts="$(remote_sudo openviking "$OPENVIKING_TARGET" \
     /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" \
     --format '{{range .Mounts}}{{println .Destination}}{{end}}')"
@@ -233,10 +255,6 @@ broker_user="$(remote_sudo openviking "$OPENVIKING_TARGET" \
 [[ "$broker_user" == '1000:1000' ]] \
     || fail "Broker Sidecar user is $broker_user, expected 1000:1000"
 
-target_pid="$(remote_sudo openviking "$OPENVIKING_TARGET" \
-    /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.State.Pid}}')"
-target_container_id="$(remote_sudo openviking "$OPENVIKING_TARGET" \
-    /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" --format '{{.Id}}')"
 broker_command="$(remote_sudo openviking "$OPENVIKING_TARGET" \
     /usr/local/bin/docker inspect "$BROKER_CONTAINER" --format '{{json .Config.Cmd}}')"
 [[ "$broker_command" == *"-target-pid=$target_pid"* ]] \
@@ -277,8 +295,15 @@ if [[ "$EXPECTED_DECISION" == deny ]]; then
     printf '%s\n' \
         'Dual-TDVM DENY verification passed.' \
         "OpenViking container: $target_container_id (PID $target_pid, still running)" \
+        "OpenViking source image config digest: $source_image_config_digest" \
+        "OpenViking runtime image config digest: $runtime_image_config_digest" \
+        "OpenViking running container image config digest: $container_image_config_digest" \
+        "Target Entry image config digest: $runtime_image_config_digest (verified exact selector)" \
         "Broker socket: $broker_socket_stat" \
         "Trustee metric: $denied_metric" \
+        'Target Entry requires verified/workload_id/policy selectors and the observed runtime image digest.' \
+        'OpenViking has no Workload API, Broker API, or SVID/private-key mount.' \
+        "Only the Broker Sidecar mounts Workload API ($broker_workload_mount) and Broker API ($broker_api_mount) for target PID $target_pid." \
         'The Sidecar received no target SVID, never listened on 1943, and remains waiting without identity.' \
         'DENY is established by the configured Mock Trustee decision and its metric, not inferred from the empty Broker snapshot.' \
         'Evidence Provider and Trustee are still mock-stage.'
@@ -287,7 +312,7 @@ fi
 
 [[ "$(container_running openviking "$OPENVIKING_TARGET" "$BROKER_CONTAINER")" == true ]] \
     || fail 'Broker Sidecar is not running after Trustee ALLOW'
-grep -Fq 'OpenViking mTLS listener is ready' <<<"$broker_logs" \
+grep -Fq "OpenViking mTLS listener is ready for identity $OPENVIKING_ID" <<<"$broker_logs" \
     || fail 'Broker Sidecar did not receive the strongly selected target SVID'
 allowed_metric="$(grep -E '^argus_m4_fake_requests_total\{service="workload_trustee",result="ok"\} [1-9][0-9]*$' <<<"$trustee_metrics" || true)"
 [[ -n "$allowed_metric" ]] \
@@ -357,17 +382,30 @@ const targetId = process.argv[4];
       }
     },
   };
-  for (const path of ["/health", "/ready"]) {
-    const status = await new Promise((resolve, reject) => {
-      const request = https.get(url, { path, servername: url.hostname, timeout: 10000, ...tls }, (response) => {
-        response.resume();
-        resolve(response.statusCode);
-      });
-      request.on("timeout", () => request.destroy(new Error(`OpenViking ${path} timed out`)));
-      request.on("error", reject);
+  const requestStatus = (path) => new Promise((resolve, reject) => {
+    const request = https.get(url, { path, servername: url.hostname, timeout: 10000, ...tls }, (response) => {
+      response.resume();
+      resolve(response.statusCode);
     });
-    if (status !== 200) throw new Error(`OpenViking ${path} returned HTTP ${status}`);
-    console.log(`Guard ALLOW -> direct SPIFFE mTLS ${path} -> HTTP ${status}`);
+    request.on("timeout", () => request.destroy(new Error(`OpenViking ${path} timed out`)));
+    request.on("error", reject);
+  });
+
+  const healthStatus = await requestStatus("/health");
+  if (healthStatus !== 200) throw new Error(`OpenViking /health returned HTTP ${healthStatus}`);
+  console.log(`Guard ALLOW -> direct SPIFFE mTLS /health -> HTTP ${healthStatus}`);
+
+  try {
+    const readyStatus = await requestStatus("/ready");
+    if (readyStatus === 200) {
+      console.log("Application Readiness: READY - /ready HTTP 200");
+    } else if (readyStatus === 503) {
+      console.log("Application Readiness: NOT READY - /ready HTTP 503; this profile does not deploy Ollama/bge-m3");
+    } else {
+      console.log(`Application Readiness: NOT READY - /ready HTTP ${readyStatus}`);
+    }
+  } catch (error) {
+    console.log(`Application Readiness: NOT READY - /ready request failed: ${error.message}`);
   }
 })().catch((error) => {
   console.error(error);
@@ -446,7 +484,10 @@ request.on("timeout", () => {
   console.error("wrong-client test timed out");
   process.exit(1);
 });
-request.on("error", () => process.exit(0));
+request.on("error", (error) => {
+  console.log(`Wrong-client SPIFFE ID rejected during mTLS handshake as expected: ${error.message}`);
+  process.exit(0);
+});
 NODE
 
 cleanup_wrong_client
@@ -476,7 +517,11 @@ if [[ "$VERIFY_TARGET_EXIT" == 1 ]]; then
     done
     [[ "$(container_running openviking "$OPENVIKING_TARGET" "$BROKER_CONTAINER")" == false ]] \
         || fail 'Broker Sidecar did not stop after the target PID exited'
-    target_exit_result='OpenViking stopped; Sidecar exited through pidfd monitoring'
+    if remote_sudo openviking "$OPENVIKING_TARGET" \
+        /bin/bash -c "exec 3<>/dev/tcp/127.0.0.1/$OPENVIKING_PORT" >/dev/null 2>&1; then
+        fail "port $OPENVIKING_PORT remained reachable after the target PID and Broker Sidecar exited"
+    fi
+    target_exit_result="OpenViking stopped; Sidecar exited through pidfd monitoring; port $OPENVIKING_PORT closed"
 fi
 
 printf '%s\n' \
@@ -484,10 +529,19 @@ printf '%s\n' \
     "OpenClaw Agent parent: $OPENCLAW_PARENT_ID" \
     "OpenViking Agent parent: $OPENVIKING_PARENT_ID" \
     "OpenViking container: $target_container_id (PID $target_pid)" \
+    "OpenViking source image config digest: $source_image_config_digest" \
+    "OpenViking runtime image config digest: $runtime_image_config_digest" \
+    "OpenViking running container image config digest: $container_image_config_digest" \
+    "Target Entry image config digest: $runtime_image_config_digest (verified exact selector)" \
     "Broker socket: $broker_socket_stat" \
     "Trustee metric: $allowed_metric" \
-    'OpenViking has no SPIRE/SVID mount; only the Broker Sidecar holds workload identity.' \
+    'Target Entry requires verified/workload_id/policy selectors and matches the observed runtime image digest.' \
+    "Broker Sidecar received target SVID $OPENVIKING_ID and opened port $OPENVIKING_PORT." \
+    'OpenViking has no Workload API, Broker API, or SVID/private-key mount.' \
+    "Only the Broker Sidecar mounts Workload API ($broker_workload_mount) and Broker API ($broker_api_mount) for target PID $target_pid." \
     'No-client and wrong-expected-client mTLS checks failed as expected.' \
-    'OpenClaw Guard ALLOW preceded successful mTLS /health and /ready requests.' \
+    'OpenClaw could not reach the OpenViking plaintext port 1933.' \
+    'OpenClaw Guard ALLOW preceded successful SPIFFE mTLS /health = 200.' \
+    'Application /ready is recorded separately and is not a security-chain hard gate; this profile does not deploy Ollama/bge-m3.' \
     "Target exit check: $target_exit_result" \
     'Evidence Provider and Trustee are still mock-stage; this is not real Quote/QGS or Rekor acceptance.'

@@ -82,7 +82,9 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
    并保持无身份等待状态；
 7. OpenClaw 到 Sidecar 的跨 TDVM mTLS 成功；
 8. 无证书、错误客户端 ID 和明文 1933 访问失败；
-9. OpenViking 退出后 Sidecar 退出。
+9. OpenViking 退出后 Sidecar 退出且 1943 关闭；
+10. `/health=200` 是安全链路硬验收；`/ready` 只记录 Application Readiness，
+    本 profile 未部署 Ollama/bge-m3 时允许明确记录为 `503 / NOT READY`。
 
 ## 4. 验证顺序
 
@@ -110,8 +112,13 @@ Profile，验证完整 A-F 时序。
 - Mock Evidence Provider/Trustee 请求计数；
 - Broker 自身身份与 OpenViking 目标身份；
 - PID/container 关联；
+- source、TC-API runtime、运行容器与 Registration Entry 的 image config digest；
 - mTLS 正向和负向结果；
 - OpenViking/Sidecar 退出行为。
+
+当前允许使用 `DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST` 传入实测 runtime digest。
+后续工程项是让 Registration Entry 直接基于 Attestor 实际观察到的 runtime
+measurement，而不是未经 TC-API 转换的 source artifact measurement。
 
 ## 5. 完成定义
 
@@ -143,4 +150,5 @@ Profile，验证完整 A-F 时序。
 - OpenViking Python SPIFFE SDK；
 - 每请求 Quote、正文哈希或 TLS exporter 绑定；
 - 新的回退 Profile；
+- 为满足本轮 `/ready` 观察项而部署 Ollama/bge-m3；
 - 对已失陷 TDVM、Docker 管理员或 SPIRE 管理员的额外防护。

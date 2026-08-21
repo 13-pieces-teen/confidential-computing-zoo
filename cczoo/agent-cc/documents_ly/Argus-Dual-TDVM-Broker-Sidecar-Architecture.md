@@ -188,11 +188,14 @@ Broker stream 的每次响应按完整身份快照处理。目标身份消失后
 
 1. 两个独立 TDVM Agent 均完成 Mock Node Attestation，Parent ID 不同；
 2. OpenClaw 只取得自己的身份；
-3. OpenViking Python 无 SPIRE mount，Sidecar 引用的 PID 等于实际 OpenViking PID；
-4. ALLOW 时 Sidecar 获得目标 SVID 并监听 1943；
+3. OpenViking Python 无 Workload API、Broker API 或 SVID/private-key mount，Sidecar
+   引用的 PID 等于实际 OpenViking PID；
+4. ALLOW 时 verified selectors 与实际 runtime image config digest 命中强 Entry，
+   Sidecar 获得目标 SVID 并监听 1943；
 5. DENY 时 Trustee metric 记录拒绝；Sidecar 无目标 SVID、无 ready、不监听 1943，
    并保持无身份等待状态；
-6. OpenClaw 经本地 Guard ALLOW 后完成跨 TDVM mTLS；
+6. OpenClaw 经本地 Guard ALLOW 后完成跨 TDVM mTLS，`/health=200`；`/ready`
+   仅记录 Application Readiness，不作为本轮安全链路硬验收；
 7. 无客户端证书、错误 SPIFFE ID 和直接访问 1933 均失败；
 8. OpenViking 退出后 Sidecar 因 pidfd 退出；
 9. 报告明确标记 Mock Evidence Provider/Trustee，不升级为真实 TDX 结论。

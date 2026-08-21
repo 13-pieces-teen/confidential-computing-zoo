@@ -104,6 +104,13 @@ bash "$PROFILE_DIR/scripts/register-workloads.sh"
 OpenViking 的 `load-workload` 不重建 TC-API：它把 OpenViking 和 Broker 镜像传入
 TDVM，将 OpenViking 源镜像推送到既有本地 Registry，并复制 launch-only 脚本。
 
+如果 TC-API 的镜像转换改变了 Docker image config digest，本轮允许通过
+`DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST` 将实际 runtime digest 显式传给注册脚本。
+`verify.sh` 会分别记录 source image 与 TC-API runtime image digest，并要求
+`dual-openviking-target` 的 `docker:image_config_digest` 精确匹配 runtime digest。
+这是当前测试接口，不是最终工程收口：后续 Registration Entry 应直接使用 Attestor
+实际观察到的 runtime measurement，而不是未经转换的 source artifact measurement。
+
 注册脚本只创建本 profile 的三个身份 Entry：
 
 | Entry | SPIFFE ID | 必要 selector |
@@ -157,8 +164,12 @@ reference attestation；当前阶段不实现自动重新认证。
 
 - OpenViking 无 SPIRE/SVID mount；Sidecar 的 target PID 等于 OpenViking 实际 PID；
 - 无客户端证书失败，临时错误 expected-client ID 的 Sidecar 也拒绝 OpenClaw；
-- Guard 返回 ALLOW 后，OpenClaw 使用自己的 SVID 访问 Sidecar `/health` 和
-  `/ready`；OpenClaw 无法访问明文 `1933`。
+- Guard 返回 ALLOW 后，OpenClaw 使用自己的 SVID 访问 Sidecar `/health=200`；
+  OpenClaw 无法访问明文 `1933`。
+
+`/ready` 只作为 Application Readiness 观察项，不是身份与 mTLS 安全链路的硬验收。
+本 profile 不部署 Ollama/bge-m3，因此当前环境应明确记录 `/ready=503` 与
+`Application Readiness: NOT READY`，而不是为通过测试引入 Ollama。
 
 默认最后执行 PID 生命周期检查：停止 OpenViking 后，Sidecar 必须通过 pidfd 退出。
 因此完整验收结束时 OpenViking 与 Sidecar 处于停止状态；要保留运行状态可在非正式
@@ -170,7 +181,9 @@ reference attestation；当前阶段不实现自动重新认证。
 |---|---|
 | `DUAL_OPENVIKING_GUEST_BROKER_RUN` | `/run/argus-spire-dual/openviking-broker` |
 | `DUAL_OPENVIKING_BROKER_IMAGE` | `argus-openviking-broker-sidecar:local` |
+| `DUAL_OPENVIKING_SOURCE_IMAGE` | `localhost:5000/openviking:v0.4.8` |
 | `DUAL_OPENVIKING_RUNTIME_IMAGE_ID` | `openviking-cmem:latest` |
+| `DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST` | 可选；TC-API 转换后的实际 runtime config digest |
 | `DUAL_OPENVIKING_TRUSTEE_ADDRESS` | `DUAL_OPENVIKING_SPIRE_SERVER_ADDRESS` |
 | `DUAL_TDVM_TRUSTEE_PORT` | `18443` |
 | `DUAL_WORKLOAD_DECISION` | `allow` |
