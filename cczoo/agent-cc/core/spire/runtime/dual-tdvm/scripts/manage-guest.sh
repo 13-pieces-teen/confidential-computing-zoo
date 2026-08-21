@@ -11,6 +11,12 @@ PROVIDER_IMAGE="${DUAL_PROVIDER_IMAGE:-argus-spire-dual-mock-evidence-provider:l
 REMOTE_ROOT="${DUAL_GUEST_ROOT:-/opt/argus-spire-dual}"
 OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
 OPENVIKING_ID="spiffe://argus.local/service/openviking-cmem"
+OPENVIKING_APPLICATION_READY="${DUAL_OPENVIKING_APPLICATION_READY:-0}"
+OPENVIKING_OLLAMA_CONTAINER="${DUAL_OPENVIKING_OLLAMA_CONTAINER:-argus-dual-openviking-ollama}"
+OPENVIKING_OLLAMA_IMAGE="${DUAL_OPENVIKING_OLLAMA_IMAGE:-}"
+OPENVIKING_OLLAMA_MODEL="${DUAL_OPENVIKING_OLLAMA_MODEL:-bge-m3}"
+OPENVIKING_OLLAMA_VOLUME="${DUAL_OPENVIKING_OLLAMA_VOLUME:-argus-dual-openviking-ollama-data}"
+OPENVIKING_OLLAMA_API_BASE="${DUAL_OPENVIKING_OLLAMA_API_BASE:-http://${OPENVIKING_OLLAMA_CONTAINER}:11434/v1}"
 
 fail() {
     printf 'dual TDVM %s %s: FAIL: %s\n' "${ROLE:-guest}" "$ACTION" "$1" >&2
@@ -62,6 +68,12 @@ esac
 if [[ "$ROLE" == openviking ]]; then
     [[ "$REMOTE_BROKER_RUN" == /* ]] \
         || fail 'OpenViking Broker run path must be absolute'
+    [[ "$OPENVIKING_APPLICATION_READY" == 0 || "$OPENVIKING_APPLICATION_READY" == 1 ]] \
+        || fail 'DUAL_OPENVIKING_APPLICATION_READY must be 0 or 1'
+    if [[ "$OPENVIKING_APPLICATION_READY" == 1 ]]; then
+        [[ -n "$OPENVIKING_OLLAMA_IMAGE" ]] \
+            || fail 'DUAL_OPENVIKING_OLLAMA_IMAGE is required when application readiness is enabled'
+    fi
 fi
 
 ssh_options=(
@@ -316,6 +328,25 @@ load_workload() {
             || fail 'DUAL_OPENVIKING_CONFIG must name an absolute, non-empty ov.conf file'
         require_local_image "$BROKER_IMAGE"
         stream_image "$BROKER_IMAGE"
+        if [[ "$OPENVIKING_APPLICATION_READY" == 1 ]]; then
+            python3 - "$openviking_config" "$OPENVIKING_OLLAMA_API_BASE" "$OPENVIKING_OLLAMA_MODEL" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as stream:
+    config = json.load(stream)
+embedding = config.get("embedding") or {}
+dense = embedding.get("dense") or embedding
+if dense.get("provider") != "ollama":
+    raise SystemExit("DUAL_OPENVIKING_APPLICATION_READY=1 requires embedding provider=ollama")
+if str(dense.get("api_base", "")).rstrip("/") != sys.argv[2].rstrip("/"):
+    raise SystemExit("OpenViking embedding api_base must be {}".format(sys.argv[2]))
+if dense.get("model") != sys.argv[3]:
+    raise SystemExit("OpenViking embedding model must be {}".format(sys.argv[3]))
+PY
+            require_local_image "$OPENVIKING_OLLAMA_IMAGE"
+            stream_image "$OPENVIKING_OLLAMA_IMAGE"
+        fi
         remote curl -fsS --max-time 5 "$tc_api_url/" >/dev/null \
             || fail "existing TC-API is not healthy at $tc_api_url"
         remote curl -fsS --max-time 5 http://127.0.0.1:5000/v2/ >/dev/null \
@@ -337,6 +368,44 @@ load_workload() {
     fi
 
     printf '%s workload image and runtime files are loaded in its TDVM.\n' "$ROLE"
+}
+
+start_openviking_ollama() {
+    local network="$1"
+    local ready=0
+
+    [[ "$OPENVIKING_APPLICATION_READY" == 1 ]] || return 0
+    remote_sudo /usr/local/bin/docker image inspect "$OPENVIKING_OLLAMA_IMAGE" >/dev/null \
+        || fail "Ollama image is not loaded in OpenViking TDVM: $OPENVIKING_OLLAMA_IMAGE"
+    remote_sudo /usr/local/bin/docker rm -f "$OPENVIKING_OLLAMA_CONTAINER" >/dev/null 2>&1 || true
+    remote_sudo /usr/local/bin/docker volume create "$OPENVIKING_OLLAMA_VOLUME" >/dev/null
+    remote_sudo /usr/local/bin/docker run -d \
+        --name "$OPENVIKING_OLLAMA_CONTAINER" \
+        --network "$network" \
+        --restart unless-stopped \
+        --env OLLAMA_HOST=0.0.0.0:11434 \
+        --volume "$OPENVIKING_OLLAMA_VOLUME:/root/.ollama" \
+        "$OPENVIKING_OLLAMA_IMAGE" >/dev/null
+    for _ in $(seq 1 60); do
+        if remote_sudo /usr/local/bin/docker exec "$OPENVIKING_OLLAMA_CONTAINER" \
+            ollama ls >/dev/null 2>&1; then
+            ready=1
+            break
+        fi
+        read -r -t 1 _ || true
+    done
+    if [[ "$ready" != 1 ]]; then
+        remote_sudo /usr/local/bin/docker logs --tail 120 "$OPENVIKING_OLLAMA_CONTAINER" >&2 || true
+        fail 'Ollama did not become ready in the OpenViking TDVM'
+    fi
+    if ! remote_sudo /usr/local/bin/docker exec "$OPENVIKING_OLLAMA_CONTAINER" \
+        ollama show "$OPENVIKING_OLLAMA_MODEL" >/dev/null 2>&1; then
+        remote_sudo /usr/local/bin/docker exec "$OPENVIKING_OLLAMA_CONTAINER" \
+            ollama pull "$OPENVIKING_OLLAMA_MODEL"
+    fi
+    remote_sudo /usr/local/bin/docker exec "$OPENVIKING_OLLAMA_CONTAINER" \
+        ollama show "$OPENVIKING_OLLAMA_MODEL" >/dev/null
+    printf 'OpenViking application dependency is ready: Ollama model %s\n' "$OPENVIKING_OLLAMA_MODEL"
 }
 
 start_openclaw() {
@@ -458,7 +527,7 @@ NODE
 }
 
 start_openviking() {
-    local port state_dir source_image image_url runtime_image_id tc_api_url agent_id identity_token bearer_token network
+    local port state_dir source_image image_url runtime_image_id tc_api_url agent_id identity_token bearer_token network runtime_digest container_digest
     port="${DUAL_OPENVIKING_PORT:-1943}"
     state_dir="/var/lib/argus-spire-dual/openviking-state"
     source_image="${DUAL_OPENVIKING_SOURCE_IMAGE:-localhost:5000/openviking:v0.4.8}"
@@ -494,9 +563,11 @@ start_openviking() {
         "$BROKER_CONTAINER" "$WORKLOAD_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker network inspect "$network" >/dev/null 2>&1 \
         || remote_sudo /usr/local/bin/docker network create "$network" >/dev/null
+    start_openviking_ollama "$network"
     launch_env=(
         "AUTO_START_INFRA=0"
         "OPENVIKING_LAUNCH_ACTION=launch"
+        "OPENVIKING_START_BROKER=0"
         "TC_API_URL=$tc_api_url"
         "WORKLOAD_ID=openviking-cmem"
         "IMAGE_NAME=$source_image"
@@ -520,8 +591,34 @@ start_openviking() {
         launch_env+=("TC_API_BEARER_TOKEN=$bearer_token")
     fi
     remote_sudo env "${launch_env[@]}" "$REMOTE_ROOT/bin/launch_openviking.sh"
+    runtime_digest="$(remote_sudo /usr/local/bin/docker image inspect \
+        "$runtime_image_id" --format '{{.Id}}')"
+    container_digest="$(remote_sudo /usr/local/bin/docker inspect \
+        "$WORKLOAD_CONTAINER" --format '{{.Image}}')"
+    [[ "$runtime_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+        || fail "TC-API runtime image config digest is invalid: $runtime_digest"
+    [[ "$container_digest" == "$runtime_digest" ]] \
+        || fail "OpenViking container uses $container_digest, expected runtime digest $runtime_digest"
+
+    DUAL_RUNTIME_DIR="$RUNTIME_DIR" \
+    DUAL_OPENVIKING_RUNTIME_IMAGE_ID="$runtime_image_id" \
+        "$SCRIPT_DIR/register-workloads.sh"
+
+    broker_env=(
+        "AUTO_START_INFRA=0"
+        "OPENVIKING_LAUNCH_ACTION=broker"
+        "OPENVIKING_WORKLOAD_API_DIR=$REMOTE_RUN"
+        "OPENVIKING_BROKER_API_DIR=$REMOTE_BROKER_RUN"
+        "OPENVIKING_AGENT_SPIFFE_ID=$agent_id"
+        "OPENVIKING_MTLS_PORT=$port"
+        "OPENVIKING_CONTAINER=$WORKLOAD_CONTAINER"
+        "OPENVIKING_BROKER_CONTAINER=$BROKER_CONTAINER"
+        "OPENVIKING_BROKER_IMAGE=$BROKER_IMAGE"
+    )
+    remote_sudo env "${broker_env[@]}" "$REMOTE_ROOT/bin/launch_openviking.sh"
     printf '%s\n' \
         'Unmodified OpenViking and its Broker Sidecar are ready in the OpenViking TDVM.' \
+        "Observed runtime image config digest: $runtime_digest" \
         "Broker mTLS port: $port" \
         "Accepted client identity: $OPENCLAW_ID"
 }
@@ -538,7 +635,7 @@ status() {
     remote test -c /dev/tdx_guest || fail 'SSH target is not a TD Guest'
     containers=("$PROVIDER_CONTAINER" "$AGENT_CONTAINER" "$WORKLOAD_CONTAINER")
     [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard)
-    [[ "$ROLE" == openviking ]] && containers+=("$BROKER_CONTAINER")
+    [[ "$ROLE" == openviking ]] && containers+=("$BROKER_CONTAINER" "$OPENVIKING_OLLAMA_CONTAINER")
     for container in "${containers[@]}"; do
         if remote_sudo /usr/local/bin/docker inspect "$container" >/dev/null 2>&1; then
             remote_sudo /usr/local/bin/docker inspect "$container" \
@@ -552,7 +649,7 @@ status() {
 stop() {
     containers=("$WORKLOAD_CONTAINER" "$AGENT_CONTAINER" "$PROVIDER_CONTAINER")
     [[ "$ROLE" == openclaw ]] && containers+=(argus-dual-openclaw-guard)
-    [[ "$ROLE" == openviking ]] && containers=("$BROKER_CONTAINER" "${containers[@]}")
+    [[ "$ROLE" == openviking ]] && containers=("$BROKER_CONTAINER" "$OPENVIKING_OLLAMA_CONTAINER" "${containers[@]}")
     remote_sudo /usr/local/bin/docker rm -f "${containers[@]}" >/dev/null 2>&1 || true
     printf 'Stopped %s dual-TDVM containers; persistent data and Docker volumes were retained.\n' "$ROLE"
 }

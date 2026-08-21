@@ -89,7 +89,7 @@ export DUAL_OPENCLAW_PARENT_ID='spiffe://argus.local/spire/agent/argus_tdx/<open
 export DUAL_OPENVIKING_PARENT_ID='spiffe://argus.local/spire/agent/argus_tdx/<openviking-key-id>'
 ```
 
-## 4. 加载 workload 并注册三个 Entry
+## 4. 加载 workload
 
 OpenViking 的 `ov.conf` 含模型/API 凭据，只通过绝对路径传入，不写入仓库：
 
@@ -98,18 +98,16 @@ export DUAL_OPENVIKING_CONFIG=/absolute/path/to/ov.conf
 
 bash "$PROFILE_DIR/scripts/manage-guest.sh" openclaw load-workload
 bash "$PROFILE_DIR/scripts/manage-guest.sh" openviking load-workload
-bash "$PROFILE_DIR/scripts/register-workloads.sh"
 ```
 
 OpenViking 的 `load-workload` 不重建 TC-API：它把 OpenViking 和 Broker 镜像传入
 TDVM，将 OpenViking 源镜像推送到既有本地 Registry，并复制 launch-only 脚本。
 
-如果 TC-API 的镜像转换改变了 Docker image config digest，本轮允许通过
-`DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST` 将实际 runtime digest 显式传给注册脚本。
-`verify.sh` 会分别记录 source image 与 TC-API runtime image digest，并要求
-`dual-openviking-target` 的 `docker:image_config_digest` 精确匹配 runtime digest。
-这是当前测试接口，不是最终工程收口：后续 Registration Entry 应直接使用 Attestor
-实际观察到的 runtime measurement，而不是未经转换的 source artifact measurement。
+OpenViking 的 runtime image config digest 只有在 TC-API 完成镜像转换后才能确定。
+因此 `start-workload` 会按固定顺序执行：TC-API 启动 OpenViking、读取运行容器实际
+config digest、自动创建三个强 Entry，最后启动 Broker Sidecar。注册不再使用 source
+image digest，也不需要人工传入 digest override。`verify.sh` 会分别记录 source、
+TC-API runtime、运行容器与 Entry digest，并要求后三者完全一致。
 
 注册脚本只创建本 profile 的三个身份 Entry：
 
@@ -139,6 +137,9 @@ DUAL_EXPECT_WORKLOAD_DECISION=deny \
   bash "$PROFILE_DIR/scripts/verify.sh"
 ```
 
+首次 `start-workload` 会在 TC-API 启动目标容器后自动执行 `register-workloads.sh`。
+Sidecar 只在包含实际 runtime digest 的 Entry 创建完成后启动。
+
 TC-API 应已启动 OpenViking。Mock Trustee 拒绝后，Sidecar 保持运行并等待身份，
 但没有目标 SVID、没有 ready 日志且不监听 1943；Mock Trustee metrics 记录
 `denied`。空身份快照本身不能区分永久 DENY、Entry 尚未同步或暂时不匹配，
@@ -167,9 +168,22 @@ reference attestation；当前阶段不实现自动重新认证。
 - Guard 返回 ALLOW 后，OpenClaw 使用自己的 SVID 访问 Sidecar `/health=200`；
   OpenClaw 无法访问明文 `1933`。
 
-`/ready` 只作为 Application Readiness 观察项，不是身份与 mTLS 安全链路的硬验收。
-本 profile 不部署 Ollama/bge-m3，因此当前环境应明确记录 `/ready=503` 与
-`Application Readiness: NOT READY`，而不是为通过测试引入 Ollama。
+`/ready` 始终与身份和 mTLS 安全链路分开。默认模式不部署模型依赖，`/ready` 只记录
+Application Readiness。需要同时完成应用就绪验证时，在 `load-workload` 前显式启用：
+
+```bash
+export DUAL_OPENVIKING_APPLICATION_READY=1
+export DUAL_OPENVIKING_OLLAMA_IMAGE='ollama/ollama:<tested-version>'
+export DUAL_OPENVIKING_OLLAMA_MODEL=bge-m3
+
+docker pull "$DUAL_OPENVIKING_OLLAMA_IMAGE"
+```
+
+对应的 `ov.conf` embedding 配置必须使用 `provider=ollama`、模型 `bge-m3`，并将
+`api_base` 指向 `http://argus-dual-openviking-ollama:11434/v1`。Profile 会把显式指定
+的 Ollama 镜像传入 OpenViking TDVM，在专用 Docker 网络内启动它并准备模型；不发布
+Ollama 宿主机端口。启用后 `verify.sh` 默认要求跨 TDVM mTLS `/ready=200`，但该结果
+仍单独标记为 Application Readiness，不改变安全链路结论。
 
 默认最后执行 PID 生命周期检查：停止 OpenViking 后，Sidecar 必须通过 pidfd 退出。
 因此完整验收结束时 OpenViking 与 Sidecar 处于停止状态；要保留运行状态可在非正式
@@ -183,7 +197,11 @@ reference attestation；当前阶段不实现自动重新认证。
 | `DUAL_OPENVIKING_BROKER_IMAGE` | `argus-openviking-broker-sidecar:local` |
 | `DUAL_OPENVIKING_SOURCE_IMAGE` | `localhost:5000/openviking:v0.4.8` |
 | `DUAL_OPENVIKING_RUNTIME_IMAGE_ID` | `openviking-cmem:latest` |
-| `DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST` | 可选；TC-API 转换后的实际 runtime config digest |
+| `DUAL_OPENVIKING_APPLICATION_READY` | `0`；设为 `1` 时部署并硬验收应用依赖 |
+| `DUAL_OPENVIKING_OLLAMA_IMAGE` | 应用就绪模式必填；部署主机上已有的显式 Ollama image tag |
+| `DUAL_OPENVIKING_OLLAMA_MODEL` | `bge-m3` |
+| `DUAL_OPENVIKING_OLLAMA_API_BASE` | `http://argus-dual-openviking-ollama:11434/v1` |
+| `DUAL_EXPECT_APPLICATION_READY` | 默认跟随 `DUAL_OPENVIKING_APPLICATION_READY` |
 | `DUAL_OPENVIKING_TRUSTEE_ADDRESS` | `DUAL_OPENVIKING_SPIRE_SERVER_ADDRESS` |
 | `DUAL_TDVM_TRUSTEE_PORT` | `18443` |
 | `DUAL_WORKLOAD_DECISION` | `allow` |
@@ -201,5 +219,5 @@ docker compose -f "$PROFILE_DIR/compose.yaml" down
 ```
 
 `stop` 只删除本 profile 的容器，不删除 TDVM 磁盘、镜像、Agent data、OpenViking
-数据或 OpenClaw volumes。远程执行证据记录在
+数据、Ollama 模型 volume 或 OpenClaw volumes。远程执行证据记录在
 [`Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md`](../../../../documents_ly/Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)。

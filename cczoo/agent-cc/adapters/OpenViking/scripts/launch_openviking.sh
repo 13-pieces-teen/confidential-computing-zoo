@@ -41,6 +41,7 @@ OPENVIKING_BROKER_CONTAINER="${OPENVIKING_BROKER_CONTAINER:-agentcc-openviking-b
 OPENVIKING_BROKER_IMAGE="${OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
 OPENVIKING_MODEL_CA_BUNDLE="${OPENVIKING_MODEL_CA_BUNDLE:-}"
 OPENVIKING_LAUNCH_ACTION="${OPENVIKING_LAUNCH_ACTION:-all}"
+OPENVIKING_START_BROKER="${OPENVIKING_START_BROKER:-1}"
 ATTESTATION_REQUIRED="${ATTESTATION_REQUIRED:-false}"
 POLL_INTERVAL="${POLL_INTERVAL:-3}"
 POLL_ATTEMPTS="${POLL_ATTEMPTS:-40}"
@@ -174,6 +175,64 @@ validate_broker_runtime() {
         || { echo "OPENVIKING_MTLS_PORT must be numeric." >&2; exit 1; }
 }
 
+start_broker_sidecar() {
+    local container_id="$1"
+    local launch_id="$2"
+    local target_pid target_started_at runtime_image_config_digest attempt
+
+    [[ "$(docker inspect "$container_id" --format '{{.State.Running}}')" == true ]] \
+        || { echo "OpenViking container is not running: $container_id" >&2; exit 1; }
+    target_pid="$(docker inspect "$container_id" --format '{{.State.Pid}}')"
+    target_started_at="$(docker inspect "$container_id" --format '{{.State.StartedAt}}')"
+    runtime_image_config_digest="$(docker inspect "$container_id" --format '{{.Image}}')"
+    [[ "$target_pid" =~ ^[1-9][0-9]*$ ]] \
+        || { echo "Invalid OpenViking host PID: $target_pid" >&2; exit 1; }
+
+    echo "[5/5] Starting Broker Sidecar for OpenViking PID ${target_pid}"
+    docker rm -f "$OPENVIKING_BROKER_CONTAINER" >/dev/null 2>&1 || true
+    docker run -d \
+        --name "$OPENVIKING_BROKER_CONTAINER" \
+        --network host \
+        --pid host \
+        --label argus.component=openviking-broker \
+        --volume "$OPENVIKING_WORKLOAD_API_DIR:/opt/spire/run/agent:ro" \
+        --volume "$OPENVIKING_BROKER_API_DIR:/opt/spire/run/broker:ro" \
+        "$OPENVIKING_BROKER_IMAGE" \
+        -workload-api=unix:///opt/spire/run/agent/agent.sock \
+        -broker-socket=/opt/spire/run/broker/broker.sock \
+        -broker-spiffe-id=spiffe://argus.local/infra/openviking-broker \
+        "-agent-spiffe-id=$OPENVIKING_AGENT_SPIFFE_ID" \
+        -target-spiffe-id=spiffe://argus.local/service/openviking-cmem \
+        -client-spiffe-id=spiffe://argus.local/agent/openclaw \
+        "-target-pid=$target_pid" \
+        "-listen=0.0.0.0:$OPENVIKING_MTLS_PORT" \
+        -upstream=http://127.0.0.1:1933 >/dev/null
+
+    for ((attempt=1; attempt<=WAIT_ATTEMPTS; attempt++)); do
+        if docker logs "$OPENVIKING_BROKER_CONTAINER" 2>&1 | grep -Fq 'OpenViking mTLS listener is ready'; then
+            printf '%s\n' \
+                'OpenViking Broker Sidecar is ready.' \
+                "  launch_id: $launch_id" \
+                "  container_id: $container_id" \
+                "  host_pid: $target_pid" \
+                "  process_started_at: $target_started_at" \
+                "  runtime_image_config_digest: $runtime_image_config_digest" \
+                "  mTLS_port: $OPENVIKING_MTLS_PORT"
+            return 0
+        fi
+        if [[ "$(docker inspect "$OPENVIKING_BROKER_CONTAINER" --format '{{.State.Running}}')" != true ]]; then
+            docker logs "$OPENVIKING_BROKER_CONTAINER" >&2 || true
+            echo "OpenViking Broker Sidecar exited before identity became ready." >&2
+            exit 1
+        fi
+        sleep "$WAIT_INTERVAL"
+    done
+
+    docker logs "$OPENVIKING_BROKER_CONTAINER" >&2 || true
+    echo "Timed out waiting for OpenViking Broker Sidecar identity." >&2
+    exit 1
+}
+
 resolve_tc_client_cmd() {
     if command -v tc-oidc-verification-code >/dev/null 2>&1; then
         TC_CLIENT_CMD=("$(command -v tc-oidc-verification-code)")
@@ -275,8 +334,11 @@ fi
 
 [[ "$OPENVIKING_LAUNCH_ACTION" == all \
     || "$OPENVIKING_LAUNCH_ACTION" == build \
-    || "$OPENVIKING_LAUNCH_ACTION" == launch ]] \
-    || { echo 'OPENVIKING_LAUNCH_ACTION must be all, build, or launch.' >&2; exit 1; }
+    || "$OPENVIKING_LAUNCH_ACTION" == launch \
+    || "$OPENVIKING_LAUNCH_ACTION" == broker ]] \
+    || { echo 'OPENVIKING_LAUNCH_ACTION must be all, build, launch, or broker.' >&2; exit 1; }
+[[ "$OPENVIKING_START_BROKER" == 0 || "$OPENVIKING_START_BROKER" == 1 ]] \
+    || { echo 'OPENVIKING_START_BROKER must be 0 or 1.' >&2; exit 1; }
 
 if [[ -z "$OPENVIKING_BASE" ]]; then
     echo "OPENVIKING_BASE is required and must be a pinned official OpenViking image digest." >&2
@@ -286,6 +348,18 @@ fi
 if [[ "$OPENVIKING_BASE" != *@sha256:* ]]; then
     echo "OPENVIKING_BASE must use a pinned image digest (@sha256:<digest>)." >&2
     exit 1
+fi
+
+if [[ "$OPENVIKING_LAUNCH_ACTION" == broker ]]; then
+    validate_broker_runtime
+    docker image inspect "$OPENVIKING_BROKER_IMAGE" >/dev/null 2>&1 \
+        || { echo "Broker Sidecar image is missing: $OPENVIKING_BROKER_IMAGE" >&2; exit 1; }
+    container_id="$(docker inspect "$OPENVIKING_CONTAINER" --format '{{.Id}}')"
+    launch_id="$(docker inspect "$OPENVIKING_CONTAINER" --format '{{index .Config.Labels "io.trucon.launch-id"}}')"
+    [[ -n "$launch_id" ]] \
+        || { echo "OpenViking container is missing its TC-API launch ID: $OPENVIKING_CONTAINER" >&2; exit 1; }
+    start_broker_sidecar "$container_id" "$launch_id"
+    exit 0
 fi
 
 ensure_infra_stack
@@ -464,48 +538,19 @@ PY
 )"
 target_pid="$(docker inspect "$container_id" --format '{{.State.Pid}}')"
 target_started_at="$(docker inspect "$container_id" --format '{{.State.StartedAt}}')"
+runtime_image_config_digest="$(docker inspect "$container_id" --format '{{.Image}}')"
 [[ "$target_pid" =~ ^[1-9][0-9]*$ ]] \
     || { echo "Invalid OpenViking host PID: $target_pid" >&2; exit 1; }
 
-echo "[5/5] Starting Broker Sidecar for OpenViking PID ${target_pid}"
-docker rm -f "$OPENVIKING_BROKER_CONTAINER" >/dev/null 2>&1 || true
-docker run -d \
-    --name "$OPENVIKING_BROKER_CONTAINER" \
-    --network host \
-    --pid host \
-    --label argus.component=openviking-broker \
-    --volume "$OPENVIKING_WORKLOAD_API_DIR:/opt/spire/run/agent:ro" \
-    --volume "$OPENVIKING_BROKER_API_DIR:/opt/spire/run/broker:ro" \
-    "$OPENVIKING_BROKER_IMAGE" \
-    -workload-api=unix:///opt/spire/run/agent/agent.sock \
-    -broker-socket=/opt/spire/run/broker/broker.sock \
-    -broker-spiffe-id=spiffe://argus.local/infra/openviking-broker \
-    "-agent-spiffe-id=$OPENVIKING_AGENT_SPIFFE_ID" \
-    -target-spiffe-id=spiffe://argus.local/service/openviking-cmem \
-    -client-spiffe-id=spiffe://argus.local/agent/openclaw \
-    "-target-pid=$target_pid" \
-    "-listen=0.0.0.0:$OPENVIKING_MTLS_PORT" \
-    -upstream=http://127.0.0.1:1933 >/dev/null
+if [[ "$OPENVIKING_START_BROKER" == 0 ]]; then
+    printf '%s\n' \
+        'OpenViking TC-API launch completed; Broker Sidecar start is deferred until identity registration.' \
+        "  launch_id: $launch_id" \
+        "  container_id: $container_id" \
+        "  host_pid: $target_pid" \
+        "  process_started_at: $target_started_at" \
+        "  runtime_image_config_digest: $runtime_image_config_digest"
+    exit 0
+fi
 
-for ((attempt=1; attempt<=WAIT_ATTEMPTS; attempt++)); do
-    if docker logs "$OPENVIKING_BROKER_CONTAINER" 2>&1 | grep -Fq 'OpenViking mTLS listener is ready'; then
-        printf '%s\n' \
-            'OpenViking Broker Sidecar is ready.' \
-            "  launch_id: $launch_id" \
-            "  container_id: $container_id" \
-            "  host_pid: $target_pid" \
-            "  process_started_at: $target_started_at" \
-            "  mTLS_port: $OPENVIKING_MTLS_PORT"
-        exit 0
-    fi
-    if [[ "$(docker inspect "$OPENVIKING_BROKER_CONTAINER" --format '{{.State.Running}}')" != true ]]; then
-        docker logs "$OPENVIKING_BROKER_CONTAINER" >&2 || true
-        echo "OpenViking Broker Sidecar exited before identity became ready." >&2
-        exit 1
-    fi
-    sleep "$WAIT_INTERVAL"
-done
-
-docker logs "$OPENVIKING_BROKER_CONTAINER" >&2 || true
-echo "Timed out waiting for OpenViking Broker Sidecar identity." >&2
-exit 1
+start_broker_sidecar "$container_id" "$launch_id"

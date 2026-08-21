@@ -49,6 +49,8 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 - Broker Entry：绑定 OpenViking TDVM Agent Parent、Broker label/image/digest；
 - OpenViking target Entry：绑定同一 OpenViking Parent、OpenViking
   label/image/digest 和 `argus_tdx_workload` 可信 selectors；
+- target digest 在 TC-API 启动后从实际 runtime image 读取，不使用 source digest 或
+  人工 override；
 - target Entry 禁用 X.509-SVID prefetch；
 - 不保留相同 OpenViking SPIFFE ID 的弱 Entry。
 
@@ -57,6 +59,7 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 - 复用 OpenViking TDVM 既有 TC-API 和 Registry，不由该 Profile 重建；
 - launch-only 非交互启动必须显式提供 identity token 或 bearer token；
 - 从启动结果解析唯一 container ID 和实际宿主机 PID；
+- 在 Sidecar 启动前读取运行容器的 image config digest，并自动创建三个强 Entry；
 - OpenViking 只监听回环 HTTP 1933；
 - Sidecar 使用 `--pid host` 和 pidfd 引用该 PID；
 - Sidecar 挂载 Broker 自身 Workload API socket 和 Broker API socket；
@@ -83,8 +86,8 @@ Sidecar 链路合并到 `core/spire/runtime/dual-tdvm`。
 7. OpenClaw 到 Sidecar 的跨 TDVM mTLS 成功；
 8. 无证书、错误客户端 ID 和明文 1933 访问失败；
 9. OpenViking 退出后 Sidecar 退出且 1943 关闭；
-10. `/health=200` 是安全链路硬验收；`/ready` 只记录 Application Readiness，
-    本 profile 未部署 Ollama/bge-m3 时允许明确记录为 `503 / NOT READY`。
+10. `/health=200` 是安全链路硬验收；`/ready` 单独记录 Application Readiness；
+11. 显式启用 Ollama/bge-m3 应用就绪模式时，额外要求 `/ready=200`。
 
 ## 4. 验证顺序
 
@@ -116,9 +119,9 @@ Profile，验证完整 A-F 时序。
 - mTLS 正向和负向结果；
 - OpenViking/Sidecar 退出行为。
 
-当前允许使用 `DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST` 传入实测 runtime digest。
-后续工程项是让 Registration Entry 直接基于 Attestor 实际观察到的 runtime
-measurement，而不是未经 TC-API 转换的 source artifact measurement。
+启动编排在 TC-API 创建运行容器后读取实际 runtime image config digest，再自动创建
+Registration Entry 并启动 Sidecar。source、runtime、运行容器与 Entry digest 仍分别
+记录，但身份匹配只使用 Attestor 实际可观察的 runtime measurement。
 
 ## 5. 完成定义
 
@@ -129,6 +132,8 @@ measurement，而不是未经 TC-API 转换的 source artifact measurement。
 - ALLOW、DENY、进程退出和跨 TDVM mTLS 均在同一 Profile 通过；
 - 旧的 direct OpenViking SVID Entry 不存在；
 - 结果明确标记 Mock Evidence Provider + Mock Trustee。
+- 启用应用就绪模式时，Ollama 仅在 OpenViking 专用 Docker 网络内运行且
+  `/ready=200`。
 
 真实 Quote/QGS、TC-API/Rekor 证据和生产 Trustee 替换不属于本轮完成条件。
 
@@ -150,5 +155,5 @@ measurement，而不是未经 TC-API 转换的 source artifact measurement。
 - OpenViking Python SPIFFE SDK；
 - 每请求 Quote、正文哈希或 TLS exporter 绑定；
 - 新的回退 Profile；
-- 为满足本轮 `/ready` 观察项而部署 Ollama/bge-m3；
+- 除显式应用就绪模式使用的 Ollama/bge-m3 外，不新增其他模型服务；
 - 对已失陷 TDVM、Docker 管理员或 SPIRE 管理员的额外防护。

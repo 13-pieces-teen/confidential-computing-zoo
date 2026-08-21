@@ -30,6 +30,7 @@ OPENVIKING_PORT="${DUAL_OPENVIKING_PORT:-1943}"
 TRUSTEE_PORT="${DUAL_TDVM_TRUSTEE_PORT:-18443}"
 EXPECTED_DECISION="${DUAL_EXPECT_WORKLOAD_DECISION:-allow}"
 VERIFY_TARGET_EXIT="${DUAL_VERIFY_TARGET_EXIT:-1}"
+EXPECT_APPLICATION_READY="${DUAL_EXPECT_APPLICATION_READY:-${DUAL_OPENVIKING_APPLICATION_READY:-0}}"
 
 fail() {
     printf 'dual TDVM verification: FAIL: %s\n' "$1" >&2
@@ -45,6 +46,8 @@ done
     || fail 'OpenClaw and OpenViking share one Agent parent'
 [[ "$EXPECTED_DECISION" == allow || "$EXPECTED_DECISION" == deny ]] \
     || fail 'DUAL_EXPECT_WORKLOAD_DECISION must be allow or deny'
+[[ "$EXPECT_APPLICATION_READY" == 0 || "$EXPECT_APPLICATION_READY" == 1 ]] \
+    || fail 'DUAL_EXPECT_APPLICATION_READY must be 0 or 1'
 if [[ "$EXPECTED_DECISION" == allow ]]; then
     [[ -n "$OPENVIKING_HOST_ADDRESS" ]] \
         || fail 'DUAL_OPENVIKING_HOST_ADDRESS is required for ALLOW verification'
@@ -337,13 +340,14 @@ fi
 
 remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - \
-    "$OPENVIKING_ORIGIN" "$OPENCLAW_ID" "$OPENVIKING_ID" <<'NODE'
+    "$OPENVIKING_ORIGIN" "$OPENCLAW_ID" "$OPENVIKING_ID" "$EXPECT_APPLICATION_READY" <<'NODE'
 const fs = require("fs");
 const https = require("https");
 
 const origin = process.argv[2];
 const callerId = process.argv[3];
 const targetId = process.argv[4];
+const expectApplicationReady = process.argv[5] === "1";
 
 (async () => {
   const guardToken = fs.readFileSync("/run/secrets/argus_guard_api_token", "utf8").trim();
@@ -399,12 +403,13 @@ const targetId = process.argv[4];
     const readyStatus = await requestStatus("/ready");
     if (readyStatus === 200) {
       console.log("Application Readiness: READY - /ready HTTP 200");
-    } else if (readyStatus === 503) {
-      console.log("Application Readiness: NOT READY - /ready HTTP 503; this profile does not deploy Ollama/bge-m3");
     } else {
-      console.log(`Application Readiness: NOT READY - /ready HTTP ${readyStatus}`);
+      const message = `Application Readiness: NOT READY - /ready HTTP ${readyStatus}`;
+      if (expectApplicationReady) throw new Error(message);
+      console.log(message);
     }
   } catch (error) {
+    if (expectApplicationReady) throw error;
     console.log(`Application Readiness: NOT READY - /ready request failed: ${error.message}`);
   }
 })().catch((error) => {
@@ -524,6 +529,12 @@ if [[ "$VERIFY_TARGET_EXIT" == 1 ]]; then
     target_exit_result="OpenViking stopped; Sidecar exited through pidfd monitoring; port $OPENVIKING_PORT closed"
 fi
 
+if [[ "$EXPECT_APPLICATION_READY" == 1 ]]; then
+    application_readiness_result='Application /ready = 200 through SPIFFE mTLS (application gate enabled).'
+else
+    application_readiness_result='Application /ready was recorded separately and was not a security-chain hard gate.'
+fi
+
 printf '%s\n' \
     'Dual-TDVM ALLOW verification passed.' \
     "OpenClaw Agent parent: $OPENCLAW_PARENT_ID" \
@@ -542,6 +553,6 @@ printf '%s\n' \
     'No-client and wrong-expected-client mTLS checks failed as expected.' \
     'OpenClaw could not reach the OpenViking plaintext port 1933.' \
     'OpenClaw Guard ALLOW preceded successful SPIFFE mTLS /health = 200.' \
-    'Application /ready is recorded separately and is not a security-chain hard gate; this profile does not deploy Ollama/bge-m3.' \
+    "$application_readiness_result" \
     "Target exit check: $target_exit_result" \
     'Evidence Provider and Trustee are still mock-stage; this is not real Quote/QGS or Rekor acceptance.'

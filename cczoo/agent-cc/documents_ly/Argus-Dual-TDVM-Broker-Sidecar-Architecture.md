@@ -101,6 +101,10 @@ TDVM 共享 socket、私钥或 Agent Parent。
 OpenViking TDVM 内由 TC-API 启动未修改的 OpenViking Python 容器，并形成与本次启动
 关联的度量/审计记录。Launcher 取得实际 container ID 和 Agent 可见的宿主机 PID。
 
+TC-API 完成转换和启动后，部署编排读取运行容器实际使用的 image config digest，
+据此创建 OpenViking target 强 Entry。完成 runtime measurement 注册后才启动 Broker
+Sidecar，避免使用转换前的 source artifact digest。
+
 OpenViking 只在本 TDVM 回环地址提供 HTTP 服务，不挂载 SPIRE socket。
 
 ### D. Broker 取得自身身份
@@ -145,7 +149,7 @@ Guard 不是业务代理。OpenClaw 不直接访问 OpenViking 明文端口。
 |---|---|---|
 | OpenClaw | OpenClaw TDVM Agent | OpenClaw image、label 和 config digest |
 | Broker Sidecar | OpenViking TDVM Agent | Broker image、label 和 config digest |
-| OpenViking target | OpenViking TDVM Agent | OpenViking image/label/digest + `argus_tdx_workload` 可信 selectors |
+| OpenViking target | OpenViking TDVM Agent | OpenViking runtime image/label/config digest + `argus_tdx_workload` 可信 selectors |
 
 OpenViking target Entry 使用 `disableX509SVIDPrefetch`，让目标身份由 Broker 的
 PID-reference 请求触发。Entry 本身不会从 `verified=false` 动态变成
@@ -159,6 +163,8 @@ PID-reference 请求触发。Entry 本身不会从 `verified=false` 动态变成
 - Broker API 和 Workload API 都只存在于 OpenViking TDVM 本地；
 - OpenViking Python 不获得 SVID、私钥或 SPIRE socket；
 - Sidecar 的目标 SVID 私钥只保存在内存中。
+- 可选 Ollama/bge-m3 只作为 Application Readiness 依赖运行在 OpenViking 专用
+  Docker 网络内，不发布宿主机端口，也不参与 SPIFFE 身份链路。
 
 这里不新增 service mesh、额外 Gateway、每请求 Quote 或请求正文证明。
 
@@ -180,9 +186,9 @@ Broker stream 的每次响应按完整身份快照处理。目标身份消失后
   `core/spire/plugins/argus-tdx-workloadattestor` 和
   `core/spire/runtime/asymmetric`：Broker PID-reference 链路。
 
-本地已经完成代码、Go 测试、配置校验和脚本静态检查。尚未完成的是在远程两台 TDVM
-上执行 M3 ALLOW/DENY、双 TDVM ALLOW/DENY、Guard 与跨 TDVM mTLS 验收；在远程
-报告填入实测证据前，不能声明当前组合方案已经远程跑通。
+`ea15713` 已在远程完成 M3 与双 TDVM ALLOW/DENY、Guard、跨 TDVM mTLS 和 PID
+生命周期验收。其后的 runtime digest 自动注册与可选 Application Readiness 改动仍需
+在远程 TDVM 重新验证，不能沿用旧报告作为新改动的运行证据。
 
 ## 9. 完成标准
 
@@ -196,6 +202,7 @@ Broker stream 的每次响应按完整身份快照处理。目标身份消失后
    并保持无身份等待状态；
 6. OpenClaw 经本地 Guard ALLOW 后完成跨 TDVM mTLS，`/health=200`；`/ready`
    仅记录 Application Readiness，不作为本轮安全链路硬验收；
+   显式启用 Ollama/bge-m3 模式时，应用验收额外要求 `/ready=200`；
 7. 无客户端证书、错误 SPIFFE ID 和直接访问 1933 均失败；
 8. OpenViking 退出后 Sidecar 因 pidfd 退出；
 9. 报告明确标记 Mock Evidence Provider/Trustee，不升级为真实 TDX 结论。

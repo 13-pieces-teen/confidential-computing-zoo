@@ -11,7 +11,6 @@ OPENCLAW_ID="spiffe://argus.local/agent/openclaw"
 OPENVIKING_ID="spiffe://argus.local/service/openviking-cmem"
 OPENVIKING_BROKER_ID="spiffe://argus.local/infra/openviking-broker"
 OPENCLAW_IMAGE="${DUAL_OPENCLAW_WORKLOAD_IMAGE:-argus-dual-openclaw:local}"
-OPENVIKING_SOURCE_IMAGE="${DUAL_OPENVIKING_SOURCE_IMAGE:-localhost:5000/openviking:v0.4.8}"
 OPENVIKING_RUNTIME_IMAGE_ID="${DUAL_OPENVIKING_RUNTIME_IMAGE_ID:-openviking-cmem:latest}"
 OPENVIKING_BROKER_IMAGE="${DUAL_OPENVIKING_BROKER_IMAGE:-argus-openviking-broker-sidecar:local}"
 OPENCLAW_PARENT_ID="${DUAL_OPENCLAW_PARENT_ID:-}"
@@ -113,14 +112,14 @@ if missing:
 openclaw_digest="${DUAL_OPENCLAW_IMAGE_CONFIG_DIGEST:-$(
     remote_image_digest openclaw "$OPENCLAW_SSH_TARGET" "$OPENCLAW_IMAGE"
 )}"
-openviking_digest="${DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST:-$(
-    remote_image_digest openviking "$OPENVIKING_SSH_TARGET" "$OPENVIKING_SOURCE_IMAGE"
-)}"
+openviking_digest="$(
+    remote_image_digest openviking "$OPENVIKING_SSH_TARGET" "$OPENVIKING_RUNTIME_IMAGE_ID"
+)"
 openviking_broker_digest="${DUAL_OPENVIKING_BROKER_IMAGE_CONFIG_DIGEST:-$(
     remote_image_digest openviking "$OPENVIKING_SSH_TARGET" "$OPENVIKING_BROKER_IMAGE"
 )}"
 require_digest DUAL_OPENCLAW_IMAGE_CONFIG_DIGEST "$openclaw_digest"
-require_digest DUAL_OPENVIKING_IMAGE_CONFIG_DIGEST "$openviking_digest"
+require_digest DUAL_OPENVIKING_RUNTIME_IMAGE_ID "$openviking_digest"
 require_digest DUAL_OPENVIKING_BROKER_IMAGE_CONFIG_DIGEST "$openviking_broker_digest"
 
 spire_server entry delete -entryID dual-openclaw-workload >/dev/null 2>&1 || true
@@ -163,7 +162,7 @@ printf '%s\n' \
     "OpenViking Agent parent: $OPENVIKING_PARENT_ID" \
     "OpenClaw image config digest: $openclaw_digest" \
     "OpenViking runtime image id: $OPENVIKING_RUNTIME_IMAGE_ID" \
-    "OpenViking image config digest: $openviking_digest" \
+    "OpenViking observed runtime image config digest: $openviking_digest" \
     "OpenViking Broker image config digest: $openviking_broker_digest"
 spire_server entry show -entryID dual-openclaw-workload
 spire_server entry show -entryID dual-openviking-broker
