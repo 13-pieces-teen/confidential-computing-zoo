@@ -586,6 +586,8 @@ $docker run -d \
     -e GUARD_MODE=spiffe_identity \
     -e GUARD_SPIFFE_POLICY_FILE=/opt/argus/conf/guard-policy.yaml \
     -e ARGUS_API_TOKEN_FILE=/run/secrets/argus_guard_api_token \
+    -e RUST_LOG=info \
+    -e NO_COLOR=1 \
     -v "$remote_root/conf/guard-policy.yaml:/opt/argus/conf/guard-policy.yaml:ro" \
     -v "$remote_root/secrets/guard-api-token:/run/secrets/argus_guard_api_token:ro" \
     "$guard_image" >/dev/null
