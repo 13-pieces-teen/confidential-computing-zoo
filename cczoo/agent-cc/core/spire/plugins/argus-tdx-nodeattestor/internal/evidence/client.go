@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// Client talks only to the guest-local Evidence Provider. Remote evidence
+// verification is deliberately handled by the Server-side Trustee client.
 type Client struct {
 	httpClient *http.Client
 	requestURL string
@@ -34,6 +36,8 @@ func NewClient(endpoint *url.URL, timeout time.Duration, maxBytes int64) (*Clien
 		transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 		}
+		// net/http still needs an HTTP URL; DialContext redirects the synthetic
+		// host to the configured Unix socket.
 		requestURL = "http://unix/ra/v1/evidence"
 	}
 	return &Client{
@@ -60,6 +64,8 @@ func (client *Client) GetEvidence(ctx context.Context, request []byte) ([]byte, 
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return nil, fmt.Errorf("evidence provider returned HTTP %d", response.StatusCode)
 	}
+	// Read one byte past the limit so an exactly-full response is distinguishable
+	// from a truncated oversized response.
 	contents, err := io.ReadAll(io.LimitReader(response.Body, client.maxBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read evidence response: %w", err)

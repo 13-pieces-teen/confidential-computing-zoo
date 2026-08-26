@@ -12,6 +12,8 @@ import (
 
 var capabilityPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
 
+// ValidateAgentHello enforces the bounded, versioned first handshake message
+// before the Server derives identity from its proof key.
 func ValidateAgentHello(hello *nodeattestorv1.AgentHello) error {
 	if hello == nil {
 		return fmt.Errorf("AgentHello is required")
@@ -47,6 +49,8 @@ func ValidateAgentHello(hello *nodeattestorv1.AgentHello) error {
 	return nil
 }
 
+// ValidateServerChallenge verifies both the challenge envelope and the nonce
+// copied into its canonical EvidenceRequest.
 func ValidateServerChallenge(challenge *nodeattestorv1.ServerChallenge) error {
 	return validateServerChallengeAt(challenge, time.Now().Unix())
 }
@@ -67,6 +71,8 @@ func validateServerChallengeAt(challenge *nodeattestorv1.ServerChallenge, now in
 	if challenge.IssuedAtUnix <= 0 || challenge.ExpiresAtUnix <= challenge.IssuedAtUnix {
 		return fmt.Errorf("challenge validity window is invalid")
 	}
+	// A small symmetric tolerance accommodates known guest/host clock skew while
+	// still rejecting challenges that are not current.
 	issuedTooFarAhead := now < challenge.IssuedAtUnix &&
 		challenge.IssuedAtUnix-now > ChallengeClockSkewSeconds
 	expiredTooLongAgo := now >= challenge.ExpiresAtUnix &&
@@ -90,6 +96,8 @@ func validateServerChallengeAt(challenge *nodeattestorv1.ServerChallenge, now in
 	return nil
 }
 
+// ValidateEvidenceResponse checks the session binding and ensures evidence is
+// a bounded, canonicalizable JSON object before signature verification.
 func ValidateEvidenceResponse(response *nodeattestorv1.EvidenceResponse, expectedSessionID []byte) error {
 	if response == nil {
 		return fmt.Errorf("EvidenceResponse is required")

@@ -4,6 +4,9 @@ package argus.spire.nodeattestor.v1;
 
 option go_package = "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor/v1;nodeattestorv1";
 
+// AgentHello is the first payload carried over SPIRE's NodeAttestor stream.
+// The persistent public key digest determines the Agent SPIFFE ID; agent_nonce
+// adds Agent-side freshness but is not used as a self-asserted identity.
 message AgentHello {
   uint32 protocol_version = 1;
   bytes attestation_public_key = 2;
@@ -12,6 +15,8 @@ message AgentHello {
   repeated string capabilities = 5;
 }
 
+// ServerChallenge supplies Server-generated freshness and the canonical,
+// policy-bound request that the Evidence Provider must bind into REPORTDATA.
 message ServerChallenge {
   uint32 protocol_version = 1;
   bytes session_id = 2;
@@ -22,6 +27,8 @@ message ServerChallenge {
   bytes evidence_request_json = 7;
 }
 
+// EvidenceResponse returns opaque evidence and proves possession of the
+// attestation key by signing the hello/challenge/evidence transcript.
 message EvidenceResponse {
   uint32 protocol_version = 1;
   bytes session_id = 2;

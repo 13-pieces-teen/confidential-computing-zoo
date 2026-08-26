@@ -1,3 +1,4 @@
+// Command server serves the Server-side Argus TDX NodeAttestor plugin to SPIRE.
 package main
 
 import (

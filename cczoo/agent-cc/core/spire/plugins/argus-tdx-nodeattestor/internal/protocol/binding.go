@@ -10,6 +10,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// BindingReportData derives the 64-byte TDX REPORTDATA value from the exact
+// EvidenceRequest and BindingClaims. SHA-384 fills the first 48 bytes; the TDX
+// field's remaining 16 bytes intentionally stay zero.
 func BindingReportData(evidenceRequestJSON, bindingClaimsJSON []byte) ([64]byte, error) {
 	var reportData [64]byte
 	canonicalRequest, _, err := CanonicalEvidenceRequest(evidenceRequestJSON)
@@ -29,6 +32,8 @@ func BindingReportData(evidenceRequestJSON, bindingClaimsJSON []byte) ([64]byte,
 	return reportData, nil
 }
 
+// EvidenceRequestDigest names the canonical request used by both the Server
+// and Trustee, preventing semantically equivalent JSON encodings from drifting.
 func EvidenceRequestDigest(evidenceRequestJSON []byte) (string, error) {
 	canonical, _, err := CanonicalEvidenceRequest(evidenceRequestJSON)
 	if err != nil {
@@ -38,6 +43,7 @@ func EvidenceRequestDigest(evidenceRequestJSON []byte) (string, error) {
 	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
+// KeyID is the stable public identifier for the Agent's Ed25519 proof key.
 func KeyID(attestationPublicKey []byte) (string, error) {
 	if len(attestationPublicKey) != PublicKeySize {
 		return "", fmt.Errorf("attestation public key must be %d bytes", PublicKeySize)
@@ -46,6 +52,8 @@ func KeyID(attestationPublicKey []byte) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// AgentSPIFFEID derives node identity from the proof key rather than a
+// self-reported instance name.
 func AgentSPIFFEID(trustDomain string, attestationPublicKey []byte) (string, error) {
 	if trustDomain == "" {
 		return "", fmt.Errorf("trust domain is required")
@@ -57,6 +65,8 @@ func AgentSPIFFEID(trustDomain string, attestationPublicKey []byte) (string, err
 	return fmt.Sprintf("spiffe://%s/spire/agent/argus_tdx/%s", trustDomain, keyID), nil
 }
 
+// TranscriptHash binds the complete hello, challenge, and evidence bytes. The
+// Agent signs this hash so none of them can be substituted independently.
 func TranscriptHash(hello *nodeattestorv1.AgentHello, challenge *nodeattestorv1.ServerChallenge, evidenceJSON []byte) ([32]byte, error) {
 	var result [32]byte
 	if err := ValidateAgentHello(hello); err != nil {

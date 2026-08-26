@@ -1,3 +1,4 @@
+# The center hosts shared trust services; each TDVM runs its own Agent and brokers.
 name: argus-spire-dual-tdvm-center
 
 services:
@@ -6,6 +7,7 @@ services:
     container_name: argus-dual-mock-trustee
     hostname: trustee.argus.local
     command:
+      # These fixed claims make the software-only attestation scenarios reproducible.
       - -listen=0.0.0.0:18443
       - -tls-cert=/opt/argus/certs/trustee-server.pem
       - -tls-key=/opt/argus/certs/trustee-server-key.pem
@@ -38,6 +40,7 @@ services:
       - mock-trustee
     command: ["-config", "/opt/spire/conf/server.conf"]
     volumes:
+      # Keep identity state across center restarts; guest Agent state remains separate.
       - "${DUAL_RUNTIME_DIR:-./runtime}/conf/server.conf:/opt/spire/conf/server.conf:ro"
       - "${DUAL_RUNTIME_DIR:-./runtime}/conf/policy.yaml:/opt/spire/conf/policy.yaml:ro"
       - "${DUAL_RUNTIME_DIR:-./runtime}/certs/upstream-ca.pem:/opt/spire/conf/certs/upstream-ca.pem:ro"

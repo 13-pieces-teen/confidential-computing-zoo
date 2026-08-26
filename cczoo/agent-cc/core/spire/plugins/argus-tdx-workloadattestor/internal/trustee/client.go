@@ -14,12 +14,18 @@ import (
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 )
 
+// Client submits opaque evidence to the remote Trustee and decodes its
+// appraisal. The workload attestor remains responsible for binding the verdict
+// to the current request before exposing selectors to SPIRE.
 type Client struct {
 	httpClient       *http.Client
 	endpoint         string
 	maxResponseBytes int64
 }
 
+// NewClient requires mTLS and adds an exact Trustee SPIFFE-ID check to normal
+// certificate-chain and DNS-name verification. This authenticates the Trustee
+// connection; the Trustee's verdict separately appraises the target workload.
 func NewClient(endpoint *url.URL, tlsConfig *tls.Config, expectedSPIFFEID string, timeout time.Duration, maxResponseBytes int64) (*Client, error) {
 	if endpoint == nil || endpoint.Scheme != "https" {
 		return nil, fmt.Errorf("Trustee endpoint must use HTTPS")
@@ -42,6 +48,9 @@ func NewClient(endpoint *url.URL, tlsConfig *tls.Config, expectedSPIFFEID string
 	}, nil
 }
 
+// Verify calls the Trustee and strictly decodes its response. It does not grant
+// trust: the workload attestor still checks request binding and requires a
+// valid allow verdict.
 func (client *Client) Verify(ctx context.Context, input protocol.VerifyRequest) (protocol.Verdict, error) {
 	body, err := json.Marshal(input)
 	if err != nil {
@@ -62,6 +71,8 @@ func (client *Client) Verify(ctx context.Context, input protocol.VerifyRequest) 
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return protocol.Verdict{}, fmt.Errorf("Trustee returned HTTP %d", response.StatusCode)
 	}
+	// Read one byte past the limit to distinguish a complete response from a
+	// truncated oversized one.
 	contents, err := io.ReadAll(io.LimitReader(response.Body, client.maxResponseBytes+1))
 	if err != nil {
 		return protocol.Verdict{}, fmt.Errorf("read Trustee response: %w", err)
@@ -78,6 +89,8 @@ func (client *Client) Verify(ctx context.Context, input protocol.VerifyRequest) 
 	return verdict, nil
 }
 
+// verifyTrusteeIdentity accepts only an exact URI SAN on the leaf certificate;
+// another identity in the same trust domain is not an interchangeable Trustee.
 func verifyTrusteeIdentity(state tls.ConnectionState, expectedSPIFFEID string) error {
 	if len(state.PeerCertificates) == 0 {
 		return fmt.Errorf("Trustee presented no certificate")

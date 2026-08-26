@@ -29,6 +29,8 @@ require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"
 }
 
+# Verify both PID and QEMU command line so a stale pidfile cannot target an
+# unrelated process.
 running_pid() {
     local pid command_line
     if [[ -s "$PID_FILE" ]]; then
@@ -62,6 +64,7 @@ prepare() {
     require_command guestfish
     require_images
     [[ -r "$TDVM_SSH_PUBLIC_KEY" ]] || fail "SSH public key is unreadable: $TDVM_SSH_PUBLIC_KEY"
+    # Keep the base image immutable; inject access credentials into a per-TDVM overlay.
     mkdir -p "$(dirname "$TDVM_OVERLAY_IMAGE")"
     if [[ ! -e "$TDVM_OVERLAY_IMAGE" ]]; then
         qemu-img create -f qcow2 -F qcow2 -b "$TDVM_BASE_IMAGE" "$TDVM_OVERLAY_IMAGE"
@@ -108,6 +111,8 @@ start() {
         fi
     done
 
+    # Loopback forwards serve the operator; the Docker bridge forward lets the
+    # center-side containers reach the guest Broker's mTLS listener.
     qemu-system-x86_64 \
         -name "$TDVM_NAME" \
         -enable-kvm -cpu host -smp "$TDVM_CPUS" -m "$TDVM_MEMORY" \
@@ -147,6 +152,7 @@ stop() {
         printf 'TD VM already stopped\n'
         return
     fi
+    # Use graceful QEMU shutdown only; failure to stop remains visible to the caller.
     kill "$pid"
     for _ in $(seq 1 30); do
         if ! kill -0 "$pid" 2>/dev/null; then

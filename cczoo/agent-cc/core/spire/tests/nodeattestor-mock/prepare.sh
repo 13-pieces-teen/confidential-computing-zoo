@@ -9,6 +9,7 @@ RUNTIME_DIR="$SCRIPT_DIR/runtime"
 GO_CACHE_DIR="${ARGUS_GO_CACHE_DIR:-/tmp/argus-go-cache}"
 GO_PROXY="${ARGUS_GO_PROXY:-https://proxy.golang.org,direct}"
 
+# Keep generated plugins, credentials, and SPIRE state under one test runtime.
 mkdir -p "$RUNTIME_DIR"/{plugins,conf,certs,server-data,server-run,agent-data/argus-tdx,agent-run,broker-run}
 mkdir -p "$GO_CACHE_DIR"
 chmod 0700 "$RUNTIME_DIR/certs" "$RUNTIME_DIR/server-data" "$RUNTIME_DIR/agent-data" "$RUNTIME_DIR/agent-data/argus-tdx"
@@ -20,6 +21,7 @@ chown -R 1000:1000 \
     "$RUNTIME_DIR/broker-run"
 chmod 2770 "$RUNTIME_DIR/broker-run"
 
+# Populate a shared module cache first, then build the external plugins offline.
 docker run --rm \
     -e "GOPROXY=$GO_PROXY" -e "GOSUMDB=${ARGUS_GOSUMDB:-sum.golang.org}" -e GOMODCACHE=/gomodcache -e GOFLAGS=-mod=readonly \
     -v "$MODULE_DIR:/workspace:ro" -v "$GO_CACHE_DIR:/gomodcache" \
@@ -47,6 +49,8 @@ docker run --rm \
     go build -mod=readonly -trimpath -o /out/argus-tdx-workloadattestor ./cmd/argus-tdx-workloadattestor
 chmod 0755 "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor"
 
+# Rotate the complete mock PKI when any key is missing or any certificate is
+# near expiry, avoiding a partially mismatched Trustee mTLS chain.
 regenerate_certs=0
 for key in upstream-ca-key.pem trustee-ca-key.pem trustee-server-key.pem trustee-client-key.pem; do
     if [[ ! -s "$RUNTIME_DIR/certs/$key" ]]; then
@@ -118,6 +122,7 @@ chmod 0644 "$RUNTIME_DIR/certs"/*.pem
 chmod 0600 "$RUNTIME_DIR/certs"/*-key.pem
 chown -R 1000:1000 "$RUNTIME_DIR/certs"
 
+# SPIRE checks these rendered hashes before launching each external plugin.
 server_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-server" | awk '{print $1}')"
 agent_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" | awk '{print $1}')"
 workload_attestor_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor" | awk '{print $1}')"
@@ -128,6 +133,7 @@ sed \
     "$SCRIPT_DIR/agent.conf.tmpl" > "$RUNTIME_DIR/conf/agent.conf"
 cp "$SCRIPT_DIR/policy.yaml" "$RUNTIME_DIR/conf/policy.yaml"
 
+# Build fixtures for positive identity, selector mismatch, and Broker PID tests.
 docker build -q -f "$SCRIPT_DIR/Dockerfile.fake" -t argus-spire-m3-fake:local "$RUNTIME_DIR" >/dev/null
 docker build -q -f "$SCRIPT_DIR/Dockerfile.negative-workload" -t argus-spire-m3-negative-workload:local "$SCRIPT_DIR" >/dev/null
 docker build -q -f "$SCRIPT_DIR/Dockerfile.broker-target" -t argus-spire-m3-broker-target:local "$SCRIPT_DIR" >/dev/null

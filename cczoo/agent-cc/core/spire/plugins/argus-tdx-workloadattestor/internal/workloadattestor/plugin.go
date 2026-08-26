@@ -26,14 +26,22 @@ import (
 
 const workloadPIDReferenceTypeURL = "type.googleapis.com/spiffe.broker.WorkloadPIDReference"
 
+// EvidenceCollector obtains evidence for a target PID without deciding whether
+// that workload is trusted.
 type EvidenceCollector interface {
 	Collect(context.Context, protocol.EvidenceRequest) (json.RawMessage, error)
 }
 
+// TrusteeVerifier appraises evidence and returns an allow/deny verdict. It does
+// not issue an SVID or choose the workload's SPIFFE ID.
 type TrusteeVerifier interface {
 	Verify(context.Context, protocol.VerifyRequest) (protocol.Verdict, error)
 }
 
+// Plugin implements SPIRE Agent workload attestation and configuration. It
+// orchestrates evidence collection and remote appraisal, then returns trusted
+// selectors for SPIRE registration-entry matching; SPIRE remains the SVID
+// issuer.
 type Plugin struct {
 	workloadattestorv1.UnimplementedWorkloadAttestorServer
 	configv1.UnimplementedConfigServer
@@ -44,17 +52,27 @@ type Plugin struct {
 	nonce     func() (string, error)
 }
 
+// New creates a plugin with optional injected clients. SPIRE supplies the real
+// clients through Configure; injection keeps protocol tests independent of the
+// network.
 func New(evidence EvidenceCollector, trustee TrusteeVerifier) *Plugin {
 	return &Plugin{evidence: evidence, trustee: trustee, nonce: newNonce}
 }
 
-// Attest deliberately returns no selectors. The trusted selectors are only
-// available through the authenticated SPIFFE Broker reference path.
+// Attest deliberately returns no selectors for the ordinary PID-only Workload
+// API path. Remote-attestation selectors are available only through the typed
+// SPIFFE Broker reference handled by AttestReference.
 func (plugin *Plugin) Attest(context.Context, *workloadattestorv1.AttestRequest) (*workloadattestorv1.AttestResponse, error) {
 	return &workloadattestorv1.AttestResponse{}, nil
 }
 
+// AttestReference attests the PID named by a Broker reference. Every failure is
+// fail-closed: only an allow verdict bound to the same protocol, nonce, and PID
+// can produce selectors. Those selectors are claims for SPIRE to match, not an
+// SVID issued by this plugin.
 func (plugin *Plugin) AttestReference(ctx context.Context, request *workloadattestorv1.AttestReferenceRequest) (*workloadattestorv1.AttestReferenceResponse, error) {
+	// Snapshot both clients under one lock so a concurrent Configure call cannot
+	// mix Evidence Provider and Trustee instances from different configurations.
 	evidenceClient, trusteeClient, err := plugin.clients()
 	if err != nil {
 		return nil, err
@@ -70,6 +88,9 @@ func (plugin *Plugin) AttestReference(ctx context.Context, request *workloadatte
 	if pidReference.Pid <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "workload PID must be positive")
 	}
+	// A numeric PID is only a lookup key and can be reused. If process-incarnation
+	// binding is required, the Evidence Provider and Trustee must cover stable
+	// process facts in the evidence; the checks below bind only the echoed PID.
 	nonce, err := plugin.nonce()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "generate attestation nonce: %v", err)
@@ -92,6 +113,8 @@ func (plugin *Plugin) AttestReference(ctx context.Context, request *workloadatte
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable, "verify workload evidence: %v", err)
 	}
+	// Reject replayed, cross-PID, or cross-version verdicts even if they say
+	// "allow".
 	if verdict.ProtocolVersion != protocol.Version || verdict.Nonce != nonce || verdict.PID != pidReference.Pid {
 		return nil, status.Error(codes.Unavailable, "Trustee verdict is not bound to the workload request")
 	}
@@ -101,6 +124,8 @@ func (plugin *Plugin) AttestReference(ctx context.Context, request *workloadatte
 	if verdict.StableErrorCode != "OK" || !validSelectorComponent(verdict.WorkloadID) || !validSelectorComponent(verdict.PolicyID) {
 		return nil, status.Error(codes.Unavailable, "Trustee returned an invalid allow verdict")
 	}
+	// SPIRE maps these selector values through registration entries and retains
+	// authority over the resulting SPIFFE ID and SVID lifecycle.
 	return &workloadattestorv1.AttestReferenceResponse{SelectorValues: []string{
 		"verified:true",
 		"workload_id:" + verdict.WorkloadID,
@@ -108,6 +133,8 @@ func (plugin *Plugin) AttestReference(ctx context.Context, request *workloadatte
 	}}, nil
 }
 
+// Validate checks configuration syntax and security boundaries without loading
+// certificate files or changing the active clients.
 func (plugin *Plugin) Validate(_ context.Context, request *configv1.ValidateRequest) (*configv1.ValidateResponse, error) {
 	if request == nil {
 		return &configv1.ValidateResponse{Valid: false, Notes: []string{"request is required"}}, nil
@@ -116,6 +143,8 @@ func (plugin *Plugin) Validate(_ context.Context, request *configv1.ValidateRequ
 	return &configv1.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
 }
 
+// Configure loads the Trustee mTLS material, builds both boundary clients, and
+// swaps them into service as one consistent pair.
 func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -153,6 +182,8 @@ func (plugin *Plugin) clients() (EvidenceCollector, TrusteeVerifier, error) {
 }
 
 func loadTrusteeTLS(config *Config) (*tls.Config, error) {
+	// These credentials authenticate the plugin-to-Trustee channel. They are not
+	// evidence that the referenced workload itself is trusted.
 	certificate, err := tls.LoadX509KeyPair(config.TrusteeClientCertPath, config.TrusteeClientKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("load client certificate: %w", err)
@@ -174,6 +205,8 @@ func loadTrusteeTLS(config *Config) (*tls.Config, error) {
 }
 
 func newNonce() (string, error) {
+	// A fresh 256-bit nonce lets the plugin correlate evidence and verdict with
+	// exactly one attestation attempt.
 	value := make([]byte, 32)
 	if _, err := rand.Read(value); err != nil {
 		return "", fmt.Errorf("read random bytes: %w", err)
@@ -182,5 +215,7 @@ func newNonce() (string, error) {
 }
 
 func validSelectorComponent(value string) bool {
+	// Colons and whitespace would change SPIRE's selector type/value grammar or
+	// make the emitted claim ambiguous.
 	return value != "" && !strings.ContainsAny(value, ":\r\n\t ")
 }

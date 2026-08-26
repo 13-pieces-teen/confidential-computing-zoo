@@ -1,3 +1,5 @@
+// Command fake-services runs combined mock Evidence Provider and Trustee APIs
+// for integration tests. It does not perform hardware TDX attestation.
 package main
 
 import (
@@ -86,6 +88,8 @@ func run() error {
 	defer trusteeTCPListener.Close()
 	trusteeListener := tls.NewListener(trusteeTCPListener, tlsConfig)
 
+	// The Evidence Provider is guest-local HTTP, while the mock Trustee models
+	// the remote boundary with a client-authenticated TLS listener.
 	evidenceServer := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	trusteeServer := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	errorChannel := make(chan error, 2)

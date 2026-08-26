@@ -32,6 +32,9 @@ type bindingStore struct {
 	directory string
 }
 
+// newBindingStore opens the persistent first-seen binding database. It rejects
+// later attempts to associate one proof key with different verified instance or
+// launch claims; it is not a substitute for rollback-protected storage.
 func newBindingStore(directory string) (*bindingStore, error) {
 	if !filepath.IsAbs(directory) {
 		return nil, fmt.Errorf("binding state directory must be absolute")
@@ -52,6 +55,8 @@ func newBindingStore(directory string) (*bindingStore, error) {
 	return &bindingStore{directory: filepath.Clean(directory)}, nil
 }
 
+// Bind records keyID -> instance/launch exactly once, or confirms that an
+// existing record is identical.
 func (store *bindingStore) Bind(keyID string, binding instanceBinding) error {
 	if err := validateBinding(keyID, binding); err != nil {
 		return err
@@ -96,6 +101,8 @@ func (store *bindingStore) Bind(keyID string, binding instanceBinding) error {
 		return fmt.Errorf("close binding record: %w", err)
 	}
 
+	// Hard-link publication is create-only: concurrent writers cannot overwrite
+	// the first durable binding.
 	if err := os.Link(temporaryPath, target); err != nil {
 		if !errors.Is(err, fs.ErrExist) {
 			return fmt.Errorf("publish binding record: %w", err)
@@ -115,6 +122,8 @@ func (store *bindingStore) Bind(keyID string, binding instanceBinding) error {
 	return nil
 }
 
+// readBindingRecord treats corruption, unexpected fields, and weak permissions
+// as admission failures instead of falling back to an unbound key.
 func readBindingRecord(path string) (instanceBinding, bool, error) {
 	file, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -196,6 +205,8 @@ func syncDirectory(path string) error {
 		return err
 	}
 	defer directory.Close()
+	// Windows does not support directory fsync with the same semantics; target
+	// Linux deployments require it for durable publication.
 	if err := directory.Sync(); err != nil && runtime.GOOS != "windows" {
 		return err
 	}

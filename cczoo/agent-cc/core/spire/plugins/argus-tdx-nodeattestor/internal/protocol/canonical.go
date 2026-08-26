@@ -11,6 +11,8 @@ import (
 	"github.com/gowebpki/jcs"
 )
 
+// canonicalizeJSON applies the restricted JSON profile used in security
+// digests. The preflight rejects ambiguous inputs before RFC 8785/JCS encoding.
 func canonicalizeJSON(input []byte) ([]byte, error) {
 	if !utf8.Valid(input) {
 		return nil, fmt.Errorf("JSON is not valid UTF-8")
@@ -25,6 +27,8 @@ func canonicalizeJSON(input []byte) ([]byte, error) {
 	return canonical, nil
 }
 
+// inspectJSON rejects duplicate keys, trailing values, and floating-point
+// numbers so different parsers cannot bind different meanings to the same text.
 func inspectJSON(input []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(input))
 	decoder.UseNumber()

@@ -10,6 +10,7 @@ fail() {
     exit 1
 }
 
+# A usable host needs KVM/TDVF to launch TDVMs and QGS to service Quote requests.
 [[ -c /dev/kvm ]] || fail "/dev/kvm is not a character device"
 [[ -r /sys/module/kvm_intel/parameters/tdx ]] || fail "kvm_intel does not expose the TDX enablement parameter"
 [[ "$(cat /sys/module/kvm_intel/parameters/tdx)" == "Y" ]] || fail "KVM TDX support is not enabled"

@@ -86,6 +86,7 @@ OPENVIKING_SSH_TARGET="${DUAL_OPENVIKING_TDVM_SSH_TARGET:-}"
 [[ -n "$OPENVIKING_SSH_TARGET" ]] \
     || fail 'DUAL_OPENVIKING_TDVM_SSH_TARGET is required'
 
+# Bind registration to two distinct, currently attested TDVM Agents.
 spire_server agent list -output json | python3 -c '
 import json
 import sys
@@ -111,6 +112,8 @@ if missing:
     raise SystemExit("configured parent IDs are not live argus_tdx Agents: {}".format(", ".join(sorted(missing))))
 ' "$OPENCLAW_PARENT_ID" "$OPENVIKING_PARENT_ID"
 
+# Observe digests in the TDVMs that will run the images; local tags are not
+# sufficient evidence for workload registration.
 openclaw_digest="${DUAL_OPENCLAW_IMAGE_CONFIG_DIGEST:-$(
     remote_image_digest openclaw "$OPENCLAW_SSH_TARGET" "$OPENCLAW_IMAGE"
 )}"
@@ -128,6 +131,7 @@ require_digest DUAL_OPENCLAW_BROKER_IMAGE_CONFIG_DIGEST "$openclaw_broker_digest
 require_digest DUAL_OPENVIKING_RUNTIME_IMAGE_ID "$openviking_digest"
 require_digest DUAL_OPENVIKING_BROKER_IMAGE_CONFIG_DIGEST "$openviking_broker_digest"
 
+# OpenClaw and its Broker remain children of the OpenClaw TDVM Agent.
 spire_server entry delete -entryID dual-openclaw-workload >/dev/null 2>&1 || true
 spire_server entry create \
     -entryID dual-openclaw-workload \
@@ -149,6 +153,8 @@ spire_server entry create \
     -selector docker:image_config_digest:"$openclaw_broker_digest" \
     -x509SVIDTTL 600 >/dev/null
 
+# The OpenViking target combines Docker provenance with verified workload
+# claims; its Broker receives a separate infrastructure identity.
 spire_server entry delete -entryID dual-openviking-workload >/dev/null 2>&1 || true
 spire_server entry delete -entryID dual-openviking-broker >/dev/null 2>&1 || true
 spire_server entry create \

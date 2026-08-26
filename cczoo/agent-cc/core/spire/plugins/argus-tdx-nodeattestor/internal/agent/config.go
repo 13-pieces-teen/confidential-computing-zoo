@@ -14,6 +14,8 @@ import (
 
 const defaultEvidencePath = "/ra/v1/evidence"
 
+// Config contains the Agent-side trust boundary: the SPIRE trust domain,
+// local Evidence Provider endpoint, and persistent attestation key location.
 type Config struct {
 	TrustDomain        string
 	EvidenceEndpoint   *url.URL
@@ -81,6 +83,8 @@ func parseConfig(core *configv1.CoreConfiguration, input string) (*Config, []str
 	}, nil
 }
 
+// validateEndpoint keeps evidence collection on the guest-local channel. The
+// remote, mutually authenticated verification hop belongs to the Server.
 func validateEndpoint(endpoint *url.URL) error {
 	switch endpoint.Scheme {
 	case "unix":

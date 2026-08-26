@@ -1,3 +1,5 @@
+// Command mock-evidence-provider runs only the synthetic guest-side evidence
+// API used by integration tests; it does not read a TDX quote device.
 package main
 
 import (

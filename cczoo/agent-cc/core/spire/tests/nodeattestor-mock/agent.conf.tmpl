@@ -9,6 +9,7 @@ agent {
 
     experimental {
         broker {
+            # The test Broker is the only client allowed to submit PID references.
             socket_path = "/opt/spire/run/broker/broker.sock"
             brokers = [
                 {
@@ -61,6 +62,7 @@ plugins {
     }
 
     WorkloadAttestor "argus_tdx_workload" {
+        # Successful Trustee decisions become selectors used by test registrations.
         plugin_cmd = "/opt/spire/plugins/argus-tdx-workloadattestor"
         plugin_checksum = "__WORKLOAD_ATTESTOR_CHECKSUM__"
         plugin_data {

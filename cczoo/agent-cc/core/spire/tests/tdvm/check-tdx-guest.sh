@@ -9,6 +9,7 @@ fail() {
     exit 1
 }
 
+# Validate guest-side Quote prerequisites, not merely the TDX device node.
 [[ -c "$TDX_DEVICE" ]] || fail "$TDX_DEVICE is not a character device; run this check inside a TD VM, not on the TDX Host"
 [[ -d /sys/module/tdx_guest ]] || fail "the tdx_guest kernel module is not loaded inside the TD VM"
 [[ -d "$TSM_REPORT_ROOT" ]] || fail "TSM configfs report root is unavailable at $TSM_REPORT_ROOT"

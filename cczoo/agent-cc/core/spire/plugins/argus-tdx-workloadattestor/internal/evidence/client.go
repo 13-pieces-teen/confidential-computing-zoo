@@ -14,12 +14,17 @@ import (
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 )
 
+// Client talks to the agent-local Evidence Provider. It only collects an
+// opaque evidence document; it neither appraises trust nor creates selectors.
 type Client struct {
 	httpClient *http.Client
 	endpoint   string
 	maxBytes   int64
 }
 
+// NewClient builds an Evidence Provider client for either loopback HTTP or a
+// Unix-domain socket. Configuration validation enforces the local-only HTTP
+// boundary before this constructor is called.
 func NewClient(endpoint *url.URL, timeout time.Duration, maxBytes int64) (*Client, error) {
 	if endpoint == nil || timeout <= 0 || maxBytes <= 0 {
 		return nil, fmt.Errorf("Evidence Provider client arguments are invalid")
@@ -44,6 +49,9 @@ func NewClient(endpoint *url.URL, timeout time.Duration, maxBytes int64) (*Clien
 	}, nil
 }
 
+// Collect obtains PID-bound evidence for one nonce. The plugin deliberately
+// checks only transport, size, and JSON syntax here; evidence interpretation
+// belongs to the Trustee.
 func (client *Client) Collect(ctx context.Context, input protocol.EvidenceRequest) (json.RawMessage, error) {
 	body, err := json.Marshal(input)
 	if err != nil {
@@ -64,6 +72,8 @@ func (client *Client) Collect(ctx context.Context, input protocol.EvidenceReques
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 		return nil, fmt.Errorf("Evidence Provider returned HTTP %d", response.StatusCode)
 	}
+	// Read one byte past the limit so an oversized response cannot be mistaken
+	// for a complete, valid evidence document.
 	document, err := io.ReadAll(io.LimitReader(response.Body, client.maxBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read workload evidence: %w", err)

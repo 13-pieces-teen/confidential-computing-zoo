@@ -16,10 +16,12 @@ if [[ ! -f "$RUNTIME_DIR/conf/server.conf" ]]; then
     exit 1
 fi
 
+# Keep the shared control plane outside both TDVMs; guests run Agents only.
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate \
     mock-trustee \
     spire-server
 
+# Do not deploy or register guests until the Server admin socket is usable.
 for _ in $(seq 1 60); do
     if docker compose -f "$COMPOSE_FILE" exec -T spire-server \
         /opt/spire/bin/spire-server healthcheck \

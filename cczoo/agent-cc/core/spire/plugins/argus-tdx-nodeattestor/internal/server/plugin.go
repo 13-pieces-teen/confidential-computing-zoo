@@ -46,6 +46,9 @@ type runtimeState struct {
 	bindingStore *bindingStore
 }
 
+// Plugin implements the Server half of the Argus TDX NodeAttestor handshake.
+// It authenticates the Agent transcript, delegates quote verification to the
+// Trustee, and returns SPIRE Agent attributes only after all bindings pass.
 type Plugin struct {
 	nodeattestorv1.UnimplementedNodeAttestorServer
 	configv1.UnimplementedConfigServer
@@ -76,6 +79,11 @@ func New() *Plugin {
 	}
 }
 
+// Attest advances a fixed two-request state machine:
+//
+//  1. validate AgentHello and issue a fresh, policy-bound challenge;
+//  2. authenticate EvidenceResponse, verify it with the Trustee, persist the
+//     proof-key binding, and finally return AgentAttributes.
 func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (err error) {
 	started := time.Now()
 	defer func() { plugin.telemetry.Attestation("server", started, err) }()
@@ -108,6 +116,8 @@ func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (e
 		return status.Errorf(codes.InvalidArgument, "derive key ID: %v", err)
 	}
 
+	// Server-generated session and nonce values prevent an Agent from choosing
+	// or replaying the freshness input bound into evidence.
 	sessionID := make([]byte, protocol.SessionIDSize)
 	nonce := make([]byte, protocol.NonceSize)
 	if _, err := io.ReadFull(plugin.random, sessionID); err != nil {
@@ -161,6 +171,8 @@ func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (e
 	if err := protocol.ValidateEvidenceResponse(response, sessionID); err != nil {
 		return status.Errorf(codes.InvalidArgument, "validate EvidenceResponse: %v", err)
 	}
+	// Verify proof-key possession across the entire exchange before sending
+	// attacker-controlled evidence to the remote verifier.
 	transcriptHash, err := protocol.TranscriptHash(hello, challenge, response.EvidenceJson)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "construct transcript: %v", err)
@@ -185,6 +197,8 @@ func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (e
 	if hello.InstanceHint != "" && hello.InstanceHint != claims.InstanceID {
 		return status.Error(codes.PermissionDenied, "instance hint does not match verified instance ID")
 	}
+	// Persist the verified instance association before exposing an identity to
+	// SPIRE; a conflict therefore fails closed without issuing attributes.
 	if err := recordInstanceBinding(state.bindingStore, keyID, claims); err != nil {
 		return status.Errorf(codes.PermissionDenied, "attestation key conflict: %v", err)
 	}
@@ -260,6 +274,8 @@ func recordInstanceBinding(store *bindingStore, keyID string, claims trustee.Ver
 }
 
 func buildEvidenceRequest(config *Config, nonce []byte, keyID string) ([]byte, error) {
+	// The request binds the Server identity, proof key, policy digest, and fresh
+	// nonce into the REPORTDATA that the Trustee must verify.
 	request := protocol.EvidenceRequest{
 		Version:  "v1",
 		Nonce:    base64.RawURLEncoding.EncodeToString(nonce),
@@ -307,6 +323,8 @@ func deriveAgentAttributes(config *Config, publicKey []byte, claims trustee.Veri
 	if err := validateSelectors(selectors); err != nil {
 		return nil, err
 	}
+	// Require operator intervention before SPIRE accepts the same attestation
+	// payload again.
 	return &nodeattestorv1.AgentAttributes{
 		SpiffeId:       spiffeID,
 		SelectorValues: selectors,

@@ -8,6 +8,9 @@ import (
 )
 
 func main() {
+	// SPIRE owns and configures the plugin process. The plugin returns selectors;
+	// SPIRE later matches them against registration entries and issues any
+	// resulting SVID.
 	plugin := workloadattestor.New(nil, nil)
 	pluginmain.Serve(
 		workloadattestorv1.WorkloadAttestorPluginServer(plugin),

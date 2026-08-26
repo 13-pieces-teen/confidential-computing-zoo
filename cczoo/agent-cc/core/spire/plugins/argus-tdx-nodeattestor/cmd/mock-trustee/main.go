@@ -1,3 +1,5 @@
+// Command mock-trustee runs only the synthetic verifier API used by integration
+// tests; an allow response is not evidence of hardware-backed verification.
 package main
 
 import (
@@ -129,6 +131,8 @@ func parseFlags() options {
 
 type stringListFlag []string
 
+// Set makes repeated -instance-id flags an explicit allowlist, replacing the
+// default value as soon as the operator supplies the first entry.
 func (values *stringListFlag) Set(value string) error {
 	if value == "" {
 		return fmt.Errorf("instance-id must not be empty")

@@ -27,12 +27,15 @@ import (
 var _ pluginsdk.NeedsLogger = (*Plugin)(nil)
 var _ pluginsdk.NeedsHostServices = (*Plugin)(nil)
 
+// EvidenceProvider collects guest-local TDX evidence for the canonical request
+// issued by the SPIRE Server. It does not decide whether the evidence is valid.
 type EvidenceProvider interface {
 	GetEvidence(context.Context, []byte) ([]byte, error)
 }
 
 type ProviderFactory func(*Config) (EvidenceProvider, error)
 
+// Plugin implements the Agent half of the Argus TDX NodeAttestor handshake.
 type Plugin struct {
 	nodeattestorv1.UnimplementedNodeAttestorServer
 	configv1.UnimplementedConfigServer
@@ -57,6 +60,12 @@ func New() *Plugin {
 	}
 }
 
+// AidAttestation performs a two-message exchange:
+//
+//  1. send the persistent proof key and a fresh Agent nonce;
+//  2. collect evidence for the Server challenge and sign the full transcript.
+//
+// The Server, not this plugin, asks the Trustee to validate the TDX evidence.
 func (plugin *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) (err error) {
 	started := time.Now()
 	defer func() { plugin.telemetry.Attestation("agent", started, err) }()
@@ -69,6 +78,8 @@ func (plugin *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttes
 		return status.Errorf(codes.Internal, "load attestation key: %v", err)
 	}
 	publicKey := privateKey.Public().(ed25519.PublicKey)
+	// The Agent nonce makes independently initiated handshakes distinguishable;
+	// the Server contributes a separate nonce and session ID in its challenge.
 	agentNonce := make([]byte, protocol.NonceSize)
 	if _, err := io.ReadFull(plugin.random, agentNonce); err != nil {
 		return status.Errorf(codes.Internal, "generate agent nonce: %v", err)
@@ -120,6 +131,9 @@ func (plugin *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttes
 		return status.Error(codes.PermissionDenied, "EvidenceRequest target does not match the attestation key")
 	}
 
+	// Evidence collection remains on a Unix socket or loopback HTTP endpoint;
+	// the untrusted result is authenticated by the transcript and later Trustee
+	// verification before SPIRE accepts any Agent attributes.
 	provider, err := plugin.providerFactory(config)
 	if err != nil {
 		return status.Errorf(codes.Internal, "configure Evidence Provider client: %v", err)

@@ -1,3 +1,4 @@
+// Command agent serves the Agent-side Argus TDX NodeAttestor plugin to SPIRE.
 package main
 
 import (

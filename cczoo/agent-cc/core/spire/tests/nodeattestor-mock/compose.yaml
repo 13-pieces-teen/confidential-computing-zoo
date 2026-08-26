@@ -1,3 +1,4 @@
+# A single-host fixture that exercises the protocol without claiming hardware attestation.
 name: argus-spire-m3
 
 services:
@@ -57,7 +58,9 @@ services:
     depends_on:
       - fake-services
       - spire-server
+    # Sharing the network namespace makes the guest-local Provider reachable on loopback.
     network_mode: service:fake-services
+    # Host PID visibility lets WorkloadPIDReference tests address real container processes.
     pid: host
     command: ["-config", "/opt/spire/conf/agent.conf"]
     healthcheck:

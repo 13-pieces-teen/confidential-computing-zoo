@@ -19,6 +19,8 @@ import (
 
 const verifyPath = "/v1/verify/tdx-node"
 
+// Config combines the admission policy, persistent key binding state, and the
+// mutually authenticated Trustee channel used by the Server plugin.
 type Config struct {
 	TrustDomain             string
 	TrusteeURL              *url.URL
@@ -164,6 +166,8 @@ func loadTLSConfig(raw hclConfig) (*tls.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load Trustee client key pair: %w", err)
 	}
+	// PKI chain and DNS name verification happen during the TLS handshake. The
+	// Trustee client additionally requires the configured SPIFFE URI SAN.
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		RootCAs:      roots,

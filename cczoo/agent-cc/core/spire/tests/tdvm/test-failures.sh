@@ -44,6 +44,7 @@ start_case() {
     printf 'started %s\n' "$name"
 }
 
+# Every fault gets fresh Agent data so prior keys or SVIDs cannot mask admission.
 mkdir -p "$RUNTIME_DIR/m4"
 case_directory="$(mktemp -d "$RUNTIME_DIR/m4/run-XXXXXXXX")"
 replay_first="$case_directory/replay-first"
@@ -62,6 +63,7 @@ done
 docker compose up -d --force-recreate spire-server >/dev/null
 baseline_agents="$(agent_count)"
 
+# Admit one fresh control Agent before injecting replay and upstream failures.
 start_case replay-first "$replay_first" M4_REPLAY_EVIDENCE=true
 wait_for_log "Node attestation was successful"
 after_first="$(agent_count)"
@@ -80,6 +82,8 @@ if (( after_replay != after_first )); then
     echo "replayed evidence admitted a new Agent" >&2
     exit 1
 fi
+# Provider errors, Trustee errors, and Trustee timeouts must all fail closed
+# without changing the admitted Agent set.
 start_case provider-503 "$provider_fault" M4_EVIDENCE_STATUS=503
 wait_for_log "evidence provider returned HTTP 503"
 if (( $(agent_count) != after_first )); then
@@ -101,6 +105,7 @@ if (( $(agent_count) != after_first )); then
     exit 1
 fi
 
+# Verify telemetry classifies each failure rather than collapsing them together.
 server_metrics="$(curl -fsS "http://127.0.0.1:${M3_SERVER_METRICS_PORT:-39988}/metrics")"
 require_metric() {
     local expected="$1"

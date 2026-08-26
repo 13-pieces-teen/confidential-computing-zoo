@@ -17,11 +17,14 @@ var (
 	digestPattern     = regexp.MustCompile(`^[a-z0-9]+:[0-9a-f]+$`)
 )
 
+// TargetService identifies both the logical attestation target and its
+// proof-key-derived URI.
 type TargetService struct {
 	ServiceName string `json:"service_name"`
 	TargetURI   string `json:"target_uri"`
 }
 
+// EvidenceRequest is the Server-authored request bound into TDX REPORTDATA.
 type EvidenceRequest struct {
 	Version         string        `json:"version"`
 	Nonce           string        `json:"nonce"`
@@ -52,6 +55,8 @@ type RuntimeBinding struct {
 	CgroupPath       *string `json:"cgroup_path"`
 }
 
+// BindingClaims describe which service instance and runtime produced the
+// evidence, plus the provenance and assurance assigned to each claim.
 type BindingClaims struct {
 	AssuranceLevel           string               `json:"assurance_level"`
 	ServiceIdentity          ServiceIdentity      `json:"service_identity"`
@@ -61,6 +66,8 @@ type BindingClaims struct {
 	ProviderClaimAssurance   map[string]string    `json:"provider_claim_assurance"`
 }
 
+// CanonicalEvidenceRequest accepts only the v1 field set and returns the JCS
+// form used in REPORTDATA and Trustee request digests.
 func CanonicalEvidenceRequest(input []byte) ([]byte, EvidenceRequest, error) {
 	canonical, err := canonicalizeJSON(input)
 	if err != nil {
@@ -92,6 +99,8 @@ func CanonicalEvidenceRequest(input []byte) ([]byte, EvidenceRequest, error) {
 	return canonical, request, nil
 }
 
+// CanonicalBindingClaims validates and normalizes claim-source sets before
+// returning the one representation that may be hashed into REPORTDATA.
 func CanonicalBindingClaims(input []byte) ([]byte, BindingClaims, error) {
 	canonical, err := canonicalizeJSON(input)
 	if err != nil {
@@ -242,6 +251,8 @@ func validateBindingClaims(claims *BindingClaims) error {
 }
 
 func validateObjectFields(input []byte, expected []string) error {
+	// Exact field sets make schema additions explicit protocol changes instead
+	// of silently accepted but uninterpreted metadata.
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(input, &object); err != nil {
 		return fmt.Errorf("expected JSON object: %w", err)
@@ -273,6 +284,8 @@ func validateAndNormalizeSupport(support map[string][]string) error {
 				return fmt.Errorf("source for claim %q is not normalized ASCII", claim)
 			}
 		}
+		// Source lists are sets in the protocol; sorting and deduplication make
+		// their digest independent of provider ordering.
 		sort.Strings(sources)
 		output := sources[:0]
 		for _, source := range sources {

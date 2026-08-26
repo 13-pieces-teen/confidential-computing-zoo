@@ -40,6 +40,8 @@ type Binding struct {
 	RequireInstanceID           bool `json:"require_instance_id" yaml:"require_instance_id"`
 }
 
+// Policy carries both the normalized model used for admission checks and the
+// canonical digest bound into evidence requests and Trustee responses.
 type Policy struct {
 	Model         Model
 	CanonicalJSON []byte
@@ -68,6 +70,8 @@ func Parse(contents []byte) (*Policy, error) {
 	if err := normalizeAndValidate(&model); err != nil {
 		return nil, err
 	}
+	// Normalize before JCS so equivalent allowlists produce one stable digest
+	// regardless of their source YAML ordering or duplicates.
 	encoded, err := json.Marshal(model)
 	if err != nil {
 		return nil, fmt.Errorf("marshal policy model: %w", err)
@@ -129,6 +133,8 @@ func normalizeAndValidate(model *Model) error {
 		model.TEE.AllowedRTMR[index] = normalized
 	}
 	if !model.Binding.RequireReportData || !model.Binding.RequireAttestationKeyDigest || !model.Binding.RequireInstanceID {
+		// These bindings are the minimum profile; configuration cannot silently
+		// weaken them for an individual deployment.
 		return fmt.Errorf("all baseline binding requirements must be true")
 	}
 	return nil

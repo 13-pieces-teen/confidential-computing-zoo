@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Recorder emits best-effort SPIRE host metrics. Metrics failures never alter
+// the attestation decision or mask the original protocol error.
 type Recorder struct {
 	client metricsv1.MetricsServiceClient
 }
@@ -80,6 +82,7 @@ func trusteeResultAndReason(err error) (string, string) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "error", "deadline_exceeded"
 	}
+	// Keep labels bounded and stable instead of exporting full error strings.
 	const marker = "Trustee returned HTTP "
 	if index := strings.Index(err.Error(), marker); index >= 0 {
 		statusCode := strings.Fields(err.Error()[index+len(marker):])

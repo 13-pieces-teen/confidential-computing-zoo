@@ -117,6 +117,8 @@ container_running() {
         --format '{{.State.Running}}' 2>/dev/null
 }
 
+# Prove that both SSH endpoints are TDVMs and expose only their role-local
+# Workload and Broker API sockets before inspecting central SPIRE state.
 for role in openclaw openviking; do
     if [[ "$role" == openclaw ]]; then
         target="$OPENCLAW_TARGET"
@@ -143,6 +145,7 @@ for role in openclaw openviking; do
         || fail "$role SPIRE Agent is not running"
 done
 
+# Parent IDs must refer to live Agents, not stale IDs from an earlier TDVM run.
 agents="$(spire_server agent list -output json)"
 printf '%s' "$agents" | python3 -c '
 import json
@@ -165,6 +168,9 @@ if missing:
 
 [[ "$(container_running openviking "$OPENVIKING_TARGET" "$OPENVIKING_CONTAINER")" == true ]] \
     || fail 'TC-API OpenViking container is not running'
+
+# Compare the immutable image actually running in each TDVM with the selectors
+# that authorize SVID issuance.
 openclaw_image_config_digest="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker image inspect "$OPENCLAW_IMAGE" --format '{{.Id}}')"
 openclaw_broker_image_config_digest="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
@@ -190,6 +196,8 @@ container_image_config_digest="$(remote_sudo openviking "$OPENVIKING_TARGET" \
 [[ "$container_image_config_digest" == "$runtime_image_config_digest" ]] \
     || fail "OpenViking container image digest is $container_image_config_digest, expected runtime digest $runtime_image_config_digest"
 
+# Require one exact entry per identity, under the correct TDVM Agent parent.
+# The OpenViking target additionally needs verified workload-attestation claims.
 entries="$(spire_server entry show -output json)"
 printf '%s' "$entries" | python3 -c '
 import json
@@ -273,6 +281,8 @@ for name, values in (("OpenClaw", openclaw), ("OpenClaw Broker", openclaw_broker
     "$OPENCLAW_BROKER_IMAGE" "$openclaw_broker_image_config_digest" \
     "$OPENVIKING_RUNTIME_IMAGE_ID" "$runtime_image_config_digest"
 
+# The business container must not hold SPIFFE/SVID material: plaintext is
+# loopback-only, while identity sockets belong exclusively to the Broker.
 openviking_mounts="$(remote_sudo openviking "$OPENVIKING_TARGET" \
     /usr/local/bin/docker inspect "$OPENVIKING_CONTAINER" \
     --format '{{range .Mounts}}{{println .Destination}}{{end}}')"
@@ -320,6 +330,7 @@ broker_api_mount="$(remote_sudo openviking "$OPENVIKING_TARGET" \
 [[ "$broker_api_mount" == "$OPENVIKING_BROKER_RUN" ]] \
     || fail "Broker API mount is $broker_api_mount, expected $OPENVIKING_BROKER_RUN"
 
+# Correlate Broker behavior with the Trustee's explicit decision metric.
 broker_logs="$(remote_sudo openviking "$OPENVIKING_TARGET" \
     /usr/local/bin/docker logs "$BROKER_CONTAINER" 2>&1)"
 trustee_metrics="$(curl -fsS \
@@ -331,6 +342,8 @@ trustee_metrics="$(curl -fsS \
     "https://trustee.argus.local:$TRUSTEE_PORT/metrics")"
 
 if [[ "$EXPECTED_DECISION" == deny ]]; then
+    # DENY means no target SVID and no listener; the Broker remains alive so the
+    # test distinguishes a policy rejection from an unrelated process crash.
     [[ "$(container_running openviking "$OPENVIKING_TARGET" "$BROKER_CONTAINER")" == true ]] \
         || fail 'Broker Sidecar stopped instead of waiting without a target identity'
     ! grep -Fq 'OpenViking mTLS listener is ready' <<<"$broker_logs" \
@@ -360,6 +373,7 @@ if [[ "$EXPECTED_DECISION" == deny ]]; then
     exit 0
 fi
 
+# ALLOW requires the Broker to receive the strongly selected OpenViking SVID.
 [[ "$(container_running openviking "$OPENVIKING_TARGET" "$BROKER_CONTAINER")" == true ]] \
     || fail 'Broker Sidecar is not running after Trustee ALLOW'
 grep -Fq "OpenViking mTLS listener is ready for identity $OPENVIKING_ID" <<<"$broker_logs" \
@@ -371,6 +385,9 @@ allowed_metric="$(grep -E '^argus_m4_fake_requests_total\{service="workload_trus
     || fail 'OpenClaw workload is not running'
 [[ "$(container_running openclaw "$OPENCLAW_TARGET" "$OPENCLAW_BROKER_CONTAINER")" == true ]] \
     || fail 'OpenClaw Egress Broker is not running'
+
+# OpenClaw follows the same boundary: it holds no SPIFFE/SVID material. Its
+# Egress Broker owns that material, its Guard client token, and the remote address.
 openclaw_pid="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker inspect "$OPENCLAW_CONTAINER" --format '{{.State.Pid}}')"
 openclaw_mounts="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
@@ -439,6 +456,8 @@ openclaw_broker_logs="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
 grep -Fq "OpenClaw Egress Broker is ready for identity $OPENCLAW_ID" <<<"$openclaw_broker_logs" \
     || fail 'OpenClaw Egress Broker did not receive the real OpenClaw PID identity'
 
+# Bypass attempts must fail at both boundaries: mTLS rejects a client without an
+# SVID, and the OpenClaw TDVM cannot reach OpenViking's plaintext listener.
 if remote_sudo openclaw "$OPENCLAW_TARGET" \
     curl -kfsS --noproxy '*' --max-time 3 \
     "https://$OPENVIKING_HOST_ADDRESS:$OPENVIKING_PORT/health" >/dev/null 2>&1; then
@@ -450,6 +469,8 @@ if remote_sudo openclaw "$OPENCLAW_TARGET" \
     fail 'OpenClaw TDVM can reach OpenViking plaintext port 1933'
 fi
 
+# Inject a Guard policy miss through a temporary Egress Broker and require the
+# denial before any upstream OpenViking request is attempted.
 cleanup_guard_deny_broker() {
     remote_sudo openclaw "$OPENCLAW_TARGET" \
         /usr/local/bin/docker rm -f "$DENY_BROKER_CONTAINER" >/dev/null 2>&1 || true
@@ -509,6 +530,8 @@ grep -Eq 'request_id=[0-9a-f]+ method=GET path=/health decision_id=[^ ]+ status=
 cleanup_guard_deny_broker
 trap - EXIT
 
+# Exercise the intended cross-TDVM path from inside OpenClaw: local HTTP,
+# caller-side Guard, SPIFFE mTLS, then the OpenViking health endpoints.
 remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker exec -i "$OPENCLAW_CONTAINER" node - \
     "http://$OPENCLAW_BROKER_CONTAINER:$OPENCLAW_EGRESS_PORT" "$EXPECT_APPLICATION_READY" <<'NODE'
@@ -572,6 +595,9 @@ openclaw_broker_logs="$(remote_sudo openclaw "$OPENCLAW_TARGET" \
     /usr/local/bin/docker logs "$OPENCLAW_BROKER_CONTAINER" 2>&1)"
 grep -Eq 'request_id=[0-9a-f]+ method=GET path=/health decision_id=[^ ]+ status=200 duration=' <<<"$openclaw_broker_logs" \
     || fail 'OpenClaw Egress Broker did not log the allowed /health decision result'
+
+# Finish with a real plugin turn so transport success is not mistaken for
+# application-level OpenClaw/OpenViking integration.
 remote_sudo openclaw "$OPENCLAW_TARGET" test -x "$REMOTE_ROOT/bin/verify_openclaw_plugin_e2e.sh" \
     || fail 'real OpenClaw plugin E2E script is missing; load the OpenClaw workload again'
 plugin_e2e_result="$(remote_sudo openclaw "$OPENCLAW_TARGET" env \
@@ -586,6 +612,8 @@ plugin_e2e_result="$(remote_sudo openclaw "$OPENCLAW_TARGET" env \
     || fail 'real OpenClaw agent turn, OpenViking session capture, or commit E2E failed'
 printf '%s\n' "$plugin_e2e_result"
 
+# Replace the Ingress Broker with one expecting the wrong client identity; TLS
+# must fail even though both sides otherwise hold valid SPIFFE credentials.
 cleanup_wrong_client() {
     remote_sudo openviking "$OPENVIKING_TARGET" \
         /usr/local/bin/docker rm -f "$WRONG_CLIENT_CONTAINER" >/dev/null 2>&1 || true
@@ -659,6 +687,8 @@ done
 
 target_exit_result='not requested'
 if [[ "$VERIFY_TARGET_EXIT" == 1 ]]; then
+    # PID binding is a lifecycle boundary: each Broker must exit with its target and
+    # a restarted workload must be paired with its new host PID.
     remote_sudo openviking "$OPENVIKING_TARGET" \
         /usr/local/bin/docker stop "$OPENVIKING_CONTAINER" >/dev/null
     for _ in $(seq 1 15); do

@@ -63,6 +63,8 @@ case "$ROLE" in
     *) fail 'role must be openclaw or openviking' ;;
 esac
 
+# A shared command drives both guests, but every path, socket, and container is
+# selected by role so SPIFFE sockets and SVID material never cross TDVMs.
 [[ -n "$SSH_TARGET" ]] \
     || fail "set DUAL_${ROLE^^}_TDVM_SSH_TARGET to the TDVM SSH destination"
 [[ "$RUNTIME_DIR" == /* ]] \
@@ -89,6 +91,7 @@ if [[ -n "$SSH_IDENTITY" ]]; then
     ssh_options+=(-i "$SSH_IDENTITY")
 fi
 
+# Preserve argv boundaries while executing commands through the guest SSH shell.
 remote() {
     local command_string="" argument quoted
     for argument in "$@"; do
@@ -157,6 +160,7 @@ deploy_agent() {
     require_local_image "$PROVIDER_IMAGE"
     require_local_image "$SPIRE_AGENT_IMAGE"
 
+    # Cross into the guest only after proving this is a TDVM with its own Docker.
     remote true
     remote test -c /dev/tdx_guest || fail 'SSH target is not a TD Guest'
     remote_sudo test -x /usr/local/bin/docker \
@@ -203,6 +207,8 @@ deploy_agent() {
     remote_sudo chown -R 1000:1000 "$REMOTE_BROKER_RUN"
     remote_sudo chmod 2770 "$REMOTE_BROKER_RUN"
 
+    # Evidence is collected inside this TDVM; verification stays at the center
+    # Trustee, so the two sides of the attestation path remain separate.
     remote_sudo /usr/local/bin/docker rm -f "$PROVIDER_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker run -d \
         --name "$PROVIDER_CONTAINER" \
@@ -233,6 +239,8 @@ deploy_agent() {
     agent_mounts+=(
         -v "$REMOTE_BROKER_RUN:/opt/spire/run/$ROLE-broker"
     )
+    # Host PID visibility lets the Agent bind workload identity to the real target
+    # process while exposing only role-local Workload and Broker API sockets.
     remote_sudo /usr/local/bin/docker run -d \
         --name "$AGENT_CONTAINER" \
         --network host \
@@ -258,6 +266,8 @@ deploy_agent() {
 load_workload() {
     command -v docker >/dev/null 2>&1 || fail 'Docker is required on the deployment host'
     require_local_image "$WORKLOAD_IMAGE"
+    # Stream deployment artifacts directly into the selected TDVM; no guest is
+    # allowed to depend on the other guest's image store.
     stream_image "$WORKLOAD_IMAGE"
 
     if [[ "$ROLE" == openclaw ]]; then
@@ -270,6 +280,8 @@ load_workload() {
         stream_image "$guard_image"
         stream_image "$sandbox_image"
         stream_image "$BROKER_IMAGE"
+        # Guard and gateway secrets are staged in the OpenClaw TDVM only. The business
+        # container still receives no SPIFFE/SVID material or Guard token.
         remote_sudo /usr/local/bin/docker tag \
             "$sandbox_image" openclaw-sandbox:bookworm-slim
 
@@ -333,6 +345,8 @@ PY
             require_local_image "$OPENVIKING_OLLAMA_IMAGE"
             stream_image "$OPENVIKING_OLLAMA_IMAGE"
         fi
+        # TC-API and the registry are pre-existing OpenViking-TDVM services; this step
+        # loads the approved source image and launcher without starting identity yet.
         remote curl -fsS --max-time 5 "$tc_api_url/" >/dev/null \
             || fail "existing TC-API is not healthy at $tc_api_url"
         remote curl -fsS --max-time 5 http://127.0.0.1:5000/v2/ >/dev/null \
@@ -371,8 +385,8 @@ start_openviking_ollama() {
         || fail "Ollama image is not loaded in OpenViking TDVM: $OPENVIKING_OLLAMA_IMAGE"
     remote_sudo /usr/local/bin/docker rm -f "$OPENVIKING_OLLAMA_CONTAINER" >/dev/null 2>&1 || true
     remote_sudo /usr/local/bin/docker volume create "$OPENVIKING_OLLAMA_VOLUME" >/dev/null
-    # DMZ 等只允许经 HTTP 代理出网的环境：DUAL_OPENVIKING_OLLAMA_EXTRA_ENV
-    # 提供空格分隔的 KEY=VALUE 列表，作为额外 --env 传给 Ollama 容器。
+    # In proxy-only environments, pass extra Ollama settings as a
+    # space-separated KEY=VALUE list in DUAL_OPENVIKING_OLLAMA_EXTRA_ENV.
     if [[ -n "$OPENVIKING_OLLAMA_EXTRA_ENV" ]]; then
         read -r -a ollama_extra <<<"$OPENVIKING_OLLAMA_EXTRA_ENV" || true
         for pair in "${ollama_extra[@]}"; do
@@ -382,9 +396,9 @@ start_openviking_ollama() {
             ollama_envs+=(--env "$pair")
         done
     fi
-    # 容器内 Ollama CLI（Go 客户端）同样遵循 HTTP(S)_PROXY：即使目标是本容器
-    # 的 0.0.0.0:11434 也会被导向代理，导致 ls/pull 全部失败。回环与容器网络
-    # 必须强制豁免；用户已在 EXTRA_ENV 提供的 NO_PROXY 会合并保留。
+    # The Ollama CLI honors HTTP(S)_PROXY even for 0.0.0.0:11434, which would
+    # send ls/pull through the proxy. Preserve caller NO_PROXY values and always
+    # exempt loopback and container ranges.
     no_proxy="$user_no_proxy"
     [[ -n "$no_proxy" ]] && no_proxy="$no_proxy,"
     no_proxy+="$(IFS=,; echo "${no_proxy_mandatory[*]}")"
@@ -451,6 +465,8 @@ start_openclaw_broker() {
     [[ "$agent_id" == spiffe://argus.local/spire/agent/argus_tdx/* ]] \
         || fail 'DUAL_OPENCLAW_PARENT_ID must be the current OpenClaw Agent SPIFFE ID'
 
+    # The Egress Broker, not OpenClaw, receives the Workload API and Broker API.
+    # Binding target-pid ties the requested OpenClaw identity to the live process.
     remote_sudo bash -s -- \
         "$REMOTE_ROOT" "$REMOTE_RUN" "$REMOTE_BROKER_RUN" \
         "$WORKLOAD_CONTAINER" "$BROKER_CONTAINER" "$BROKER_IMAGE" "$network" \
@@ -530,6 +546,8 @@ start_openclaw() {
     remote_sudo test -s "$REMOTE_ROOT/secrets/openclaw-gateway-token" \
         || fail 'OpenClaw gateway token is not loaded'
 
+    # Assemble the caller-local path: OpenClaw -> Guard -> Egress Broker. Only the
+    # Broker is given the fixed remote origin and the identity sockets.
     remote_sudo bash -s -- \
         "$REMOTE_ROOT" "$WORKLOAD_CONTAINER" "$WORKLOAD_IMAGE" \
         "$BROKER_CONTAINER" "$guard_image" "$network" "$gateway_port" "$bridge_port" <<'REMOTE'
@@ -669,6 +687,8 @@ start_openviking() {
     remote_sudo /usr/local/bin/docker network inspect "$network" >/dev/null 2>&1 \
         || remote_sudo /usr/local/bin/docker network create "$network" >/dev/null
     start_openviking_ollama "$network"
+    # Launch the SPIFFE-credential-free business container before registering
+    # its observed runtime digest; this avoids trusting a mutable source tag.
     launch_env=(
         "AUTO_START_INFRA=0"
         "OPENVIKING_LAUNCH_ACTION=launch"
@@ -705,10 +725,13 @@ start_openviking() {
     [[ "$container_digest" == "$runtime_digest" ]] \
         || fail "OpenViking container uses $container_digest, expected runtime digest $runtime_digest"
 
+    # Registration now binds the live OpenViking process image to its TDVM Agent.
     DUAL_RUNTIME_DIR="$RUNTIME_DIR" \
     DUAL_OPENVIKING_RUNTIME_IMAGE_ID="$runtime_image_id" \
         "$SCRIPT_DIR/register-workloads.sh"
 
+    # Start the Broker only after the strong target entry exists; OpenViking itself
+    # never receives a Workload API socket or SVID private key.
     broker_env=(
         "AUTO_START_INFRA=0"
         "OPENVIKING_LAUNCH_ACTION=broker"
@@ -744,6 +767,8 @@ connect_openviking() {
             || fail "required container is not running: $container"
     done
 
+    # Configure the plugin to use caller-local HTTP; the Egress Broker performs
+    # Guard authorization and cross-TDVM SPIFFE mTLS behind that endpoint.
     remote_sudo env \
         PATH=/usr/local/bin:/usr/bin:/bin \
         "TARGET_URI=$target_uri" \

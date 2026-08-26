@@ -35,6 +35,8 @@ type VerifyInput struct {
 	Policy              *policy.Policy
 }
 
+// VerifiedNodeClaims is the narrow, policy-checked result the Server may use to
+// construct SPIRE selectors. Raw Trustee output is never forwarded directly.
 type VerifiedNodeClaims struct {
 	QuoteVerified         bool               `json:"quote_verified"`
 	ReportDataVerified    bool               `json:"report_data_verified"`
@@ -86,6 +88,9 @@ type Client struct {
 	now              func() time.Time
 }
 
+// NewClient creates the remote verification boundary. TLS verifies the CA and
+// DNS server name; VerifyConnection additionally pins the exact Trustee SPIFFE
+// URI SAN expected by this deployment.
 func NewClient(endpoint *url.URL, tlsConfig *tls.Config, expectedSPIFFEID string, timeout time.Duration, maxResponseBytes int64) (*Client, error) {
 	if endpoint == nil || endpoint.Scheme != "https" {
 		return nil, fmt.Errorf("Trustee endpoint must use HTTPS")
@@ -111,6 +116,8 @@ func NewClient(endpoint *url.URL, tlsConfig *tls.Config, expectedSPIFFEID string
 	}, nil
 }
 
+// VerifyNode submits evidence and accepts claims only when response freshness,
+// request/key/policy bindings, quote status, and measurement policy all agree.
 func (client *Client) VerifyNode(ctx context.Context, input VerifyInput) (VerifiedNodeClaims, error) {
 	request, err := buildRequest(input)
 	if err != nil {
@@ -152,6 +159,8 @@ func (client *Client) doRequest(ctx context.Context, requestBody []byte) (*http.
 		attempts = 1
 	}
 	var lastErr error
+	// Retries resend the same session-bound body and are limited to transport
+	// failures, throttling, and server errors.
 	for attempt := 0; attempt < attempts; attempt++ {
 		httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, client.endpoint, bytes.NewReader(requestBody))
 		if err != nil {
@@ -197,6 +206,8 @@ func buildRequest(input VerifyInput) (verifyRequest, error) {
 	if err != nil {
 		return verifyRequest{}, fmt.Errorf("EvidenceRequest: %w", err)
 	}
+	// Duplicate the critical digests at the Trustee envelope level so both the
+	// response and its verified claims can be checked against local inputs.
 	requestDigest, err := protocol.EvidenceRequestDigest(canonicalRequest)
 	if err != nil {
 		return verifyRequest{}, err
@@ -219,6 +230,8 @@ func parseResponse(contents []byte) (verifyResponse, error) {
 	if err != nil {
 		return verifyResponse{}, fmt.Errorf("Trustee response JSON: %w", err)
 	}
+	// Exact field sets reject schema drift that could otherwise leave new
+	// security-relevant output unchecked by this client.
 	if err := requireFields(canonical, []string{
 		"protocol_version", "session_id", "decision", "stable_error_code", "verified_claims",
 		"evidence_request_digest", "attestation_key_digest", "policy_id", "policy_digest",
@@ -260,6 +273,8 @@ func parseResponse(contents []byte) (verifyResponse, error) {
 }
 
 func validateResponse(response verifyResponse, request verifyRequest, expectedPolicy *policy.Policy, now time.Time) error {
+	// Validate the outer envelope first, then repeat the binding checks inside
+	// verified_claims before using any measurement or instance value.
 	if response.ProtocolVersion != ProtocolVersion || response.SessionID != request.SessionID {
 		return fmt.Errorf("Trustee response protocol or session mismatch")
 	}
@@ -352,6 +367,8 @@ func requireFields(contents []byte, expected []string) error {
 }
 
 func verifyTrusteeIdentity(state tls.ConnectionState, expectedSPIFFEID string) error {
+	// Compare the leaf certificate URI exactly; accepting any URI in the trust
+	// domain would let a different workload act as the Trustee.
 	if len(state.PeerCertificates) == 0 {
 		return fmt.Errorf("Trustee presented no certificate")
 	}

@@ -3,6 +3,7 @@ policy_id: argus-dual-tdvm-openviking-v1
 trust_domain: argus.local
 decision_ttl_seconds: __DECISION_TTL_SECONDS__
 rules:
+  # Authorize the caller identity and operation; SPIRE issuance alone is not authorization.
   - id: openclaw-to-openviking-cmem
     callers:
       - spiffe://argus.local/agent/openclaw

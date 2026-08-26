@@ -17,6 +17,9 @@ import (
 
 const trusteeProtocolVersion = 1
 
+// Config controls deterministic mock claims and injected failure modes. These
+// services exercise protocol binding and fail-closed behavior; they do not
+// collect or cryptographically verify a hardware TDX quote.
 type Config struct {
 	InstanceID         string
 	AllowedInstanceIDs []string
@@ -161,6 +164,9 @@ func NewHandler(config Config) (*Handler, error) {
 	return &Handler{config: config, counters: make(map[counterKey]uint64)}, nil
 }
 
+// ServeHTTP exposes the combined mock Evidence Provider and Trustee used by
+// single-process integration tests. Split test deployments use the narrower
+// handlers below to preserve the Evidence Provider/Trustee role separation.
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	switch request.URL.Path {
 	case "/ra/v1/evidence":
@@ -246,6 +252,8 @@ func (handler *Handler) handleWorkloadEvidence(writer http.ResponseWriter, reque
 		writeError(writer, http.StatusBadRequest, "INVALID_WORKLOAD_EVIDENCE_REQUEST")
 		return
 	}
+	// The workload document is synthetic and deterministic apart from the clock;
+	// it exists only to exercise the WorkloadAttestor protocol.
 	now := handler.config.Now().UTC().Truncate(time.Second)
 	document := workloadEvidenceDocument{
 		ProtocolVersion:   trusteeProtocolVersion,
@@ -341,6 +349,8 @@ func (handler *Handler) handleEvidence(writer http.ResponseWriter, request *http
 		writeError(writer, handler.config.EvidenceStatus, "EVIDENCE_PROVIDER_FAULT")
 		return
 	}
+	// Replay mode deliberately reuses the first response so later challenges
+	// fail their request/REPORTDATA binding checks.
 	if evidence := handler.cachedEvidence(); evidence != nil {
 		handler.record("evidence", "replay")
 		writeBytes(writer, http.StatusOK, evidence)
@@ -367,6 +377,8 @@ func (handler *Handler) handleEvidence(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusInternalServerError, "INTERNAL_ERROR")
 		return
 	}
+	// fakeQuote mirrors the fields consumed by the mock Trustee but carries no
+	// hardware signature or collateral.
 	document, err := json.Marshal(evidenceDocument{
 		ProtocolVersion: trusteeProtocolVersion,
 		BindingClaims:   claims,
@@ -433,6 +445,8 @@ func (handler *Handler) handleVerify(writer http.ResponseWriter, request *http.R
 }
 
 func (handler *Handler) verify(input verifyRequest) (trustee.VerifiedNodeClaims, error) {
+	// This mock verifier checks protocol and REPORTDATA relationships only. Its
+	// QuoteVerified result must not be interpreted as real TDX verification.
 	if input.ProtocolVersion != trusteeProtocolVersion || input.PolicyID == "" || input.PolicyDigest == "" {
 		return trustee.VerifiedNodeClaims{}, fmt.Errorf("invalid protocol or policy")
 	}

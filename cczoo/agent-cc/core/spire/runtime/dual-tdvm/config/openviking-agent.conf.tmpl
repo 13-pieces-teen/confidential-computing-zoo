@@ -9,6 +9,7 @@ agent {
 
     experimental {
         broker {
+            # The Ingress Broker holds the SVID and attests the target PID by reference.
             socket_path = "/opt/spire/run/openviking-broker/broker.sock"
             brokers = [
                 {
@@ -33,6 +34,7 @@ telemetry {
 
 plugins {
     NodeAttestor "argus_tdx" {
+        # Node evidence is collected from the Provider inside this TDVM.
         plugin_cmd = "/opt/spire/plugins/argus-tdx-nodeattestor-agent"
         plugin_checksum = "__AGENT_CHECKSUM__"
         plugin_data {
@@ -61,6 +63,7 @@ plugins {
     }
 
     WorkloadAttestor "argus_tdx_workload" {
+        # Only this attestor can add the verified selectors required by registration.
         plugin_cmd = "/opt/spire/plugins/argus-tdx-workloadattestor"
         plugin_checksum = "__WORKLOAD_ATTESTOR_CHECKSUM__"
         plugin_data {

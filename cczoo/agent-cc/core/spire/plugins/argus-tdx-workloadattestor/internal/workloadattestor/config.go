@@ -13,6 +13,8 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
+// Config contains the validated boundaries and limits used by one configured
+// plugin instance.
 type Config struct {
 	EvidenceEndpoint      *url.URL
 	TrusteeEndpoint       *url.URL
@@ -38,6 +40,8 @@ type hclConfig struct {
 }
 
 func parseConfig(input string) (*Config, []string) {
+	// Validation reports all configuration problems in one SPIRE response. It
+	// does not read credential files; Configure performs that runtime check.
 	raw := hclConfig{RequestTimeout: "10s", MaxResponseBytes: 1 << 20}
 	if err := hcl.Decode(&raw, input); err != nil {
 		return nil, []string{fmt.Sprintf("decode HCL configuration: %v", err)}
@@ -92,6 +96,9 @@ func parseConfig(input string) (*Config, []string) {
 }
 
 func validateEvidenceEndpoint(endpoint *url.URL) error {
+	// The Evidence Provider consumes a local process PID, so keep collection on the
+	// agent-local Unix socket or loopback boundary. Remote trust appraisal uses
+	// the separately authenticated Trustee channel.
 	switch endpoint.Scheme {
 	case "unix":
 		if endpoint.Host != "" || !path.IsAbs(endpoint.Path) || endpoint.RawQuery != "" || endpoint.Fragment != "" {
@@ -115,5 +122,7 @@ func validateEvidenceEndpoint(endpoint *url.URL) error {
 }
 
 func absoluteForHostOrLinux(value string) bool {
+	// SPIRE configuration may target Linux even when validation runs on a
+	// Windows development host.
 	return filepath.IsAbs(value) || strings.HasPrefix(value, "/")
 }

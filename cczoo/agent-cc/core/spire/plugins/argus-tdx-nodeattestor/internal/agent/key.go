@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 )
 
+// loadOrCreateAttestationKey preserves the proof key across Agent restarts. Once
+// the Trustee verifies the evidence, the Server associates this key with the
+// accepted instance and launch claims.
 func loadOrCreateAttestationKey(path string) (ed25519.PrivateKey, error) {
 	key, err := loadAttestationKey(path)
 	if err == nil {
@@ -35,6 +38,7 @@ func loadOrCreateAttestationKey(path string) (ed25519.PrivateKey, error) {
 	return privateKey, nil
 }
 
+// loadAttestationKey rejects links, devices, and broadly readable key files.
 func loadAttestationKey(path string) (ed25519.PrivateKey, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -56,6 +60,8 @@ func loadAttestationKey(path string) (ed25519.PrivateKey, error) {
 	return ed25519.PrivateKey(contents), nil
 }
 
+// installKeyAtomically uses a hard-link publication step so concurrent Agent
+// starts cannot replace a key that another process has already installed.
 func installKeyAtomically(path string, privateKey ed25519.PrivateKey) error {
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".attestation-key-*")
 	if err != nil {
@@ -78,6 +84,7 @@ func installKeyAtomically(path string, privateKey ed25519.PrivateKey) error {
 	if err := os.Link(temporaryPath, path); err != nil {
 		return fmt.Errorf("install attestation key: %w", err)
 	}
+	// Persist the directory entry as well as the key contents.
 	if err := syncDirectory(filepath.Dir(path)); err != nil {
 		return err
 	}

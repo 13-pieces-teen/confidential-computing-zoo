@@ -37,6 +37,7 @@ require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"
 }
 
+# Reject ambiguous paths and identities before creating shared runtime material.
 [[ "$RUNTIME_DIR" =~ ^/[^/]+/[^/]+(/.*)?$ \
     && "$RUNTIME_DIR" != *'//'* \
     && "$RUNTIME_DIR" != *'/./'* \
@@ -77,6 +78,7 @@ install -d -m 0700 \
     "$RUNTIME_DIR/server-data"
 install -d -m 0755 "$GO_CACHE_DIR"
 
+# Resolve modules once, then compile from the cache with network access disabled.
 download_go_dependencies() {
     local module_dir="$1"
 
@@ -129,6 +131,7 @@ build_go_binary "$WORKLOAD_PLUGIN_MODULE_DIR" \
     ./cmd/argus-tdx-workloadattestor argus-tdx-workloadattestor
 chmod 0755 "$RUNTIME_DIR/plugins"/*
 
+# SPIRE upstream signing and Trustee transport use separate trust roots.
 generate_ca() {
     local name="$1"
     local common_name="$2"
@@ -213,6 +216,7 @@ chown -R 1000:1000 \
     "$RUNTIME_DIR/server-data" \
     "$RUNTIME_DIR/server-run"
 
+# Render the exact external-plugin checksums SPIRE will verify at startup.
 server_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-server" | awk '{print $1}')"
 agent_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-nodeattestor-agent" | awk '{print $1}')"
 workload_attestor_checksum="$(sha256sum "$RUNTIME_DIR/plugins/argus-tdx-workloadattestor" | awk '{print $1}')"
@@ -249,6 +253,7 @@ sed \
     >"$RUNTIME_DIR/conf/guard-policy.yaml"
 chmod 0644 "$RUNTIME_DIR/conf"/*
 
+# Build the center-side mock services and transfer-ready guest images.
 docker build -q \
     -f "$PROFILE_DIR/images/Dockerfile.mock-evidence-provider" \
     -t argus-spire-dual-mock-evidence-provider:local \

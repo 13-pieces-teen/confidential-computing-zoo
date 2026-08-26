@@ -1,4 +1,5 @@
 version: 1
+# Software-only policy fixture; production values must come from real TDX measurements.
 policy_id: dual-tdvm-v1-mock
 tee:
   type: tdx

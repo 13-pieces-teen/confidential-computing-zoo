@@ -24,6 +24,7 @@ plugins {
     }
 
     NodeAttestor "argus_tdx" {
+        # This fixture uses fake services but preserves the production protocol boundary.
         plugin_cmd = "/opt/spire/plugins/argus-tdx-nodeattestor-server"
         plugin_checksum = "__SERVER_CHECKSUM__"
         plugin_data {
@@ -35,6 +36,7 @@ plugins {
             trustee_expected_spiffe_id = "spiffe://argus.local/service/trustee"
             trustee_auth_mode = "mtls_files"
             policy_path = "/opt/spire/conf/policy.yaml"
+            # Persist bindings so restart and replay cases exercise durable state.
             binding_state_dir = "/opt/spire/data/server/argus-tdx-bindings"
             challenge_ttl = "30s"
             verifier_timeout = "15s"

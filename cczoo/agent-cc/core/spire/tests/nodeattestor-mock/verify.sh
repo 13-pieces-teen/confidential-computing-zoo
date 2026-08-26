@@ -27,6 +27,7 @@ reset_entry() {
     spire_server entry delete -entryID "$1" >/dev/null 2>&1 || true
 }
 
+# Recreate the registration graph so stale entries cannot affect selector tests.
 for entry_id in m3-node m3-workload m3-wrong-parent m3-wrong-label m3-wrong-digest m3-broker m3-broker-target; do
     reset_entry "$entry_id"
 done
@@ -42,6 +43,7 @@ identity = agents[0]["id"]
 print("spiffe://{}{}".format(identity["trust_domain"], identity["path"]))
 ' <<<"$agent_json")"
 
+# The Broker socket is the narrow handoff from the root Agent to uid 1000.
 broker_socket_stat="$(stat -c '%u:%g %a' "$SCRIPT_DIR/runtime/broker-run/broker.sock")"
 [[ "$broker_socket_stat" == "0:1000 770" ]] \
     || { echo "Broker API socket permissions are $broker_socket_stat, expected 0:1000 770" >&2; exit 1; }
@@ -55,6 +57,8 @@ case "$workload_image" in
     *) echo "invalid workload image config digest: $workload_image" >&2; exit 1 ;;
 esac
 
+# Establish one valid entry plus parent/label decoys; a different image later
+# covers the digest-mismatch denial.
 spire_server entry create \
     -entryID m3-node -node -spiffeID "$NODE_ALIAS" \
     -selector argus_tdx:policy:openviking-m3-v1 \
@@ -108,6 +112,7 @@ wait_for_positive_svid() {
     done
 }
 
+# The matching container must receive only the intended workload identity.
 positive_output="$(wait_for_positive_svid)"
 for forbidden in "$WRONG_PARENT_ID" "$WRONG_LABEL_ID"; do
     if grep -Fq "$forbidden" <<<"$positive_output"; then
@@ -128,6 +133,7 @@ verify_denied() {
     grep -Fq "no identity issued" <<<"$output"
 }
 
+# Selector mismatches must fail closed with "no identity issued".
 verify_denied argus-m3-wrong-label "$workload_image" wrong-label
 verify_denied argus-m3-wrong-digest "$wrong_image" openviking-cmem
 
@@ -137,6 +143,8 @@ cleanup_broker_test() {
 }
 trap cleanup_broker_test EXIT
 
+# Give the Broker its own identity, while the target identity additionally
+# requires verified workload claims tied to the target PID.
 spire_server entry create \
     -entryID m3-broker -parentID "$NODE_ALIAS" -spiffeID "$BROKER_ID" \
     -selector docker:label:argus.component:openviking-broker \
@@ -160,6 +168,8 @@ docker run -d --name "$BROKER_TARGET_CONTAINER" --network none \
     argus-spire-m3-broker-target:local >/dev/null
 target_pid="$(docker inspect "$BROKER_TARGET_CONTAINER" --format '{{.State.Pid}}')"
 
+# For this PID-bound path, only the Broker mounts identity sockets and requests
+# the target SVID; the protected target receives neither.
 docker run -d --name "$BROKER_CONTAINER" --network host --pid host \
     --label argus.component=openviking-broker \
     -v "$SCRIPT_DIR/runtime/agent-run:/opt/spire/run/agent:ro" \
@@ -185,6 +195,7 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 if [[ "$WORKLOAD_DECISION" == deny ]]; then
+    # A Trustee denial keeps the Sidecar waiting but must never open its listener.
     [[ "$broker_ready" == 0 ]] \
         || { echo 'Broker Sidecar received a target SVID while Mock Trustee decision was deny' >&2; exit 1; }
     [[ "$(docker inspect "$BROKER_CONTAINER" --format '{{.State.Running}}')" == true ]] \
@@ -211,6 +222,7 @@ if [[ "$broker_ready" != 1 ]]; then
     exit 1
 fi
 
+# pidfd binding must terminate the Broker when its protected target exits.
 docker stop "$BROKER_TARGET_CONTAINER" >/dev/null
 for _ in $(seq 1 10); do
     [[ "$(docker inspect "$BROKER_CONTAINER" --format '{{.State.Running}}')" == false ]] && break
