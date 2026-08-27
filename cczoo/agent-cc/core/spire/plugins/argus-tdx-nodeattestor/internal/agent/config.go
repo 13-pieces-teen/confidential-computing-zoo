@@ -2,110 +2,58 @@ package agent
 
 import (
 	"fmt"
-	"net"
-	"net/url"
-	"path/filepath"
-	"strings"
+	"path"
 	"time"
 
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 	"github.com/hashicorp/hcl"
-	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 )
 
-const defaultEvidencePath = "/ra/v1/evidence"
-
-// Config contains the Agent-side trust boundary: the SPIRE trust domain,
-// local Evidence Provider endpoint, and persistent attestation key location.
 type Config struct {
-	TrustDomain        string
-	EvidenceEndpoint   *url.URL
-	AttestationKeyPath string
+	EvidenceSocketPath string
+	ProofKeyPath       string
 	EvidenceTimeout    time.Duration
-	MaxEvidenceBytes   int64
-	InstanceHint       string
+	MaxQuoteBytes      int64
 }
 
 type hclConfig struct {
-	EvidenceEndpoint   string `hcl:"evidence_endpoint"`
-	AttestationKeyPath string `hcl:"attestation_key_path"`
+	EvidenceSocketPath string `hcl:"evidence_socket_path"`
+	ProofKeyPath       string `hcl:"proof_key_path"`
 	EvidenceTimeout    string `hcl:"evidence_timeout"`
-	MaxEvidenceBytes   int64  `hcl:"max_evidence_bytes"`
-	InstanceHint       string `hcl:"instance_hint"`
+	MaxQuoteBytes      int64  `hcl:"max_quote_bytes"`
 }
 
-func parseConfig(core *configv1.CoreConfiguration, input string) (*Config, []string) {
+func parseConfig(_ *configapi.CoreConfiguration, input string) (*Config, []string) {
 	raw := hclConfig{
-		EvidenceTimeout:  "10s",
-		MaxEvidenceBytes: 4 << 20,
+		EvidenceTimeout: "10s",
+		MaxQuoteBytes:   protocol.MaxQuoteSize,
 	}
-	var notes []string
 	if err := hcl.Decode(&raw, input); err != nil {
 		return nil, []string{fmt.Sprintf("decode HCL configuration: %v", err)}
 	}
-	if core == nil || core.TrustDomain == "" {
-		notes = append(notes, "core trust_domain is required")
+
+	var notes []string
+	if !path.IsAbs(raw.EvidenceSocketPath) {
+		notes = append(notes, "evidence_socket_path must be absolute")
 	}
-	endpoint, err := url.Parse(raw.EvidenceEndpoint)
-	if err != nil || endpoint.Scheme == "" {
-		notes = append(notes, "evidence_endpoint must be a valid unix or loopback HTTP URL")
-	} else if err := validateEndpoint(endpoint); err != nil {
-		notes = append(notes, err.Error())
-	}
-	if !filepath.IsAbs(raw.AttestationKeyPath) {
-		notes = append(notes, "attestation_key_path must be absolute")
+	if !path.IsAbs(raw.ProofKeyPath) {
+		notes = append(notes, "proof_key_path must be absolute")
 	}
 	timeout, err := time.ParseDuration(raw.EvidenceTimeout)
-	if err != nil || timeout <= 0 || timeout > 30*time.Second {
-		notes = append(notes, "evidence_timeout must be greater than zero and no more than 30s")
+	if err != nil || timeout <= 0 {
+		notes = append(notes, "evidence_timeout must be greater than zero")
 	}
-	if raw.MaxEvidenceBytes <= 0 || raw.MaxEvidenceBytes > 4<<20 {
-		notes = append(notes, "max_evidence_bytes must be between 1 and 4194304")
-	}
-	if len(raw.InstanceHint) > 128 || strings.ContainsAny(raw.InstanceHint, "\r\n\t") {
-		notes = append(notes, "instance_hint must be at most 128 printable ASCII bytes")
-	}
-	for _, character := range []byte(raw.InstanceHint) {
-		if character < 0x20 || character > 0x7e {
-			notes = append(notes, "instance_hint must be at most 128 printable ASCII bytes")
-			break
-		}
+	if raw.MaxQuoteBytes <= 0 || raw.MaxQuoteBytes > protocol.MaxQuoteSize {
+		notes = append(notes, fmt.Sprintf("max_quote_bytes must be between 1 and %d", protocol.MaxQuoteSize))
 	}
 	if len(notes) > 0 {
 		return nil, notes
 	}
 	return &Config{
-		TrustDomain:        core.TrustDomain,
-		EvidenceEndpoint:   endpoint,
-		AttestationKeyPath: filepath.Clean(raw.AttestationKeyPath),
+		EvidenceSocketPath: path.Clean(raw.EvidenceSocketPath),
+		ProofKeyPath:       path.Clean(raw.ProofKeyPath),
 		EvidenceTimeout:    timeout,
-		MaxEvidenceBytes:   raw.MaxEvidenceBytes,
-		InstanceHint:       raw.InstanceHint,
+		MaxQuoteBytes:      raw.MaxQuoteBytes,
 	}, nil
-}
-
-// validateEndpoint keeps evidence collection on the guest-local channel. The
-// remote, mutually authenticated verification hop belongs to the Server.
-func validateEndpoint(endpoint *url.URL) error {
-	switch endpoint.Scheme {
-	case "unix":
-		if endpoint.Host != "" || !filepath.IsAbs(endpoint.Path) || endpoint.RawQuery != "" || endpoint.Fragment != "" {
-			return fmt.Errorf("unix evidence_endpoint must contain only an absolute socket path")
-		}
-	case "http":
-		host := endpoint.Hostname()
-		if host != "localhost" {
-			address := net.ParseIP(host)
-			if address == nil || !address.IsLoopback() {
-				return fmt.Errorf("HTTP evidence_endpoint must use a loopback address")
-			}
-		}
-		if endpoint.Path == "" {
-			endpoint.Path = defaultEvidencePath
-		}
-	case "https":
-		return fmt.Errorf("HTTPS evidence_endpoint is not supported on the Agent local channel; use unix or loopback HTTP")
-	default:
-		return fmt.Errorf("evidence_endpoint scheme must be unix or http")
-	}
-	return nil
 }

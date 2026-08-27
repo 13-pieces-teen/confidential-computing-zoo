@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/json"
+	"crypto/sha256"
 	"fmt"
-	"strings"
+	"io"
 	"testing"
 	"time"
 
-	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
+	nodeattestorapi "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
-	protocolv1 "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor/v1"
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/policy"
+	argusnodeattestor "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/trustee"
 )
@@ -23,61 +22,64 @@ import (
 type fakeVerifier struct {
 	called bool
 	input  trustee.VerifyInput
-	claims trustee.VerifiedNodeClaims
 	err    error
+	hook   func()
 }
 
 func (verifier *fakeVerifier) VerifyNode(_ context.Context, input trustee.VerifyInput) (trustee.VerifiedNodeClaims, error) {
 	verifier.called = true
 	verifier.input = input
-	return verifier.claims, verifier.err
+	if verifier.hook != nil {
+		verifier.hook()
+	}
+	return trustee.VerifiedNodeClaims{}, verifier.err
 }
 
 type fakeAttestStream struct {
 	context       context.Context
 	helloPayload  []byte
 	privateKey    ed25519.PrivateKey
-	evidenceJSON  []byte
+	quote         []byte
 	badSignature  bool
+	unknownFields bool
 	receiveCount  int
-	sentResponses []*nodeattestorv1.AttestResponse
+	sentResponses []*nodeattestorapi.AttestResponse
 }
 
-func (stream *fakeAttestStream) Recv() (*nodeattestorv1.AttestRequest, error) {
+func (stream *fakeAttestStream) Recv() (*nodeattestorapi.AttestRequest, error) {
 	stream.receiveCount++
 	if stream.receiveCount == 1 {
-		return &nodeattestorv1.AttestRequest{Request: &nodeattestorv1.AttestRequest_Payload{Payload: stream.helloPayload}}, nil
+		return &nodeattestorapi.AttestRequest{Request: &nodeattestorapi.AttestRequest_Payload{Payload: stream.helloPayload}}, nil
 	}
 	if stream.receiveCount != 2 || len(stream.sentResponses) != 1 {
 		return nil, fmt.Errorf("unexpected receive sequence")
 	}
-	challenge := new(protocolv1.ServerChallenge)
+	challenge := new(argusnodeattestor.NodeChallenge)
 	if err := proto.Unmarshal(stream.sentResponses[0].GetChallenge(), challenge); err != nil {
 		return nil, err
 	}
-	hello := new(protocolv1.AgentHello)
-	if err := proto.Unmarshal(stream.helloPayload, hello); err != nil {
-		return nil, err
-	}
-	hash, err := protocol.TranscriptHash(hello, challenge, stream.evidenceJSON)
+	publicKey := stream.privateKey.Public().(ed25519.PublicKey)
+	digest, err := protocol.TranscriptDigest(publicKey, challenge.Nonce, challenge.ExpiresAtUnixMs, stream.quote)
 	if err != nil {
 		return nil, err
 	}
-	signature := ed25519.Sign(stream.privateKey, hash[:])
+	signature := ed25519.Sign(stream.privateKey, digest[:])
 	if stream.badSignature {
 		signature[0] ^= 0xff
 	}
-	responseBytes, err := proto.Marshal(&protocolv1.EvidenceResponse{
-		ProtocolVersion: protocol.Version, SessionId: challenge.SessionId,
-		EvidenceJson: stream.evidenceJSON, TranscriptSignature: signature,
+	responseBytes, err := proto.Marshal(&argusnodeattestor.NodeEvidenceResponse{
+		TdxQuote: stream.quote, TranscriptSignature: signature,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &nodeattestorv1.AttestRequest{Request: &nodeattestorv1.AttestRequest_ChallengeResponse{ChallengeResponse: responseBytes}}, nil
+	if stream.unknownFields {
+		responseBytes = append(responseBytes, 0x98, 0x06, 0x01)
+	}
+	return &nodeattestorapi.AttestRequest{Request: &nodeattestorapi.AttestRequest_ChallengeResponse{ChallengeResponse: responseBytes}}, nil
 }
 
-func (stream *fakeAttestStream) Send(response *nodeattestorv1.AttestResponse) error {
+func (stream *fakeAttestStream) Send(response *nodeattestorapi.AttestResponse) error {
 	stream.sentResponses = append(stream.sentResponses, response)
 	return nil
 }
@@ -89,129 +91,115 @@ func (stream *fakeAttestStream) Context() context.Context     { return stream.co
 func (stream *fakeAttestStream) SendMsg(any) error            { return nil }
 func (stream *fakeAttestStream) RecvMsg(any) error            { return nil }
 
-func TestAttestVerifiesTranscriptBeforeTrusteeAndReturnsAttributes(t *testing.T) {
-	plugin, stream, verifier := configuredAttestation(t, false)
+func TestAttestPinsKeyVerifiesPoPAndReturnsFixedAttributes(t *testing.T) {
+	plugin, stream, verifier, _ := configuredAttestation(t)
 	if err := plugin.Attest(stream); err != nil {
 		t.Fatal(err)
 	}
 	if !verifier.called {
 		t.Fatal("Trustee verifier was not called")
 	}
-	if len(stream.sentResponses) != 2 {
-		t.Fatalf("response count = %d, want 2", len(stream.sentResponses))
-	}
-	challenge := new(protocolv1.ServerChallenge)
+	challenge := new(argusnodeattestor.NodeChallenge)
 	if err := proto.Unmarshal(stream.sentResponses[0].GetChallenge(), challenge); err != nil {
 		t.Fatal(err)
 	}
-	var request protocol.EvidenceRequest
-	if err := json.Unmarshal(challenge.EvidenceRequestJson, &request); err != nil {
+	expectedRuntimeData, err := protocol.NodeRuntimeData(challenge.Nonce, stream.privateKey.Public().(ed25519.PublicKey))
+	if err != nil {
 		t.Fatal(err)
 	}
-	keyID, _ := protocol.KeyID(stream.privateKey.Public().(ed25519.PublicKey))
-	if request.Target.TargetURI != "argus-node:"+keyID || request.ProfileDigest != plugin.state.config.Policy.Digest {
-		t.Fatal("challenge did not bind key ID and policy digest")
-	}
-	if !bytes.Equal(verifier.input.SessionID, challenge.SessionId) || !bytes.Equal(verifier.input.EvidenceRequestJSON, challenge.EvidenceRequestJson) {
-		t.Fatal("Trustee did not receive the exact challenge context")
+	if !bytes.Equal(verifier.input.Quote, stream.quote) || !bytes.Equal(verifier.input.RuntimeData, expectedRuntimeData) {
+		t.Fatalf("Trustee input = %#v", verifier.input)
 	}
 	attributes := stream.sentResponses[1].GetAgentAttributes()
-	if attributes == nil || attributes.CanReattest {
-		t.Fatalf("attributes = %#v", attributes)
-	}
-	expectedID, _ := protocol.AgentSPIFFEID("argus.local", stream.privateKey.Public().(ed25519.PublicKey))
-	if attributes.SpiffeId != expectedID {
-		t.Fatalf("Agent ID = %q, want %q", attributes.SpiffeId, expectedID)
-	}
-	expectedSelectors := []string{
-		"policy:openviking-prod-v1", "policy_digest:" + plugin.state.config.Policy.Digest,
-		"mrtd:aabb", "tcb_status:up_to_date", "debug:false", "instance_id:tdvm-0001",
-	}
-	if !equalStringSlices(attributes.SelectorValues, expectedSelectors) {
-		t.Fatalf("selectors = %v", attributes.SelectorValues)
+	if attributes == nil || attributes.SpiffeId != protocol.FixedAgentSPIFFEID || len(attributes.SelectorValues) != 0 || !attributes.CanReattest {
+		t.Fatalf("AgentAttributes = %#v", attributes)
 	}
 }
 
-func TestAttestRejectsBadSignatureBeforeTrustee(t *testing.T) {
-	plugin, stream, verifier := configuredAttestation(t, true)
+func TestAttestRejectsUnpinnedKeyBeforeGeneratingChallenge(t *testing.T) {
+	plugin, stream, verifier, _ := configuredAttestation(t)
+	plugin.state.config.SlotOwnerKeySHA256 = [sha256.Size]byte{}
+	plugin.random = failingReader{}
+	if err := plugin.Attest(stream); err == nil {
+		t.Fatal("unpinned proof key was accepted")
+	}
+	if verifier.called || len(stream.sentResponses) != 0 {
+		t.Fatal("challenge or Trustee call occurred before the static pin matched")
+	}
+}
+
+func TestAttestRejectsUnknownHelloFields(t *testing.T) {
+	plugin, stream, verifier, _ := configuredAttestation(t)
+	stream.helloPayload = append(stream.helloPayload, 0x98, 0x06, 0x01)
+	if err := plugin.Attest(stream); err == nil {
+		t.Fatal("AgentHello with unknown fields was accepted")
+	}
+	if verifier.called || len(stream.sentResponses) != 0 {
+		t.Fatal("unknown AgentHello reached challenge or Trustee")
+	}
+}
+
+func TestAttestRejectsBadPoPBeforeTrustee(t *testing.T) {
+	plugin, stream, verifier, _ := configuredAttestation(t)
+	stream.badSignature = true
 	if err := plugin.Attest(stream); err == nil {
 		t.Fatal("bad transcript signature was accepted")
 	}
-	if verifier.called {
-		t.Fatal("Trustee was called before transcript signature passed")
-	}
-	if len(stream.sentResponses) != 1 {
-		t.Fatal("AgentAttributes were returned after signature failure")
+	if verifier.called || len(stream.sentResponses) != 1 {
+		t.Fatal("Trustee or AgentAttributes was reached after bad PoP")
 	}
 }
 
-func TestRecordInstanceBindingRejectsCloneConflict(t *testing.T) {
-	store, err := newBindingStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
+func TestAttestRejectsUnknownResponseFields(t *testing.T) {
+	plugin, stream, verifier, _ := configuredAttestation(t)
+	stream.unknownFields = true
+	if err := plugin.Attest(stream); err == nil {
+		t.Fatal("NodeEvidenceResponse with unknown fields was accepted")
 	}
-	keyID := strings.Repeat("a", 64)
-	first := trustee.VerifiedNodeClaims{InstanceID: "tdvm-0001"}
-	second := trustee.VerifiedNodeClaims{InstanceID: "tdvm-0002"}
-	if err := recordInstanceBinding(store, keyID, first); err != nil {
-		t.Fatal(err)
-	}
-	if err := recordInstanceBinding(store, keyID, first); err != nil {
-		t.Fatal("same binding was not idempotent")
-	}
-	if err := recordInstanceBinding(store, keyID, second); err == nil {
-		t.Fatal("same key bound to another instance was accepted")
+	if verifier.called || len(stream.sentResponses) != 1 {
+		t.Fatal("unknown NodeEvidenceResponse reached Trustee or AgentAttributes")
 	}
 }
 
-func configuredAttestation(t *testing.T, badSignature bool) (*Plugin, *fakeAttestStream, *fakeVerifier) {
+func TestAttestRechecksChallengeExpiryAfterTrustee(t *testing.T) {
+	plugin, stream, verifier, currentTime := configuredAttestation(t)
+	verifier.hook = func() { *currentTime = currentTime.Add(plugin.state.config.ChallengeTTL) }
+	if err := plugin.Attest(stream); err == nil {
+		t.Fatal("attestation completing at challenge expiry was accepted")
+	}
+	if !verifier.called || len(stream.sentResponses) != 1 {
+		t.Fatal("expired appraisal returned AgentAttributes")
+	}
+}
+
+func configuredAttestation(t *testing.T) (*Plugin, *fakeAttestStream, *fakeVerifier, *time.Time) {
 	t.Helper()
-	loadedPolicy, err := policy.Parse([]byte(validPolicyYAML))
-	if err != nil {
-		t.Fatal(err)
-	}
 	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x41}, ed25519.SeedSize))
-	helloBytes, err := proto.Marshal(&protocolv1.AgentHello{
-		ProtocolVersion: protocol.Version, AttestationPublicKey: privateKey.Public().(ed25519.PublicKey),
-		AgentNonce: bytes.Repeat([]byte{0x42}, protocol.NonceSize), InstanceHint: "tdvm-0001",
-		Capabilities: []string{"report_data_v1", "tdx"},
-	})
+	publicKey := privateKey.Public().(ed25519.PublicKey)
+	helloBytes, err := proto.Marshal(&argusnodeattestor.AgentHello{ProofPublicKey: publicKey})
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims := trustee.VerifiedNodeClaims{
-		QuoteVerified: true, ReportDataVerified: true, TCBStatus: "up_to_date", MRTD: "aabb",
-		DebugEnabled: false, InstanceID: "tdvm-0001", PolicyID: loadedPolicy.Model.PolicyID, PolicyDigest: loadedPolicy.Digest,
-	}
-	verifier := &fakeVerifier{claims: claims}
+	keyDigest := sha256.Sum256(publicKey)
+	verifier := new(fakeVerifier)
+	currentTime := time.Now().UTC()
 	plugin := New()
-	bindings, err := newBindingStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
 	plugin.state = &runtimeState{config: &Config{
-		TrustDomain: "argus.local", Policy: loadedPolicy, ChallengeTTL: 30 * time.Second,
-		VerifierTimeout: time.Second, MaxEvidenceBytes: protocol.MaxEvidenceSize,
-	}, verifier: verifier, bindingStore: bindings}
-	plugin.random = bytes.NewReader(append(bytes.Repeat([]byte{0x51}, 32), bytes.Repeat([]byte{0x52}, 32)...))
-	plugin.now = time.Now
+		TrustDomain: requiredTrustDomain, AgentID: protocol.FixedAgentSPIFFEID,
+		SlotOwnerKeySHA256: keyDigest, ChallengeTTL: 30 * time.Second,
+		TrusteeTimeout: time.Second, MaxQuoteBytes: protocol.MaxQuoteSize,
+	}, verifier: verifier}
+	plugin.random = bytes.NewReader(bytes.Repeat([]byte{0x52}, protocol.NonceSize))
+	plugin.now = func() time.Time { return currentTime }
 	stream := &fakeAttestStream{
 		context: context.Background(), helloPayload: helloBytes, privateKey: privateKey,
-		evidenceJSON: []byte(`{"quote":"fixture"}`), badSignature: badSignature,
+		quote: []byte{0x01, 0x02, 0x03},
 	}
-	return plugin, stream, verifier
+	return plugin, stream, verifier, &currentTime
 }
 
-func equalStringSlices(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
-}
+type failingReader struct{}
 
-var _ nodeattestorv1.NodeAttestor_AttestServer = (*fakeAttestStream)(nil)
+func (failingReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
+
+var _ nodeattestorapi.NodeAttestor_AttestServer = (*fakeAttestStream)(nil)

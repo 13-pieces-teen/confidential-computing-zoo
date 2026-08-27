@@ -21,15 +21,17 @@ Entry、TC-API launch-only 和统一验证脚本集成；两个业务容器均�
 
 ## 推荐阅读顺序
 
-1. [双 TDVM + Egress/Ingress Broker 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
-2. [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
-3. [OpenViking Broker Sidecar 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
-4. [远程验证报告（`ea15713`）](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
+1. [真实 TDX Node Evidence 与 Trustee 改造方案及执行状态](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md)
+2. [双 TDVM + Egress/Ingress Broker 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
+3. [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
+4. [OpenViking Broker Sidecar 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
+5. [远程验证报告（`ea15713`）](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
 
 ## 顶层文档职责
 
 | 文档 | 职责 | 状态 |
 |---|---|---|
+| [Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md) | 自定义 Node 流程精简、真实 Evidence Provider/Trustee 改造、当前完成度与验收门槛 | 合同收敛与实施准备；真实路径未完成 |
 | [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 当前架构事实源：组件、身份、请求时序和边界 | 已确定 |
 | [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 当前双 Broker 代码、测试和完成条件 | 本地验证中；远程待复验 |
 | [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | OpenViking Broker API、PID reference 与生命周期详细设计 | 当前组件设计参考 |

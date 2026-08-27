@@ -1,2 +1,0 @@
-FROM ghcr.io/spiffe/spire-agent:1.15.2
-LABEL org.argus.m3.negative-workload="true"

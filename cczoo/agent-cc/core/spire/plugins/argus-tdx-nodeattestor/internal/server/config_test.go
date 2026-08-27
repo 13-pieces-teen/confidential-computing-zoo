@@ -1,10 +1,13 @@
 package server
 
 import (
-	"crypto/ed25519"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"math/big"
 	"os"
@@ -13,52 +16,56 @@ import (
 	"testing"
 	"time"
 
-	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 )
 
-func TestParseConfigLoadsImmutablePolicyAndTLS(t *testing.T) {
-	directory := t.TempDir()
-	paths := writeConfigFixtures(t, directory)
-	config, notes := parseConfig(&configv1.CoreConfiguration{TrustDomain: "argus.local"}, validServerHCL(paths))
+func TestParseConfigLoadsFixedIdentityAndTrusteePins(t *testing.T) {
+	paths := writeConfigFixtures(t, t.TempDir())
+	config, notes := parseConfig(&configapi.CoreConfiguration{TrustDomain: "argus.local"}, validServerHCL(paths))
 	if len(notes) != 0 {
 		t.Fatalf("config notes = %v", notes)
 	}
-	if config.Policy.Model.PolicyID != "openviking-prod-v1" || config.Policy.Digest == "" {
-		t.Fatalf("loaded policy = %#v", config.Policy)
+	if config.AgentID != protocol.FixedAgentSPIFFEID {
+		t.Fatalf("Agent ID = %q", config.AgentID)
 	}
-	if config.TrusteeTLSConfig.ServerName != "trustee.argus.local" || len(config.TrusteeTLSConfig.Certificates) != 1 {
-		t.Fatal("Trustee TLS configuration was not loaded")
+	if got := hex.EncodeToString(config.SlotOwnerKeySHA256[:]); got != strings.Repeat("ab", sha256.Size) {
+		t.Fatalf("slot owner key digest = %q", got)
 	}
-	if config.TrusteeURL.Path != verifyPath {
-		t.Fatalf("Trustee path = %q", config.TrusteeURL.Path)
+	if config.TrusteeURL.String() != "https://trustee.argus.local" {
+		t.Fatalf("Trustee URL = %q", config.TrusteeURL)
+	}
+	if config.TrusteeTLSConfig.ServerName != "trustee.argus.local" || config.EARPublicKey == nil {
+		t.Fatal("Trustee TLS or EAR key was not loaded")
+	}
+	if config.PolicyID != "argus-node-tdx-0123" || config.ChallengeTTL != 30*time.Second {
+		t.Fatalf("config = %#v", config)
 	}
 }
 
-func TestParseConfigRejectsUnsafeInputs(t *testing.T) {
-	directory := t.TempDir()
-	paths := writeConfigFixtures(t, directory)
-	if err := os.Chmod(paths.key, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	input := strings.ReplaceAll(validServerHCL(paths), `trustee_url = "https://trustee.argus.local"`, `trustee_url = "http://trustee.argus.local"`)
-	config, notes := parseConfig(&configv1.CoreConfiguration{TrustDomain: "argus.local"}, input)
-	if config != nil || len(notes) < 2 {
+func TestParseConfigRejectsOtherTrustDomainAgentAndNonHTTPSTrustee(t *testing.T) {
+	paths := writeConfigFixtures(t, t.TempDir())
+	input := strings.Replace(validServerHCL(paths), `trustee_url = "https://trustee.argus.local"`, `trustee_url = "http://trustee.argus.local"`, 1)
+	input = strings.Replace(input, protocol.FixedAgentSPIFFEID, "spiffe://argus.local/spire/agent/other", 1)
+	config, notes := parseConfig(&configapi.CoreConfiguration{TrustDomain: "other.local"}, input)
+	if config != nil || len(notes) < 3 {
 		t.Fatalf("config = %#v, notes = %v", config, notes)
 	}
 }
 
 type fixturePaths struct {
-	ca, cert, key, policy, bindingStateDir string
+	ca, earKey string
 }
 
 func writeConfigFixtures(t *testing.T, directory string) fixturePaths {
 	t.Helper()
-	_, caPrivate, err := ed25519.GenerateKey(rand.Reader)
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	caTemplate := &x509.Certificate{
+	template := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
 		Subject:               pkix.Name{CommonName: "Test CA"},
 		NotBefore:             now.Add(-time.Hour),
@@ -67,82 +74,48 @@ func writeConfigFixtures(t *testing.T, directory string) fixturePaths {
 		BasicConstraintsValid: true,
 		KeyUsage:              x509.KeyUsageCertSign,
 	}
-	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, caPrivate.Public(), caPrivate)
+	certificate, err := x509.CreateCertificate(rand.Reader, template, template, &caKey.PublicKey, caKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, clientPrivate, err := ed25519.GenerateKey(rand.Reader)
+	earKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clientTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(2),
-		Subject:      pkix.Name{CommonName: "SPIRE Server"},
-		NotBefore:    now.Add(-time.Hour),
-		NotAfter:     now.Add(time.Hour),
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-	}
-	clientDER, err := x509.CreateCertificate(rand.Reader, clientTemplate, caTemplate, clientPrivate.Public(), caPrivate)
+	earDER, err := x509.MarshalPKIXPublicKey(&earKey.PublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	paths := fixturePaths{
-		ca:              filepath.Join(directory, "ca.pem"),
-		cert:            filepath.Join(directory, "client.pem"),
-		key:             filepath.Join(directory, "client-key.pem"),
-		policy:          filepath.Join(directory, "policy.yaml"),
-		bindingStateDir: filepath.Join(directory, "bindings"),
+		ca:     filepath.ToSlash(filepath.Join(directory, "ca.pem")),
+		earKey: filepath.ToSlash(filepath.Join(directory, "ear-public-key.pem")),
 	}
-	writePEM(t, paths.ca, "CERTIFICATE", caDER, 0o644)
-	writePEM(t, paths.cert, "CERTIFICATE", clientDER, 0o644)
-	privateDER, err := x509.MarshalPKCS8PrivateKey(clientPrivate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writePEM(t, paths.key, "PRIVATE KEY", privateDER, 0o600)
-	if err := os.WriteFile(paths.policy, []byte(validPolicyYAML), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writePEM(t, paths.ca, "CERTIFICATE", certificate)
+	writePEM(t, paths.earKey, "PUBLIC KEY", earDER)
 	return paths
 }
 
-func writePEM(t *testing.T, path, kind string, contents []byte, mode os.FileMode) {
+func writePEM(t *testing.T, path, kind string, contents []byte) {
 	t.Helper()
-	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: kind, Bytes: contents}), mode); err != nil {
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: kind, Bytes: contents}), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func validServerHCL(paths fixturePaths) string {
 	return `
+agent_id = "` + protocol.FixedAgentSPIFFEID + `"
+slot_owner_key_sha256 = "` + strings.Repeat("ab", sha256.Size) + `"
 trustee_url = "https://trustee.argus.local"
 trustee_ca_path = "` + paths.ca + `"
-trustee_client_cert_path = "` + paths.cert + `"
-trustee_client_key_path = "` + paths.key + `"
 trustee_server_name = "trustee.argus.local"
-trustee_expected_spiffe_id = "spiffe://argus.local/service/trustee"
-trustee_auth_mode = "mtls_files"
-policy_path = "` + paths.policy + `"
-binding_state_dir = "` + paths.bindingStateDir + `"
+ear_public_key_path = "` + paths.earKey + `"
+ear_expected_issuer = "https://trustee.argus.local"
+ear_expected_profile = "tag:github.com,2024:confidential-containers/Trustee"
+policy_id = "argus-node-tdx-0123"
 challenge_ttl = "30s"
-verifier_timeout = "15s"
-max_evidence_bytes = 4194304
+trustee_timeout = "15s"
+max_quote_bytes = 1048576
+max_trustee_response_bytes = 1048576
 `
 }
-
-const validPolicyYAML = `
-version: 1
-policy_id: openviking-prod-v1
-tee:
-  type: tdx
-  allow_debug: false
-  allowed_tcb_status: [up_to_date]
-  allowed_mrtd: [aabb]
-  allowed_rtmr:
-    "0": [0011]
-binding:
-  require_report_data: true
-  require_attestation_key_digest: true
-  require_instance_id: true
-`

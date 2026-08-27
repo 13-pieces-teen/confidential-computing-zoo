@@ -3,48 +3,40 @@ package agent
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
-	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
-	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
-	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
-
-	protocolv1 "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor/v1"
+	nodeattestor "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/evidence"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/telemetry"
+	"github.com/hashicorp/go-hclog"
+	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
+	nodeattestorapi "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/nodeattestor/v1"
+	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ pluginsdk.NeedsLogger = (*Plugin)(nil)
 var _ pluginsdk.NeedsHostServices = (*Plugin)(nil)
 
-// EvidenceProvider collects guest-local TDX evidence for the canonical request
-// issued by the SPIRE Server. It does not decide whether the evidence is valid.
 type EvidenceProvider interface {
-	GetEvidence(context.Context, []byte) ([]byte, error)
+	GetNodeEvidence(context.Context, []byte, []byte) ([]byte, error)
 }
 
 type ProviderFactory func(*Config) (EvidenceProvider, error)
 
-// Plugin implements the Agent half of the Argus TDX NodeAttestor handshake.
 type Plugin struct {
-	nodeattestorv1.UnimplementedNodeAttestorServer
-	configv1.UnimplementedConfigServer
+	nodeattestorapi.UnimplementedNodeAttestorServer
+	configapi.UnimplementedConfigServer
 
 	configMu sync.RWMutex
 	config   *Config
 	logger   hclog.Logger
 
-	random          io.Reader
 	keyLoader       func(string) (ed25519.PrivateKey, error)
 	providerFactory ProviderFactory
 	telemetry       telemetry.Recorder
@@ -52,46 +44,27 @@ type Plugin struct {
 
 func New() *Plugin {
 	return &Plugin{
-		random:    rand.Reader,
-		keyLoader: loadOrCreateAttestationKey,
+		keyLoader: loadProofKey,
 		providerFactory: func(config *Config) (EvidenceProvider, error) {
-			return evidence.NewClient(config.EvidenceEndpoint, config.EvidenceTimeout, config.MaxEvidenceBytes)
+			return evidence.NewClient(config.EvidenceSocketPath, config.EvidenceTimeout, config.MaxQuoteBytes)
 		},
 	}
 }
 
-// AidAttestation performs a two-message exchange:
-//
-//  1. send the persistent proof key and a fresh Agent nonce;
-//  2. collect evidence for the Server challenge and sign the full transcript.
-//
-// The Server, not this plugin, asks the Trustee to validate the TDX evidence.
-func (plugin *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttestationServer) (err error) {
+func (plugin *Plugin) AidAttestation(stream nodeattestorapi.NodeAttestor_AidAttestationServer) (err error) {
 	started := time.Now()
 	defer func() { plugin.telemetry.Attestation("agent", started, err) }()
 	config, err := plugin.getConfig()
 	if err != nil {
 		return err
 	}
-	privateKey, err := plugin.keyLoader(config.AttestationKeyPath)
+	privateKey, err := plugin.keyLoader(config.ProofKeyPath)
 	if err != nil {
-		return status.Errorf(codes.Internal, "load attestation key: %v", err)
+		return status.Errorf(codes.Internal, "load proof key: %v", err)
 	}
 	publicKey := privateKey.Public().(ed25519.PublicKey)
-	// The Agent nonce makes independently initiated handshakes distinguishable;
-	// the Server contributes a separate nonce and session ID in its challenge.
-	agentNonce := make([]byte, protocol.NonceSize)
-	if _, err := io.ReadFull(plugin.random, agentNonce); err != nil {
-		return status.Errorf(codes.Internal, "generate agent nonce: %v", err)
-	}
 
-	hello := &protocolv1.AgentHello{
-		ProtocolVersion:      protocol.Version,
-		AttestationPublicKey: publicKey,
-		AgentNonce:           agentNonce,
-		InstanceHint:         config.InstanceHint,
-		Capabilities:         []string{"report_data_v1", "tdx"},
-	}
+	hello := &nodeattestor.AgentHello{ProofPublicKey: publicKey}
 	if err := protocol.ValidateAgentHello(hello); err != nil {
 		return status.Errorf(codes.Internal, "construct AgentHello: %v", err)
 	}
@@ -99,89 +72,73 @@ func (plugin *Plugin) AidAttestation(stream nodeattestorv1.NodeAttestor_AidAttes
 	if err != nil {
 		return status.Errorf(codes.Internal, "marshal AgentHello: %v", err)
 	}
-	if err := stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
-		Data: &nodeattestorv1.PayloadOrChallengeResponse_Payload{Payload: helloBytes},
+	if err := stream.Send(&nodeattestorapi.PayloadOrChallengeResponse{
+		Data: &nodeattestorapi.PayloadOrChallengeResponse_Payload{Payload: helloBytes},
 	}); err != nil {
 		return status.Errorf(codes.Unavailable, "send AgentHello: %v", err)
 	}
 
 	spireChallenge, err := stream.Recv()
 	if err != nil {
-		return status.Errorf(codes.Unavailable, "receive ServerChallenge: %v", err)
+		return status.Errorf(codes.Unavailable, "receive NodeChallenge: %v", err)
 	}
 	if len(spireChallenge.Challenge) == 0 || len(spireChallenge.Challenge) > protocol.MaxChallengeSize {
-		return status.Error(codes.InvalidArgument, "ServerChallenge size is outside the allowed range")
+		return status.Error(codes.InvalidArgument, "NodeChallenge size is outside the allowed range")
 	}
-	challenge := new(protocolv1.ServerChallenge)
+	challenge := new(nodeattestor.NodeChallenge)
 	if err := proto.Unmarshal(spireChallenge.Challenge, challenge); err != nil {
-		return status.Errorf(codes.InvalidArgument, "unmarshal ServerChallenge: %v", err)
+		return status.Errorf(codes.InvalidArgument, "unmarshal NodeChallenge: %v", err)
 	}
-	if err := protocol.ValidateServerChallenge(challenge); err != nil {
-		return status.Errorf(codes.InvalidArgument, "validate ServerChallenge: %v", err)
-	}
-	_, evidenceRequest, err := protocol.CanonicalEvidenceRequest(challenge.EvidenceRequestJson)
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "validate EvidenceRequest: %v", err)
-	}
-	keyID, err := protocol.KeyID(publicKey)
-	if err != nil {
-		return status.Errorf(codes.Internal, "derive key ID: %v", err)
-	}
-	if evidenceRequest.Target.TargetURI != "argus-node:"+keyID {
-		return status.Error(codes.PermissionDenied, "EvidenceRequest target does not match the attestation key")
+	if err := protocol.ValidateNodeChallenge(challenge); err != nil {
+		return status.Errorf(codes.InvalidArgument, "validate NodeChallenge: %v", err)
 	}
 
-	// Evidence collection remains on a Unix socket or loopback HTTP endpoint;
-	// the untrusted result is authenticated by the transcript and later Trustee
-	// verification before SPIRE accepts any Agent attributes.
 	provider, err := plugin.providerFactory(config)
 	if err != nil {
 		return status.Errorf(codes.Internal, "configure Evidence Provider client: %v", err)
 	}
 	evidenceContext, cancel := context.WithTimeout(stream.Context(), config.EvidenceTimeout)
 	defer cancel()
-	evidenceJSON, err := provider.GetEvidence(evidenceContext, challenge.EvidenceRequestJson)
+	quote, err := provider.GetNodeEvidence(evidenceContext, challenge.Nonce, publicKey)
 	if err != nil {
-		return status.Errorf(codes.Unavailable, "obtain evidence: %v", err)
+		return status.Errorf(codes.Unavailable, "obtain node evidence: %v", err)
 	}
-	plugin.telemetry.EvidenceBytes("agent", len(evidenceJSON))
-	if int64(len(evidenceJSON)) > config.MaxEvidenceBytes {
-		return status.Error(codes.ResourceExhausted, "evidence exceeds configured size limit")
+	plugin.telemetry.EvidenceBytes("agent", len(quote))
+	if len(quote) == 0 || int64(len(quote)) > config.MaxQuoteBytes {
+		return status.Error(codes.ResourceExhausted, "TDX Quote size is outside the allowed range")
 	}
-	transcriptHash, err := protocol.TranscriptHash(hello, challenge, evidenceJSON)
+	digest, err := protocol.TranscriptDigest(publicKey, challenge.Nonce, challenge.ExpiresAtUnixMs, quote)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "construct transcript: %v", err)
 	}
-	response := &protocolv1.EvidenceResponse{
-		ProtocolVersion:     protocol.Version,
-		SessionId:           append([]byte(nil), challenge.SessionId...),
-		EvidenceJson:        evidenceJSON,
-		TranscriptSignature: ed25519.Sign(privateKey, transcriptHash[:]),
+	response := &nodeattestor.NodeEvidenceResponse{
+		TdxQuote:            quote,
+		TranscriptSignature: ed25519.Sign(privateKey, digest[:]),
 	}
-	if err := protocol.ValidateEvidenceResponse(response, challenge.SessionId); err != nil {
-		return status.Errorf(codes.InvalidArgument, "construct EvidenceResponse: %v", err)
+	if err := protocol.ValidateNodeEvidenceResponse(response, config.MaxQuoteBytes); err != nil {
+		return status.Errorf(codes.InvalidArgument, "construct NodeEvidenceResponse: %v", err)
 	}
 	responseBytes, err := (proto.MarshalOptions{Deterministic: true}).Marshal(response)
 	if err != nil {
-		return status.Errorf(codes.Internal, "marshal EvidenceResponse: %v", err)
+		return status.Errorf(codes.Internal, "marshal NodeEvidenceResponse: %v", err)
 	}
-	if err := stream.Send(&nodeattestorv1.PayloadOrChallengeResponse{
-		Data: &nodeattestorv1.PayloadOrChallengeResponse_ChallengeResponse{ChallengeResponse: responseBytes},
+	if err := stream.Send(&nodeattestorapi.PayloadOrChallengeResponse{
+		Data: &nodeattestorapi.PayloadOrChallengeResponse_ChallengeResponse{ChallengeResponse: responseBytes},
 	}); err != nil {
-		return status.Errorf(codes.Unavailable, "send EvidenceResponse: %v", err)
+		return status.Errorf(codes.Unavailable, "send NodeEvidenceResponse: %v", err)
 	}
 	return nil
 }
 
-func (plugin *Plugin) Validate(_ context.Context, request *configv1.ValidateRequest) (*configv1.ValidateResponse, error) {
+func (plugin *Plugin) Validate(_ context.Context, request *configapi.ValidateRequest) (*configapi.ValidateResponse, error) {
 	if request == nil {
-		return &configv1.ValidateResponse{Valid: false, Notes: []string{"request is required"}}, nil
+		return &configapi.ValidateResponse{Valid: false, Notes: []string{"request is required"}}, nil
 	}
 	_, notes := parseConfig(request.CoreConfiguration, request.HclConfiguration)
-	return &configv1.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
+	return &configapi.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
 }
 
-func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
+func (plugin *Plugin) Configure(_ context.Context, request *configapi.ConfigureRequest) (*configapi.ConfigureResponse, error) {
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
@@ -192,7 +149,7 @@ func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRe
 	plugin.configMu.Lock()
 	plugin.config = config
 	plugin.configMu.Unlock()
-	return &configv1.ConfigureResponse{}, nil
+	return &configapi.ConfigureResponse{}, nil
 }
 
 func (plugin *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
@@ -214,5 +171,5 @@ func (plugin *Plugin) getConfig() (*Config, error) {
 }
 
 func (plugin *Plugin) String() string {
-	return fmt.Sprintf("argus_tdx Agent NodeAttestor")
+	return "argus_tdx Agent NodeAttestor"
 }

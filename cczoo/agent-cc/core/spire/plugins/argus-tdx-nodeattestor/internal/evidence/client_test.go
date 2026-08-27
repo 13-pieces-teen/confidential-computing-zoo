@@ -1,88 +1,129 @@
 package evidence
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 )
 
-func TestGetEvidencePostsOriginalRequest(t *testing.T) {
-	requestBody := `{"version":"v1"}`
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodPost {
-			t.Errorf("method = %s", request.Method)
-		}
-		if request.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("Content-Type = %q", request.Header.Get("Content-Type"))
-		}
-		contents, err := io.ReadAll(request.Body)
-		if err != nil {
-			t.Error(err)
-		}
-		if string(contents) != requestBody {
-			t.Errorf("request body = %s", contents)
-		}
-		_, _ = writer.Write([]byte(`{"evidence":"fixture"}`))
-	}))
-	defer server.Close()
-	endpoint, err := url.Parse(server.URL)
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
+}
+
+func TestGetNodeEvidenceUsesTypedNodeEndpoint(t *testing.T) {
+	nonce := bytes.Repeat([]byte{0x11}, protocol.NonceSize)
+	publicKey := bytes.Repeat([]byte{0x22}, protocol.PublicKeySize)
+	quote := []byte{0x01, 0x02, 0x03, 0xff}
+
+	client := &Client{
+		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			if request.Method != http.MethodPost {
+				t.Errorf("method = %s", request.Method)
+			}
+			if request.URL.Path != "/node-evidence" {
+				t.Errorf("path = %s", request.URL.Path)
+			}
+			if request.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("Content-Type = %q", request.Header.Get("Content-Type"))
+			}
+			var body nodeEvidenceRequest
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Nonce != base64.RawURLEncoding.EncodeToString(nonce) {
+				t.Errorf("nonce = %q", body.Nonce)
+			}
+			if body.ProofPublicKey != base64.RawURLEncoding.EncodeToString(publicKey) {
+				t.Errorf("proof public key = %q", body.ProofPublicKey)
+			}
+			response := `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":"` + base64.RawURLEncoding.EncodeToString(quote) + `"}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(response)),
+				Header:     make(http.Header),
+			}, nil
+		})},
+		requestURL: "http://unix/node-evidence",
+		maxBytes:   1024,
+	}
+
+	got, err := client.GetNodeEvidence(context.Background(), nonce, publicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := NewClient(endpoint, time.Second, 1024)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := client.GetEvidence(context.Background(), []byte(requestBody))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(result) != `{"evidence":"fixture"}` {
-		t.Fatalf("response = %s", result)
+	if !bytes.Equal(got, quote) {
+		t.Fatalf("quote = %x, want %x", got, quote)
 	}
 }
 
-func TestGetEvidenceFailsClosedOnStatusAndSize(t *testing.T) {
-	for name, handler := range map[string]http.HandlerFunc{
-		"status": func(writer http.ResponseWriter, _ *http.Request) {
-			writer.WriteHeader(http.StatusServiceUnavailable)
-		},
-		"size": func(writer http.ResponseWriter, _ *http.Request) {
-			_, _ = writer.Write([]byte(strings.Repeat("x", 17)))
-		},
+func TestGetNodeEvidenceRejectsInvalidProviderResponses(t *testing.T) {
+	validQuote := base64.RawURLEncoding.EncodeToString([]byte{1})
+	for name, test := range map[string]struct {
+		statusCode int
+		body       string
+	}{
+		"status":         {statusCode: http.StatusServiceUnavailable},
+		"evidence type":  {statusCode: http.StatusOK, body: `{"evidence_type":"other","quote_format":"tdx","quote":"` + validQuote + `"}`},
+		"quote format":   {statusCode: http.StatusOK, body: `{"evidence_type":"tdx_quote","quote_format":"other","quote":"` + validQuote + `"}`},
+		"unknown field":  {statusCode: http.StatusOK, body: `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":"` + validQuote + `","other":true}`},
+		"invalid quote":  {statusCode: http.StatusOK, body: `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":"***"}`},
+		"empty quote":    {statusCode: http.StatusOK, body: `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":""}`},
+		"oversize quote": {statusCode: http.StatusOK, body: `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":"` + base64.RawURLEncoding.EncodeToString([]byte{1, 2}) + `"}`},
 	} {
 		t.Run(name, func(t *testing.T) {
-			server := httptest.NewServer(handler)
-			defer server.Close()
-			endpoint, err := url.Parse(server.URL)
-			if err != nil {
-				t.Fatal(err)
+			client := &Client{
+				httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					return &http.Response{StatusCode: test.statusCode, Body: io.NopCloser(strings.NewReader(test.body)), Header: make(http.Header)}, nil
+				})},
+				requestURL: "http://unix/node-evidence",
+				maxBytes:   1,
 			}
-			client, err := NewClient(endpoint, time.Second, 16)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := client.GetEvidence(context.Background(), []byte(`{}`)); err == nil {
-				t.Fatal("invalid Evidence Provider response was accepted")
+			if _, err := client.GetNodeEvidence(context.Background(), make([]byte, protocol.NonceSize), make([]byte, protocol.PublicKeySize)); err == nil {
+				t.Fatal("invalid Provider response was accepted")
 			}
 		})
 	}
 }
 
-func TestNewClientRejectsInvalidLimits(t *testing.T) {
-	if _, err := NewClient(nil, time.Second, 1); err == nil {
-		t.Fatal("nil endpoint was accepted")
+func TestNewClientRequiresAbsoluteUnixSocketAndLimits(t *testing.T) {
+	client, err := NewClient("/run/argus/evidence-provider.sock", time.Second, 1)
+	if err != nil {
+		t.Fatal(err)
 	}
-	endpoint := &url.URL{Scheme: "unix", Path: "/run/argus/evidence.sock"}
-	if _, err := NewClient(endpoint, 0, 1); err == nil {
+	transport := client.httpClient.Transport.(*http.Transport)
+	if transport.Proxy != nil {
+		t.Fatal("Unix-socket client retained environment proxy routing")
+	}
+	if _, err := NewClient("relative.sock", time.Second, 1); err == nil {
+		t.Fatal("relative socket path was accepted")
+	}
+	if _, err := NewClient("/run/argus/evidence-provider.sock", 0, 1); err == nil {
 		t.Fatal("zero timeout was accepted")
 	}
-	if _, err := NewClient(endpoint, time.Second, 0); err == nil {
-		t.Fatal("zero size limit was accepted")
+	if _, err := NewClient("/run/argus/evidence-provider.sock", time.Second, 0); err == nil {
+		t.Fatal("zero quote size was accepted")
+	}
+	if _, err := NewClient("/run/argus/evidence-provider.sock", time.Second, protocol.MaxQuoteSize+1); err == nil {
+		t.Fatal("oversize quote limit was accepted")
+	}
+}
+
+func TestGetNodeEvidenceRejectsInvalidRequestLengths(t *testing.T) {
+	client := &Client{httpClient: http.DefaultClient, requestURL: "http://unix/node-evidence", maxBytes: 1}
+	if _, err := client.GetNodeEvidence(context.Background(), make([]byte, protocol.NonceSize-1), make([]byte, protocol.PublicKeySize)); err == nil {
+		t.Fatal("invalid nonce was accepted")
+	}
+	if _, err := client.GetNodeEvidence(context.Background(), make([]byte, protocol.NonceSize), make([]byte, protocol.PublicKeySize-1)); err == nil {
+		t.Fatal("invalid proof public key was accepted")
 	}
 }

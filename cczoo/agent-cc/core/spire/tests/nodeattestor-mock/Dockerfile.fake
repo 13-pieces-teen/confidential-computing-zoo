@@ -1,4 +1,0 @@
-FROM scratch
-COPY plugins/fake-services /fake-services
-USER 1000:1000
-ENTRYPOINT ["/fake-services"]

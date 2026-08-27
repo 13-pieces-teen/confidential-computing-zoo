@@ -8,14 +8,14 @@ import (
 	"unicode"
 
 	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
-	metricsv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/hostservice/common/metrics/v1"
+	metricsapi "github.com/spiffe/spire-plugin-sdk/proto/spire/hostservice/common/metrics/v1"
 	"google.golang.org/grpc/status"
 )
 
 // Recorder emits best-effort SPIRE host metrics. Metrics failures never alter
 // the attestation decision or mask the original protocol error.
 type Recorder struct {
-	client metricsv1.MetricsServiceClient
+	client metricsapi.MetricsServiceClient
 }
 
 func (recorder *Recorder) Broker(broker pluginsdk.ServiceBroker) {
@@ -32,7 +32,7 @@ func (recorder *Recorder) Attestation(side string, started time.Time, err error)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, _ = recorder.client.MeasureSince(ctx, &metricsv1.MeasureSinceRequest{
+	_, _ = recorder.client.MeasureSince(ctx, &metricsapi.MeasureSinceRequest{
 		Key: []string{"argus_nodeattestor", "duration"}, Time: started.UnixNano(),
 		Labels: labels("side", side),
 	})
@@ -44,7 +44,7 @@ func (recorder *Recorder) EvidenceBytes(side string, size int) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, _ = recorder.client.AddSample(ctx, &metricsv1.AddSampleRequest{
+	_, _ = recorder.client.AddSample(ctx, &metricsapi.AddSampleRequest{
 		Key: []string{"argus_nodeattestor", "evidence_bytes"}, Val: float32(size),
 		Labels: labels("side", side),
 	})
@@ -57,13 +57,13 @@ func (recorder *Recorder) Trustee(err error) {
 	))
 }
 
-func (recorder *Recorder) increment(key []string, metricLabels []*metricsv1.Label) {
+func (recorder *Recorder) increment(key []string, metricLabels []*metricsapi.Label) {
 	if !recorder.client.IsInitialized() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, _ = recorder.client.IncrCounter(ctx, &metricsv1.IncrCounterRequest{
+	_, _ = recorder.client.IncrCounter(ctx, &metricsapi.IncrCounterRequest{
 		Key: key, Val: 1, Labels: metricLabels,
 	})
 }
@@ -107,10 +107,10 @@ func snakeCase(input string) string {
 	return output.String()
 }
 
-func labels(values ...string) []*metricsv1.Label {
-	output := make([]*metricsv1.Label, 0, len(values)/2)
+func labels(values ...string) []*metricsapi.Label {
+	output := make([]*metricsapi.Label, 0, len(values)/2)
 	for index := 0; index+1 < len(values); index += 2 {
-		output = append(output, &metricsv1.Label{Name: values[index], Value: values[index+1]})
+		output = append(output, &metricsapi.Label{Name: values[index], Value: values[index+1]})
 	}
 	return output
 }

@@ -3,98 +3,73 @@ package protocol
 import (
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-
-	nodeattestorv1 "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor/v1"
-	"google.golang.org/protobuf/proto"
 )
 
-// BindingReportData derives the 64-byte TDX REPORTDATA value from the exact
-// EvidenceRequest and BindingClaims. SHA-384 fills the first 48 bytes; the TDX
-// field's remaining 16 bytes intentionally stay zero.
-func BindingReportData(evidenceRequestJSON, bindingClaimsJSON []byte) ([64]byte, error) {
-	var reportData [64]byte
-	canonicalRequest, _, err := CanonicalEvidenceRequest(evidenceRequestJSON)
-	if err != nil {
-		return reportData, fmt.Errorf("canonicalize EvidenceRequest: %w", err)
+func NodeRuntimeData(nonce, proofPublicKey []byte) ([]byte, error) {
+	if len(nonce) != NonceSize {
+		return nil, fmt.Errorf("nonce must be %d bytes", NonceSize)
 	}
-	canonicalClaims, _, err := CanonicalBindingClaims(bindingClaimsJSON)
-	if err != nil {
-		return reportData, fmt.Errorf("canonicalize BindingClaims: %w", err)
+	if len(proofPublicKey) != PublicKeySize {
+		return nil, fmt.Errorf("proof public key must be %d bytes", PublicKeySize)
 	}
 
-	hasher := sha512.New384()
-	_, _ = hasher.Write(bindingDomain)
-	_, _ = hasher.Write(canonicalRequest)
-	_, _ = hasher.Write(canonicalClaims)
-	copy(reportData[:48], hasher.Sum(nil))
+	runtimeData := make([]byte, 0, 2+len(reportDataDomain)+2+len(FixedAgentSPIFFEID)+NonceSize+PublicKeySize)
+	runtimeData = appendLP16(runtimeData, []byte(reportDataDomain))
+	runtimeData = appendLP16(runtimeData, []byte(FixedAgentSPIFFEID))
+	runtimeData = append(runtimeData, nonce...)
+	runtimeData = append(runtimeData, proofPublicKey...)
+	return runtimeData, nil
+}
+
+func ReportData(nonce, proofPublicKey []byte) ([64]byte, error) {
+	var reportData [64]byte
+	runtimeData, err := NodeRuntimeData(nonce, proofPublicKey)
+	if err != nil {
+		return reportData, err
+	}
+	digest := sha512.Sum384(runtimeData)
+	copy(reportData[:48], digest[:])
 	return reportData, nil
 }
 
-// EvidenceRequestDigest names the canonical request used by both the Server
-// and Trustee, preventing semantically equivalent JSON encodings from drifting.
-func EvidenceRequestDigest(evidenceRequestJSON []byte) (string, error) {
-	canonical, _, err := CanonicalEvidenceRequest(evidenceRequestJSON)
-	if err != nil {
-		return "", err
+func TranscriptDigest(proofPublicKey, nonce []byte, expiresAtUnixMs uint64, tdxQuote []byte) ([64]byte, error) {
+	var result [64]byte
+	if len(proofPublicKey) != PublicKeySize {
+		return result, fmt.Errorf("proof public key must be %d bytes", PublicKeySize)
 	}
-	digest := sha256.Sum256(canonical)
-	return "sha256:" + hex.EncodeToString(digest[:]), nil
+	if len(nonce) != NonceSize {
+		return result, fmt.Errorf("nonce must be %d bytes", NonceSize)
+	}
+	if len(tdxQuote) == 0 {
+		return result, fmt.Errorf("TDX Quote is required")
+	}
+
+	quoteDigest := sha256.Sum256(tdxQuote)
+	transcript := make([]byte, 0, 2+len(transcriptDomain)+PublicKeySize+NonceSize+8+sha256.Size)
+	transcript = appendLP16(transcript, []byte(transcriptDomain))
+	transcript = append(transcript, proofPublicKey...)
+	transcript = append(transcript, nonce...)
+	expiresAt := make([]byte, 8)
+	binary.BigEndian.PutUint64(expiresAt, expiresAtUnixMs)
+	transcript = append(transcript, expiresAt...)
+	transcript = append(transcript, quoteDigest[:]...)
+	return sha512.Sum512(transcript), nil
 }
 
-// KeyID is the stable public identifier for the Agent's Ed25519 proof key.
-func KeyID(attestationPublicKey []byte) (string, error) {
-	if len(attestationPublicKey) != PublicKeySize {
-		return "", fmt.Errorf("attestation public key must be %d bytes", PublicKeySize)
+func KeyID(proofPublicKey []byte) (string, error) {
+	if len(proofPublicKey) != PublicKeySize {
+		return "", fmt.Errorf("proof public key must be %d bytes", PublicKeySize)
 	}
-	digest := sha256.Sum256(attestationPublicKey)
+	digest := sha256.Sum256(proofPublicKey)
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// AgentSPIFFEID derives node identity from the proof key rather than a
-// self-reported instance name.
-func AgentSPIFFEID(trustDomain string, attestationPublicKey []byte) (string, error) {
-	if trustDomain == "" {
-		return "", fmt.Errorf("trust domain is required")
-	}
-	keyID, err := KeyID(attestationPublicKey)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("spiffe://%s/spire/agent/argus_tdx/%s", trustDomain, keyID), nil
-}
-
-// TranscriptHash binds the complete hello, challenge, and evidence bytes. The
-// Agent signs this hash so none of them can be substituted independently.
-func TranscriptHash(hello *nodeattestorv1.AgentHello, challenge *nodeattestorv1.ServerChallenge, evidenceJSON []byte) ([32]byte, error) {
-	var result [32]byte
-	if err := ValidateAgentHello(hello); err != nil {
-		return result, err
-	}
-	if err := ValidateServerChallenge(challenge); err != nil {
-		return result, err
-	}
-	if len(evidenceJSON) == 0 || len(evidenceJSON) > MaxEvidenceSize {
-		return result, fmt.Errorf("evidence JSON size is outside the allowed range")
-	}
-
-	marshal := proto.MarshalOptions{Deterministic: true}
-	helloBytes, err := marshal.Marshal(hello)
-	if err != nil {
-		return result, fmt.Errorf("marshal AgentHello: %w", err)
-	}
-	challengeBytes, err := marshal.Marshal(challenge)
-	if err != nil {
-		return result, fmt.Errorf("marshal ServerChallenge: %w", err)
-	}
-	evidenceDigest := sha256.Sum256(evidenceJSON)
-
-	hasher := sha256.New()
-	_, _ = hasher.Write(transcriptDomain)
-	_, _ = hasher.Write(helloBytes)
-	_, _ = hasher.Write(challengeBytes)
-	_, _ = hasher.Write(evidenceDigest[:])
-	copy(result[:], hasher.Sum(nil))
-	return result, nil
+func appendLP16(destination, value []byte) []byte {
+	length := make([]byte, 2)
+	binary.BigEndian.PutUint16(length, uint16(len(value)))
+	destination = append(destination, length...)
+	return append(destination, value...)
 }

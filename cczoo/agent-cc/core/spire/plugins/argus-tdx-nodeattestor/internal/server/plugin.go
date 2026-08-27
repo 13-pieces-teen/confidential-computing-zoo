@@ -4,35 +4,22 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
+	"crypto/sha256"
 	"io"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/spiffe/spire-plugin-sdk/pluginsdk"
-	nodeattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
-	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+	nodeattestorapi "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/nodeattestor/v1"
+	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	protocolv1 "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor/v1"
+	argusnodeattestor "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/telemetry"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/trustee"
 )
-
-var _ pluginsdk.NeedsLogger = (*Plugin)(nil)
-var _ pluginsdk.NeedsHostServices = (*Plugin)(nil)
-
-var requiredCapabilities = map[string]struct{}{
-	"report_data_v1": {},
-	"tdx":            {},
-}
 
 type TrusteeVerifier interface {
 	VerifyNode(context.Context, trustee.VerifyInput) (trustee.VerifiedNodeClaims, error)
@@ -41,26 +28,20 @@ type TrusteeVerifier interface {
 type VerifierFactory func(*Config) (TrusteeVerifier, error)
 
 type runtimeState struct {
-	config       *Config
-	verifier     TrusteeVerifier
-	bindingStore *bindingStore
+	config   *Config
+	verifier TrusteeVerifier
 }
 
-// Plugin implements the Server half of the Argus TDX NodeAttestor handshake.
-// It authenticates the Agent transcript, delegates quote verification to the
-// Trustee, and returns SPIRE Agent attributes only after all bindings pass.
 type Plugin struct {
-	nodeattestorv1.UnimplementedNodeAttestorServer
-	configv1.UnimplementedConfigServer
+	nodeattestorapi.UnimplementedNodeAttestorServer
+	configapi.UnimplementedConfigServer
 
 	stateMu sync.RWMutex
 	state   *runtimeState
-	logger  hclog.Logger
 
 	random          io.Reader
 	now             func() time.Time
 	verifierFactory VerifierFactory
-	telemetry       telemetry.Recorder
 }
 
 func New() *Plugin {
@@ -71,22 +52,18 @@ func New() *Plugin {
 			return trustee.NewClient(
 				config.TrusteeURL,
 				config.TrusteeTLSConfig,
-				config.TrusteeExpectedSPIFFEID,
-				config.VerifierTimeout,
-				config.MaxEvidenceBytes,
+				config.EARPublicKey,
+				config.EARExpectedIssuer,
+				config.EARExpectedProfile,
+				config.PolicyID,
+				config.TrusteeTimeout,
+				config.MaxTrusteeResponseBytes,
 			)
 		},
 	}
 }
 
-// Attest advances a fixed two-request state machine:
-//
-//  1. validate AgentHello and issue a fresh, policy-bound challenge;
-//  2. authenticate EvidenceResponse, verify it with the Trustee, persist the
-//     proof-key binding, and finally return AgentAttributes.
-func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (err error) {
-	started := time.Now()
-	defer func() { plugin.telemetry.Attestation("server", started, err) }()
+func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) error {
 	state, err := plugin.getState()
 	if err != nil {
 		return err
@@ -96,9 +73,9 @@ func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (e
 		return status.Errorf(codes.Unavailable, "receive AgentHello: %v", err)
 	}
 	if len(initial.GetPayload()) == 0 || len(initial.GetChallengeResponse()) != 0 || len(initial.GetPayload()) > protocol.MaxAgentHelloSize {
-		return status.Error(codes.InvalidArgument, "first attestation request must contain only AgentHello payload")
+		return status.Error(codes.InvalidArgument, "first attestation request must contain only AgentHello")
 	}
-	hello := new(protocolv1.AgentHello)
+	hello := new(argusnodeattestor.AgentHello)
 	if err := proto.Unmarshal(initial.GetPayload(), hello); err != nil {
 		return status.Errorf(codes.InvalidArgument, "unmarshal AgentHello: %v", err)
 	}
@@ -108,121 +85,90 @@ func (plugin *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) (e
 	if err := protocol.ValidateAgentHello(hello); err != nil {
 		return status.Errorf(codes.InvalidArgument, "validate AgentHello: %v", err)
 	}
-	if err := validateCapabilities(hello.Capabilities); err != nil {
-		return status.Errorf(codes.InvalidArgument, "validate AgentHello capabilities: %v", err)
-	}
-	keyID, err := protocol.KeyID(hello.AttestationPublicKey)
-	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "derive key ID: %v", err)
+	keyDigest := sha256.Sum256(hello.ProofPublicKey)
+	if keyDigest != state.config.SlotOwnerKeySHA256 {
+		return status.Error(codes.PermissionDenied, "proof public key does not match the fixed Agent slot")
 	}
 
-	// Server-generated session and nonce values prevent an Agent from choosing
-	// or replaying the freshness input bound into evidence.
-	sessionID := make([]byte, protocol.SessionIDSize)
 	nonce := make([]byte, protocol.NonceSize)
-	if _, err := io.ReadFull(plugin.random, sessionID); err != nil {
-		return status.Errorf(codes.Internal, "generate session ID: %v", err)
-	}
 	if _, err := io.ReadFull(plugin.random, nonce); err != nil {
 		return status.Errorf(codes.Internal, "generate challenge nonce: %v", err)
 	}
-	evidenceRequestJSON, err := buildEvidenceRequest(state.config, nonce, keyID)
+	expiresAtUnixMs := uint64(plugin.now().Add(state.config.ChallengeTTL).UnixMilli())
+	challenge := &argusnodeattestor.NodeChallenge{Nonce: nonce, ExpiresAtUnixMs: expiresAtUnixMs}
+	challengeBytes, err := proto.Marshal(challenge)
 	if err != nil {
-		return status.Errorf(codes.Internal, "build EvidenceRequest: %v", err)
+		return status.Errorf(codes.Internal, "marshal NodeChallenge: %v", err)
 	}
-	now := plugin.now().UTC().Truncate(time.Second)
-	challenge := &protocolv1.ServerChallenge{
-		ProtocolVersion:     protocol.Version,
-		SessionId:           sessionID,
-		Nonce:               nonce,
-		IssuedAtUnix:        now.Unix(),
-		ExpiresAtUnix:       now.Add(state.config.ChallengeTTL).Unix(),
-		PolicyId:            state.config.Policy.Model.PolicyID,
-		EvidenceRequestJson: evidenceRequestJSON,
-	}
-	challengeBytes, err := (proto.MarshalOptions{Deterministic: true}).Marshal(challenge)
-	if err != nil {
-		return status.Errorf(codes.Internal, "marshal ServerChallenge: %v", err)
-	}
-	if err := stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_Challenge{Challenge: challengeBytes},
+	if err := stream.Send(&nodeattestorapi.AttestResponse{
+		Response: &nodeattestorapi.AttestResponse_Challenge{Challenge: challengeBytes},
 	}); err != nil {
-		return status.Errorf(codes.Unavailable, "send ServerChallenge: %v", err)
+		return status.Errorf(codes.Unavailable, "send NodeChallenge: %v", err)
 	}
 
 	request, err := stream.Recv()
 	if err != nil {
-		return status.Errorf(codes.Unavailable, "receive EvidenceResponse: %v", err)
+		return status.Errorf(codes.Unavailable, "receive NodeEvidenceResponse: %v", err)
 	}
-	if len(request.GetChallengeResponse()) == 0 || len(request.GetPayload()) != 0 || len(request.GetChallengeResponse()) > protocol.MaxEvidenceSize {
-		return status.Error(codes.InvalidArgument, "second attestation request must contain only EvidenceResponse")
+	if len(request.GetChallengeResponse()) == 0 || len(request.GetPayload()) != 0 || len(request.GetChallengeResponse()) > protocol.MaxNodeEvidenceResponseSize {
+		return status.Error(codes.InvalidArgument, "second attestation request must contain only NodeEvidenceResponse")
 	}
-	response := new(protocolv1.EvidenceResponse)
+	response := new(argusnodeattestor.NodeEvidenceResponse)
 	if err := proto.Unmarshal(request.GetChallengeResponse(), response); err != nil {
-		return status.Errorf(codes.InvalidArgument, "unmarshal EvidenceResponse: %v", err)
+		return status.Errorf(codes.InvalidArgument, "unmarshal NodeEvidenceResponse: %v", err)
 	}
 	if len(response.ProtoReflect().GetUnknown()) != 0 {
-		return status.Error(codes.InvalidArgument, "EvidenceResponse contains unknown fields")
+		return status.Error(codes.InvalidArgument, "NodeEvidenceResponse contains unknown fields")
 	}
-	plugin.telemetry.EvidenceBytes("server", len(response.EvidenceJson))
-	if int64(len(response.EvidenceJson)) > state.config.MaxEvidenceBytes {
-		return status.Error(codes.ResourceExhausted, "evidence exceeds configured size limit")
+	if err := protocol.ValidateNodeEvidenceResponse(response, state.config.MaxQuoteBytes); err != nil {
+		return status.Errorf(codes.InvalidArgument, "validate NodeEvidenceResponse: %v", err)
 	}
-	if err := protocol.ValidateEvidenceResponse(response, sessionID); err != nil {
-		return status.Errorf(codes.InvalidArgument, "validate EvidenceResponse: %v", err)
+	if uint64(plugin.now().UnixMilli()) >= expiresAtUnixMs {
+		return status.Error(codes.PermissionDenied, "NodeChallenge expired")
 	}
-	// Verify proof-key possession across the entire exchange before sending
-	// attacker-controlled evidence to the remote verifier.
-	transcriptHash, err := protocol.TranscriptHash(hello, challenge, response.EvidenceJson)
+	transcriptDigest, err := protocol.TranscriptDigest(hello.ProofPublicKey, nonce, expiresAtUnixMs, response.TdxQuote)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "construct transcript: %v", err)
 	}
-	if !ed25519.Verify(ed25519.PublicKey(hello.AttestationPublicKey), transcriptHash[:], response.TranscriptSignature) {
+	if !ed25519.Verify(ed25519.PublicKey(hello.ProofPublicKey), transcriptDigest[:], response.TranscriptSignature) {
 		return status.Error(codes.PermissionDenied, "transcript signature verification failed")
 	}
-
-	verifyContext, cancel := context.WithTimeout(stream.Context(), state.config.VerifierTimeout)
-	defer cancel()
-	claims, err := state.verifier.VerifyNode(verifyContext, trustee.VerifyInput{
-		SessionID:           sessionID,
-		EvidenceJSON:        response.EvidenceJson,
-		EvidenceRequestJSON: evidenceRequestJSON,
-		AttestationKey:      hello.AttestationPublicKey,
-		Policy:              state.config.Policy,
-	})
-	plugin.telemetry.Trustee(err)
+	runtimeData, err := protocol.NodeRuntimeData(nonce, hello.ProofPublicKey)
 	if err != nil {
+		return status.Errorf(codes.Internal, "construct node runtime data: %v", err)
+	}
+
+	verifyContext, cancel := context.WithTimeout(stream.Context(), state.config.TrusteeTimeout)
+	defer cancel()
+	if _, err := state.verifier.VerifyNode(verifyContext, trustee.VerifyInput{
+		Quote: response.TdxQuote, RuntimeData: runtimeData,
+	}); err != nil {
 		return status.Errorf(codes.PermissionDenied, "Trustee verification failed: %v", err)
 	}
-	if hello.InstanceHint != "" && hello.InstanceHint != claims.InstanceID {
-		return status.Error(codes.PermissionDenied, "instance hint does not match verified instance ID")
+	if uint64(plugin.now().UnixMilli()) >= expiresAtUnixMs {
+		return status.Error(codes.PermissionDenied, "NodeChallenge expired during Trustee verification")
 	}
-	// Persist the verified instance association before exposing an identity to
-	// SPIRE; a conflict therefore fails closed without issuing attributes.
-	if err := recordInstanceBinding(state.bindingStore, keyID, claims); err != nil {
-		return status.Errorf(codes.PermissionDenied, "attestation key conflict: %v", err)
-	}
-	attributes, err := deriveAgentAttributes(state.config, hello.AttestationPublicKey, claims)
-	if err != nil {
-		return status.Errorf(codes.Internal, "derive AgentAttributes: %v", err)
-	}
-	if err := stream.Send(&nodeattestorv1.AttestResponse{
-		Response: &nodeattestorv1.AttestResponse_AgentAttributes{AgentAttributes: attributes},
+	if err := stream.Send(&nodeattestorapi.AttestResponse{
+		Response: &nodeattestorapi.AttestResponse_AgentAttributes{AgentAttributes: &nodeattestorapi.AgentAttributes{
+			SpiffeId:       protocol.FixedAgentSPIFFEID,
+			SelectorValues: nil,
+			CanReattest:    true,
+		}},
 	}); err != nil {
 		return status.Errorf(codes.Unavailable, "send AgentAttributes: %v", err)
 	}
 	return nil
 }
 
-func (plugin *Plugin) Validate(_ context.Context, request *configv1.ValidateRequest) (*configv1.ValidateResponse, error) {
+func (plugin *Plugin) Validate(_ context.Context, request *configapi.ValidateRequest) (*configapi.ValidateResponse, error) {
 	if request == nil {
-		return &configv1.ValidateResponse{Valid: false, Notes: []string{"request is required"}}, nil
+		return &configapi.ValidateResponse{Valid: false, Notes: []string{"request is required"}}, nil
 	}
 	_, notes := parseConfig(request.CoreConfiguration, request.HclConfiguration)
-	return &configv1.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
+	return &configapi.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
 }
 
-func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
+func (plugin *Plugin) Configure(_ context.Context, request *configapi.ConfigureRequest) (*configapi.ConfigureResponse, error) {
 	if request == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
@@ -234,23 +180,10 @@ func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRe
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "configure Trustee verifier: %v", err)
 	}
-	bindingStore, err := newBindingStore(config.BindingStateDir)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "configure binding store: %v", err)
-	}
 	plugin.stateMu.Lock()
-	plugin.state = &runtimeState{config: config, verifier: verifier, bindingStore: bindingStore}
+	plugin.state = &runtimeState{config: config, verifier: verifier}
 	plugin.stateMu.Unlock()
-	return &configv1.ConfigureResponse{}, nil
-}
-
-func (plugin *Plugin) BrokerHostServices(broker pluginsdk.ServiceBroker) error {
-	plugin.telemetry.Broker(broker)
-	return nil
-}
-
-func (plugin *Plugin) SetLogger(logger hclog.Logger) {
-	plugin.logger = logger
+	return &configapi.ConfigureResponse{}, nil
 }
 
 func (plugin *Plugin) getState() (*runtimeState, error) {
@@ -260,88 +193,4 @@ func (plugin *Plugin) getState() (*runtimeState, error) {
 		return nil, status.Error(codes.FailedPrecondition, "plugin is not configured")
 	}
 	return plugin.state, nil
-}
-
-func recordInstanceBinding(store *bindingStore, keyID string, claims trustee.VerifiedNodeClaims) error {
-	if store == nil {
-		return fmt.Errorf("binding store is not configured")
-	}
-	launchID := ""
-	if claims.LaunchID != nil {
-		launchID = *claims.LaunchID
-	}
-	return store.Bind(keyID, instanceBinding{InstanceID: claims.InstanceID, LaunchID: launchID})
-}
-
-func buildEvidenceRequest(config *Config, nonce []byte, keyID string) ([]byte, error) {
-	// The request binds the Server identity, proof key, policy digest, and fresh
-	// nonce into the REPORTDATA that the Trustee must verify.
-	request := protocol.EvidenceRequest{
-		Version:  "v1",
-		Nonce:    base64.RawURLEncoding.EncodeToString(nonce),
-		CallerID: "spiffe://" + config.TrustDomain + "/spire/server",
-		Target: protocol.TargetService{
-			ServiceName: "argus-tdx-node",
-			TargetURI:   "argus-node:" + keyID,
-		},
-		RequestedClaims: []string{"TeeQuote", "IdentityClaims"},
-		ProfileDigest:   config.Policy.Digest,
-	}
-	encoded, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
-	}
-	canonical, _, err := protocol.CanonicalEvidenceRequest(encoded)
-	return canonical, err
-}
-
-func validateCapabilities(capabilities []string) error {
-	if len(capabilities) != len(requiredCapabilities) {
-		return fmt.Errorf("capabilities must be exactly report_data_v1 and tdx")
-	}
-	for _, capability := range capabilities {
-		if _, ok := requiredCapabilities[capability]; !ok {
-			return fmt.Errorf("unsupported capability %q", capability)
-		}
-	}
-	return nil
-}
-
-func deriveAgentAttributes(config *Config, publicKey []byte, claims trustee.VerifiedNodeClaims) (*nodeattestorv1.AgentAttributes, error) {
-	spiffeID, err := protocol.AgentSPIFFEID(config.TrustDomain, publicKey)
-	if err != nil {
-		return nil, err
-	}
-	selectors := []string{
-		"policy:" + claims.PolicyID,
-		"policy_digest:" + claims.PolicyDigest,
-		"mrtd:" + claims.MRTD,
-		"tcb_status:" + claims.TCBStatus,
-		fmt.Sprintf("debug:%t", claims.DebugEnabled),
-		"instance_id:" + claims.InstanceID,
-	}
-	if err := validateSelectors(selectors); err != nil {
-		return nil, err
-	}
-	// Require operator intervention before SPIRE accepts the same attestation
-	// payload again.
-	return &nodeattestorv1.AgentAttributes{
-		SpiffeId:       spiffeID,
-		SelectorValues: selectors,
-		CanReattest:    false,
-	}, nil
-}
-
-func validateSelectors(selectors []string) error {
-	if len(selectors) == 0 || len(selectors) > protocol.MaxSelectorValues {
-		return fmt.Errorf("selector count is outside the allowed range")
-	}
-	for _, selector := range selectors {
-		if len(selector) == 0 || len(selector) > protocol.MaxSelectorSize || strings.IndexFunc(selector, func(character rune) bool {
-			return character < 0x20 || character == 0x7f
-		}) >= 0 {
-			return fmt.Errorf("selector value is invalid")
-		}
-	}
-	return nil
 }

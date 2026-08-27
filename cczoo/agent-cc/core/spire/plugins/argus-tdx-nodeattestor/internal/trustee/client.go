@@ -3,379 +3,258 @@ package trustee
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
-	"regexp"
+	"strings"
 	"time"
-
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/policy"
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
-)
-
-const ProtocolVersion = 1
-
-var (
-	digestPattern      = regexp.MustCompile(`^[a-z0-9]+:[0-9a-f]+$`)
-	measurementPattern = regexp.MustCompile(`^[0-9a-f]+$`)
-	identifierPattern  = regexp.MustCompile(`^[\x21-\x7e]+$`)
 )
 
 type VerifyInput struct {
-	SessionID           []byte
-	EvidenceJSON        []byte
-	EvidenceRequestJSON []byte
-	AttestationKey      []byte
-	Policy              *policy.Policy
+	Quote       []byte
+	RuntimeData []byte
 }
 
-// VerifiedNodeClaims is the narrow, policy-checked result the Server may use to
-// construct SPIRE selectors. Raw Trustee output is never forwarded directly.
-type VerifiedNodeClaims struct {
-	QuoteVerified         bool               `json:"quote_verified"`
-	ReportDataVerified    bool               `json:"report_data_verified"`
-	TCBStatus             string             `json:"tcb_status"`
-	MRTD                  string             `json:"mrtd"`
-	RTMR                  map[string]*string `json:"rtmr"`
-	DebugEnabled          bool               `json:"debug_enabled"`
-	InstanceID            string             `json:"instance_id"`
-	LaunchID              *string            `json:"launch_id"`
-	PolicyID              string             `json:"policy_id"`
-	PolicyDigest          string             `json:"policy_digest"`
-	AttestationKeyDigest  string             `json:"attestation_key_digest"`
-	EvidenceRequestDigest string             `json:"evidence_request_digest"`
-	VerifiedAt            string             `json:"verified_at"`
-	ExpiresAt             string             `json:"expires_at"`
+// VerifiedNodeClaims intentionally carries no selectors. The Trustee decision
+// gates the one fixed Agent identity configured by this NodeAttestor.
+type VerifiedNodeClaims struct{}
+
+type tdxEvidence struct {
+	CCEventLog any    `json:"cc_eventlog"`
+	Quote      string `json:"quote"`
 }
 
-type verifyRequest struct {
-	ProtocolVersion       int             `json:"protocol_version"`
-	SessionID             string          `json:"session_id"`
-	Evidence              json.RawMessage `json:"evidence"`
-	EvidenceRequest       json.RawMessage `json:"evidence_request"`
-	EvidenceRequestDigest string          `json:"evidence_request_digest"`
-	AttestationKeyDigest  string          `json:"attestation_key_digest"`
-	PolicyID              string          `json:"policy_id"`
-	PolicyDigest          string          `json:"policy_digest"`
+type runtimeData struct {
+	Raw string `json:"raw"`
 }
 
-type verifyResponse struct {
-	ProtocolVersion       int                 `json:"protocol_version"`
-	SessionID             string              `json:"session_id"`
-	Decision              string              `json:"decision"`
-	StableErrorCode       string              `json:"stable_error_code"`
-	VerifiedClaims        *VerifiedNodeClaims `json:"verified_claims"`
-	EvidenceRequestDigest string              `json:"evidence_request_digest"`
-	AttestationKeyDigest  string              `json:"attestation_key_digest"`
-	PolicyID              string              `json:"policy_id"`
-	PolicyDigest          string              `json:"policy_digest"`
-	IssuedAt              string              `json:"issued_at"`
-	ExpiresAt             string              `json:"expires_at"`
+type individualAttestationRequest struct {
+	TEE                      string      `json:"tee"`
+	Evidence                 string      `json:"evidence"`
+	RuntimeData              runtimeData `json:"runtime_data"`
+	RuntimeDataHashAlgorithm string      `json:"runtime_data_hash_algorithm"`
+}
+
+type attestationRequest struct {
+	VerificationRequests []individualAttestationRequest `json:"verification_requests"`
+	PolicyIDs            []string                       `json:"policy_ids"`
+}
+
+type earHeader struct {
+	Algorithm string `json:"alg"`
+}
+
+type annotatedEvidence struct {
+	ReportData string `json:"report_data"`
+}
+
+type appraisal struct {
+	Status            string            `json:"ear.status"`
+	PolicyID          string            `json:"ear.appraisal-policy-id"`
+	AnnotatedEvidence annotatedEvidence `json:"ear.veraison.annotated-evidence"`
+}
+
+type earClaims struct {
+	Profile  string               `json:"eat_profile"`
+	Issuer   string               `json:"iss"`
+	IssuedAt int64                `json:"iat"`
+	Expires  int64                `json:"exp"`
+	Submods  map[string]appraisal `json:"submods"`
 }
 
 type Client struct {
 	httpClient       *http.Client
-	endpoint         string
-	expectedSPIFFEID string
+	attestationURL   string
+	earPublicKey     *ecdsa.PublicKey
+	expectedIssuer   string
+	expectedProfile  string
+	policyID         string
 	maxResponseBytes int64
-	maxAttempts      int
 	now              func() time.Time
 }
 
-// NewClient creates the remote verification boundary. TLS verifies the CA and
-// DNS server name; VerifyConnection additionally pins the exact Trustee SPIFFE
-// URI SAN expected by this deployment.
-func NewClient(endpoint *url.URL, tlsConfig *tls.Config, expectedSPIFFEID string, timeout time.Duration, maxResponseBytes int64) (*Client, error) {
-	if endpoint == nil || endpoint.Scheme != "https" {
-		return nil, fmt.Errorf("Trustee endpoint must use HTTPS")
+func NewClient(
+	endpoint *url.URL,
+	tlsConfig *tls.Config,
+	earPublicKey *ecdsa.PublicKey,
+	expectedIssuer string,
+	expectedProfile string,
+	policyID string,
+	timeout time.Duration,
+	maxResponseBytes int64,
+) (*Client, error) {
+	if endpoint == nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		return nil, fmt.Errorf("Trustee endpoint must be an HTTPS origin")
 	}
-	if tlsConfig == nil || len(tlsConfig.Certificates) == 0 || tlsConfig.RootCAs == nil {
-		return nil, fmt.Errorf("Trustee mTLS configuration is incomplete")
+	if endpoint.Path != "" && endpoint.Path != "/" {
+		return nil, fmt.Errorf("Trustee endpoint must not contain a path")
 	}
-	if expectedSPIFFEID == "" || timeout <= 0 || maxResponseBytes <= 0 {
-		return nil, fmt.Errorf("Trustee client arguments are invalid")
+	if tlsConfig == nil || tlsConfig.RootCAs == nil {
+		return nil, fmt.Errorf("Trustee TLS configuration is incomplete")
 	}
+	if earPublicKey == nil || earPublicKey.Curve != elliptic.P256() {
+		return nil, fmt.Errorf("EAR public key must use P-256")
+	}
+	if expectedIssuer == "" || expectedProfile == "" || policyID == "" || url.PathEscape(policyID) != policyID {
+		return nil, fmt.Errorf("Trustee EAR configuration is invalid")
+	}
+	if timeout <= 0 || maxResponseBytes <= 0 {
+		return nil, fmt.Errorf("Trustee client limits are invalid")
+	}
+
+	attestationEndpoint := *endpoint
+	attestationEndpoint.Path = "/attestation"
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig.Clone()
-	transport.TLSClientConfig.VerifyConnection = func(state tls.ConnectionState) error {
-		return verifyTrusteeIdentity(state, expectedSPIFFEID)
-	}
 	return &Client{
 		httpClient:       &http.Client{Transport: transport, Timeout: timeout},
-		endpoint:         endpoint.String(),
-		expectedSPIFFEID: expectedSPIFFEID,
+		attestationURL:   attestationEndpoint.String(),
+		earPublicKey:     earPublicKey,
+		expectedIssuer:   expectedIssuer,
+		expectedProfile:  expectedProfile,
+		policyID:         policyID,
 		maxResponseBytes: maxResponseBytes,
-		maxAttempts:      2,
 		now:              time.Now,
 	}, nil
 }
 
-// VerifyNode submits evidence and accepts claims only when response freshness,
-// request/key/policy bindings, quote status, and measurement policy all agree.
 func (client *Client) VerifyNode(ctx context.Context, input VerifyInput) (VerifiedNodeClaims, error) {
-	request, err := buildRequest(input)
+	if len(input.Quote) == 0 {
+		return VerifiedNodeClaims{}, fmt.Errorf("TDX Quote is required")
+	}
+	if len(input.RuntimeData) == 0 {
+		return VerifiedNodeClaims{}, fmt.Errorf("node runtime data is required")
+	}
+	requestBody, err := buildRequest(input, client.policyID)
 	if err != nil {
 		return VerifiedNodeClaims{}, err
 	}
-	requestBody, err := json.Marshal(request)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.attestationURL, bytes.NewReader(requestBody))
 	if err != nil {
-		return VerifiedNodeClaims{}, fmt.Errorf("marshal Trustee request: %w", err)
+		return VerifiedNodeClaims{}, fmt.Errorf("create Trustee attestation request: %w", err)
 	}
-	response, err := client.doRequest(ctx, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/jwt")
+	response, err := client.httpClient.Do(request)
 	if err != nil {
-		return VerifiedNodeClaims{}, err
+		return VerifiedNodeClaims{}, fmt.Errorf("call Trustee attestation endpoint: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return VerifiedNodeClaims{}, fmt.Errorf("Trustee returned HTTP %d", response.StatusCode)
+		return VerifiedNodeClaims{}, fmt.Errorf("Trustee attestation endpoint returned HTTP %d", response.StatusCode)
 	}
-	contents, err := io.ReadAll(io.LimitReader(response.Body, client.maxResponseBytes+1))
+	token, err := readLimited(response.Body, client.maxResponseBytes)
 	if err != nil {
-		return VerifiedNodeClaims{}, fmt.Errorf("read Trustee response: %w", err)
+		return VerifiedNodeClaims{}, fmt.Errorf("read Trustee EAR: %w", err)
 	}
-	if int64(len(contents)) > client.maxResponseBytes {
-		return VerifiedNodeClaims{}, fmt.Errorf("Trustee response exceeds %d bytes", client.maxResponseBytes)
-	}
-	parsed, err := parseResponse(contents)
-	if err != nil {
+	if err := verifyEAR(token, client.earPublicKey, client.expectedIssuer, client.expectedProfile, client.policyID, input.RuntimeData, client.now()); err != nil {
 		return VerifiedNodeClaims{}, err
 	}
-	if err := validateResponse(parsed, request, input.Policy, client.now()); err != nil {
-		return VerifiedNodeClaims{}, err
-	}
-	return *parsed.VerifiedClaims, nil
+	return VerifiedNodeClaims{}, nil
 }
 
-func (client *Client) doRequest(ctx context.Context, requestBody []byte) (*http.Response, error) {
-	attempts := client.maxAttempts
-	if attempts <= 0 {
-		attempts = 1
+func buildRequest(input VerifyInput, policyID string) ([]byte, error) {
+	inner, err := json.Marshal(tdxEvidence{
+		CCEventLog: nil,
+		Quote:      base64.StdEncoding.EncodeToString(input.Quote),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal TDX evidence: %w", err)
 	}
-	var lastErr error
-	// Retries resend the same session-bound body and are limited to transport
-	// failures, throttling, and server errors.
-	for attempt := 0; attempt < attempts; attempt++ {
-		httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, client.endpoint, bytes.NewReader(requestBody))
-		if err != nil {
-			return nil, fmt.Errorf("create Trustee request: %w", err)
-		}
-		httpRequest.Header.Set("Content-Type", "application/json")
-		httpRequest.Header.Set("Accept", "application/json")
-		response, err := client.httpClient.Do(httpRequest)
-		if err != nil {
-			lastErr = err
-			if ctx.Err() != nil {
-				break
-			}
-			continue
-		}
-		retryable := response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
-		if !retryable || attempt == attempts-1 {
-			return response, nil
-		}
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		_ = response.Body.Close()
+	request := attestationRequest{
+		VerificationRequests: []individualAttestationRequest{{
+			TEE:                      "tdx",
+			Evidence:                 base64.RawURLEncoding.EncodeToString(inner),
+			RuntimeData:              runtimeData{Raw: base64.RawURLEncoding.EncodeToString(input.RuntimeData)},
+			RuntimeDataHashAlgorithm: "sha384",
+		}},
+		PolicyIDs: []string{policyID},
 	}
-	if ctx.Err() != nil {
-		return nil, fmt.Errorf("call Trustee: %w", ctx.Err())
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Trustee request: %w", err)
 	}
-	return nil, fmt.Errorf("call Trustee: %w", lastErr)
+	return encoded, nil
 }
 
-func buildRequest(input VerifyInput) (verifyRequest, error) {
-	if len(input.SessionID) != protocol.SessionIDSize {
-		return verifyRequest{}, fmt.Errorf("session ID must be %d bytes", protocol.SessionIDSize)
+func verifyEAR(token []byte, publicKey *ecdsa.PublicKey, expectedIssuer, expectedProfile, policyID string, runtimeData []byte, now time.Time) error {
+	parts := strings.Split(string(token), ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("Trustee response is not a compact JWT")
 	}
-	if len(input.AttestationKey) != protocol.PublicKeySize {
-		return verifyRequest{}, fmt.Errorf("attestation key must be %d bytes", protocol.PublicKeySize)
-	}
-	if input.Policy == nil {
-		return verifyRequest{}, fmt.Errorf("policy is required")
-	}
-	if err := requireJSONObject(input.EvidenceJSON); err != nil {
-		return verifyRequest{}, fmt.Errorf("evidence: %w", err)
-	}
-	canonicalRequest, _, err := protocol.CanonicalEvidenceRequest(input.EvidenceRequestJSON)
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
-		return verifyRequest{}, fmt.Errorf("EvidenceRequest: %w", err)
+		return fmt.Errorf("decode EAR header: %w", err)
 	}
-	// Duplicate the critical digests at the Trustee envelope level so both the
-	// response and its verified claims can be checked against local inputs.
-	requestDigest, err := protocol.EvidenceRequestDigest(canonicalRequest)
-	if err != nil {
-		return verifyRequest{}, err
+	var header earHeader
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		return fmt.Errorf("decode EAR header: %w", err)
 	}
-	keyDigest := sha256.Sum256(input.AttestationKey)
-	return verifyRequest{
-		ProtocolVersion:       ProtocolVersion,
-		SessionID:             base64.RawURLEncoding.EncodeToString(input.SessionID),
-		Evidence:              append(json.RawMessage(nil), input.EvidenceJSON...),
-		EvidenceRequest:       append(json.RawMessage(nil), canonicalRequest...),
-		EvidenceRequestDigest: requestDigest,
-		AttestationKeyDigest:  "sha256:" + hex.EncodeToString(keyDigest[:]),
-		PolicyID:              input.Policy.Model.PolicyID,
-		PolicyDigest:          input.Policy.Digest,
-	}, nil
-}
+	if header.Algorithm != "ES256" {
+		return fmt.Errorf("EAR algorithm must be ES256")
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || len(signature) != 64 {
+		return fmt.Errorf("decode EAR signature")
+	}
+	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+	r := new(big.Int).SetBytes(signature[:32])
+	s := new(big.Int).SetBytes(signature[32:])
+	if !ecdsa.Verify(publicKey, digest[:], r, s) {
+		return fmt.Errorf("EAR signature verification failed")
+	}
 
-func parseResponse(contents []byte) (verifyResponse, error) {
-	canonical, err := protocol.CanonicalizeJSON(contents)
+	claimsBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return verifyResponse{}, fmt.Errorf("Trustee response JSON: %w", err)
+		return fmt.Errorf("decode EAR claims: %w", err)
 	}
-	// Exact field sets reject schema drift that could otherwise leave new
-	// security-relevant output unchecked by this client.
-	if err := requireFields(canonical, []string{
-		"protocol_version", "session_id", "decision", "stable_error_code", "verified_claims",
-		"evidence_request_digest", "attestation_key_digest", "policy_id", "policy_digest",
-		"issued_at", "expires_at",
-	}); err != nil {
-		return verifyResponse{}, fmt.Errorf("Trustee response: %w", err)
+	var claims earClaims
+	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		return fmt.Errorf("decode EAR claims: %w", err)
 	}
-	var raw struct {
-		VerifiedClaims json.RawMessage `json:"verified_claims"`
+	if claims.Issuer != expectedIssuer || claims.Profile != expectedProfile {
+		return fmt.Errorf("EAR issuer or profile mismatch")
 	}
-	if err := json.Unmarshal(canonical, &raw); err != nil {
-		return verifyResponse{}, fmt.Errorf("decode Trustee response claims: %w", err)
+	nowUnix := now.Unix()
+	if claims.IssuedAt <= 0 || claims.IssuedAt > nowUnix || claims.Expires <= nowUnix || claims.Expires <= claims.IssuedAt {
+		return fmt.Errorf("EAR validity window is not current")
 	}
-	if !bytes.Equal(raw.VerifiedClaims, []byte("null")) {
-		if err := requireFields(raw.VerifiedClaims, []string{
-			"quote_verified", "report_data_verified", "tcb_status", "mrtd", "rtmr", "debug_enabled",
-			"instance_id", "launch_id", "policy_id", "policy_digest", "attestation_key_digest",
-			"evidence_request_digest", "verified_at", "expires_at",
-		}); err != nil {
-			return verifyResponse{}, fmt.Errorf("Trustee verified_claims: %w", err)
-		}
-		var claimsRaw struct {
-			RTMR json.RawMessage `json:"rtmr"`
-		}
-		if err := json.Unmarshal(raw.VerifiedClaims, &claimsRaw); err != nil {
-			return verifyResponse{}, fmt.Errorf("decode Trustee RTMR claims: %w", err)
-		}
-		if err := requireFields(claimsRaw.RTMR, []string{"0", "1", "2", "3"}); err != nil {
-			return verifyResponse{}, fmt.Errorf("Trustee verified_claims.rtmr: %w", err)
-		}
+	cpu, ok := claims.Submods["cpu0"]
+	if !ok || cpu.Status != "affirming" {
+		return fmt.Errorf("EAR cpu0 appraisal is not affirming")
 	}
-	var response verifyResponse
-	decoder := json.NewDecoder(bytes.NewReader(canonical))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&response); err != nil {
-		return verifyResponse{}, fmt.Errorf("decode Trustee response: %w", err)
+	if cpu.PolicyID != policyID {
+		return fmt.Errorf("EAR appraisal policy ID mismatch")
 	}
-	return response, nil
-}
-
-func validateResponse(response verifyResponse, request verifyRequest, expectedPolicy *policy.Policy, now time.Time) error {
-	// Validate the outer envelope first, then repeat the binding checks inside
-	// verified_claims before using any measurement or instance value.
-	if response.ProtocolVersion != ProtocolVersion || response.SessionID != request.SessionID {
-		return fmt.Errorf("Trustee response protocol or session mismatch")
-	}
-	if response.EvidenceRequestDigest != request.EvidenceRequestDigest || response.AttestationKeyDigest != request.AttestationKeyDigest {
-		return fmt.Errorf("Trustee response binding digest mismatch")
-	}
-	if response.PolicyID != request.PolicyID || response.PolicyDigest != request.PolicyDigest {
-		return fmt.Errorf("Trustee response policy mismatch")
-	}
-	issuedAt, expiresAt, err := validateWindow(response.IssuedAt, response.ExpiresAt, now)
+	reportData, err := hex.DecodeString(cpu.AnnotatedEvidence.ReportData)
 	if err != nil {
-		return fmt.Errorf("Trustee response validity: %w", err)
+		return fmt.Errorf("decode EAR report_data: %w", err)
 	}
-	if response.Decision != "allow" || response.StableErrorCode != "OK" || response.VerifiedClaims == nil {
-		return fmt.Errorf("Trustee denied attestation with code %q", response.StableErrorCode)
-	}
-	claims := response.VerifiedClaims
-	if !claims.QuoteVerified || !claims.ReportDataVerified {
-		return fmt.Errorf("Trustee did not verify quote and report_data")
-	}
-	if claims.PolicyID != request.PolicyID || claims.PolicyDigest != request.PolicyDigest || claims.AttestationKeyDigest != request.AttestationKeyDigest || claims.EvidenceRequestDigest != request.EvidenceRequestDigest {
-		return fmt.Errorf("verified claims binding mismatch")
-	}
-	if !expectedPolicy.AllowsTCBStatus(claims.TCBStatus) || !expectedPolicy.AllowsMRTD(claims.MRTD) {
-		return fmt.Errorf("verified claims violate TCB or MRTD policy")
-	}
-	if claims.DebugEnabled && !expectedPolicy.Model.TEE.AllowDebug {
-		return fmt.Errorf("debug TD is not allowed")
-	}
-	if !identifierPattern.MatchString(claims.InstanceID) {
-		return fmt.Errorf("verified instance ID is invalid")
-	}
-	for index := range expectedPolicy.Model.TEE.AllowedRTMR {
-		measurement := claims.RTMR[index]
-		if measurement == nil || !measurementPattern.MatchString(*measurement) || !expectedPolicy.AllowsRTMR(index, *measurement) {
-			return fmt.Errorf("verified RTMR %s violates policy", index)
-		}
-	}
-	claimsVerifiedAt, claimsExpiresAt, err := validateWindow(claims.VerifiedAt, claims.ExpiresAt, now)
-	if err != nil {
-		return fmt.Errorf("verified claims validity: %w", err)
-	}
-	if claimsVerifiedAt.Before(issuedAt) || claimsExpiresAt.After(expiresAt) {
-		return fmt.Errorf("verified claims validity exceeds Trustee response window")
+	runtimeDigest := sha512.Sum384(runtimeData)
+	expectedReportData := append(runtimeDigest[:], make([]byte, 16)...)
+	if !bytes.Equal(reportData, expectedReportData) {
+		return fmt.Errorf("EAR report_data does not match node runtime data")
 	}
 	return nil
 }
 
-func validateWindow(issued, expires string, now time.Time) (time.Time, time.Time, error) {
-	issuedAt, err := time.Parse("2006-01-02T15:04:05Z", issued)
-	if err != nil || issuedAt.Format("2006-01-02T15:04:05Z") != issued {
-		return time.Time{}, time.Time{}, fmt.Errorf("issued time is not canonical UTC RFC3339")
-	}
-	expiresAt, err := time.Parse("2006-01-02T15:04:05Z", expires)
-	if err != nil || expiresAt.Format("2006-01-02T15:04:05Z") != expires {
-		return time.Time{}, time.Time{}, fmt.Errorf("expiry time is not canonical UTC RFC3339")
-	}
-	if expiresAt.Before(now) || !expiresAt.After(issuedAt) || issuedAt.After(now.Add(time.Minute)) {
-		return time.Time{}, time.Time{}, fmt.Errorf("validity window is not current")
-	}
-	return issuedAt, expiresAt, nil
-}
-
-func requireJSONObject(contents []byte) error {
-	canonical, err := protocol.CanonicalizeJSON(contents)
+func readLimited(reader io.Reader, maximum int64) ([]byte, error) {
+	contents, err := io.ReadAll(io.LimitReader(reader, maximum+1))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(canonical, &object); err != nil || object == nil {
-		return fmt.Errorf("must be a JSON object")
+	if int64(len(contents)) > maximum {
+		return nil, fmt.Errorf("response exceeds %d bytes", maximum)
 	}
-	return nil
-}
-
-func requireFields(contents []byte, expected []string) error {
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(contents, &object); err != nil || object == nil {
-		return fmt.Errorf("expected JSON object")
-	}
-	if len(object) != len(expected) {
-		return fmt.Errorf("expected fields %v", expected)
-	}
-	for _, field := range expected {
-		if _, ok := object[field]; !ok {
-			return fmt.Errorf("missing field %q", field)
-		}
-	}
-	return nil
-}
-
-func verifyTrusteeIdentity(state tls.ConnectionState, expectedSPIFFEID string) error {
-	// Compare the leaf certificate URI exactly; accepting any URI in the trust
-	// domain would let a different workload act as the Trustee.
-	if len(state.PeerCertificates) == 0 {
-		return fmt.Errorf("Trustee presented no certificate")
-	}
-	for _, uri := range state.PeerCertificates[0].URIs {
-		if uri.String() == expectedSPIFFEID {
-			return nil
-		}
-	}
-	return fmt.Errorf("Trustee SPIFFE ID mismatch")
+	return contents, nil
 }

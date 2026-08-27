@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package argus.spire.nodeattestor;
+
+option go_package = "github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/gen/argus/spire/nodeattestor;nodeattestor";
+
+message AgentHello {
+  bytes proof_public_key = 1;
+}
+
+message NodeChallenge {
+  bytes nonce = 1;
+  uint64 expires_at_unix_ms = 2;
+}
+
+message NodeEvidenceResponse {
+  bytes tdx_quote = 1;
+  bytes transcript_signature = 2;
+}

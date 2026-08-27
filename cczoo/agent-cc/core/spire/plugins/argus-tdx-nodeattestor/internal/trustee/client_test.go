@@ -1,221 +1,244 @@
 package trustee
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/policy"
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 )
 
-func TestVerifyNodeAcceptsBoundPolicyCompliantResponse(t *testing.T) {
-	now := time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC)
-	input := validInput(t)
+const (
+	testPolicyID = "argus-node-tdx-0123"
+	testIssuer   = "https://trustee.argus.local"
+	testProfile  = "tag:github.com,2024:confidential-containers/Trustee"
+)
+
+func TestVerifyNodeUsesOfficialRequestAndAcceptsAffirmingEAR(t *testing.T) {
+	now := time.Date(2026, 8, 27, 1, 2, 3, 0, time.UTC)
+	quote := []byte{0x01, 0x02, 0x03, 0x04}
+	runtimeData := []byte("node-runtime-data")
+	key := newSigningKey(t)
+
+	var paths []string
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodPost || request.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("invalid Trustee request metadata")
-		}
-		contents, err := io.ReadAll(request.Body)
-		if err != nil {
-			t.Error(err)
-		}
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal(contents, &raw); err != nil {
-			t.Error(err)
-		}
-		var evidence map[string]any
-		if err := json.Unmarshal(raw["evidence"], &evidence); err != nil || evidence["quote"] != "fixture" {
-			t.Errorf("evidence was not embedded as an object: %s", raw["evidence"])
-		}
-		var parsed verifyRequest
-		if err := json.Unmarshal(contents, &parsed); err != nil {
-			t.Error(err)
-		}
-		response := validResponse(parsed, now)
-		writer.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(writer).Encode(response); err != nil {
-			t.Error(err)
+		paths = append(paths, request.Method+" "+request.URL.Path)
+		switch request.URL.Path {
+		case "/attestation":
+			contents, err := io.ReadAll(request.Body)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			assertTrusteeRequest(t, contents, quote, runtimeData)
+			_, _ = writer.Write([]byte(signEAR(t, key, validClaims(now, runtimeData))))
+		default:
+			http.NotFound(writer, request)
 		}
 	}))
 	defer server.Close()
-	client := &Client{httpClient: server.Client(), endpoint: server.URL, maxResponseBytes: 1 << 20, now: func() time.Time { return now }}
-	claims, err := client.VerifyNode(context.Background(), input)
-	if err != nil {
+
+	client := testClient(server, key, now)
+	if _, err := client.VerifyNode(context.Background(), VerifyInput{Quote: quote, RuntimeData: runtimeData}); err != nil {
 		t.Fatal(err)
 	}
-	if claims.InstanceID != "tdvm-0001" || claims.TCBStatus != "up_to_date" {
-		t.Fatalf("claims = %#v", claims)
+	if got, want := strings.Join(paths, ","), "POST /attestation"; got != want {
+		t.Fatalf("requests = %q, want %q", got, want)
 	}
 }
 
-func TestVerifyNodeRejectsMismatchedAndDeniedResponses(t *testing.T) {
-	now := time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC)
-	for name, mutate := range map[string]func(*verifyResponse){
-		"session": func(response *verifyResponse) {
-			response.SessionID = base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{9}, 32))
+func TestVerifyNodeRejectsInvalidEAR(t *testing.T) {
+	now := time.Date(2026, 8, 27, 1, 2, 3, 0, time.UTC)
+	runtimeData := []byte("node-runtime-data")
+	key := newSigningKey(t)
+	otherKey := newSigningKey(t)
+
+	tests := map[string]func(map[string]any) (*ecdsa.PrivateKey, map[string]any){
+		"signature": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) { return otherKey, claims },
+		"issuer": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			claims["iss"] = "https://other.example"
+			return key, claims
 		},
-		"policy": func(response *verifyResponse) {
-			response.PolicyDigest = "sha256:" + string(bytes.Repeat([]byte{'f'}, 64))
+		"profile": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			claims["eat_profile"] = "other-profile"
+			return key, claims
 		},
-		"deny": func(response *verifyResponse) {
-			response.Decision = "deny"
-			response.StableErrorCode = "POLICY_REJECTED"
-			response.VerifiedClaims = nil
+		"expired": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			claims["exp"] = now.Unix()
+			return key, claims
 		},
-		"debug": func(response *verifyResponse) { response.VerifiedClaims.DebugEnabled = true },
-		"rtmr":  func(response *verifyResponse) { value := "ffff"; response.VerifiedClaims.RTMR["0"] = &value },
-	} {
+		"missing issued at": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			delete(claims, "iat")
+			return key, claims
+		},
+		"status": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			cpu := claims["submods"].(map[string]any)["cpu0"].(map[string]any)
+			cpu["ear.status"] = "contraindicated"
+			return key, claims
+		},
+		"policy": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			cpu := claims["submods"].(map[string]any)["cpu0"].(map[string]any)
+			cpu["ear.appraisal-policy-id"] = "other-policy"
+			return key, claims
+		},
+		"report data": func(claims map[string]any) (*ecdsa.PrivateKey, map[string]any) {
+			cpu := claims["submods"].(map[string]any)["cpu0"].(map[string]any)
+			annotated := cpu["ear.veraison.annotated-evidence"].(map[string]any)
+			annotated["report_data"] = strings.Repeat("00", 64)
+			return key, claims
+		},
+	}
+
+	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
-			input := validInput(t)
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				var parsed verifyRequest
-				if err := json.NewDecoder(request.Body).Decode(&parsed); err != nil {
-					t.Error(err)
-				}
-				response := validResponse(parsed, now)
-				mutate(&response)
-				_ = json.NewEncoder(writer).Encode(response)
+				signingKey, claims := mutate(validClaims(now, runtimeData))
+				_, _ = writer.Write([]byte(signEAR(t, signingKey, claims)))
 			}))
 			defer server.Close()
-			client := &Client{httpClient: server.Client(), endpoint: server.URL, maxResponseBytes: 1 << 20, now: func() time.Time { return now }}
-			if _, err := client.VerifyNode(context.Background(), input); err == nil {
-				t.Fatal("invalid Trustee response was accepted")
+
+			client := testClient(server, key, now)
+			if _, err := client.VerifyNode(context.Background(), VerifyInput{Quote: []byte{1}, RuntimeData: runtimeData}); err == nil {
+				t.Fatalf("invalid %s EAR was accepted", name)
 			}
 		})
 	}
 }
 
-func TestVerifyNodeRejectsUnknownResponseField(t *testing.T) {
-	now := time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC)
-	input := validInput(t)
+func TestVerifyNodeDoesNotRetryTrusteeFailure(t *testing.T) {
+	key := newSigningKey(t)
+	postCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		var parsed verifyRequest
-		_ = json.NewDecoder(request.Body).Decode(&parsed)
-		contents, _ := json.Marshal(validResponse(parsed, now))
-		contents = append(contents[:len(contents)-1], []byte(`,"unexpected":true}`)...)
-		_, _ = writer.Write(contents)
+		postCount++
+		writer.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
-	client := &Client{httpClient: server.Client(), endpoint: server.URL, maxResponseBytes: 1 << 20, now: func() time.Time { return now }}
-	if _, err := client.VerifyNode(context.Background(), input); err == nil {
-		t.Fatal("unknown Trustee response field was accepted")
+
+	client := testClient(server, key, time.Now())
+	if _, err := client.VerifyNode(context.Background(), VerifyInput{Quote: []byte{1}, RuntimeData: []byte{2}}); err == nil {
+		t.Fatal("Trustee failure was accepted")
+	}
+	if postCount != 1 {
+		t.Fatalf("POST count = %d, want 1", postCount)
 	}
 }
 
-func TestVerifyTrusteeIdentityRequiresExactSPIFFEID(t *testing.T) {
-	expected, _ := url.Parse("spiffe://argus.local/service/trustee")
-	other, _ := url.Parse("spiffe://argus.local/service/other")
-	if err := verifyTrusteeIdentity(tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: []*url.URL{expected}}}}, expected.String()); err != nil {
-		t.Fatal(err)
-	}
-	if err := verifyTrusteeIdentity(tls.ConnectionState{PeerCertificates: []*x509.Certificate{{URIs: []*url.URL{other}}}}, expected.String()); err == nil {
-		t.Fatal("unexpected Trustee SPIFFE ID was accepted")
+func testClient(server *httptest.Server, key *ecdsa.PrivateKey, now time.Time) *Client {
+	return &Client{
+		httpClient:       server.Client(),
+		attestationURL:   server.URL + "/attestation",
+		earPublicKey:     &key.PublicKey,
+		expectedIssuer:   testIssuer,
+		expectedProfile:  testProfile,
+		policyID:         testPolicyID,
+		maxResponseBytes: 1 << 20,
+		now:              func() time.Time { return now },
 	}
 }
 
-func validInput(t *testing.T) VerifyInput {
+func assertTrusteeRequest(t *testing.T, contents, quote, runtimeData []byte) {
 	t.Helper()
-	loadedPolicy, err := policy.Parse([]byte(`
-version: 1
-policy_id: openviking-prod-v1
-tee:
-  type: tdx
-  allow_debug: false
-  allowed_tcb_status: [up_to_date]
-  allowed_mrtd: [aabb]
-  allowed_rtmr:
-    "0": [0011]
-binding:
-  require_report_data: true
-  require_attestation_key_digest: true
-  require_instance_id: true
-`))
+	var request struct {
+		VerificationRequests []struct {
+			TEE         string `json:"tee"`
+			Evidence    string `json:"evidence"`
+			RuntimeData struct {
+				Raw string `json:"raw"`
+			} `json:"runtime_data"`
+			RuntimeDataHashAlgorithm string `json:"runtime_data_hash_algorithm"`
+		} `json:"verification_requests"`
+		PolicyIDs []string `json:"policy_ids"`
+	}
+	if err := json.Unmarshal(contents, &request); err != nil {
+		t.Fatal(err)
+	}
+	if len(request.VerificationRequests) != 1 || len(request.PolicyIDs) != 1 {
+		t.Fatalf("request = %s", contents)
+	}
+	verification := request.VerificationRequests[0]
+	if verification.TEE != "tdx" || verification.RuntimeDataHashAlgorithm != "sha384" || request.PolicyIDs[0] != testPolicyID {
+		t.Fatalf("request metadata = %#v", request)
+	}
+	innerBytes, err := base64.RawURLEncoding.DecodeString(verification.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	nonce := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{3}, protocol.NonceSize))
-	request, err := json.Marshal(map[string]any{
-		"version": "v1", "nonce": nonce, "caller_id": "spiffe://argus.local/spire/server",
-		"target":           map[string]any{"service_name": "argus-tdx-node", "target_uri": "argus-node:" + string(bytes.Repeat([]byte{'a'}, 64))},
-		"requested_claims": []string{"TeeQuote", "IdentityClaims"}, "profile_digest": loadedPolicy.Digest,
-	})
+	var inner struct {
+		CCEventLog any    `json:"cc_eventlog"`
+		Quote      string `json:"quote"`
+	}
+	if err := json.Unmarshal(innerBytes, &inner); err != nil {
+		t.Fatal(err)
+	}
+	if inner.CCEventLog != nil || inner.Quote != base64.StdEncoding.EncodeToString(quote) {
+		t.Fatalf("inner evidence = %s", innerBytes)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(verification.RuntimeData.Raw)
+	if err != nil || string(raw) != string(runtimeData) {
+		t.Fatalf("runtime data = %q, err = %v", raw, err)
+	}
+}
+
+func validClaims(now time.Time, runtimeData []byte) map[string]any {
+	reportDigest := sha512.Sum384(runtimeData)
+	reportData := append(reportDigest[:], make([]byte, 16)...)
+	return map[string]any{
+		"eat_profile": testProfile,
+		"iss":         testIssuer,
+		"iat":         now.Add(-time.Second).Unix(),
+		"exp":         now.Add(time.Minute).Unix(),
+		"submods": map[string]any{
+			"cpu0": map[string]any{
+				"ear.status":              "affirming",
+				"ear.appraisal-policy-id": testPolicyID,
+				"ear.veraison.annotated-evidence": map[string]any{
+					"report_data": hex.EncodeToString(reportData),
+				},
+			},
+		},
+	}
+}
+
+func newSigningKey(t *testing.T) *ecdsa.PrivateKey {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return VerifyInput{
-		SessionID: bytes.Repeat([]byte{1}, protocol.SessionIDSize), EvidenceJSON: []byte(`{"quote":"fixture"}`),
-		EvidenceRequestJSON: request, AttestationKey: bytes.Repeat([]byte{2}, protocol.PublicKeySize), Policy: loadedPolicy,
-	}
+	return key
 }
 
-func validResponse(request verifyRequest, now time.Time) verifyResponse {
-	rtmr := "0011"
-	claims := &VerifiedNodeClaims{
-		QuoteVerified: true, ReportDataVerified: true, TCBStatus: "up_to_date", MRTD: "aabb",
-		RTMR: map[string]*string{"0": &rtmr, "1": nil, "2": nil, "3": nil}, DebugEnabled: false,
-		InstanceID: "tdvm-0001", PolicyID: request.PolicyID, PolicyDigest: request.PolicyDigest,
-		AttestationKeyDigest: request.AttestationKeyDigest, EvidenceRequestDigest: request.EvidenceRequestDigest,
-		VerifiedAt: now.Add(-time.Second).Format("2006-01-02T15:04:05Z"), ExpiresAt: now.Add(time.Minute).Format("2006-01-02T15:04:05Z"),
-	}
-	return verifyResponse{
-		ProtocolVersion: ProtocolVersion, SessionID: request.SessionID, Decision: "allow", StableErrorCode: "OK",
-		VerifiedClaims: claims, EvidenceRequestDigest: request.EvidenceRequestDigest, AttestationKeyDigest: request.AttestationKeyDigest,
-		PolicyID: request.PolicyID, PolicyDigest: request.PolicyDigest,
-		IssuedAt: now.Add(-time.Second).Format("2006-01-02T15:04:05Z"), ExpiresAt: now.Add(time.Minute).Format("2006-01-02T15:04:05Z"),
-	}
-}
-
-func TestVerifyNodeRejectsIncompleteRTMRSchema(t *testing.T) {
-	now := time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC)
-	input := validInput(t)
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		var parsed verifyRequest
-		_ = json.NewDecoder(request.Body).Decode(&parsed)
-		response := validResponse(parsed, now)
-		delete(response.VerifiedClaims.RTMR, "3")
-		_ = json.NewEncoder(writer).Encode(response)
-	}))
-	defer server.Close()
-	client := &Client{httpClient: server.Client(), endpoint: server.URL, maxResponseBytes: 1 << 20, now: func() time.Time { return now }}
-	if _, err := client.VerifyNode(context.Background(), input); err == nil {
-		t.Fatal("incomplete RTMR object was accepted")
-	}
-}
-
-func TestVerifyNodeRetriesSameRequestOnTransientFailure(t *testing.T) {
-	now := time.Date(2026, 7, 28, 1, 0, 0, 0, time.UTC)
-	input := validInput(t)
-	var bodies [][]byte
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		contents, _ := io.ReadAll(request.Body)
-		bodies = append(bodies, contents)
-		if len(bodies) == 1 {
-			writer.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		var parsed verifyRequest
-		_ = json.Unmarshal(contents, &parsed)
-		_ = json.NewEncoder(writer).Encode(validResponse(parsed, now))
-	}))
-	defer server.Close()
-	client := &Client{
-		httpClient: server.Client(), endpoint: server.URL, maxResponseBytes: 1 << 20,
-		maxAttempts: 2, now: func() time.Time { return now },
-	}
-	if _, err := client.VerifyNode(context.Background(), input); err != nil {
+func signEAR(t *testing.T, key *ecdsa.PrivateKey, claims map[string]any) string {
+	t.Helper()
+	header, err := json.Marshal(map[string]any{"alg": "ES256", "typ": "JWT"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bodies) != 2 || !bytes.Equal(bodies[0], bodies[1]) {
-		t.Fatal("Trustee retry did not reuse the exact request body")
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatal(err)
 	}
+	encodedHeader := base64.RawURLEncoding.EncodeToString(header)
+	encodedPayload := base64.RawURLEncoding.EncodeToString(payload)
+	signingInput := encodedHeader + "." + encodedPayload
+	digest := sha256.Sum256([]byte(signingInput))
+	r, s, err := ecdsa.Sign(rand.Reader, key, digest[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature := make([]byte, 64)
+	r.FillBytes(signature[:32])
+	s.FillBytes(signature[32:])
+	return fmt.Sprintf("%s.%s", signingInput, base64.RawURLEncoding.EncodeToString(signature))
 }

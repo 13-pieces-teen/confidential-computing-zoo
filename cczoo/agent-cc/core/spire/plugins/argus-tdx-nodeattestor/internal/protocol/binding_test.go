@@ -8,114 +8,98 @@ import (
 	"testing"
 )
 
-type goldenMutation struct {
-	Value      string `json:"value"`
-	ReportData string `json:"report_data"`
+type bindingGolden struct {
+	AgentID            string `json:"agent_id"`
+	NonceHex           string `json:"nonce_hex"`
+	ProofPublicKeyHex  string `json:"proof_public_key_hex"`
+	NodeRuntimeDataHex string `json:"node_runtime_data_hex"`
+	ReportDataHex      string `json:"report_data_hex"`
 }
 
-type goldenVector struct {
-	ProtocolVersion          uint32                    `json:"protocol_version"`
-	EvidenceRequest          json.RawMessage           `json:"evidence_request"`
-	BindingClaims            json.RawMessage           `json:"binding_claims"`
-	CanonicalEvidenceRequest string                    `json:"canonical_evidence_request"`
-	CanonicalBindingClaims   string                    `json:"canonical_binding_claims"`
-	EvidenceRequestDigest    string                    `json:"evidence_request_digest"`
-	BindingDigestSHA384      string                    `json:"binding_digest_sha384"`
-	ReportData               string                    `json:"report_data"`
-	Mutations                map[string]goldenMutation `json:"mutations"`
-}
-
-func TestReportDataGoldenVector(t *testing.T) {
-	vector := loadGoldenVector(t)
-	if vector.ProtocolVersion != Version {
-		t.Fatalf("vector protocol version = %d, want %d", vector.ProtocolVersion, Version)
-	}
-
-	canonicalRequest, _, err := CanonicalEvidenceRequest(vector.EvidenceRequest)
+func TestNodeBindingGoldenVector(t *testing.T) {
+	contents, err := os.ReadFile("testdata/report-data.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(canonicalRequest) != vector.CanonicalEvidenceRequest {
-		t.Fatalf("canonical EvidenceRequest mismatch\ngot:  %s\nwant: %s", canonicalRequest, vector.CanonicalEvidenceRequest)
+	var vector bindingGolden
+	decoder := json.NewDecoder(bytes.NewReader(contents))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&vector); err != nil {
+		t.Fatal(err)
 	}
-	canonicalClaims, _, err := CanonicalBindingClaims(vector.BindingClaims)
+	if vector.AgentID != FixedAgentSPIFFEID {
+		t.Fatalf("Agent ID = %q, want %q", vector.AgentID, FixedAgentSPIFFEID)
+	}
+	nonce, err := hex.DecodeString(vector.NonceHex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(canonicalClaims) != vector.CanonicalBindingClaims {
-		t.Fatalf("canonical BindingClaims mismatch\ngot:  %s\nwant: %s", canonicalClaims, vector.CanonicalBindingClaims)
+	publicKey, err := hex.DecodeString(vector.ProofPublicKeyHex)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	requestDigest, err := EvidenceRequestDigest(vector.EvidenceRequest)
+	runtimeData, err := NodeRuntimeData(nonce, publicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if requestDigest != vector.EvidenceRequestDigest {
-		t.Fatalf("EvidenceRequest digest = %s, want %s", requestDigest, vector.EvidenceRequestDigest)
+	if got := hex.EncodeToString(runtimeData); got != vector.NodeRuntimeDataHex {
+		t.Fatalf("node runtime data = %s, want %s", got, vector.NodeRuntimeDataHex)
 	}
 
-	reportData, err := BindingReportData(vector.EvidenceRequest, vector.BindingClaims)
+	reportData, err := ReportData(nonce, publicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := hex.EncodeToString(reportData[:48]); got != vector.BindingDigestSHA384 {
-		t.Fatalf("binding digest = %s, want %s", got, vector.BindingDigestSHA384)
-	}
-	if got := hex.EncodeToString(reportData[:]); got != vector.ReportData {
-		t.Fatalf("REPORTDATA = %s, want %s", got, vector.ReportData)
+	if got := hex.EncodeToString(reportData[:]); got != vector.ReportDataHex {
+		t.Fatalf("REPORTDATA = %s, want %s", got, vector.ReportDataHex)
 	}
 	if !bytes.Equal(reportData[48:], make([]byte, 16)) {
 		t.Fatal("REPORTDATA trailing 16 bytes are not zero")
 	}
 }
 
-func TestReportDataMutations(t *testing.T) {
-	vector := loadGoldenVector(t)
-	for name, mutation := range vector.Mutations {
+func TestTranscriptDigestGoldenVector(t *testing.T) {
+	nonce := sequentialBytes(0x00, NonceSize)
+	publicKey := sequentialBytes(0x20, PublicKeySize)
+	quote := []byte{0x54, 0x44, 0x58, 0x00, 0xff}
+
+	digest, err := TranscriptDigest(publicKey, nonce, 1_700_000_000_123, quote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const expected = "8103a2f51685a571c0990cd894962487effbabfd91d5474497c3f671bb1a1e62862de1461397f19a9ea38cbba36a0e06910e857b507867f4654708a286c98bd9"
+	if got := hex.EncodeToString(digest[:]); got != expected {
+		t.Fatalf("transcript digest = %s, want %s", got, expected)
+	}
+}
+
+func TestBindingRejectsInvalidLengths(t *testing.T) {
+	validNonce := make([]byte, NonceSize)
+	validKey := make([]byte, PublicKeySize)
+
+	for name, operation := range map[string]func() error{
+		"runtime nonce": func() error { _, err := NodeRuntimeData(validNonce[:31], validKey); return err },
+		"runtime key":   func() error { _, err := NodeRuntimeData(validNonce, validKey[:31]); return err },
+		"report nonce":  func() error { _, err := ReportData(validNonce[:31], validKey); return err },
+		"transcript key": func() error {
+			_, err := TranscriptDigest(validKey[:31], validNonce, 1, []byte{1})
+			return err
+		},
+		"empty quote": func() error { _, err := TranscriptDigest(validKey, validNonce, 1, nil); return err },
+	} {
 		t.Run(name, func(t *testing.T) {
-			var request map[string]any
-			if err := json.Unmarshal(vector.EvidenceRequest, &request); err != nil {
-				t.Fatal(err)
-			}
-			switch name {
-			case "nonce":
-				request["nonce"] = mutation.Value
-			case "key":
-				request["target"].(map[string]any)["target_uri"] = mutation.Value
-			case "policy":
-				request["profile_digest"] = mutation.Value
-			default:
-				t.Fatalf("unknown mutation %q", name)
-			}
-			mutatedRequest, err := json.Marshal(request)
-			if err != nil {
-				t.Fatal(err)
-			}
-			reportData, err := BindingReportData(mutatedRequest, vector.BindingClaims)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := hex.EncodeToString(reportData[:]); got != mutation.ReportData {
-				t.Fatalf("mutated REPORTDATA = %s, want %s", got, mutation.ReportData)
-			}
-			if mutation.ReportData == vector.ReportData {
-				t.Fatal("mutation did not change REPORTDATA")
+			if err := operation(); err == nil {
+				t.Fatal("invalid input was accepted")
 			}
 		})
 	}
 }
 
-func loadGoldenVector(t *testing.T) goldenVector {
-	t.Helper()
-	contents, err := os.ReadFile("testdata/report-data-v1.json")
-	if err != nil {
-		t.Fatal(err)
+func sequentialBytes(start byte, size int) []byte {
+	result := make([]byte, size)
+	for index := range result {
+		result[index] = start + byte(index)
 	}
-	var vector goldenVector
-	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&vector); err != nil {
-		t.Fatal(err)
-	}
-	return vector
+	return result
 }

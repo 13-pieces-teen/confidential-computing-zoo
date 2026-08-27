@@ -1,7 +1,7 @@
 # TDVM and Node Attestation failure fixtures
 
 This directory keeps only the TDVM lifecycle/preflight utilities still used by
-the dual-TDVM runtime and the isolated `argus_tdx` software failure matrix.
+the dual-TDVM runtime.
 Former pre-dual-Agent deployment, endpoint-switching, and standalone
 business-path acceptance scripts are not maintained here.
 
@@ -52,24 +52,3 @@ The Guest check requires the TD Guest device, loaded Guest module, and a
 writable TSM configfs report root. These preflights establish platform
 availability; they do not by themselves prove successful production remote
 attestation.
-
-## Software failure matrix
-
-`test-failures.sh` reuses the isolated stack under `../nodeattestor-mock` and
-checks that the custom NodeAttestor fails closed for:
-
-- replayed evidence under a fresh key and challenge;
-- Evidence Provider HTTP 503;
-- Trustee HTTP 503;
-- Trustee timeout;
-- Prometheus failure classification.
-
-Run it directly with:
-
-```bash
-core/spire/tests/tdvm/test-failures.sh
-```
-
-The matrix uses fake Evidence Provider/Trustee services and is not TDX
-hardware security acceptance. The maintained integrated deployment is
-[`runtime/dual-tdvm`](../../runtime/dual-tdvm/README.md).

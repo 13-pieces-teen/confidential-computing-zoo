@@ -1,8 +1,13 @@
 package server
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"net/url"
 	"os"
@@ -11,192 +16,189 @@ import (
 	"time"
 
 	"github.com/hashicorp/hcl"
-	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/policy"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
 )
 
-const verifyPath = "/v1/verify/tdx-node"
+const requiredTrustDomain = "argus.local"
 
-// Config combines the admission policy, persistent key binding state, and the
-// mutually authenticated Trustee channel used by the Server plugin.
 type Config struct {
 	TrustDomain             string
+	AgentID                 string
+	SlotOwnerKeySHA256      [sha256.Size]byte
 	TrusteeURL              *url.URL
-	TrusteeExpectedSPIFFEID string
 	TrusteeTLSConfig        *tls.Config
-	Policy                  *policy.Policy
-	BindingStateDir         string
+	EARPublicKey            *ecdsa.PublicKey
+	EARExpectedIssuer       string
+	EARExpectedProfile      string
+	PolicyID                string
 	ChallengeTTL            time.Duration
-	VerifierTimeout         time.Duration
-	MaxEvidenceBytes        int64
+	TrusteeTimeout          time.Duration
+	MaxQuoteBytes           int64
+	MaxTrusteeResponseBytes int64
 }
 
 type hclConfig struct {
+	AgentID                 string `hcl:"agent_id"`
+	SlotOwnerKeySHA256      string `hcl:"slot_owner_key_sha256"`
 	TrusteeURL              string `hcl:"trustee_url"`
 	TrusteeCAPath           string `hcl:"trustee_ca_path"`
-	TrusteeClientCertPath   string `hcl:"trustee_client_cert_path"`
-	TrusteeClientKeyPath    string `hcl:"trustee_client_key_path"`
 	TrusteeServerName       string `hcl:"trustee_server_name"`
-	TrusteeExpectedSPIFFEID string `hcl:"trustee_expected_spiffe_id"`
-	TrusteeAuthMode         string `hcl:"trustee_auth_mode"`
-	PolicyPath              string `hcl:"policy_path"`
-	BindingStateDir         string `hcl:"binding_state_dir"`
+	EARPublicKeyPath        string `hcl:"ear_public_key_path"`
+	EARExpectedIssuer       string `hcl:"ear_expected_issuer"`
+	EARExpectedProfile      string `hcl:"ear_expected_profile"`
+	PolicyID                string `hcl:"policy_id"`
 	ChallengeTTL            string `hcl:"challenge_ttl"`
-	VerifierTimeout         string `hcl:"verifier_timeout"`
-	MaxEvidenceBytes        int64  `hcl:"max_evidence_bytes"`
+	TrusteeTimeout          string `hcl:"trustee_timeout"`
+	MaxQuoteBytes           int64  `hcl:"max_quote_bytes"`
+	MaxTrusteeResponseBytes int64  `hcl:"max_trustee_response_bytes"`
 }
 
-func parseConfig(core *configv1.CoreConfiguration, input string) (*Config, []string) {
+func parseConfig(core *configapi.CoreConfiguration, input string) (*Config, []string) {
 	raw := hclConfig{
-		TrusteeAuthMode:  "mtls_files",
-		ChallengeTTL:     "30s",
-		VerifierTimeout:  "15s",
-		MaxEvidenceBytes: protocol.MaxEvidenceSize,
+		ChallengeTTL:            "30s",
+		TrusteeTimeout:          "15s",
+		MaxQuoteBytes:           protocol.MaxQuoteSize,
+		MaxTrusteeResponseBytes: 1 << 20,
 	}
-	var notes []string
 	if err := hcl.Decode(&raw, input); err != nil {
 		return nil, []string{fmt.Sprintf("decode HCL configuration: %v", err)}
 	}
-	if core == nil || core.TrustDomain == "" {
-		notes = append(notes, "core trust_domain is required")
+	var notes []string
+	if core == nil || core.TrustDomain != requiredTrustDomain {
+		notes = append(notes, "core trust_domain must be argus.local")
 	}
-	trusteeURL, err := url.Parse(raw.TrusteeURL)
-	if err != nil || trusteeURL.Scheme != "https" || trusteeURL.Host == "" || trusteeURL.RawQuery != "" || trusteeURL.Fragment != "" {
-		notes = append(notes, "trustee_url must be an HTTPS origin without query or fragment")
-	} else {
-		if trusteeURL.Path != "" && trusteeURL.Path != "/" {
-			notes = append(notes, "trustee_url must not contain a path")
-		}
-		trusteeURL.Path = verifyPath
+	if raw.AgentID != protocol.FixedAgentSPIFFEID {
+		notes = append(notes, "agent_id must be "+protocol.FixedAgentSPIFFEID)
 	}
-	if raw.TrusteeAuthMode != "mtls_files" {
-		notes = append(notes, "trustee_auth_mode must be mtls_files")
+	slotOwnerKeySHA256, err := parseSHA256(raw.SlotOwnerKeySHA256)
+	if err != nil {
+		notes = append(notes, "slot_owner_key_sha256 must be 64 lowercase hexadecimal characters")
 	}
-	if raw.TrusteeServerName == "" || strings.ContainsAny(raw.TrusteeServerName, "/:@") {
-		notes = append(notes, "trustee_server_name is invalid")
-	}
-	if err := validateSPIFFEID(raw.TrusteeExpectedSPIFFEID, core); err != nil {
+	trusteeURL, err := parseTrusteeURL(raw.TrusteeURL)
+	if err != nil {
 		notes = append(notes, err.Error())
 	}
+	tlsConfig, err := loadTLSConfig(raw.TrusteeCAPath, raw.TrusteeServerName)
+	if err != nil {
+		notes = append(notes, err.Error())
+	}
+	earPublicKey, err := loadEARPublicKey(raw.EARPublicKeyPath)
+	if err != nil {
+		notes = append(notes, err.Error())
+	}
+	if raw.EARExpectedIssuer == "" {
+		notes = append(notes, "ear_expected_issuer is required")
+	}
+	if raw.EARExpectedProfile == "" {
+		notes = append(notes, "ear_expected_profile is required")
+	}
+	if raw.PolicyID == "" || url.PathEscape(raw.PolicyID) != raw.PolicyID {
+		notes = append(notes, "policy_id must be one URL path segment")
+	}
 	challengeTTL, err := time.ParseDuration(raw.ChallengeTTL)
-	if err != nil || challengeTTL < time.Second || challengeTTL > 2*time.Minute {
-		notes = append(notes, "challenge_ttl must be between 1s and 2m")
+	if err != nil || challengeTTL <= 0 {
+		notes = append(notes, "challenge_ttl must be greater than zero")
 	}
-	verifierTimeout, err := time.ParseDuration(raw.VerifierTimeout)
-	if err != nil || verifierTimeout <= 0 || verifierTimeout > 30*time.Second {
-		notes = append(notes, "verifier_timeout must be greater than zero and no more than 30s")
-	} else if challengeTTL > 0 && verifierTimeout >= challengeTTL {
-		notes = append(notes, "verifier_timeout must be shorter than challenge_ttl")
+	trusteeTimeout, err := time.ParseDuration(raw.TrusteeTimeout)
+	if err != nil || trusteeTimeout <= 0 {
+		notes = append(notes, "trustee_timeout must be greater than zero")
 	}
-	if raw.MaxEvidenceBytes <= 0 || raw.MaxEvidenceBytes > protocol.MaxEvidenceSize {
-		notes = append(notes, fmt.Sprintf("max_evidence_bytes must be between 1 and %d", protocol.MaxEvidenceSize))
+	if raw.MaxQuoteBytes <= 0 || raw.MaxQuoteBytes > protocol.MaxQuoteSize {
+		notes = append(notes, fmt.Sprintf("max_quote_bytes must be between 1 and %d", protocol.MaxQuoteSize))
 	}
-	if !filepath.IsAbs(raw.BindingStateDir) {
-		notes = append(notes, "binding_state_dir must be absolute")
-	}
-
-	loadedPolicy, policyErr := loadPolicy(raw.PolicyPath)
-	if policyErr != nil {
-		notes = append(notes, policyErr.Error())
-	}
-	tlsConfig, tlsErr := loadTLSConfig(raw)
-	if tlsErr != nil {
-		notes = append(notes, tlsErr.Error())
+	if raw.MaxTrusteeResponseBytes <= 0 {
+		notes = append(notes, "max_trustee_response_bytes must be greater than zero")
 	}
 	if len(notes) > 0 {
 		return nil, notes
 	}
 	return &Config{
 		TrustDomain:             core.TrustDomain,
+		AgentID:                 raw.AgentID,
+		SlotOwnerKeySHA256:      slotOwnerKeySHA256,
 		TrusteeURL:              trusteeURL,
-		TrusteeExpectedSPIFFEID: raw.TrusteeExpectedSPIFFEID,
 		TrusteeTLSConfig:        tlsConfig,
-		Policy:                  loadedPolicy,
-		BindingStateDir:         filepath.Clean(raw.BindingStateDir),
+		EARPublicKey:            earPublicKey,
+		EARExpectedIssuer:       raw.EARExpectedIssuer,
+		EARExpectedProfile:      raw.EARExpectedProfile,
+		PolicyID:                raw.PolicyID,
 		ChallengeTTL:            challengeTTL,
-		VerifierTimeout:         verifierTimeout,
-		MaxEvidenceBytes:        raw.MaxEvidenceBytes,
+		TrusteeTimeout:          trusteeTimeout,
+		MaxQuoteBytes:           raw.MaxQuoteBytes,
+		MaxTrusteeResponseBytes: raw.MaxTrusteeResponseBytes,
 	}, nil
 }
 
-func loadPolicy(path string) (*policy.Policy, error) {
-	if !filepath.IsAbs(path) {
-		return nil, fmt.Errorf("policy_path must be absolute")
+func parseTrusteeURL(value string) (*url.URL, error) {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+		return nil, fmt.Errorf("trustee_url must be an HTTPS origin")
 	}
-	if err := requireRegularFile(path, false); err != nil {
-		return nil, fmt.Errorf("policy_path: %w", err)
-	}
-	loaded, err := policy.Load(path)
-	if err != nil {
-		return nil, fmt.Errorf("policy_path: %w", err)
-	}
-	return loaded, nil
+	parsed.Path = ""
+	return parsed, nil
 }
 
-func loadTLSConfig(raw hclConfig) (*tls.Config, error) {
-	for name, path := range map[string]string{
-		"trustee_ca_path":          raw.TrusteeCAPath,
-		"trustee_client_cert_path": raw.TrusteeClientCertPath,
-		"trustee_client_key_path":  raw.TrusteeClientKeyPath,
-	} {
-		if !filepath.IsAbs(path) {
-			return nil, fmt.Errorf("%s must be absolute", name)
-		}
+func loadTLSConfig(caPath, serverName string) (*tls.Config, error) {
+	if serverName == "" || strings.ContainsAny(serverName, "/:@") {
+		return nil, fmt.Errorf("trustee_server_name is invalid")
 	}
-	if err := requireRegularFile(raw.TrusteeCAPath, false); err != nil {
-		return nil, fmt.Errorf("trustee_ca_path: %w", err)
-	}
-	if err := requireRegularFile(raw.TrusteeClientCertPath, false); err != nil {
-		return nil, fmt.Errorf("trustee_client_cert_path: %w", err)
-	}
-	if err := requireRegularFile(raw.TrusteeClientKeyPath, true); err != nil {
-		return nil, fmt.Errorf("trustee_client_key_path: %w", err)
-	}
-	caPEM, err := os.ReadFile(raw.TrusteeCAPath)
+	caPEM, err := readRegularFile(caPath, "trustee_ca_path")
 	if err != nil {
-		return nil, fmt.Errorf("read trustee CA: %w", err)
+		return nil, err
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(caPEM) {
 		return nil, fmt.Errorf("trustee_ca_path contains no certificates")
 	}
-	certificate, err := tls.LoadX509KeyPair(raw.TrusteeClientCertPath, raw.TrusteeClientKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("load Trustee client key pair: %w", err)
-	}
-	// PKI chain and DNS name verification happen during the TLS handshake. The
-	// Trustee client additionally requires the configured SPIFFE URI SAN.
-	return &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		RootCAs:      roots,
-		Certificates: []tls.Certificate{certificate},
-		ServerName:   raw.TrusteeServerName,
-	}, nil
+	return &tls.Config{RootCAs: roots, ServerName: serverName}, nil
 }
 
-func requireRegularFile(path string, private bool) error {
-	info, err := os.Lstat(path)
+func loadEARPublicKey(path string) (*ecdsa.PublicKey, error) {
+	contents, err := readRegularFile(path, "ear_public_key_path")
 	if err != nil {
-		return err
+		return nil, err
+	}
+	block, rest := pem.Decode(contents)
+	if block == nil || block.Type != "PUBLIC KEY" || len(rest) != 0 {
+		return nil, fmt.Errorf("ear_public_key_path must contain one PUBLIC KEY PEM block")
+	}
+	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse EAR public key: %w", err)
+	}
+	publicKey, ok := parsed.(*ecdsa.PublicKey)
+	if !ok || publicKey.Curve != elliptic.P256() {
+		return nil, fmt.Errorf("EAR public key must use P-256")
+	}
+	return publicKey, nil
+}
+
+func readRegularFile(path, name string) ([]byte, error) {
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("%s must be absolute", name)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("must be a regular file")
+		return nil, fmt.Errorf("%s must be a regular file", name)
 	}
-	if private && info.Mode().Perm() != 0o600 {
-		return fmt.Errorf("permissions must be 0600")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
 	}
-	return nil
+	return contents, nil
 }
 
-func validateSPIFFEID(value string, core *configv1.CoreConfiguration) error {
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme != "spiffe" || parsed.Host == "" || parsed.Path == "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != value {
-		return fmt.Errorf("trustee_expected_spiffe_id is invalid")
+func parseSHA256(value string) ([sha256.Size]byte, error) {
+	var digest [sha256.Size]byte
+	decoded, err := hex.DecodeString(value)
+	if err != nil || len(decoded) != sha256.Size || hex.EncodeToString(decoded) != value {
+		return digest, fmt.Errorf("invalid SHA-256")
 	}
-	if core != nil && core.TrustDomain != "" && parsed.Host != core.TrustDomain {
-		return fmt.Errorf("trustee_expected_spiffe_id must belong to the configured trust domain")
-	}
-	return nil
+	copy(digest[:], decoded)
+	return digest, nil
 }

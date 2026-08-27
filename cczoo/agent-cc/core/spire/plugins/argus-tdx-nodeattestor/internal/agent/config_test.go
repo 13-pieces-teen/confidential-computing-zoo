@@ -3,52 +3,58 @@ package agent
 import (
 	"context"
 	"testing"
+	"time"
 
-	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/protocol"
+	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 )
 
-func TestParseConfigAcceptsUnixAndLoopbackHTTP(t *testing.T) {
-	core := &configv1.CoreConfiguration{TrustDomain: "argus.local"}
-	for _, input := range []string{
-		`evidence_endpoint = "unix:///run/argus/evidence.sock"
-attestation_key_path = "/var/lib/spire/argus-tdx/attestation-key"`,
-		`evidence_endpoint = "http://127.0.0.1:8008/ra/v1/evidence"
-attestation_key_path = "/var/lib/spire/argus-tdx/attestation-key"`,
-	} {
-		if _, notes := parseConfig(core, input); len(notes) != 0 {
-			t.Fatalf("valid config notes = %v", notes)
-		}
+const validAgentConfig = `
+evidence_socket_path = "/run/argus/evidence-provider.sock"
+proof_key_path = "/var/lib/spire/argus-tdx/proof-key.pem"
+`
+
+func TestParseConfigAcceptsNodeEvidenceSettings(t *testing.T) {
+	config, notes := parseConfig(nil, validAgentConfig)
+	if len(notes) != 0 {
+		t.Fatalf("valid config notes = %v", notes)
+	}
+	if config.EvidenceSocketPath != "/run/argus/evidence-provider.sock" {
+		t.Fatalf("evidence socket = %q", config.EvidenceSocketPath)
+	}
+	if config.ProofKeyPath != "/var/lib/spire/argus-tdx/proof-key.pem" {
+		t.Fatalf("proof key path = %q", config.ProofKeyPath)
+	}
+	if config.EvidenceTimeout != 10*time.Second {
+		t.Fatalf("evidence timeout = %s", config.EvidenceTimeout)
+	}
+	if config.MaxQuoteBytes != protocol.MaxQuoteSize {
+		t.Fatalf("maximum Quote bytes = %d", config.MaxQuoteBytes)
 	}
 }
 
-func TestParseConfigRejectsRemoteHTTPAndRelativeKey(t *testing.T) {
-	config, notes := parseConfig(&configv1.CoreConfiguration{TrustDomain: "argus.local"}, `
-evidence_endpoint = "http://192.0.2.10:8008/ra/v1/evidence"
-attestation_key_path = "attestation-key"
+func TestParseConfigRejectsInvalidPathsAndLimits(t *testing.T) {
+	config, notes := parseConfig(nil, `
+evidence_socket_path = "evidence.sock"
+proof_key_path = "proof-key.pem"
+evidence_timeout = "0s"
+max_quote_bytes = 4194305
 `)
-	if config != nil || len(notes) != 2 {
+	if config != nil || len(notes) != 4 {
 		t.Fatalf("config = %#v, notes = %v", config, notes)
 	}
 }
 
 func TestValidateDoesNotChangeConfiguredSnapshot(t *testing.T) {
 	plugin := New()
-	valid := `evidence_endpoint = "unix:///run/argus/evidence.sock"
-attestation_key_path = "/var/lib/spire/argus-tdx/attestation-key"`
-	if _, err := plugin.Configure(context.Background(), &configv1.ConfigureRequest{
-		CoreConfiguration: &configv1.CoreConfiguration{TrustDomain: "argus.local"},
-		HclConfiguration:  valid,
-	}); err != nil {
+	if _, err := plugin.Configure(context.Background(), &configapi.ConfigureRequest{HclConfiguration: validAgentConfig}); err != nil {
 		t.Fatal(err)
 	}
 	before, err := plugin.getConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := plugin.Validate(context.Background(), &configv1.ValidateRequest{
-		CoreConfiguration: &configv1.CoreConfiguration{TrustDomain: "argus.local"},
-		HclConfiguration:  `evidence_endpoint = "http://remote.example/"`,
-	})
+	response, err := plugin.Validate(context.Background(), &configapi.ValidateRequest{HclConfiguration: `evidence_socket_path = "relative.sock"`})
 	if err != nil {
 		t.Fatal(err)
 	}
