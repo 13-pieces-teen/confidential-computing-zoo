@@ -171,11 +171,15 @@ func buildRequest(input VerifyInput, policyID string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal TDX evidence: %w", err)
 	}
+	// Trustee v0.21 compares raw runtime data directly with TDX REPORTDATA.
+	runtimeDigest := sha512.Sum384(input.RuntimeData)
+	var reportData [64]byte
+	copy(reportData[:], runtimeDigest[:])
 	request := attestationRequest{
 		VerificationRequests: []individualAttestationRequest{{
 			TEE:                      "tdx",
 			Evidence:                 base64.RawURLEncoding.EncodeToString(inner),
-			RuntimeData:              runtimeData{Raw: base64.RawURLEncoding.EncodeToString(input.RuntimeData)},
+			RuntimeData:              runtimeData{Raw: base64.RawURLEncoding.EncodeToString(reportData[:])},
 			RuntimeDataHashAlgorithm: "sha384",
 		}},
 		PolicyIDs: []string{policyID},
