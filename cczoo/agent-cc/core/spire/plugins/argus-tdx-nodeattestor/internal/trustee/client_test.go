@@ -1,6 +1,7 @@
 package trustee
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -25,7 +26,7 @@ const (
 	testProfile  = "tag:github.com,2024:confidential-containers/Trustee"
 )
 
-func TestVerifyNodeUsesOfficialRequestAndAcceptsAffirmingEAR(t *testing.T) {
+func TestVerifyNodeSendsReportDataAndAcceptsAffirmingEAR(t *testing.T) {
 	now := time.Date(2026, 8, 27, 1, 2, 3, 0, time.UTC)
 	quote := []byte{0x01, 0x02, 0x03, 0x04}
 	runtimeData := []byte("node-runtime-data")
@@ -185,8 +186,11 @@ func assertTrusteeRequest(t *testing.T, contents, quote, runtimeData []byte) {
 		t.Fatalf("inner evidence = %s", innerBytes)
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(verification.RuntimeData.Raw)
-	if err != nil || string(raw) != string(runtimeData) {
-		t.Fatalf("runtime data = %q, err = %v", raw, err)
+	reportDigest := sha512.Sum384(runtimeData)
+	expectedReportData := make([]byte, 64)
+	copy(expectedReportData, reportDigest[:])
+	if err != nil || !bytes.Equal(raw, expectedReportData) {
+		t.Fatalf("runtime data = %x, want REPORTDATA %x, err = %v", raw, expectedReportData, err)
 	}
 }
 
