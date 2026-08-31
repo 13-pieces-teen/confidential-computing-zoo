@@ -24,6 +24,49 @@ See Also: [`Agent-CC doc`](../../README.md) for the top-level architecture and [
 - A Sigstore-capable identity for OIDC login flows
 - Reachable trust-service and KBS dependencies for attested launch flows
 
+## Configure Ollama as the OpenClaw primary model
+
+Ollama must expose the OpenAI-compatible API, and the target model must be downloaded in advance:
+
+```bash
+cd cczoo/agent-cc/adapters/OpenClaw/scripts
+./run_ollama_luks.sh pull llama3.2
+OLLAMA_HOST=0.0.0.0:11434 ./run_ollama_luks.sh serve
+```
+
+`run_ollama_luks.sh` requires `OLLAMA_LUKS_MOUNT_ROOT` to be an active LUKS
+mount point and stores models under `${OLLAMA_LUKS_MOUNT_ROOT}/ollama` by
+default. Do not run plain `ollama serve` or `ollama pull`, because the default
+path `~/.ollama/models` is outside the LUKS-protected storage. Keep the `serve`
+command running in a separate terminal while completing the steps below.
+
+Run the connector after the OpenClaw Gateway is running with a persistent config
+volume:
+
+```bash
+cd cczoo/agent-cc/adapters/OpenClaw/scripts
+export OPENCLAW_CONTAINER=agentcc-openclaw-sbx-gateway
+export OLLAMA_BASE_URL=http://127.0.0.1:11434
+export OLLAMA_CONTAINER_BASE_URL=http://host.docker.internal:11434
+export OLLAMA_MODEL=llama3.2
+./connect_openclaw_ollama.sh
+```
+
+`OLLAMA_BASE_URL` is used by the script on the host. `OLLAMA_CONTAINER_BASE_URL`
+is written to the OpenClaw configuration and must be reachable from the Gateway
+container. On Linux, create the container with
+`--add-host=host.docker.internal:host-gateway`, or set this variable to an
+Ollama address on a shared Docker network. The `OLLAMA_HOST` setting in the
+server command above makes Ollama listen on an address accessible to the
+container; restrict host firewall access to trusted clients.
+
+The script verifies Ollama readiness, model availability, and container access;
+then it writes `models.providers.ollama` and sets
+`agents.defaults.model.primary` to `ollama/llama3.2`. This step does not require
+Argus Guard, the Evidence Provider, or TC-API; it validates only the model-call
+path. For an attested deployment, register Ollama as an independent `ollama-llm`
+workload and allow OpenClaw to access it only after Argus verification.
+
 ## Local Environment Setup
 
 ```bash
