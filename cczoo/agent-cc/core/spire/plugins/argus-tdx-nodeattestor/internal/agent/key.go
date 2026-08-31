@@ -10,6 +10,9 @@ import (
 	"runtime"
 )
 
+// loadProofKey loads the operator-provisioned Agent key without generating,
+// rotating, or rewriting key material during attestation. This is a protected
+// filesystem key, not a TDX-sealed key managed by the plugin.
 func loadProofKey(path string) (ed25519.PrivateKey, error) {
 	info, err := os.Lstat(path)
 	if err != nil {

@@ -1,3 +1,6 @@
+// Package server implements the SPIRE Server side of Argus TDX Node
+// Attestation. It binds a fixed Agent slot to a proof key and delegates Quote
+// appraisal to the configured Trustee.
 package server
 
 import (
@@ -21,10 +24,13 @@ import (
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-nodeattestor/internal/trustee"
 )
 
+// TrusteeVerifier appraises a raw Quote against the Node runtime data supplied
+// by this protocol.
 type TrusteeVerifier interface {
 	VerifyNode(context.Context, trustee.VerifyInput) (trustee.VerifiedNodeClaims, error)
 }
 
+// VerifierFactory constructs the Trustee client from validated startup config.
 type VerifierFactory func(*Config) (TrusteeVerifier, error)
 
 type runtimeState struct {
@@ -32,6 +38,7 @@ type runtimeState struct {
 	verifier TrusteeVerifier
 }
 
+// Plugin implements SPIRE's Server NodeAttestor protocol for the argus_tdx type.
 type Plugin struct {
 	nodeattestorapi.UnimplementedNodeAttestorServer
 	configapi.UnimplementedConfigServer
@@ -44,6 +51,7 @@ type Plugin struct {
 	verifierFactory VerifierFactory
 }
 
+// New returns an unconfigured Server NodeAttestor.
 func New() *Plugin {
 	return &Plugin{
 		random: rand.Reader,
@@ -63,6 +71,8 @@ func New() *Plugin {
 	}
 }
 
+// Attest authenticates one Agent through key pinning, proof-of-possession, and
+// Trustee appraisal before returning SPIRE Agent attributes.
 func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) error {
 	state, err := plugin.getState()
 	if err != nil {
@@ -85,11 +95,14 @@ func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) e
 	if err := protocol.ValidateAgentHello(hello); err != nil {
 		return status.Errorf(codes.InvalidArgument, "validate AgentHello: %v", err)
 	}
+	// REPORTDATA can bind any supplied key. The independent slot pin prevents a
+	// different TDX node from claiming this profile's fixed Agent identity.
 	keyDigest := sha256.Sum256(hello.ProofPublicKey)
 	if keyDigest != state.config.SlotOwnerKeySHA256 {
 		return status.Error(codes.PermissionDenied, "proof public key does not match the fixed Agent slot")
 	}
 
+	// A fresh Server nonce makes each accepted Quote specific to this stream.
 	nonce := make([]byte, protocol.NonceSize)
 	if _, err := io.ReadFull(plugin.random, nonce); err != nil {
 		return status.Errorf(codes.Internal, "generate challenge nonce: %v", err)
@@ -126,6 +139,7 @@ func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) e
 	if uint64(plugin.now().UnixMilli()) >= expiresAtUnixMs {
 		return status.Error(codes.PermissionDenied, "NodeChallenge expired")
 	}
+	// Verify proof-of-possession before invoking the remote appraisal service.
 	transcriptDigest, err := protocol.TranscriptDigest(hello.ProofPublicKey, nonce, expiresAtUnixMs, response.TdxQuote)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "construct transcript: %v", err)
@@ -140,6 +154,8 @@ func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) e
 
 	verifyContext, cancel := context.WithTimeout(stream.Context(), state.config.TrusteeTimeout)
 	defer cancel()
+	// Trustee owns Quote, collateral, TCB, and policy appraisal. The plugin
+	// supplies the same canonical runtime data used by the guest Provider.
 	if _, err := state.verifier.VerifyNode(verifyContext, trustee.VerifyInput{
 		Quote: response.TdxQuote, RuntimeData: runtimeData,
 	}); err != nil {
@@ -148,11 +164,14 @@ func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) e
 	if uint64(plugin.now().UnixMilli()) >= expiresAtUnixMs {
 		return status.Error(codes.PermissionDenied, "NodeChallenge expired during Trustee verification")
 	}
+	// AgentAttributes admit the Agent to SPIRE. The SPIRE Server CA, not this
+	// plugin or Trustee, subsequently issues the Agent SVID.
 	if err := stream.Send(&nodeattestorapi.AttestResponse{
 		Response: &nodeattestorapi.AttestResponse_AgentAttributes{AgentAttributes: &nodeattestorapi.AgentAttributes{
 			SpiffeId:       protocol.FixedAgentSPIFFEID,
 			SelectorValues: nil,
-			CanReattest:    true,
+			// Re-attestation repeats the full fresh-nonce Quote and Trustee flow.
+			CanReattest: true,
 		}},
 	}); err != nil {
 		return status.Errorf(codes.Unavailable, "send AgentAttributes: %v", err)

@@ -8,6 +8,9 @@ import (
 	"fmt"
 )
 
+// NodeRuntimeData returns the canonical bytes shared by the Rust Provider and
+// the Server-side Trustee request. Length prefixes keep the identity fields
+// unambiguous before the fixed-size nonce and proof key.
 func NodeRuntimeData(nonce, proofPublicKey []byte) ([]byte, error) {
 	if len(nonce) != NonceSize {
 		return nil, fmt.Errorf("nonce must be %d bytes", NonceSize)
@@ -24,6 +27,8 @@ func NodeRuntimeData(nonce, proofPublicKey []byte) ([]byte, error) {
 	return runtimeData, nil
 }
 
+// ReportData maps NodeRuntimeData into TDX REPORTDATA as SHA-384 followed by a
+// zero-filled 16-byte tail.
 func ReportData(nonce, proofPublicKey []byte) ([64]byte, error) {
 	var reportData [64]byte
 	runtimeData, err := NodeRuntimeData(nonce, proofPublicKey)
@@ -35,6 +40,9 @@ func ReportData(nonce, proofPublicKey []byte) ([64]byte, error) {
 	return reportData, nil
 }
 
+// TranscriptDigest binds proof-of-possession to the exact challenge window and
+// Quote bytes. It complements hardware REPORTDATA binding; it does not appraise
+// the Quote.
 func TranscriptDigest(proofPublicKey, nonce []byte, expiresAtUnixMs uint64, tdxQuote []byte) ([64]byte, error) {
 	var result [64]byte
 	if len(proofPublicKey) != PublicKeySize {
@@ -59,6 +67,7 @@ func TranscriptDigest(proofPublicKey, nonce []byte, expiresAtUnixMs uint64, tdxQ
 	return sha512.Sum512(transcript), nil
 }
 
+// KeyID returns the lowercase SHA-256 fingerprint used to pin an Agent slot.
 func KeyID(proofPublicKey []byte) (string, error) {
 	if len(proofPublicKey) != PublicKeySize {
 		return "", fmt.Errorf("proof public key must be %d bytes", PublicKeySize)

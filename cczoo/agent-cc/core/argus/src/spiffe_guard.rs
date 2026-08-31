@@ -9,6 +9,10 @@
 //! deliberately does not re-verify attestation evidence or accept certificate
 //! material. It evaluates the relying party's explicit identity/service policy
 //! before the caller sends a sensitive request.
+//!
+//! Request identity fields are authorization context supplied by the local
+//! broker, not identities derived from a certificate here. The broker must use
+//! the same identities when it establishes and verifies the SPIFFE mTLS path.
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -24,6 +28,7 @@ const MAX_FIELD_LENGTH: usize = 2048;
 const MIN_TTL_SECONDS: u64 = 1;
 const MAX_TTL_SECONDS: u64 = 300;
 
+/// Caller-local SPIFFE authorization policy loaded at Guard startup.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpiffeGuardPolicy {
@@ -35,6 +40,7 @@ pub struct SpiffeGuardPolicy {
     pub rules: Vec<SpiffeGuardRule>,
 }
 
+/// Exact-match authorization rule for one caller-to-service relationship.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpiffeGuardRule {
@@ -49,6 +55,7 @@ pub struct SpiffeGuardRule {
     pub data_classes: Vec<String>,
 }
 
+/// Per-request authorization context supplied by the caller-local broker.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpiffeAuthorizationRequest {
@@ -63,6 +70,7 @@ pub struct SpiffeAuthorizationRequest {
     pub data_class: Option<String>,
 }
 
+/// Fail-closed result of caller-local SPIFFE policy evaluation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SpiffeAuthorizationDecision {
@@ -70,6 +78,7 @@ pub enum SpiffeAuthorizationDecision {
     Deny,
 }
 
+/// Authorization result and audit correlation metadata returned to the broker.
 #[derive(Clone, Debug, Serialize)]
 pub struct SpiffeAuthorizationResponse {
     pub request_id: String,
@@ -82,12 +91,14 @@ pub struct SpiffeAuthorizationResponse {
     pub rule_id: Option<String>,
 }
 
+/// Evaluates immutable startup policy without performing transport authentication.
 #[derive(Clone, Debug)]
 pub struct SpiffeGuard {
     policy: SpiffeGuardPolicy,
 }
 
 impl SpiffeGuardPolicy {
+    /// Load and validate a policy from its operator-managed YAML file.
     pub fn from_yaml_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
@@ -98,6 +109,7 @@ impl SpiffeGuardPolicy {
         Ok(policy)
     }
 
+    /// Validate policy syntax and the fields used for exact rule matching.
     pub fn validate(&self) -> Result<()> {
         validate_field("version", &self.version)?;
         if self.version != POLICY_VERSION {
@@ -154,23 +166,28 @@ impl SpiffeGuardPolicy {
 }
 
 impl SpiffeGuard {
+    /// Create a Guard from an already parsed policy.
     pub fn new(policy: SpiffeGuardPolicy) -> Result<Self> {
         policy.validate()?;
         Ok(Self { policy })
     }
 
+    /// Load a Guard from an operator-managed YAML policy file.
     pub fn from_yaml_file(path: impl AsRef<Path>) -> Result<Self> {
         Self::new(SpiffeGuardPolicy::from_yaml_file(path)?)
     }
 
+    /// Return the policy identifier emitted with every decision.
     pub fn policy_id(&self) -> &str {
         &self.policy.policy_id
     }
 
+    /// Return the freshness window that the broker enforces on responses.
     pub fn decision_ttl_seconds(&self) -> u64 {
         self.policy.decision_ttl_seconds
     }
 
+    /// Match one request against the validated policy, denying by default.
     pub fn authorize(&self, request: &SpiffeAuthorizationRequest) -> SpiffeAuthorizationResponse {
         let now = Utc::now().timestamp();
         let expires_at_unix = now + self.policy.decision_ttl_seconds as i64;
@@ -187,6 +204,8 @@ impl SpiffeGuard {
             }
         };
 
+        // A rule must match every configured identity, service, origin, and
+        // optional operation/data constraint before the request is allowed.
         for rule in &self.policy.rules {
             if !rule
                 .callers
@@ -333,6 +352,7 @@ fn canonical_https_origin(value: &str) -> Result<String> {
     Ok(format!("https://{host}:{port}"))
 }
 
+/// Empty policy constraints mean that the corresponding request field is unrestricted.
 fn optional_constraint_matches(allowed: &[String], actual: Option<&str>) -> bool {
     if allowed.is_empty() {
         return true;
@@ -342,6 +362,7 @@ fn optional_constraint_matches(allowed: &[String], actual: Option<&str>) -> bool
         .unwrap_or(false)
 }
 
+/// Create an audit correlation identifier; it is not an authorization capability.
 fn decision_id(request: &SpiffeAuthorizationRequest, now: i64) -> String {
     let mut random = [0_u8; 16];
     let _ = getrandom::getrandom(&mut random);

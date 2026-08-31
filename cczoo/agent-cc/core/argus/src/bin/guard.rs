@@ -14,8 +14,10 @@
 
 //! Guard binary
 //!
-//! Runs the Argus Guard HTTP server for caller-side verification.
-//! Provides REST endpoints for target verification requests.
+//! Runs one of two explicit caller-side trust paths. Evidence mode fetches and
+//! verifies target TDX evidence. SPIFFE identity mode evaluates caller-local
+//! policy over identity context supplied by the local broker; the broker still
+//! owns SPIFFE mTLS authentication and exact peer-ID enforcement.
 
 use anyhow::{bail, Result};
 use argus::{
@@ -50,18 +52,21 @@ struct GuardAppState {
     api_token: Option<Arc<str>>,
 }
 
+/// Selects the state required by the configured Guard mode.
 #[derive(Clone)]
 enum GuardRuntime {
     Evidence(Arc<EvidenceGuardState>),
     SpiffeIdentity(Arc<SpiffeGuardState>),
 }
 
+/// Dependencies for the original evidence verification path.
 struct EvidenceGuardState {
     evidence_fetcher: Arc<EvidenceFetcherHttp>,
     ra_adapter: Arc<RaAdapter>,
     policy_evaluator: Arc<dyn PolicyEvaluatorTrait>,
 }
 
+/// Immutable policy and process-local metrics for SPIFFE identity mode.
 struct SpiffeGuardState {
     guard: SpiffeGuard,
     metrics: SpiffeGuardMetrics,
@@ -73,6 +78,7 @@ const GUARD_DURATION_BUCKETS_SECONDS: [f64; 13] = [
     0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
 ];
 
+/// Mutually exclusive trust path selected once at process startup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum GuardMode {
     Evidence,
@@ -100,6 +106,7 @@ impl GuardMode {
     }
 }
 
+/// Bounded-cardinality Prometheus metrics for SPIFFE authorization decisions.
 #[derive(Default)]
 struct SpiffeGuardMetrics {
     requests: AtomicU64,
@@ -176,6 +183,7 @@ argus_guard_decision_duration_seconds_count {requests}\n"
     }
 }
 
+/// Authenticate access to Guard's decision APIs independently of workload mTLS.
 fn authorize(headers: &HeaderMap, expected_token: Option<&str>) -> Result<(), StatusCode> {
     let Some(expected_token) = expected_token else {
         return Ok(());
@@ -249,6 +257,7 @@ async fn health_handler(State(state): State<GuardAppState>) -> Json<HealthRespon
     })
 }
 
+/// Load the optional Guard API token from one configured source.
 fn api_token_from_environment() -> Result<Option<Arc<str>>> {
     let token = std::env::var("ARGUS_API_TOKEN")
         .ok()
@@ -294,6 +303,8 @@ async fn spiffe_authorize_handler(
     };
     authorize(&headers, state.api_token.as_deref())?;
 
+    // Guard evaluates the broker-supplied authorization context. The broker
+    // must enforce the same identities on the subsequent SPIFFE mTLS hop.
     let started = runtime.metrics.begin();
     let response = runtime.guard.authorize(&request);
     runtime.metrics.finish(response.decision, started);
@@ -314,6 +325,7 @@ async fn spiffe_authorize_handler(
     Ok(Json(response))
 }
 
+/// Render SPIFFE identity mode metrics in the Prometheus text format.
 async fn metrics_handler(State(state): State<GuardAppState>) -> Result<Response, StatusCode> {
     let GuardRuntime::SpiffeIdentity(runtime) = &state.runtime else {
         return Err(StatusCode::NOT_FOUND);
@@ -591,7 +603,8 @@ async fn main() -> Result<()> {
     };
     let state = GuardAppState { runtime, api_token };
 
-    // Build router
+    // Each mode exposes only its own decision API so the two trust paths cannot
+    // be selected implicitly on a per-request basis.
     let app = Router::new().route("/health", get(health_handler));
     let app = match guard_mode {
         GuardMode::Evidence => app

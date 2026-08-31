@@ -23,6 +23,8 @@ import (
 
 const requiredTrustDomain = "argus.local"
 
+// Config contains the fixed Agent slot, Trustee trust anchors, appraisal pins,
+// and protocol limits validated at SPIRE startup.
 type Config struct {
 	TrustDomain             string
 	AgentID                 string
@@ -140,6 +142,8 @@ func parseTrusteeURL(value string) (*url.URL, error) {
 	return parsed, nil
 }
 
+// loadTLSConfig authenticates the Trustee endpoint with the configured CA and
+// server name. This profile does not provision a Trustee client certificate.
 func loadTLSConfig(caPath, serverName string) (*tls.Config, error) {
 	if serverName == "" || strings.ContainsAny(serverName, "/:@") {
 		return nil, fmt.Errorf("trustee_server_name is invalid")
@@ -155,6 +159,7 @@ func loadTLSConfig(caPath, serverName string) (*tls.Config, error) {
 	return &tls.Config{RootCAs: roots, ServerName: serverName}, nil
 }
 
+// loadEARPublicKey pins the independent key used to authenticate Trustee EARs.
 func loadEARPublicKey(path string) (*ecdsa.PublicKey, error) {
 	contents, err := readRegularFile(path, "ear_public_key_path")
 	if err != nil {

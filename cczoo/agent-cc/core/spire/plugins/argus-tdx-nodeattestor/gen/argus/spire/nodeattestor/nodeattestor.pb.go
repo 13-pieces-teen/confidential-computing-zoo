@@ -21,9 +21,11 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// AgentHello identifies the proof key pinned to the fixed Agent slot.
 type AgentHello struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ProofPublicKey []byte                 `protobuf:"bytes,1,opt,name=proof_public_key,json=proofPublicKey,proto3" json:"proof_public_key,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Raw 32-byte Ed25519 public key.
+	ProofPublicKey []byte `protobuf:"bytes,1,opt,name=proof_public_key,json=proofPublicKey,proto3" json:"proof_public_key,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -65,10 +67,13 @@ func (x *AgentHello) GetProofPublicKey() []byte {
 	return nil
 }
 
+// NodeChallenge makes the Quote fresh for one Server attestation stream.
 type NodeChallenge struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Nonce           []byte                 `protobuf:"bytes,1,opt,name=nonce,proto3" json:"nonce,omitempty"`
-	ExpiresAtUnixMs uint64                 `protobuf:"varint,2,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Server-generated 32-byte nonce bound into TDX REPORTDATA.
+	Nonce []byte `protobuf:"bytes,1,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	// Absolute expiry enforced before and after Trustee appraisal.
+	ExpiresAtUnixMs uint64 `protobuf:"varint,2,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -117,10 +122,13 @@ func (x *NodeChallenge) GetExpiresAtUnixMs() uint64 {
 	return 0
 }
 
+// NodeEvidenceResponse returns hardware evidence and proof of key possession.
 type NodeEvidenceResponse struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	TdxQuote            []byte                 `protobuf:"bytes,1,opt,name=tdx_quote,json=tdxQuote,proto3" json:"tdx_quote,omitempty"`
-	TranscriptSignature []byte                 `protobuf:"bytes,2,opt,name=transcript_signature,json=transcriptSignature,proto3" json:"transcript_signature,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Raw TDX Quote whose REPORTDATA binds the nonce and proof public key.
+	TdxQuote []byte `protobuf:"bytes,1,opt,name=tdx_quote,json=tdxQuote,proto3" json:"tdx_quote,omitempty"`
+	// Ed25519 signature over the protocol transcript digest.
+	TranscriptSignature []byte `protobuf:"bytes,2,opt,name=transcript_signature,json=transcriptSignature,proto3" json:"transcript_signature,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }

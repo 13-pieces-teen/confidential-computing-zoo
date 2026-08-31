@@ -10,6 +10,8 @@ import (
 	configapi "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
 )
 
+// Config contains the guest-local paths and limits fixed when SPIRE configures
+// the Agent NodeAttestor.
 type Config struct {
 	EvidenceSocketPath string
 	ProofKeyPath       string

@@ -1,3 +1,6 @@
+// Package evidence connects the Agent NodeAttestor to the guest-local TDX
+// Evidence Provider. The Unix socket is the local trust boundary; this client
+// transports raw evidence but does not appraise it.
 package evidence
 
 import (
@@ -28,12 +31,14 @@ type nodeEvidenceResponse struct {
 	Quote        string `json:"quote"`
 }
 
+// Client calls the typed Node Evidence endpoint over a Unix domain socket.
 type Client struct {
 	httpClient *http.Client
 	requestURL string
 	maxBytes   int64
 }
 
+// NewClient constructs a bounded guest-local Evidence Provider client.
 func NewClient(socketPath string, timeout time.Duration, maxQuoteBytes int64) (*Client, error) {
 	if !path.IsAbs(socketPath) {
 		return nil, fmt.Errorf("evidence socket path must be absolute")
@@ -46,6 +51,8 @@ func NewClient(socketPath string, timeout time.Duration, maxQuoteBytes int64) (*
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Never route guest-local evidence through an HTTP proxy; the URL host is a
+	// placeholder and every connection is forced onto the configured UDS.
 	transport.Proxy = nil
 	transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
@@ -57,6 +64,8 @@ func NewClient(socketPath string, timeout time.Duration, maxQuoteBytes int64) (*
 	}, nil
 }
 
+// GetNodeEvidence asks the Provider for a Quote bound to one Server nonce and
+// the Agent proof public key.
 func (client *Client) GetNodeEvidence(ctx context.Context, nonce, proofPublicKey []byte) ([]byte, error) {
 	if len(nonce) != protocol.NonceSize {
 		return nil, fmt.Errorf("nonce must be %d bytes", protocol.NonceSize)
@@ -89,6 +98,8 @@ func (client *Client) GetNodeEvidence(ctx context.Context, nonce, proofPublicKey
 		return nil, fmt.Errorf("Evidence Provider returned HTTP %d", response.StatusCode)
 	}
 
+	// Base64URL expands the Quote, while the fixed allowance covers the small
+	// JSON envelope without permitting an unbounded response body.
 	maximumResponseBytes := client.maxBytes*2 + 1024
 	contents, err := io.ReadAll(io.LimitReader(response.Body, maximumResponseBytes+1))
 	if err != nil {

@@ -1,3 +1,5 @@
+// Package trustee submits raw TDX evidence for appraisal and verifies the
+// signed EAR returned by Trustee. It does not parse or appraise Quotes locally.
 package trustee
 
 import (
@@ -20,6 +22,8 @@ import (
 	"time"
 )
 
+// VerifyInput couples a raw Quote with the canonical runtime bytes from which
+// this protocol derives the expected REPORTDATA.
 type VerifyInput struct {
 	Quote       []byte
 	RuntimeData []byte
@@ -72,6 +76,8 @@ type earClaims struct {
 	Submods  map[string]appraisal `json:"submods"`
 }
 
+// Client calls one pinned Trustee origin and verifies EARs against fixed
+// issuer, profile, policy, and signing-key expectations.
 type Client struct {
 	httpClient       *http.Client
 	attestationURL   string
@@ -83,6 +89,7 @@ type Client struct {
 	now              func() time.Time
 }
 
+// NewClient constructs a bounded Trustee appraisal client.
 func NewClient(
 	endpoint *url.URL,
 	tlsConfig *tls.Config,
@@ -128,6 +135,8 @@ func NewClient(
 	}, nil
 }
 
+// VerifyNode accepts a Node only when Trustee returns a current, signed,
+// affirming appraisal for the requested policy and REPORTDATA binding.
 func (client *Client) VerifyNode(ctx context.Context, input VerifyInput) (VerifiedNodeClaims, error) {
 	if len(input.Quote) == 0 {
 		return VerifiedNodeClaims{}, fmt.Errorf("TDX Quote is required")
@@ -163,6 +172,8 @@ func (client *Client) VerifyNode(ctx context.Context, input VerifyInput) (Verifi
 	return VerifiedNodeClaims{}, nil
 }
 
+// buildRequest follows Trustee v0.21's raw runtime-data contract by sending the
+// derived 64-byte REPORTDATA value instead of unhashed NodeRuntimeData.
 func buildRequest(input VerifyInput, policyID string) ([]byte, error) {
 	inner, err := json.Marshal(tdxEvidence{
 		CCEventLog: nil,
@@ -191,6 +202,8 @@ func buildRequest(input VerifyInput, policyID string) ([]byte, error) {
 	return encoded, nil
 }
 
+// verifyEAR authenticates the compact JWT before accepting its appraisal and
+// annotated evidence as the result of Quote verification.
 func verifyEAR(token []byte, publicKey *ecdsa.PublicKey, expectedIssuer, expectedProfile, policyID string, runtimeData []byte, now time.Time) error {
 	parts := strings.Split(string(token), ".")
 	if len(parts) != 3 {

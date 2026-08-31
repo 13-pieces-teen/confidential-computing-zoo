@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// ValidateAgentHello enforces the initial payload accepted by the Server.
 func ValidateAgentHello(hello *nodeattestor.AgentHello) error {
 	if hello == nil {
 		return fmt.Errorf("AgentHello is required")
@@ -24,6 +25,7 @@ func ValidateAgentHello(hello *nodeattestor.AgentHello) error {
 	return nil
 }
 
+// ValidateNodeChallenge rejects malformed or already-expired Server challenges.
 func ValidateNodeChallenge(challenge *nodeattestor.NodeChallenge) error {
 	return validateNodeChallengeAt(challenge, uint64(time.Now().UnixMilli()))
 }
@@ -47,6 +49,8 @@ func validateNodeChallengeAt(challenge *nodeattestor.NodeChallenge, nowUnixMs ui
 	return nil
 }
 
+// ValidateNodeEvidenceResponse bounds the Quote and proof before cryptographic
+// verification or Trustee I/O.
 func ValidateNodeEvidenceResponse(response *nodeattestor.NodeEvidenceResponse, maxQuoteBytes int64) error {
 	if response == nil {
 		return fmt.Errorf("NodeEvidenceResponse is required")

@@ -161,6 +161,9 @@ impl TsmInstanceQuoteGenerator {
     }
 
     /// Generate and return the exact raw TDX Quote bytes.
+    ///
+    /// Each call owns one configfs report instance. Transport encoding and
+    /// Quote appraisal remain the caller's responsibility.
     pub fn generate_quote_bytes(
         &self,
         report_data: &ReportData,
@@ -170,6 +173,8 @@ impl TsmInstanceQuoteGenerator {
             let report_data_path = report_dir.join("inblob");
             let quote_path = report_dir.join("outblob");
 
+            // Writing inblob triggers Quote generation; outblob is the raw
+            // kernel-produced evidence returned to the caller.
             fs::write(&report_data_path, self.encode_inblob(report_data.as_bytes()))?;
 
             let quote_file = fs::File::open(&quote_path)?;

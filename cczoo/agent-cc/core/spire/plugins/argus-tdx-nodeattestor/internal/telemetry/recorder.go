@@ -1,3 +1,5 @@
+// Package telemetry reports bounded NodeAttestor metrics through SPIRE host
+// services without changing the attestation result.
 package telemetry
 
 import (
@@ -18,10 +20,12 @@ type Recorder struct {
 	client metricsapi.MetricsServiceClient
 }
 
+// Broker connects the recorder to SPIRE's metrics host service.
 func (recorder *Recorder) Broker(broker pluginsdk.ServiceBroker) {
 	broker.BrokerClient(&recorder.client)
 }
 
+// Attestation records one Agent-side protocol result and duration.
 func (recorder *Recorder) Attestation(side string, started time.Time, err error) {
 	result, reason := resultAndReason(err)
 	recorder.increment([]string{"argus_nodeattestor", "attempts"}, labels(
@@ -38,6 +42,7 @@ func (recorder *Recorder) Attestation(side string, started time.Time, err error)
 	})
 }
 
+// EvidenceBytes records the raw Quote size returned by the Provider.
 func (recorder *Recorder) EvidenceBytes(side string, size int) {
 	if !recorder.client.IsInitialized() || size < 0 {
 		return
@@ -50,6 +55,7 @@ func (recorder *Recorder) EvidenceBytes(side string, size int) {
 	})
 }
 
+// Trustee records a bounded classification for one appraisal request.
 func (recorder *Recorder) Trustee(err error) {
 	result, reason := trusteeResultAndReason(err)
 	recorder.increment([]string{"argus_nodeattestor", "trustee_requests"}, labels(

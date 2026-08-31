@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! TDX Node Evidence Provider binary.
+//!
+//! The Provider serves the guest-local SPIRE Agent over a Unix domain socket.
+//! It binds the fixed Agent identity, the Server challenge, and the Agent proof
+//! key into TDX REPORTDATA, then returns the raw Quote produced by Linux TSM.
+//! Quote appraisal remains in the Server-side Trustee path, and SPIRE remains
+//! responsible for issuing the Agent SVID.
+
 use anyhow::{anyhow, bail, Context, Result};
 use axum::{
     extract::State,
@@ -36,6 +44,7 @@ const NODE_BINDING_DOMAIN: &[u8] = b"argus.node.tdx.reportdata";
 const NODE_AGENT_ID: &[u8] =
     b"spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
 
+/// Runtime paths for the guest-local socket and Linux TSM report interface.
 #[derive(Debug, PartialEq, Eq)]
 struct Config {
     socket_path: PathBuf,
@@ -73,6 +82,7 @@ impl Config {
     }
 }
 
+/// Inputs that the SPIRE Agent requires the Quote to bind.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NodeEvidenceRequest {
@@ -80,6 +90,7 @@ struct NodeEvidenceRequest {
     proof_public_key: String,
 }
 
+/// Verifier-neutral raw TDX Quote returned to the SPIRE Agent.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 struct NodeEvidenceResponse {
     evidence_type: String,
@@ -87,6 +98,7 @@ struct NodeEvidenceResponse {
     quote: String,
 }
 
+/// Isolates hardware Quote generation from the HTTP contract and its tests.
 trait QuoteSource: Send + Sync {
     fn generate_quote(&self, report_data: &ReportData) -> Result<Vec<u8>, QuoteError>;
 }
@@ -147,6 +159,11 @@ fn append_lp16(buffer: &mut Vec<u8>, value: &[u8]) {
     buffer.extend_from_slice(value);
 }
 
+/// Build the frozen Node binding shared with the Server NodeAttestor.
+///
+/// The first 48 REPORTDATA bytes are SHA-384 over length-prefixed domain and
+/// Agent ID values followed by the 32-byte nonce and proof public key. The
+/// `ReportData` type zero-fills the remaining 16 bytes required by TDX.
 fn node_report_data(nonce: &[u8; 32], proof_public_key: &[u8; 32]) -> ReportData {
     let mut runtime_data = Vec::with_capacity(
         2 + NODE_BINDING_DOMAIN.len() + 2 + NODE_AGENT_ID.len() + nonce.len() + proof_public_key.len(),
@@ -160,6 +177,7 @@ fn node_report_data(nonce: &[u8; 32], proof_public_key: &[u8; 32]) -> ReportData
     ReportData::from_digest(&digest).expect("SHA-384 digest fits in TDX REPORTDATA")
 }
 
+/// Generate one fresh Quote for a Server-authored Node challenge.
 async fn node_evidence_handler(
     State(state): State<AppState>,
     Json(request): Json<NodeEvidenceRequest>,
@@ -168,6 +186,7 @@ async fn node_evidence_handler(
     let proof_public_key = decode_fixed_32("proof_public_key", &request.proof_public_key)?;
     let report_data = node_report_data(&nonce, &proof_public_key);
     let quote_source = state.quote_source;
+    // TSM configfs I/O is blocking, so keep it off the async HTTP worker.
     let quote = tokio::task::spawn_blocking(move || quote_source.generate_quote(&report_data))
         .await
         .map_err(ProviderError::QuoteTask)?
@@ -180,12 +199,14 @@ async fn node_evidence_handler(
     }))
 }
 
+/// Expose only the Node Evidence API used by the SPIRE Agent plugin.
 fn router(quote_source: Arc<dyn QuoteSource>) -> Router {
     Router::new()
         .route("/node-evidence", post(node_evidence_handler))
         .with_state(AppState { quote_source })
 }
 
+/// Removes only the socket created by this Provider when the listener exits.
 #[cfg(unix)]
 struct SocketGuard(PathBuf);
 
@@ -210,6 +231,7 @@ impl Drop for SocketGuard {
     }
 }
 
+/// Bind the protected guest-local socket, replacing a stale socket only.
 #[cfg(unix)]
 fn bind_socket(path: &Path) -> Result<(tokio::net::UnixListener, SocketGuard)> {
     use std::io;
@@ -231,6 +253,7 @@ fn bind_socket(path: &Path) -> Result<(tokio::net::UnixListener, SocketGuard)> {
     Ok((listener, guard))
 }
 
+/// Wait for either interactive shutdown or the service manager's terminate signal.
 #[cfg(unix)]
 async fn shutdown_signal() -> std::io::Result<()> {
     let mut terminate =
@@ -241,6 +264,7 @@ async fn shutdown_signal() -> std::io::Result<()> {
     }
 }
 
+/// Serve HTTP/1 connections over the Provider's Unix domain socket.
 #[cfg(unix)]
 async fn serve(config: Config) -> Result<()> {
     use hyper::server::conn::http1;

@@ -1,3 +1,6 @@
+// Package agent implements the SPIRE Agent side of Argus TDX Node Attestation.
+// It proves possession of the configured Agent key and obtains a fresh Quote;
+// Quote appraisal and Agent admission remain on the Server side.
 package agent
 
 import (
@@ -24,11 +27,15 @@ var _ pluginsdk.NeedsLogger = (*Plugin)(nil)
 var _ pluginsdk.NeedsHostServices = (*Plugin)(nil)
 
 type EvidenceProvider interface {
+	// GetNodeEvidence returns a raw TDX Quote bound to the nonce and proof key.
 	GetNodeEvidence(context.Context, []byte, []byte) ([]byte, error)
 }
 
+// ProviderFactory constructs the guest-local Evidence Provider client from the
+// immutable SPIRE plugin configuration.
 type ProviderFactory func(*Config) (EvidenceProvider, error)
 
+// Plugin implements SPIRE's Agent NodeAttestor protocol for the argus_tdx type.
 type Plugin struct {
 	nodeattestorapi.UnimplementedNodeAttestorServer
 	configapi.UnimplementedConfigServer
@@ -42,6 +49,7 @@ type Plugin struct {
 	telemetry       telemetry.Recorder
 }
 
+// New returns an unconfigured Agent NodeAttestor.
 func New() *Plugin {
 	return &Plugin{
 		keyLoader: loadProofKey,
@@ -51,6 +59,8 @@ func New() *Plugin {
 	}
 }
 
+// AidAttestation answers one Server challenge with a Quote and proof-of-possession
+// signature from the same key that is bound into TDX REPORTDATA.
 func (plugin *Plugin) AidAttestation(stream nodeattestorapi.NodeAttestor_AidAttestationServer) (err error) {
 	started := time.Now()
 	defer func() { plugin.telemetry.Attestation("agent", started, err) }()
@@ -64,6 +74,8 @@ func (plugin *Plugin) AidAttestation(stream nodeattestorapi.NodeAttestor_AidAtte
 	}
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
+	// The initial payload identifies the pre-provisioned Agent slot. It does not
+	// grant an identity until the Server verifies the complete attestation.
 	hello := &nodeattestor.AgentHello{ProofPublicKey: publicKey}
 	if err := protocol.ValidateAgentHello(hello); err != nil {
 		return status.Errorf(codes.Internal, "construct AgentHello: %v", err)
@@ -99,6 +111,8 @@ func (plugin *Plugin) AidAttestation(stream nodeattestorapi.NodeAttestor_AidAtte
 	}
 	evidenceContext, cancel := context.WithTimeout(stream.Context(), config.EvidenceTimeout)
 	defer cancel()
+	// The Provider creates hardware evidence only; it does not decide whether
+	// the Quote or the requested Agent identity is trusted.
 	quote, err := provider.GetNodeEvidence(evidenceContext, challenge.Nonce, publicKey)
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "obtain node evidence: %v", err)
@@ -111,6 +125,8 @@ func (plugin *Plugin) AidAttestation(stream nodeattestorapi.NodeAttestor_AidAtte
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "construct transcript: %v", err)
 	}
+	// The signature proves that the key bound into REPORTDATA also approved this
+	// exact Quote, challenge nonce, and challenge expiry.
 	response := &nodeattestor.NodeEvidenceResponse{
 		TdxQuote:            quote,
 		TranscriptSignature: ed25519.Sign(privateKey, digest[:]),
