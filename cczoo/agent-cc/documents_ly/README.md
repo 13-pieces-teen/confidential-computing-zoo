@@ -1,41 +1,40 @@
 # documents_ly 文档索引
 
-本目录顶层只保留当前方案。此前的架构、会议记录、评估计划和运行报告均放在
-[archive](./archive/) 下。
+本目录顶层包含当前 Node 方案以及仍需归档整理的历史 Broker 设计和验证记录。
+[archive](./archive/) 保存更早的架构材料。
 
 ## 当前方案
 
-当前唯一主方案是：
+当前实施范围是第一次 OpenViking Node Attestation：
 
-> OpenClaw 与 OpenViking 分别运行在独立 TDVM 中；两个 TDVM 各自完成 Node
-> Attestation。OpenClaw 和 OpenViking 均保持源码无侵入；OpenClaw 插件调用本地
-> Egress Broker，后者执行 Guard 授权并代表真实 OpenClaw PID 发起 mTLS；OpenViking
-> Ingress Broker 代表真实 Python PID 终止 mTLS。
+> OpenViking TDVM 内的独立 Evidence Provider 通过 TSM/QGS 生成真实 Quote；
+> Agent NodeAttestor 负责 SPIRE challenge 和 proof-of-possession；Server
+> NodeAttestor 调用真实 Trustee，并在 appraisal 通过后返回固定 Agent ID。
 
-当前 Evidence Provider 和 Trustee 均为 Mock。
+仓库当前没有可直接执行的端到端部署入口；Trustee policy、EAR trust、proof pin、
+SPIRE bundle 和网络地址由目标环境提供。
 
-`runtime/dual-tdvm` 已完成双 Broker Endpoint、两个 PID reference、四个 Registration
-Entry、TC-API launch-only 和统一验证脚本集成；两个业务容器均不挂载 Workload API。
-`ea15713` 的远程结果早于 OpenClaw Egress 改造，不能作为当前代码的验收结论；当前
-方案仍需重新执行远程双 TDVM ALLOW/DENY 和真实插件 E2E。
+Workload Attestation、第二次 Quote、Broker身份和双 TDVM业务 mTLS 不在当前运行
+范围内。相关顶层文档只记录历史设计和验证结果，不能作为当前部署入口或真实
+Node Attestation验收证据。
 
 ## 推荐阅读顺序
 
 1. [真实 TDX Node Evidence 与 Trustee 改造方案及执行状态](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md)
-2. [双 TDVM + Egress/Ingress Broker 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
-3. [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
-4. [OpenViking Broker Sidecar 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
-5. [远程验证报告（`ea15713`）](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
+2. [双 TDVM + Egress/Ingress Broker 历史架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
+3. [历史实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
+4. [待重新设计的 OpenViking Broker Sidecar方案](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
+5. [历史软件链远程验证报告](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
 
 ## 顶层文档职责
 
 | 文档 | 职责 | 状态 |
 |---|---|---|
-| [Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md) | 自定义 Node 流程精简、真实 Evidence Provider/Trustee 改造、当前完成度与验收门槛 | 合同收敛与实施准备；真实路径未完成 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 当前架构事实源：组件、身份、请求时序和边界 | 已确定 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 当前双 Broker 代码、测试和完成条件 | 本地验证中；远程待复验 |
-| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | OpenViking Broker API、PID reference 与生命周期详细设计 | 当前组件设计参考 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md) | 历史远程证据；记录 Parent、Entry、PID、UDS 和 mTLS | 早于当前 Egress 改造，不能复用为当前 PASS |
+| [Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md) | 自定义 Node 流程、真实 Evidence Provider/Trustee改造和验收门槛 | 当前事实源；真实E2E仍受网络和policy阻塞 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 历史双 Broker组件、身份和请求时序 | 非当前运行架构 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 历史双 Broker代码与验证计划 | 不再是执行入口 |
+| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | OpenViking Broker API和PID reference设计 | Stage 2待重新设计 |
+| [Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md) | 历史软件链远程证据 | 不能复用为当前PASS |
 
 ## 历史归档
 
@@ -51,8 +50,7 @@ Entry、TC-API launch-only 和统一验证脚本集成；两个业务容器均�
 ## 文档维护规则
 
 1. 当前架构变化先更新架构文档，再更新实施计划。
-2. 代码骨架、Mock 测试和旧 Profile PASS 不得写成当前双 TDVM Broker Profile 已验收。
+2. 代码骨架、测试替身和历史 Profile PASS不得写成当前真实Node路径已验收。
 3. Registration Entry 是静态匹配规则；WorkloadAttestor 在验证成功后返回 selector。
-4. Mock Evidence Provider/Trustee 只证明软件链路，不代表真实 Quote、QGS、
-   TC-API/Rekor 或生产 Trustee 验证。
+4. 软件链测试不代表真实Quote、QGS、TC-API/Rekor或生产Trustee验证。
 5. 每轮远程执行都记录对应 commit；新改动通过前不得复用旧 commit 的运行结论。

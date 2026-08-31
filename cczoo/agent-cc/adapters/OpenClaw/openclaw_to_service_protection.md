@@ -226,13 +226,8 @@ The full payload shapes and additional operator notes remain in [`README.md`](..
 
 ### Build and run gateway Docker container
 
-The maintained OpenClaw/OpenViking security runtime is the
-[dual-TDVM Broker profile](../../core/spire/runtime/dual-tdvm/README.md):
-
-```bash
-export PROFILE_DIR="$(pwd)/core/spire/runtime/dual-tdvm"
-sudo -E bash "$PROFILE_DIR/scripts/prepare.sh"
-```
+This document provides component-level build instructions only; it does not
+define an integrated SPIRE runtime command.
 
 **Notice: You can set openclaw configurate(such as mode & the api key) by interactivate:**
 

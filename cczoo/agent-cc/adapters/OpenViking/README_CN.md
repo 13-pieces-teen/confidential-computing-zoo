@@ -16,19 +16,14 @@ Ingress Broker 代表其真实进程向 SPIRE 请求目标身份。
 
 Broker 不配置自动重启，因为新容器不能继续使用旧的目标 PID。
 
-## 当前部署入口
+## 部署状态
 
-当前唯一受维护的集成部署是[双 TDVM Runtime](../../core/spire/runtime/dual-tdvm/README.md)。
-其中 `prepare.sh` 构建官方 OpenViking runtime 镜像和 Ingress Broker；
-`manage-guest.sh` 加载镜像，通过 TDVM 中既有 TC API 启动 OpenViking，按实际
-runtime digest 注册身份，再以返回的真实 PID 启动 Broker。
-
-`scripts/launch_openviking.sh` 是该 Profile 复用的适配器 launcher，不是第二套
-部署 Profile，也不会自行创建 Registration Entry。
+本目录只包含适配器实现和 launcher，不是 SPIRE 集成部署，也不会自行创建
+Registration Entry。Workload Attestation阶段不在当前可信身份运行链内。
 
 ## 验证
 
-dual-TDVM 的 `verify.sh` 检查：
+适配器单元测试只检查本地合同。未来的集成运行时还必须检查：
 
 - OpenViking 没有 SPIRE 或 SVID mount；
 - Ingress Broker 引用当前 OpenViking 宿主机 PID；

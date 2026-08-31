@@ -1,33 +1,25 @@
 # Argus SPIRE integration
 
-The maintained runtime is the dual-TDVM profile under
-[`runtime/dual-tdvm/`](runtime/dual-tdvm/README.md):
+The current executable scope is the first OpenViking Node Attestation stage:
 
 ```text
-OpenClaw official runtime
-  -> local HTTP -> Egress Broker -> caller-local Guard
-  -> OpenClaw PID reference -> in-memory OpenClaw X.509-SVID
-  -> cross-TDVM SPIFFE mTLS
-  -> OpenViking Ingress Broker
-  -> OpenViking PID reference -> in-memory OpenViking X.509-SVID
-  -> loopback OpenViking HTTP API
+SPIRE Server -> argus_tdx Server NodeAttestor -> Trustee /attestation
+SPIRE Agent  -> argus_tdx Agent NodeAttestor  -> TDX Evidence Provider UDS
+TDX Evidence Provider -> Guest TSM -> QEMU/QGS -> real TDX Quote
 ```
 
-Both TDVMs have independent SPIRE Agents and Node Attestation state. The two
-business containers do not mount SPIRE sockets and do not hold SVID private
-keys. Guard remains the caller-local policy decision point; the Egress Broker
-is the policy enforcement point for the normal OpenViking plugin path.
+The repository does not define an end-to-end deployment entry. The target
+environment must supply the Trustee trust material and policy, the fixed
+proof-key pin, the SPIRE bundle, and a reachable Agent-to-Server address.
 
 ## Directory map
 
 ```text
 spire/
-  plugins/          argus_tdx NodeAttestor and WorkloadAttestor plug-ins
-  runtime/
-    dual-tdvm/      deployment, config, scripts, and remote validation
-  tests/            isolated NodeAttestor and TDVM fixtures
+  plugins/argus-tdx-nodeattestor/  current Agent and Server plug-ins
+  tests/tdvm/                       TD Host and Guest preflight utilities
 ```
 
-The former asymmetric preload/materializer runtime and its benchmark harness
-have been removed. See the dual-TDVM README for the execution sequence and the
-current Mock-versus-real-attestation evidence boundary.
+The TDX identity Evidence Provider is implemented by
+`../argus/src/bin/tdx_evidence_provider.rs`. Workload Attestation and the
+second Quote remain outside the current runtime scope.

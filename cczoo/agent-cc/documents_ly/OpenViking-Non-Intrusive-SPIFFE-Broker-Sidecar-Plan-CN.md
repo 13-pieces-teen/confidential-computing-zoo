@@ -5,25 +5,23 @@
 | 项目 | 内容 |
 | --- | --- |
 | 方案目标 | 不修改 OpenViking 上游 Python 业务源码，对实际运行的 OpenViking Python 进程完成 Workload Attestation，并由 sidecar 代表它进行 SPIFFE mTLS |
-| 当前拓扑 | OpenClaw 与 OpenViking 分别运行在独立 TDVM；Broker Sidecar 位于 OpenViking TDVM |
-| 主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
-| 当前仓库基线 | Broker 组件已接入统一双 TDVM Profile；本地静态验证完成，远程验收待执行 |
-| 文档性质 | 方案决策与详细设计记录；当前实现状态和执行命令以架构文档及实施方案为准 |
-| 关键限制 | SPIRE 1.15.2 的 Broker API 仍标记为 experimental；双 TDVM Broker Profile 仍需远程验证 |
+| 当时拓扑 | OpenClaw 与 OpenViking 分别运行在独立 TDVM；Broker Sidecar 位于 OpenViking TDVM |
+| 历史主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
+| 当前仓库基线 | Broker组件不在当前可信身份运行链 |
+| 文档性质 | 历史方案与详细设计记录；不是当前执行说明 |
+| 关键限制 | Workload Attestation和第二次Quote尚未详细设计；SPIRE 1.15.2 的 Broker API 仍标记为 experimental |
 
-> 当前状态：Broker Sidecar、自定义 WorkloadAttestor 和统一 `runtime/dual-tdvm`
-> Profile 已完成代码集成；OpenViking 不再直接挂载 Workload API。远程 ALLOW/DENY
-> 与跨 TDVM mTLS 尚未执行。当前状态以
-> [双 TDVM + Broker Sidecar 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)和
-> [实施计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)为准。
+> 当前状态：Workload Attestation和第二次Quote尚未详细设计。本文保留设计背景，
+> 不提供可执行部署入口。
 
 ### 方案决策
 
 本文是在“OpenViking 上游源码非侵入”成为优先约束之后形成的目标方案。它取代既有设计中“OpenViking Python 直接调用 Workload API”这一身份申请方式，但不改变已经确认的 Node Attestation、TC-API/Rekor、Evidence Provider、Trustee、selector 和 Registration Entry 主链路。
 
-本文以 **Broker Sidecar** 为主方案和当前唯一落地路径。TDVM Host Broker Gateway 仅作为文末备注保留，用于记录未来可能的部署形态；它不进入当前实现范围，也不作为 Sidecar 的并行或回退路径。
+本文记录的历史主方案是 **Broker Sidecar**。TDVM Host Broker Gateway仅作为文末
+备选形态记录；两者都不进入当前Stage 1运行范围。
 
-既有直接 Python 方案及其OpenViking专用代码不再保留。实现 Broker Sidecar 时，同时删除OpenViking路径中的Python SPIFFE wrapper、凭据文件等待和materializer启动代码，最终只存在一条身份与mTLS路径。
+目标运行链只包含一条身份与mTLS路径：OpenViking Python保持原生HTTP服务，Broker Sidecar代表经过验证的目标PID持有身份并终止mTLS。
 
 ## 1. 结论
 
@@ -66,7 +64,7 @@
 - 不在第一阶段引入 service mesh、Kubernetes、跨节点 PID 引用或通用多租户 Broker。
 - 不把每一次业务请求都变成一次 TDX Quote 验证。
 - 不把 SVID 轮换等同于重新执行 Workload Attestation。
-- 不保留 OpenViking 旧 materializer/Python TLS wrapper 的运行开关、兼容入口或回退路径。
+- 不设计并行的 materializer/Python TLS wrapper 身份路径。
 
 ## 3. 官方接口选择
 
@@ -98,10 +96,9 @@ SPIRE Agent/Server: 1.15.2
 新 WorkloadAttestor Plugin SDK: 1.15.2
 ```
 
-现有 `argus_tdx` NodeAttestor 没有因 Broker API 被改写。本机插件测试、配置检查和
-Mock 软件链路检查已经完成；Broker API 在 1.15.2 中仍属于 experimental，因此完整
-兼容性结论要以远程 Linux/TDVM 验证为准。整个 OpenViking 身份链只按 Broker API
-实现。
+现有 `argus_tdx` NodeAttestor 没有因 Broker API 被改写。Broker API 在 1.15.2 中
+仍属于 experimental，因此完整兼容性结论要以远程 Linux/TDVM验证为准。整个
+OpenViking身份链只按Broker API实现。
 
 ## 4. 总体架构
 
@@ -434,91 +431,31 @@ expected_agent_spiffe_id = <由当前部署的Node Attestation/Agent身份结果
 - 两种身份材料不能混用。
 - 不把 OpenViking私钥写入 `/run/argus-svid` 后再共享给 Python。
 
-## 11. SPIRE Agent 配置草案
+## 11. SPIRE Agent 配置边界
 
-以下结构基于仓库当前使用的 SPIRE 1.15.2；接入双 TDVM 运行配置后仍需用 `spire-agent validate` 确认最终配置：
-
-```hcl
-agent {
-    trust_domain = "argus.local"
-    socket_path = "/opt/spire/run/openviking/agent.sock"
-
-    experimental {
-        broker {
-            socket_path = "/opt/spire/run/broker/broker.sock"
-            brokers = [
-                {
-                    id = "spiffe://argus.local/infra/openviking-broker"
-                    allowed_reference_types = [
-                        {
-                            type_url = "type.googleapis.com/spiffe.broker.WorkloadPIDReference"
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-}
-
-plugins {
-    WorkloadAttestor "docker" {
-        plugin_data {
-            docker_socket_path = "unix:///var/run/docker.sock"
-        }
-    }
-
-    WorkloadAttestor "unix" {
-        plugin_data {}
-    }
-
-    WorkloadAttestor "argus_tdx_workload" {
-        plugin_cmd = "/opt/spire/plugins/argus-tdx-workloadattestor"
-        plugin_checksum = "<checksum>"
-        plugin_data {
-            evidence_endpoint = "http://127.0.0.1:<port>/ra/v1/evidence"
-            policy_id = "openviking-cmem-v1"
-        }
-    }
-}
-```
-
-不配置 `bind_address`，因此 PID reference不能经网络发送。Broker配置中也不使用 `type_url = "*"`。
-
-上述 `brokers[].id` 是 Agent 对 Broker 客户端的允许列表；Sidecar 中的 `expected_agent_spiffe_id` 则用于 Broker 反向认证 Agent 服务端。两者方向不同，必须同时配置和测试。
+Workload Attestation和第二次Quote完成详细设计前，本方案不提供Agent HCL、
+Evidence合同或部署参数。
 
 ## 12. 对当前仓库的改造边界
 
-### 12.1 已新增并复用
+### 12.1 历史实现中保留的组件代码
 
 | 位置 | 作用 |
 | --- | --- |
 | `cczoo/agent-cc/adapters/OpenViking/broker_sidecar/` | 专用 Broker API客户端、PID生命周期管理、内存SVID轮换、mTLS代理 |
-| `cczoo/agent-cc/core/spire/plugins/argus-tdx-workloadattestor/` | 对目标 PID执行 OpenViking Workload Attestation |
-| Broker/WorkloadAttestor测试与故障用例 | 验证 PID、selector、轮换、退出和拒绝路径 |
+| `cczoo/agent-cc/core/spire/plugins/argus-tdx-workloadattestor/` | 历史 Workload Attestation实现；当前Node运行链不加载 |
+| Broker/WorkloadAttestor测试与故障用例 | 保留历史组件合同，不代表当前部署可执行 |
 
-### 12.2 当前统一 Profile 实现
+### 12.2 当前运行边界
 
-| 文件 | 目标变化 |
-| --- | --- |
-| `core/spire/runtime/dual-tdvm/config/openviking-agent.conf.tmpl` | Broker Endpoint、自定义 WorkloadAttestor 和 Trustee mTLS |
-| `core/spire/runtime/dual-tdvm/scripts/manage-guest.sh` | 部署 Agent/Sidecar，通过既有 TC-API 启动 OpenViking，并分别挂载 Workload/Broker UDS |
-| `core/spire/runtime/dual-tdvm/scripts/register-workloads.sh` | 创建 OpenClaw、Broker、OpenViking target 三个 Entry，删除已知旧弱 Entry |
-| `adapters/OpenViking/scripts/launch_openviking.sh` | 不再把 Workload API挂入 OpenViking；只开放内部HTTP；把启动结果交给受信PID绑定路径 |
-| `adapters/OpenViking/configs/Dockerfile.openviking` | OpenViking镜像不再内置其自己的 materializer和TLS wrapper，恢复原生服务入口 |
-| `core/spire/runtime/dual-tdvm/scripts/verify.sh` | 检查 Broker目标订阅、实际 PID、URI SAN、ALLOW/DENY 和跨 TDVM mTLS结果 |
+OpenViking launcher和镜像构建文件只是组件代码，不构成SPIRE集成部署入口。
 
-### 12.3 已移除的旧 OpenViking 身份路径
+### 12.3 OpenViking 身份路径约束
 
-Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的代码和配置：
-
-- `cczoo/agent-cc/adapters/OpenViking/spiffe_server/` 整个目录，包括TLS wrapper、SPIFFE身份校验辅助代码及对应测试；
-- `cczoo/agent-cc/adapters/OpenViking/scripts/entrypoint-spiffe.sh`；
-- `Dockerfile.openviking` 中构建和复制 `argus-svid-materializer`、复制Python wrapper及设置旧入口的步骤；
-- `launch_openviking.sh` 中向OpenViking挂载Workload API、传入凭据目录和启动旧SPIFFE入口的逻辑；
-- `deploy-v2-guest.sh` 中检查 `/run/argus-svid/status.json` 的旧就绪判断；
-- 仅供旧 OpenViking Python方案使用的环境变量、测试和文档说明。
-
-旧 `svid-materializer` 共享组件及 OpenClaw preload 链已经移除。当前 OpenClaw 也由独立 Egress Broker 通过真实 PID 获取内存态 SVID，业务容器不再直接持有身份材料。
+- OpenViking只运行原生内部HTTP服务，不挂载Workload API、Broker API或身份私钥目录；
+- launcher只负责启动业务进程并把本次启动结果交给后续可信PID绑定路径；
+- Broker Sidecar通过目标PID取得内存态SVID并终止mTLS；
+- OpenClaw由独立Egress Broker代表，业务容器不直接持有身份材料。
 
 ## 13. 失败语义
 
@@ -547,7 +484,8 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 
 ## 14. 分阶段落地
 
-以下 M0-M5 保留 Broker 组件的落地过程。M0-M3 及双 TDVM Profile 代码接入已经完成；远程验收仍以当前实施计划为准。
+以下 M0-M5 只保留当时的Broker组件落地过程，不是当前执行计划。当前只实施
+第一次Node Attestation。
 
 ### M0：接口与版本基线
 
@@ -560,13 +498,11 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 
 ### M1：自定义 WorkloadAttestor
 
-- 实现 `argus_tdx_workload` PID attestation。
-- 接入 mock Evidence Provider和mock Trustee。
-- 只在ALLOW时返回可信selectors。
-- Registration Entry使用Docker selectors与自定义selectors联合匹配。
-- 替换当前 `v2-openviking-workload` Docker-only Entry，并枚举所有目标SPIFFE ID Entry，确认不存在弱Entry。
+- 历史实现曾验证 `argus_tdx_workload` PID attestation的软件合同。
+- 该软件合同不进入当前Node运行链。
+- 后续设计必须把第二次Quote绑定到本次OpenViking workload启动信息；当前不展开配置和实现。
 
-完成条件：正确PID取得OpenViking SVID；错误PID、错误镜像和Trustee DENY均明确无身份；即使Docker/Unix attestor成功，自定义attestor失败时仍不能取得目标身份。
+历史完成条件不作为当前验收结论；新的Workload Attestation成功标准在第二阶段重新定义。
 
 ### M2：Broker Sidecar 身份路径
 
@@ -582,10 +518,10 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 - OpenViking恢复原生内部HTTP启动。
 - Sidecar使用OpenViking SVID提供mTLS入口。
 - 校验精确OpenClaw SPIFFE ID后才转发。
-- 移除OpenViking的Workload API挂载和凭据文件依赖。
+- OpenViking不挂载Workload API或凭据文件目录。
 - 删除 `spiffe_server/`、`entrypoint-spiffe.sh` 以及OpenViking镜像中的materializer构建和启动逻辑。
 
-完成条件：上游OpenViking源码无修改；对端看到OpenViking SPIFFE ID；明文外部端口不可达；仓库中不再存在可启动旧OpenViking Python身份路径的代码。
+完成条件：上游OpenViking源码无修改；对端看到OpenViking SPIFFE ID；明文外部端口不可达；运行链只有Broker Sidecar身份路径。
 
 ### M4：TC-API/TDX 真实绑定
 
@@ -593,7 +529,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 - 接入真实TDX Quote、Rekor记录和生产形态Trustee验证。
 - 验证pidfd只负责识别原进程退出，PID复用由当前进程启动时间、容器关系和旧launch record不一致而被拒绝；同时验证进程重启、证据篡改和policy更新路径。
 
-完成条件：真实TDVM正向路径通过；关键负向路径明确拒绝。Mock通过不能替代该阶段。
+完成条件：真实TDVM正向路径通过；关键负向路径明确拒绝。软件链测试不能替代该阶段。
 
 ### M5：生命周期与运行验收
 
@@ -607,7 +543,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 ### 单路径收敛原则
 
 - Broker Sidecar、Broker Entry、自定义WorkloadAttestor和新验证脚本作为一个完整目标链路交付。
-- 旧OpenViking身份获取和Python TLS wrapper在同一改造中删除，不保留运行时feature flag。
+- OpenViking身份只由Broker Sidecar代表，不设置并行身份路径的feature flag。
 - OpenViking容器只运行原生内部HTTP服务；对外只暴露Broker Sidecar的mTLS端口。
 - 部署、测试和文档统一以Broker Sidecar为唯一身份入口，避免两套语义并存。
 
@@ -657,7 +593,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 测试结果必须分开记录：
 
 1. 静态配置/代码检查；
-2. mock Evidence Provider/Trustee软件链路；
+2. 受控Evidence Provider/Trustee测试替身；
 3. Linux PID/pidfd和容器集成；
 4. 真实TDX Quote/QGS与Rekor；
 5. 生产Trustee和部署验收。
@@ -669,7 +605,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 以下条件全部满足，才能认为目标完成：
 
 1. OpenViking上游Python业务源码没有SPIFFE/SPIRE集成改动。
-2. 旧 `spiffe_server/`、`entrypoint-spiffe.sh` 和OpenViking materializer启动逻辑已经删除，不存在旧路径运行开关。
+2. OpenViking运行链不包含Python TLS wrapper、凭据materializer或并行身份路径开关。
 3. OpenViking容器不访问 Workload API、Broker API和SVID私钥目录。
 4. SPIRE Agent实际attest的是OpenViking Python宿主机PID。
 5. Sidecar以pidfd识别原进程退出；WorkloadAttestor以进程启动时间、容器关系和TC-API launch record拒绝数值PID复用，进程重启后不能复用旧身份上下文。
@@ -681,7 +617,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 11. 对端通过mTLS看到的是OpenViking workload身份，同时明确TLS由sidecar代理执行。
 12. OpenViking明文端口对外不可达，无法绕过sidecar。
 13. 目标退出、身份从后续快照移除、收到`PermissionDenied`或SVID到期后，sidecar不能继续建立新的有效mTLS连接。
-14. 真实TDVM环境完成正向和关键负向验证；mock结果不被描述成生产远程证明。
+14. 真实TDVM环境完成正向和关键负向验证；软件测试替身结果不被描述成生产远程证明。
 
 ## 17. 主要取舍
 
@@ -696,7 +632,7 @@ Broker Sidecar完成后，删除以下仅服务于旧 OpenViking Python方案的
 
 ## 18. 备注：TDVM Host Broker Gateway 备选形态
 
-> 本备注只记录未来可能的架构形态。当前实现、测试和验收均以 Broker Sidecar 为唯一主方案；Gateway 不与 Sidecar 并行部署，也不作为失败时的回退路径。
+> 本备注只记录当时讨论的备选架构形态，不是当前实现、测试或验收入口。
 
 Gateway 方案不改变 Workload Attestation 主链：它仍以实际 OpenViking Python PID 构造 `WorkloadPIDReference`，由 SPIRE Agent、自定义 WorkloadAttestor、Evidence Provider 和 Trustee 独立完成验证。区别仅在于，持有 OpenViking SVID 并终止 mTLS 的组件从“每个 OpenViking 实例一个 Sidecar”变为“每个 TDVM 一个长驻 Gateway”。
 

@@ -1,10 +1,10 @@
 # Argus 双 TDVM + OpenClaw Egress / OpenViking Ingress Broker 架构
 
-> 状态：当前唯一目标架构
+> 状态：历史 Broker架构记录
 >
-> 当前实现边界：代码已集成到统一 Profile；本地验证完成后仍需重新执行远程双 TDVM 验收
+> 当前实现边界：不作为当前 Node Attestation部署或验收入口
 >
-> 当前 Mock：两个 TDVM 的 Evidence Provider、中心 Trustee
+> 后续状态：Workload Attestation与第二次Quote重新设计前保持停用
 
 ## 1. 架构目标
 
@@ -98,16 +98,15 @@ image，不使用转换前 source digest。
 
 ## 8. 当前实现与证据边界
 
-当前实现入口为 `core/spire/runtime/dual-tdvm`：
+以下内容只记录当时的组件划分，不对应当前可执行 Profile：
 
 - `adapters/OpenClaw/egress_sidecar`：OpenClaw Egress Broker；
 - `adapters/OpenViking/broker_sidecar`：OpenViking Ingress Broker；
 - `core/spire/plugins/argus-tdx-workloadattestor`：OpenViking workload evidence；
 - `adapters/OpenClaw/scripts/Dockerfile.sbx-runtime`：无 Argus 代码的 OpenClaw runtime；
-- `core/spire/runtime/dual-tdvm/scripts/verify.sh`：统一 ALLOW/DENY、真实插件和生命周期验收。
+- ALLOW/DENY验证属于当时的软件链验收。
 
-旧 asymmetric、preload、materializer 运行链已删除。既有远程报告只能证明其记录时的
-代码与环境；本次 Egress 改造必须重新执行远程验收，不能沿用旧结果。
+既有远程报告只能证明其记录时的代码与环境，不能沿用为当前结果。
 
 ## 9. 完成标准
 
@@ -124,6 +123,5 @@ image，不使用转换前 source digest。
 ## 10. 参考
 
 - [实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
-- [双 TDVM 运行 Profile](../core/spire/runtime/dual-tdvm/README.md)
 - [OpenViking Ingress Broker 详细设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
 - [双 TDVM 远程验证报告](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)

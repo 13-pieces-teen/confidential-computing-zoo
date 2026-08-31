@@ -18,22 +18,17 @@ Ingress Broker.
 The Broker is not configured to restart automatically because a restarted
 container must not reuse a stale target PID.
 
-## Maintained deployment
+## Deployment status
 
-The only maintained integrated deployment is the
-[dual-TDVM runtime](../../core/spire/runtime/dual-tdvm/README.md). Its
-`prepare.sh` builds the official OpenViking runtime image and Ingress Broker;
-`manage-guest.sh` loads the images, launches OpenViking through the existing
-TDVM TC API, registers the observed runtime digest, and then starts the Broker
-with the returned process PID.
-
-`scripts/launch_openviking.sh` is the adapter launcher used by that profile.
-It is not a second deployment profile and does not create Registration Entries
-on its own.
+This directory contains the adapter implementation and launcher only; it is
+not an integrated SPIRE deployment and does not create Registration Entries on
+its own. The Workload Attestation stage remains outside the current trusted
+identity path.
 
 ## Verification
 
-The dual-TDVM `verify.sh` checks that:
+The adapter unit tests check its local contracts. A future integrated runtime
+must additionally verify that:
 
 - OpenViking has no SPIRE or SVID mount;
 - the Ingress Broker references the current OpenViking host PID;

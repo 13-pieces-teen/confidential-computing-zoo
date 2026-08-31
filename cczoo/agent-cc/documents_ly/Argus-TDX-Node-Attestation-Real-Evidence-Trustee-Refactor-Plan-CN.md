@@ -6,7 +6,8 @@
 
 ### 1.1 整体架构流程图
 
-本次重构把当前 Mock Node Attestation 单向替换为真实链路。下图中的实线表示运行时调用或数据流，虚线表示静态信任输入或尚未实施的 Stage 2 边界：
+当前方案只定义真实Node Attestation链路。下图中的实线表示运行时调用或数据流，
+虚线表示静态信任输入或尚未实施的Stage 2边界：
 
 ```mermaid
 flowchart LR
@@ -80,10 +81,13 @@ flowchart LR
 
 ### 1.2 已冻结的决策
 
-实施前先冻结一条代码约束：Argus 自有的 Node 认证链只保留一个 canonical 合同。直接删除旧 Mock message、schema、generated code、fixture、import、配置和测试，并在原代码位置完成替换；不新增带数字代际后缀的 package、目录、endpoint、domain separator 或 policy ID，也不保留双栈、协商、adapter和兼容分支。SPIRE、Trustee等外部依赖的正式发行号、上游API路径、构建工具schema值以及与本轮Node认证无关的外部服务API路径不属于本项目的代际标识，不擅自改写。
+Argus自有的Node认证链只有一个canonical合同。本地package、目录、endpoint、
+domain separator和policy ID不使用数字代际后缀，也不提供协议协商、adapter或
+并行合同。SPIRE、Trustee等外部依赖的正式发行号、上游API路径、构建工具schema值
+以及与本轮Node认证无关的外部服务API路径不属于本项目的代际标识，不擅自改写。
 
-1. 第一次 Quote 直接接入真实 TDX、QGS/DCAP 和 Trustee，不保留 Mock、synthetic evidence、旧私有 Trustee verdict 或运行时 fallback。
-2. 不设计回滚到 Mock。切换失败时停止新身份签发，保存失败证据并向前修复。
+1. 第一次 Quote 直接接入真实 TDX、QGS/DCAP 和 Trustee；运行时只接受真实Quote和经过验证的signed EAR。
+2. 认证失败时停止新身份签发，保存失败证据并向前修复，不切换到其他认证路径。
 3. SPIFFE 集成分成两个认证阶段：
    - Node 阶段验证 TDVM/Node 是否可信；
    - Workload 阶段验证具体 OpenViking workload 启动是否可信。
@@ -98,7 +102,7 @@ flowchart LR
 7. 固定 Agent ID 使用 proof key 和 Server 静态公钥 pin 限制槽位领取者；proof-key-derived Agent ID 只作为未来备选，不进入当前协议和运行路径。
 8. Stage 1 完成前，不给 OpenViking 目标 workload 签发可被误认为真实 attested 的 Workload SVID。
 9. OpenClaw Agent 不得领取 `openviking-node` 固定 ID；其后续 Node enrollment 不在本文范围内。
-10. 本文是目标实施方案，不是当前实现或真实硬件验收证明。
+10. 本文同时记录目标合同和当前实施状态；代码存在不等于真实端到端验收通过。
 11. 因为Stage 2尚未完成且OpenViking目标Workload SVID保持禁用，Stage 1单向切换首先是隔离验证环境中的**非业务服务切片**；它不能被描述为现有OpenViking端到端mTLS业务链的无中断生产切换。完整业务恢复/上线还依赖后续Stage 2。
 
 ### 1.3 两阶段边界
@@ -116,10 +120,10 @@ flowchart LR
 
 | 项目 | 当前值 |
 | --- | --- |
-| 日期 | 2026-08-26 |
-| 审计基线 HEAD | `4d2c1a2ff629ab29d09a0b9c00af62ae1aeadc48` |
-| 当前 Node 路径 | 自定义 Agent/Server NodeAttestor 已存在，但仍使用 Mock Evidence Provider 和私有 Mock Trustee verdict |
-| 真实链主要缺口 | Provider 尚未通过 Guest TSM 取得 Node Quote；QEMU/QGS wiring 未形成已验收链路；Server 未完成官方 `/attestation` 与严格 signed EAR 验证；最终镜像 measurement coverage 未关闭 |
+| 日期 | 2026-08-31 |
+| 本地清理基线 HEAD | `120b429add9f555d5bc58d1429f6040e205d7451`；远程验证基线为 `36718d4aa043a0ec180befee0cdaa003ca813441` |
+| 当前 Node 路径 | real-only TDX Evidence Provider、canonical Agent/Server NodeAttestor和官方Trustee客户端代码已存在；仓库不提供端到端部署入口 |
+| 真实链主要缺口 | 当前两机网络不互通；批准的Node policy/reference values尚未提供；最终镜像measurement coverage和真实SPIRE join/reattest尚未关闭 |
 
 ## 2. 从 Argus 原始架构推导职责
 
@@ -273,7 +277,7 @@ MRTD/RTMR 可以覆盖最终镜像、启动链和被测配置，但不能持续�
 | --- | --- | --- | --- |
 | SPIRE Agent进程：Agent Core + Agent NodeAttestor + proof signer | Agent Core认证Server、建立enrollment流并中继plugin payload/challenge；Agent plugin调用Provider并签署transcript | 它是加入trust domain的claimant侧运行时，并把本地证据接入SPIRE协议 | Provider即使取得Quote，也无法完成SPIRE Agent enrollment/renewal |
 | TDX identity Evidence Provider 进程 | 根据强类型 Node 请求构造 REPORTDATA，经 TSM 取得真实 Quote，返回 verifier-neutral evidence | 隔离 TSM 权限和证据生产逻辑，并为两个认证阶段提供共同 production plane | 若完全删除则没有 evidence producer；若嵌入 NodeAttestor则失去解耦和后续复用 |
-| TDX Quote substrate：Guest TSM、QEMU quote socket、Host QGS/DCAP | 生成硬件签名的真实 TDX Quote | 这是从软件声明跨越到硬件 evidence 的基础 | 只能得到 Mock、自报或不可远程验证的数据 |
+| TDX Quote substrate：Guest TSM、QEMU quote socket、Host QGS/DCAP | 生成硬件签名的真实 TDX Quote | 这是从软件声明跨越到硬件 evidence 的基础 | 只能得到自报或不可远程验证的数据 |
 | Trustee Attestation Service | 验证 Quote、collateral、TCB、debug、MRTD/RTMR、runtime binding 和 Node policy，返回 signed EAR | Quote bytes 本身不是准入结论 | Server 无法判断 Quote 是否有效、是否来自目标软件栈 |
 | SPIRE Server进程：Server Core + Server NodeAttestor + CA/X.509 Authority | Core中继payload/challenge并消费结果；plugin生成challenge、验证pin/PoP/EAR并返回AgentAttributes；Core绑定Agent状态/CSR后由Server CA签发SVID | 它把一次appraisal转化为trust domain内的受管Agent记录和短期Node identity | EAR只能作为孤立验证结果，不能阻止或完成SPIFFE身份签发 |
 
@@ -304,11 +308,12 @@ MRTD/RTMR 可以覆盖最终镜像、启动链和被测配置，但不能持续�
 - 自定义 singleton lease 或将 inventory 描述为 anti-clone 证明；
 - proof-key-derived Agent ID 的运行时支持；
 - telemetry recorder、完整 evidence archive 作为认证依赖；
-- Mock Provider、Mock Trustee、synthetic backend 和 cached `ALLOW`。
+- 独立测试服务、synthetic backend 和 cached `ALLOW`。
 
 运行日志、审计 bundle、golden vectors 和 smoke 工具仍然需要，但它们是验证与运维工件，不是认证链组件。
 
-单元测试可以使用进程内 fake QuoteSource 或受控 HTTP test server；它们不得编译进 production runtime、不得成为可配置 fallback，也不能作为真实 TDX/Trustee 验收证据。这里删除的是旧 Mock 服务和身份信任路径，不是禁止所有测试替身。
+单元测试可以使用进程内fake QuoteSource或受控HTTP test server；它们不得编译进
+production runtime、不得成为可配置fallback，也不能作为真实TDX/Trustee验收证据。
 
 ## 5. 固定 Agent ID 与 proof key
 
@@ -372,7 +377,7 @@ proof key与static pin是两个不同机制：PoP解决“当前响应者是否�
 
 Server/plugin 重启会结束所有旧 stream，因此不需要 pin revision、active-stream cancellation 或 ABA 状态机。受管部署的 Node 副本数固定为一，但不新建自定义 lease 子系统；same-key unmanaged clone 仍是明确残余风险。
 
-Node image/policy升级也采用同一forward-only原则：构建并实测新最终image，生成新的reference manifest和content-addressed policy，停止旧Agent并等待旧SVID排空，发布新policy/trust配置并重启Server，再启动新Agent。首版不同时接受新旧两套Node policy，也不保留回退到旧Mock或旧measurement的分支。
+Node image/policy升级也采用同一forward-only原则：构建并实测新最终image，生成新的reference manifest和content-addressed policy，停止旧Agent并等待旧SVID排空，发布新policy/trust配置并重启Server，再启动新Agent。首版不同时接受两套Node policy，也不提供其他measurement路径。
 
 ## 6. 构建、测量与 provisioning 顺序
 
@@ -423,7 +428,7 @@ smoke 工具不进入 production identity path，G0 的 measurement 也不是最
 ### 6.3 G2：身份与信任配置
 
 1. 部署固定 digest 的 Trustee AS、Node policy 和 EAR signer；
-2. Server 配置固定 HTTPS origin、TLS root、EAR signer public key/fingerprint、issuer、algorithm、policy ID/hash；
+2. Server 配置固定 HTTPS origin、TLS root、EAR signer public key/fingerprint、issuer、algorithm和policy ID；
 3. Agent配置并测量预期SPIRE Server的bootstrap trust bundle；Agent Core只有在认证Server连接后才接受Node challenge，proof-key transcript签名不替代Server authentication；
 4. 在 Guest 内生成 proof key；
 5. 通过已认证 provisioning 通道把 public-key digest 写入 Server 静态 pin；private key 不离开 Guest。该通道必须认证Guest端点和操作者、授权固定槽位更新、原子写入并回读pin、记录审计且拒绝旧值回滚；具体机制在M1前冻结，缺失时阻塞enrollment；
@@ -501,11 +506,13 @@ SPIRE Agent
 10. Server NodeAttestor消费nonce，验证stream状态、过期时间和Ed25519 PoP，并独立重算`node_runtime_data`。
 11. Server侧TrusteeClient将raw Quote编成锁定AS版本要求的TDX evidence JSON，使用Server自己的`node_runtime_data`和固定policy构造`/attestation`请求；建立连接时认证配置的AS TLS endpoint。
 12. Trustee验证Quote、collateral、TCB/debug、MRTD/RTMR、runtime-data binding和Node policy，返回signed EAR。
-13. Server NodeAttestor验证EAR signer、issuer、algorithm、时间窗、与本次exact request的关联、policy identity/hash以及完整appraisal结果。
+13. Server NodeAttestor验证EAR signer、issuer、algorithm、时间窗、与本次exact request的关联、policy ID以及完整appraisal结果。
 14. 全部通过后，Server NodeAttestor向Server Core返回固定Agent ID对应的`AgentAttributes`；失败时不返回部分attributes。
 15. Server Core校验并记录Agent，把当前enrollment请求中的CSR与已通过的Agent结果绑定，再由SPIRE Server CA/X.509 Authority签发短期Agent SVID。可选UpstreamAuthority只为Server CA提供上游签名材料/证书链，不必逐张签Agent SVID。
 
-顺序不可改变。Agent 不得直接写 TSM；Provider 不得调用 Trustee；Server 不得相信 Provider 回传的 digest/verdict；SPIRE Core 不得在 NodeAttestor 失败时通过旧 join token 或 Mock 路径签发同一身份。
+顺序不可改变。Agent不得直接写TSM；Provider不得调用Trustee；Server不得相信
+Provider回传的digest/verdict；SPIRE Core不得在NodeAttestor失败时通过join token
+或其他认证路径签发同一身份。
 
 ### 7.3 失败与重试
 
@@ -516,9 +523,10 @@ SPIRE Agent
 | TSM、QEMU、QGS、Quote 或 cleanup 失败 | Provider 不返回成功 evidence，当前 stream 失败 |
 | transcript/PoP 失败 | Server 拒绝，不调用 Trustee |
 | Trustee transport、collateral、measurement、binding 或 policy 失败 | 不返回 AgentAttributes |
-| EAR signer、issuer、time、policy identity/hash 或 appraisal 失败 | 不返回 AgentAttributes |
+| EAR signer、issuer、time、policy ID或appraisal失败 | 不返回AgentAttributes |
 
-任意重试必须创建新 stream、新 nonce、新 Quote 和新 EAR。禁止 cached `ALLOW`、direct-TSM fallback、Mock fallback 或复用旧 response。
+任意重试必须创建新stream、新nonce、新Quote和新EAR。禁止cached `ALLOW`、
+direct-TSM fallback或复用之前的response。
 
 ### 7.4 renewal
 
@@ -540,14 +548,14 @@ old Agent SVID approaching renewal
 
 ### 8.1 Agent/Server NodeAttestor 内部消息合同
 
-删除现有与 Mock schema 绑定的 message、generated code和本地import，在唯一 canonical 路径原位生成以下最小合同：
+唯一canonical路径定义NodeAttestor最小消息合同及其生成代码：
 
 ```text
 proto/argus/spire/nodeattestor/nodeattestor.proto
 gen/argus/spire/nodeattestor/
 ```
 
-不创建平行版本目录，不保留旧message解析、协议协商、兼容adapter或fallback：
+不创建平行版本目录、协议协商、兼容adapter或fallback：
 
 ```protobuf
 message AgentHello {
@@ -600,7 +608,7 @@ TDX_REPORTDATA      = node_binding_digest || zero[16]
 
 - `trust_domain`：已经包含在完整 Agent ID 中；
 - `evidence_profile`：由固定domain separator和Node方法表达；
-- `policy_id`：它是 Server/Trustee 的验证侧选择，不是 Provider 的本地事实；Server必须验证 EAR 中的 policy identity/hash；
+- `policy_id`：它是Server/Trustee的验证侧选择，不是Provider的本地事实；Server必须验证EAR中的`ear.appraisal-policy-id`；
 - `subject.kind=node`：由 Node 方法本身确定。
 
 Provider 和 Server 必须分别实现/计算该合同，并使用跨语言 golden vectors 验证。禁止两个组件共享同一个运行时 encoder 形成“同错通过”。
@@ -694,11 +702,19 @@ policy             = Server-configured content-addressed Node policy
 
 Server 传给 AS 的是完整 `node_runtime_data`，不是已经计算好的 48-byte digest，避免 AS 对 digest 再哈希一次。
 
-精确 Trustee evidence JSON、EAR serialization、claim path/type、clock skew 和 collateral receipt 必须由 G0 的真实成功样本冻结，不能根据 Mock schema 猜测，也不加入多版本 alias/fallback。Server 不再维护第二份本地 YAML MRTD/RTMR evaluator；它验证固定 policy 确实返回完整通过结果。
+精确Trustee evidence JSON、EAR serialization、claim path/type、clock skew和
+collateral receipt必须由G0的真实成功样本冻结，不能根据测试schema猜测，也不加入
+多版本alias/fallback。Server不维护第二份本地YAML MRTD/RTMR evaluator；它验证
+固定policy确实返回完整通过结果。
 
-signed EAR必须可认证地对应本次exact raw Quote、`node_runtime_data`/REPORTDATA和policy。Server不能只检查“签名有效、时间新、policy pass”，也不能依赖“它刚从同一HTTPS响应返回”作为关联证明。G0必须冻结EAR中的evidence/request hash、verified runtime-data/report-data claim或AS支持的request nonce等实际关联机制；若真实EAR无法提供等价的签名关联，Stage 1阻塞而不是接受可在时间窗内重放的通用pass token。
+signed EAR必须可认证地对应本次exact raw Quote、`node_runtime_data`/REPORTDATA和
+policy ID。Server不能只检查“签名有效、时间新、policy pass”，也不能依赖“它刚从
+同一HTTPS响应返回”作为关联证明。G0必须冻结EAR中的evidence/request hash、verified
+runtime-data/report-data claim或AS支持的request nonce等实际关联机制；若真实EAR无法
+提供等价的签名关联，Stage 1阻塞而不是接受可在时间窗内重放的通用pass token。
 
-如果真实 EAR 不提供可认证的 policy identity/hash，G0 必须停止并重新选择可验证的 policy 固定方式，例如为不可变 policy 使用独立 AS 实例和固定配置证据；不能在方案里声称 Server 校验了实际不存在的 claim。
+如果真实EAR不提供`ear.appraisal-policy-id`，Stage 1阻塞；Server不能声称校验了
+实际不存在的policy claim。
 
 ### 8.6 AgentAttributes
 
@@ -732,13 +748,15 @@ Node policy 至少约束：
 - runtime-data binding 通过；
 - 所有 policy-required appraisal 子结果通过。
 
-policy artifact 使用发布时 exact bytes 生成 content ID，例如：
+policy artifact由Trustee部署侧发布并使用固定policy ID，例如：
 
 ```text
-policy_id = argus-node-tdx-<sha256(policy_bytes)>
+policy_id = argus-node_cpu
 ```
 
-Server 固定 policy ID、exact bytes hash 和 EAR 实际返回的 policy identity/hash。若 AS 中相同 ID 的 policy bytes 被覆盖，Server 必须拒绝。首版 reference values 直接进入不可变 policy，不引入独立 RVPS。
+当前Server配置固定policy ID，并验证EAR返回的`ear.appraisal-policy-id`一致。
+policy exact bytes由Trustee部署管理，不是当前Server配置或验证字段。首版reference
+values直接进入该policy，不引入独立RVPS。
 
 ### 9.2 外部 TCB
 
@@ -755,44 +773,37 @@ Server 固定 policy ID、exact bytes hash 和 EAR 实际返回的 policy identi
 
 Host/QEMU/QGS不能无痕修改一份既有Quote中的REPORTDATA、measurement或签名，但可以造成拒绝服务，也可能把请求relay到另一台满足同一policy的TD并返回一份真实有效Quote。本方案不证明claimant与quote-producing TD之间存在不可转移共址。若Trustee verifier或EAR signer被攻陷，Server无法通过自身重复解析measurement来恢复信任；这是明确的Trustee TCB风险。
 
-## 10. 旧 Mock 删除与单向切换
+## 10. 当前代码与运行边界
 
-### 10.1 删除范围
+### 10.1 组件边界
 
-实施时，在精确盘点引用后删除或改写：
-
-| 范围 | 处理 |
+| 范围 | 当前职责 |
 | --- | --- |
-| `core/spire/plugins/argus-tdx-nodeattestor/cmd/mock-evidence-provider/` | 删除 |
-| `cmd/mock-trustee/`、`cmd/fake-services/`、`internal/fakeservices/` | 删除 |
-| 现有带代际后缀的本地proto/generated目录、旧JCS/schema/fixture | 删除；在canonical NodeAttestor路径生成唯一最小合同，不保留平行package |
-| `internal/server/binding_store.*` | 删除 |
-| `internal/policy/` 本地 YAML evaluator | 最终 Trustee policy 同批落地后删除 |
-| `internal/evidence/` | 删除旧 Mock/TCP client，改为受限 UDS NodeEvidence client |
-| `core/argus/src/bin/tdx_evidence_provider.rs` | 新增 TDX identity 专用、UDS-only、real-only Provider binary；Stage 1 只注册 typed NodeEvidence handler，Stage 2 再评审独立 WorkloadEvidence handler |
-| `core/argus/src/bin/evidence_provider.rs` 与既有 Argus Guard Evidence API消费链 | 本轮不复用、不改写，也不部署进 Stage 1 dual-TDVM Node runtime；它不是 Node Mock 兼容层。是否整体迁移或退役必须另行盘点 `guard.rs`、`engine.rs`、`start_argus.sh` 和 `docker-compose.yml` 后决定 |
-| `images/Dockerfile.mock-trustee`、`images/Dockerfile.mock-evidence-provider` | 删除 |
-| dual-TDVM compose/config/scripts 中的 Mock services/endpoints/PKI/fallback | 删除 |
-| Mock-only Node/Workload tests | 删除或替换为真实 Quote/AS 集成与 fail-closed 测试 |
-| 旧 Mock `argus-tdx-workloadattestor` 目标运行路径 | 移除；Stage 2 评审后按新合同重新实现 |
+| `core/spire/plugins/argus-tdx-nodeattestor/` | 唯一NodeAttestor合同；Agent协调challenge、Provider调用和PoP，Server负责pin、Trustee和固定Agent ID |
+| `core/argus/src/bin/tdx_evidence_provider.rs` | TDX identity专用UDS服务；Stage 1只提供typed NodeEvidence handler |
+| `core/argus/src/bin/evidence_provider.rs` | Argus Guard Evidence API；不是Node Attestation运行组件 |
+| `core/tdx-quote/src/tsm.rs` | 每请求创建TSM report instance、提交REPORTDATA、读取Quote并清理instance |
+| Trustee Client | 调用官方`/attestation`，验证TLS和signed EAR，不在Server内重复实现measurement policy |
+| `argus-tdx-workloadattestor` | Stage 1不加载；Stage 2按workload启动绑定要求另行设计 |
+| 单元测试 | 可以使用进程内QuoteSource或受控HTTP test server；测试替身不进入production runtime |
 
-TC-API 的其他能力不在本轮顺带删除。TDX identity Provider 的 Node handler 不调用 TC-API，因为第一次 Quote 不包含 workload launch facts。新增 binary 与既有 Argus Guard Provider 共享经过拆分的 QuoteSource 基础能力，但两套 API、调用者和发布生命周期互不替换。
+TDX identity Provider的Node handler不调用TC-API，因为第一次Quote不包含workload
+launch facts。它可以与Argus Guard Provider复用内部QuoteSource基础能力，但两套API、
+调用者和发布生命周期相互独立。
 
-### 10.2 单向切换顺序
+### 10.2 部署前提
 
-以下顺序首先用于隔离的Stage 1验证环境。由于OpenViking目标Workload SVID和现有业务mTLS链在本阶段不启用，不能把该步骤直接当作无中断生产迁移；在提供业务流量的环境执行会中断依赖旧Workload identity的链路。
+Stage 1只在以下输入完整时启动：
 
-1. 冻结旧身份的新签发；
-2. 盘点旧 Mock-admitted Agent records、derived-ID parents、Registration Entries、proof keys和最大 SVID TTL；
-3. 停止旧Agent并等待旧SVID/连接排空；若已为事件处置执行ban，先按replacement合同处理其banned状态；
-4. evict/delete旧parent Entries、Agent records和Mock-only key/material，确认fixed ID下无旧/banned记录；
-5. 部署最终 measured image、新的 TDX identity Provider、QGS wiring、Trustee policy 和 EAR trust；
-6. 在 Guest 生成新 proof key，通过认证通道发布 static pin；
-7. 删除 Stage 1 Node Mock runtime、endpoint和 fallback，并确认 dual-TDVM Node runtime 未启动既有 Argus Guard Provider；
-8. 只通过唯一的真实 Node path注册固定 Agent ID；
-9. 失败时保持 deny-all，保留证据并向前修复，不恢复 Mock。
+1. 最终measured TD image及对应reference values和Node policy；
+2. Guest TSM、QEMU quote socket和Host QGS/DCAP形成可用链路；
+3. Trustee HTTPS CA、EAR signer、issuer/profile和policy ID已锁定；
+4. Guest proof key已生成，Server配置固定public-key pin；
+5. SPIRE bootstrap bundle和Agent到Server网络可达；
+6. 固定Agent ID不存在来自其他认证路径的竞争record或Registration Entry。
 
-实际删除前仍要输出精确对象清单、引用关系和影响范围；本文不授权在未盘点时直接清理运行环境。
+任一前提缺失时保持不签发新身份。Stage 1不启用OpenViking目标Workload SVID或
+业务mTLS链，完整业务身份等待Stage 2。
 
 ## 11. 实施范围
 
@@ -810,10 +821,10 @@ TC-API 的其他能力不在本轮顺带删除。TDX identity Provider 的 Node 
 
 | 位置 | 修改 |
 | --- | --- |
-| `proto/argus/spire/nodeattestor/nodeattestor.proto` | 删除当前带代际后缀的proto与生成目录，在该canonical路径原位生成唯一最小messages，并一次性替换全部本地imports |
-| `gen/argus/spire/nodeattestor/` | 只保留canonical生成结果；删除旧生成代码，不建立平行版本目录或alias |
+| `proto/argus/spire/nodeattestor/nodeattestor.proto` | canonical路径中的唯一最小messages合同，全部本地import直接引用该合同 |
+| `gen/argus/spire/nodeattestor/` | canonical生成结果；不建立平行版本目录或alias |
 | SPIRE SDK imports | 保留上游正式import path，但本地alias统一改为`nodeattestorapi`、`configapi`和`metricsapi`等职责名，不把上游代际号传播到Argus自有标识 |
-| `internal/protocol/testdata/report-data.json` | 用新的唯一binding golden vector直接替换旧fixture；删除带代际后缀的fixture文件 |
+| `internal/protocol/testdata/report-data.json` | 唯一binding golden vector |
 | `internal/agent` | 加载 proof key、校验 challenge、调用 Provider、签 transcript；不计算 REPORTDATA、不访问 TSM |
 | `internal/evidence` | 改为 UDS NodeEvidence client，只负责 transport和response边界 |
 | `internal/server` | static pin、nonce、PoP、独立 runtime-data、TrusteeClient、固定 AgentAttributes |
@@ -824,36 +835,38 @@ Server pin 在进程生命周期内不可变。配置更改通过显式重启生
 
 ### 11.3 runtime
 
-改写 `core/spire/runtime/dual-tdvm/`：
+仓库当前不提供端到端runtime。目标环境提供以下真实输入后，才能建立Node-only
+部署入口：
 
-- Server config：固定 trust domain、Agent ID、static pin、AS origin、TLS/EAR trust、policy ID/hash和有限 Agent TTL；
-- OpenViking Agent config：只包含 proof-key path、Provider UDS和RPC limits，不包含 TSM root或Mock endpoint；
-- Compose/center：删除 Mock services，部署锁定 digest 的 Trustee AS；
-- Guest：启动 measured Provider，只有 Provider 获得 TSM writable access；Agent只访问 UDS；
-- QEMU：明确配置 quote-generation-socket 到 Host QGS；
-- scripts：构建/记录最终 artifact digest，执行 authenticated proof-key provisioning、真实 join/renew和负例验收；
-- OpenViking target Workload SVID 保持禁用；OpenClaw 不复用固定 Node ID。
+- 固定Agent proof-key pin和SPIRE bootstrap bundle；
+- Trustee HTTPS CA、EAR公钥、issuer/profile和批准的Node policy ID；
+- IP2到SPIRE Server的可达地址；
+- 最终measured TD image、Provider权限和QEMU/QGS接线。
+
+该入口只部署一个OpenViking Node Agent、real-only Provider和当前Agent/Server
+NodeAttestor。OpenClaw Node身份、Broker、Workload SVID和第二次Quote不在Stage 1
+运行范围内。
 
 ## 12. 里程碑
 
 ### M1：真实基础链可行性
 
-- [ ] Guest TSM → QEMU/QGS → non-empty real Quote；
-- [ ] 固定 REPORTDATA 在 Quote 中正确呈现；
+- [x] Guest TSM → QEMU/QGS → non-empty real Quote；
+- [x] 固定 REPORTDATA 在 Quote 中正确呈现；
 - [ ] 锁定 Trustee AS 验证真实 Quote并返回 signed EAR；
 - [ ] 保存真实 evidence/EAR schema和measurement coverage观察；
 - [ ] QGS、wrong REPORTDATA、wrong policy负例失败。
 
-在取得真实样本前不冻结猜测的 Trustee JSON/claim alias。
+在取得真实Trustee EAR成功样本前不冻结猜测的JSON/claim alias。
 
 ### M2：冻结最小合同并实现
 
-- [ ] 冻结唯一Node wire、Provider Node API、binding/transcript golden vectors；
-- [ ] 删除带代际后缀的本地proto/generated目录、fixture和import，只保留canonical合同；
-- [ ] 重构 real-only Provider和TSM cleanup；
-- [ ] Agent只调用Provider，Server只调用Trustee；
-- [ ] static pin和proof-key PoP生效；
-- [ ] 删除BindingStore、本地measurement evaluator和Mock合同。
+- [x] 冻结唯一Node wire、Provider Node API、binding/transcript golden vectors；
+- [x] Argus本地proto/generated目录、fixture和import只使用canonical合同；
+- [x] 实现real-only Provider和TSM cleanup；
+- [x] Agent只调用Provider，Server只调用Trustee；
+- [x] static pin和proof-key PoP通过代码测试；真实join留待M4；
+- [x] Server不包含BindingStore或本地measurement evaluator。
 
 ### M3：最终 measured artifact与policy
 
@@ -868,8 +881,8 @@ Server pin 在进程生命周期内不可变。配置更改通过显式重启生
 - [ ] 首次join得到固定Agent ID和短期Agent SVID；
 - [ ] 至少一次renewal重新产生nonce、Quote、EAR和SVID；
 - [ ] 关键负例全部fail closed；
-- [ ] 旧Agent/Entry/SVID排空；
-- [ ] Mock服务、配置、测试和fallback从目标runtime删除；
+- [ ] 固定Agent ID没有来自其他认证路径的竞争Agent record或Registration Entry；
+- [ ] 目标runtime只包含Stage 1当前组件；
 - [ ] Stage 2仍保持禁用。
 
 ## 13. 验收标准
@@ -881,14 +894,14 @@ Stage 1 只有同时满足以下条件才算完成：
 3. 每个attempt由Server生成fresh nonce，Provider生成新的真实Quote；
 4. REPORTDATA精确绑定fixed Agent ID、nonce和proof public key，Provider/Server golden vectors一致；
 5. Server在发challenge前验证static pin，并验证transcript PoP；
-6. Server使用锁定Trustee AS、固定Node policy和signed EAR完成appraisal，不存在本地YAML或Mock fallback；
+6. Server使用锁定Trustee AS、固定Node policy和signed EAR完成appraisal，不运行本地measurement policy；
 7. NodeAttestor只返回固定Agent ID和`CanReattest=true`，SVID由SPIRE Server Core/CA签发；
 8. 至少一次真实renewal重新执行完整Quote/EAR链；
 9. replay、wrong key、wrong REPORTDATA、wrong measurement、debug、bad collateral、wrong policy、bad signer、expired EAR、Provider/QGS/AS outage均不产生新SVID；
 10. Provider是唯一应用层TSM writer，Agent和普通workload只能访问受限UDS或完全无权访问；
-11. 目标runtime不存在Mock Provider、Mock Trustee、私有verdict或fallback；Server配置证明该固定ID只能经`argus_tdx` NodeAttestor产生，join-token/x509pop等替代路径不能签发同一ID；
-12. Stage 2完成前删除/禁用OpenViking目标Registration Entry和旧WorkloadAttestor路径，并通过Workload API负例证明目标Workload SVID没有被签发；
-13. Argus自有package、目录、endpoint、domain separator、policy ID、fixture和import alias不含数字代际后缀；旧本地生成目录、解析分支、协议协商和兼容路径全部不存在。外部依赖的正式发行号与上游API路径不属于此检查；
+11. 目标runtime只包含Stage 1当前组件；Server配置证明该固定ID只能经`argus_tdx` NodeAttestor产生，join-token/x509pop等替代路径不能签发同一ID；
+12. Stage 2完成前不存在OpenViking目标Registration Entry，WorkloadAttestor不加载，并通过Workload API负例证明目标Workload SVID没有被签发；
+13. Argus自有package、目录、endpoint、domain separator、policy ID、fixture和import alias不含数字代际后缀，也不存在平行合同、协议协商或兼容路径。外部依赖的正式发行号与上游API路径不属于此检查；
 14. 验收报告明确把cryptographic acceptance、deployment assumptions和residual risks分开。
 
 最小验收证据包括：
@@ -897,7 +910,7 @@ Stage 1 只有同时满足以下条件才算完成：
 source commit and component/image digests
 final TD image/initrd/verity digest
 final MRTD/RTMR and measured-boot event log
-measurement manifest and exact Node policy bytes/hash
+measurement manifest, deployed Node policy bytes/hash, and selected policy_id
 proof public key digest and Server static-pin config digest
 AgentHello / NodeChallenge / NodeEvidenceResponse
 node_runtime_data / REPORTDATA / raw Quote
@@ -905,7 +918,7 @@ exact Trustee request / signed EAR / verified claims summary
 fixed Agent ID / Agent SVID chain / NotAfter
 one real renewal chain
 critical negative-case results
-runtime inventory showing no Mock/fallback and Provider-only TSM access
+runtime inventory showing Stage 1 components and Provider-only TSM access
 ```
 
 如果 Trustee 不能导出本次使用的 exact DCAP collateral bytes，应如实记录可证明的source/cache/version/validity receipt。第三方此时可以验证AS签名声明和上下文链路，但不能仅凭该bundle独立重放完整DCAP appraisal。
@@ -941,7 +954,7 @@ Stage 2 只冻结以下前提：
 3. 第一次Quote成功、Docker label匹配或第二份通用TDVM Quote都不能单独放行；
 4. Stage 2可以复用Evidence Provider进程、受保护UDS、QuoteSource和cleanup基础设施；
 5. Stage 2使用独立typed WorkloadEvidence API/handler，不复用Node request、Node binding或fixed Node subject；
-6. 当前Provider不注册Workload endpoint/handler；任何Workload route/profile请求按普通unsupported route失败，不保留可返回占位结果的Mock handler。
+6. 当前Provider不注册Workload endpoint/handler；任何Workload route/profile请求按普通unsupported route失败，不提供占位结果handler。
 
 本文不冻结：workload challenge来源、启动事实字段、可信观察者、canonical encoding、RTMR/event log关系、Trustee workload policy、selectors、Registration Entry、目标SPIFFE ID、TOCTOU处理和SVID生命周期。这些在第一次Quote完成后单独设计。
 

@@ -224,13 +224,7 @@ venv/bin/python -m tc_api.cli.client   --base-url http://localhost:8000   --sigs
 
 ### 构建和运行网关 Docker 容器
 
-当前受维护的 OpenClaw/OpenViking 安全运行入口是
-[双 TDVM Broker Profile](../../core/spire/runtime/dual-tdvm/README.md)：
-
-```bash
-export PROFILE_DIR="$(pwd)/core/spire/runtime/dual-tdvm"
-sudo -E bash "$PROFILE_DIR/scripts/prepare.sh"
-```
+本文只提供组件级构建说明，不定义 SPIRE 集成运行命令。
 
 **注意：您可以通过交互方式设置 openclaw 配置（如模式和 API 密钥）：**
 

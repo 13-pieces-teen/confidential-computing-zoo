@@ -192,17 +192,17 @@ sudo systemctl status argus-guard
 See [Architecture](./docs/architecture.md) for deployment shapes, trust
 boundaries, and production considerations.
 
-### Argus v2 SPIFFE identity mode
+### SPIFFE identity mode
 
-The same Intel Guard binary also supports the Argus v2 caller-local policy
-path when explicitly started with `GUARD_MODE=spiffe_identity`. This mode loads
+The same Intel Guard binary also supports the caller-local SPIFFE policy path
+when explicitly started with `GUARD_MODE=spiffe_identity`. This mode loads
 `GUARD_SPIFFE_POLICY_FILE`, exposes `POST /guard/v1/authorize` and `/metrics`,
 and does not initialize the TDX evidence verifier. The default, including when
 `GUARD_MODE` is unset, remains Intel's evidence verification path.
 
-The maintained deployment and validation contract for this mode lives in the
-[dual-TDVM Broker runtime](../spire/runtime/dual-tdvm/README.md). It combines
-the Guard decision with workload SVIDs and exact-peer SPIFFE mTLS; Guard policy
+The current real Node Attestation path uses the dedicated
+`argus-tdx-evidence-provider` binary over a Guest-local Unix socket. The generic
+Guard Evidence API described above is not part of that path, and Guard policy
 evaluation alone is not a remote-attestation result.
 
 ## Security Guarantees

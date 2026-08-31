@@ -1,9 +1,7 @@
 # TDVM and Node Attestation failure fixtures
 
-This directory keeps only the TDVM lifecycle/preflight utilities still used by
-the dual-TDVM runtime.
-Former pre-dual-Agent deployment, endpoint-switching, and standalone
-business-path acceptance scripts are not maintained here.
+This directory keeps only TDVM lifecycle and TDX Host/Guest preflight
+utilities. It is not a SPIRE deployment profile.
 
 ## TD VM lifecycle
 

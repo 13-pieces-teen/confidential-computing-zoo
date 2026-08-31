@@ -2,16 +2,15 @@
 
 > 对应架构：[双 TDVM Broker 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
 >
-> 状态：代码实施完成；本地回归与远程双 TDVM 验收状态分别记录
+> 状态：历史实施记录，不作为当前执行说明
 
-## 1. 当前唯一方案
+## 1. 当时采用的方案
 
 OpenClaw 和 OpenViking 业务容器均保持源码无侵入。OpenClaw 插件通过本地普通 HTTP
 调用 Egress Broker；Egress Broker 负责 Guard 授权和客户端 SPIFFE mTLS；OpenViking
 Ingress Broker 负责服务端 mTLS 和回环 HTTP 转发。
 
-旧 asymmetric runtime、OpenClaw preload、SVID materializer、Argus entrypoint 和对应
-benchmark 不再作为兼容路径保留。
+该方案只使用Broker身份路径，不定义其他兼容运行链。
 
 ## 2. 实施内容
 
@@ -48,7 +47,7 @@ benchmark 不再作为兼容路径保留。
 - Guard ALLOW/DENY/异常、无效 receipt、错误服务端 ID、PID 退出单元测试；
 - 所有修改 shell 脚本 `bash -n`；
 - Dockerfile 静态检查、Registration selector 审计、`git diff --check`；
-- 全仓引用检查不再出现已删除的正式 asymmetric/preload/materializer 入口。
+- 全仓引用检查只出现目标Broker身份路径。
 
 ## 4. 远程双 TDVM 验收
 
@@ -63,6 +62,6 @@ benchmark 不再作为兼容路径保留。
 
 ## 5. 完成边界
 
-本轮只保证可信计算基内的正常 OpenViking 插件路径经过 Guard。Provider/Trustee 的
-Mock、真实 Quote/QGS 和生产验收边界不因本改动改变。远程验收实际运行前，只能报告
+本轮只保证可信计算基内的正常 OpenViking 插件路径经过 Guard。Mock Provider/Trustee
+软件链、真实 Quote/QGS 和生产验收边界不因本改动改变。远程验收实际运行前，只能报告
 本地代码与静态/单元测试结果，不能声明新的双 TDVM 运行证据。

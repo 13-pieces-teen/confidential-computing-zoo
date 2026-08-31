@@ -1,6 +1,10 @@
 # 双 TDVM + Broker Sidecar 远程验证报告
 
-状态：远程验证完成。M3 ALLOW/DENY 与双 TDVM DENY/ALLOW 全部通过；ALLOW 含
+> 状态：历史软件链验证记录，仅适用于下列指定commit。它不能证明当前HEAD的
+> 真实TDX Node Attestation、Trustee
+> appraisal或Workload Attestation通过。
+
+历史执行结果：M3 ALLOW/DENY 与双 TDVM DENY/ALLOW 全部通过；ALLOW 含
 wrong-client 负例、OpenViking 退出后 Sidecar 退出（pidfd）与 1943 关闭检查。
 Round 4（commit `e253767`）验证在 `ollama pull bge-m3` 处因环境出网限制失败并
 停止（见“Round 4”一节）；Round 4.1（commit `8882144`，Ollama DMZ 代理注入 +
