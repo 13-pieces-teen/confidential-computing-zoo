@@ -4,80 +4,141 @@
 
 ## 1. 结论与范围
 
-### 1.1 整体架构流程图
+### 1.1 当前 Node Attestation 架构与时间流程
 
-当前方案只定义真实Node Attestation链路。下图中的实线表示运行时调用或数据流，
-虚线表示静态信任输入或尚未实施的Stage 2边界：
+当前方案只定义真实 Node Attestation 链路。实线表示运行时调用或数据流，虚线表示静态信任输入或明确排除的 Stage 2 / 下游业务身份边界。两张图描述当前源码合同；Host QGS 接线、真实 Trustee、SPIRE join / re-attest 和真实 TDVM 端到端运行仍需单独验收。
+
+#### 1.1.1 模块架构图
+
+![当前 Node Attestation 模块架构](./assets/argus-node-attestation-modules.png)
 
 ```mermaid
-flowchart LR
-    subgraph Guest["TD Guest：被证明环境"]
-        direction TB
-        Bootstrap["SPIRE Server<br/>bootstrap trust bundle"]
-        AgentCore["SPIRE Agent Core<br/>认证 Server、enrollment、CSR"]
-        AgentPlugin["Agent NodeAttestor<br/>协调 challenge、Evidence 与 PoP"]
-        ProofKey["proof private key<br/>仅保存在 Guest"]
-        Provider["TDX identity Evidence Provider<br/>只生产原始 Evidence"]
-        TSM["Guest TSM<br/>仅 Provider 可写"]
-        OpenViking["OpenViking workload"]
+flowchart TB
+    subgraph ControlPlane["TDVM 外部控制面"]
+        direction LR
+        subgraph SpireServer["SPIRE Server"]
+            direction TB
+            ServerCore["Server Core<br/>enrollment / Agent state / CSR"]
+            ServerPlugin["argus_tdx Server NodeAttestor<br/>static pin · challenge · PoP · EAR"]
+            ServerCA["Server CA / X.509 Authority<br/>签发 short-lived Agent SVID"]
+            ServerPlugin -->|"AgentAttributes<br/>fixed Agent ID<br/>CanReattest = true"| ServerCore
+            ServerCore -->|"accepted Agent + enrollment CSR"| ServerCA
+        end
 
-        Bootstrap -. "认证预期 Server" .-> AgentCore
-        ProofKey -. "签署 transcript" .-> AgentPlugin
+        subgraph Appraisal["外部 Trustee Attestation Service"]
+            Trustee["Quote / collateral / TCB / measurement<br/>runtime binding / Node policy appraisal"]
+            NodePolicy["固定 Node policy<br/>MRTD · RTMR · debug · TCB"]
+            Collateral["Intel endorsement roots<br/>DCAP collateral"]
+            NodePolicy -.-> Trustee
+            Collateral -.-> Trustee
+        end
+
+        StaticTrust["Server 静态信任输入<br/>proof-key SHA-256 pin<br/>Trustee TLS root + EAR public key"] -.-> ServerPlugin
+        ServerPlugin <-->|"认证 HTTPS POST /attestation<br/>exact Quote + 64B REPORTDATA + policy<br/>signed EAR"| Trustee
     end
 
-    subgraph Host["Host / VMM：Quote 生成通道"]
-        direction TB
+    subgraph TDVM["TDVM / TD Guest：被证明环境"]
+        direction LR
+        Bootstrap["SPIRE Server<br/>bootstrap trust bundle"]
+        subgraph Agent["SPIRE Agent"]
+            AgentCore["Agent Core<br/>认证 Server · enrollment · CSR"]
+            AgentPlugin["argus_tdx Agent NodeAttestor<br/>challenge 协调 · Quote · transcript PoP"]
+            ProofKey["Ed25519 proof private key"] -.-> AgentPlugin
+        end
+        Provider["TDX identity Evidence Provider<br/>只生产 verifier-neutral raw Quote"]
+        GuestTSM["Guest TSM configfs<br/>REPORTDATA = SHA-384(runtime data) + 16B zero"]
+        Bootstrap -. "认证预期 Server" .-> AgentCore
+        AgentPlugin <-->|"受保护 UDS · POST /node-evidence<br/>{nonce, proof_public_key} / raw Quote"| Provider
+        Provider -->|"fixed Agent ID + nonce + public key"| GuestTSM
+    end
+
+    subgraph Host["TD Host / VMM：Quote 生成环境（部署接线待真实验收）"]
+        direction LR
         QEMU["QEMU quote-generation-socket"]
         QGS["Host QGS / DCAP"]
+        QEMU <-->|"quote generation request / response"| QGS
     end
 
-    subgraph Center["SPIRE Server：准入与身份签发边界"]
-        direction TB
-        ServerCore["SPIRE Server Core<br/>中继、Agent 状态、CSR 绑定"]
-        ServerPlugin["Server NodeAttestor<br/>challenge、pin、PoP、EAR 验证"]
-        StaticPin["固定身份槽位配置<br/>Agent ID + proof-key static pin"]
-        EARTrust["Trustee TLS root<br/>EAR signer / issuer / algorithm"]
-        ServerCA["SPIRE Server CA<br/>X.509 Authority"]
+    AgentCore ==>|"SPIRE enrollment stream<br/>AgentHello → NodeChallenge → Quote + PoP<br/>← AgentAttributes / Agent SVID"| ServerCore
+    GuestTSM <-->|"inblob / raw outblob"| QEMU
 
-        StaticPin -. "授权哪把 key 领取固定 Agent ID" .-> ServerPlugin
-        EARTrust -. "认证 AS 并验证 EAR" .-> ServerPlugin
+    subgraph Downstream["Stage 2 / 准入后 workload 与业务身份（当前没有 runtime 接线）"]
+        direction LR
+        TCAPI["TCAPI launch"]
+        OpenViking["OpenViking PID / container"]
+        WorkloadIdentity["WorkloadAttestor + Registration Entry<br/>Workload SVID"]
+        Delivery["当前 Stage 2 目标设计见独立文档<br/>Broker-aware Helper → PEM → NGINX"]
+        TCAPI -. "PID / launch facts" .-> OpenViking
+        OpenViking -. "需绑定本次启动事实的新证据" .-> WorkloadIdentity
+        WorkloadIdentity -.-> Delivery
     end
 
-    subgraph Verifier["Trustee：Evidence appraisal 边界"]
-        direction TB
-        Trustee["Trustee Attestation Service<br/>验证 Quote、TCB、measurement 与 binding"]
-        NodePolicy["固定 Node policy<br/>MRTD / RTMR / debug / TCB"]
-        Endorsements["Intel endorsement roots<br/>DCAP collateral"]
+    AgentCore -. "Node Agent SVID ≠ OpenViking Workload SVID" .-> Downstream
 
-        NodePolicy -. "appraisal policy" .-> Trustee
-        Endorsements -. "endorsement input" .-> Trustee
-    end
-
-    AgentCore ==>|"经过认证的 enrollment stream<br/>payload / challenge / response"| ServerCore
-    AgentPlugin -->|"1. proof public key<br/>经双方 Core 中继"| ServerPlugin
-    ServerPlugin -->|"2. static pin 通过后生成 fresh nonce<br/>经双方 Core 中继"| AgentPlugin
-    AgentPlugin -->|"3. nonce + proof public key<br/>受保护 UDS"| Provider
-    Provider -->|"4. fixed Agent ID + nonce + public key<br/>映射为 REPORTDATA"| TSM
-    TSM -->|"quote request"| QEMU
-    QEMU -->|"quote generation request"| QGS
-    QGS -->|"硬件签名 TDX Quote"| QEMU
-    QEMU -->|"raw Quote"| TSM
-    TSM -->|"raw Quote"| Provider
-    Provider -->|"5. verifier-neutral raw Quote"| AgentPlugin
-    AgentPlugin -->|"6. raw Quote + transcript PoP<br/>经双方 Core 中继"| ServerPlugin
-    ServerPlugin -->|"7. exact Quote + 独立重算的 runtime data<br/>+ 固定 policy；认证 HTTPS"| Trustee
-    Trustee -->|"8. 与本次请求关联的 signed EAR"| ServerPlugin
-    ServerPlugin -->|"9. AgentAttributes<br/>固定 Node Agent ID"| ServerCore
-    ServerCore -->|"10. 已准入 Agent + 当前 enrollment CSR"| ServerCA
-    ServerCA -->|"11. short-lived Agent SVID"| ServerCore
-    ServerCore -->|"交付 Node 身份"| AgentCore
-
-    AgentCore -. "Stage 1 只建立 Node 身份<br/>不证明 workload" .-> OpenViking
-    OpenViking -. "启动后、签发首张 Workload SVID 前" .-> Stage2["Stage 2 设计边界<br/>新 Quote 必须绑定本次启动事实"]
-    Stage2 -.-> Blocked["当前不实现<br/>Registration Entry 与 Workload SVID 保持禁用"]
+    classDef core fill:#E7EEFF,stroke:#315B9C,color:#14243D,stroke-width:2px;
+    classDef evidence fill:#E4F6F2,stroke:#238070,color:#123B35,stroke-width:2px;
+    classDef hardware fill:#FFF0D9,stroke:#C87519,color:#4A2A09,stroke-width:2px;
+    classDef appraisal fill:#F0E9FF,stroke:#7350A8,color:#2F1C4B,stroke-width:2px;
+    classDef static fill:#F4F1EA,stroke:#7A746B,color:#4D4943,stroke-dasharray:5 4;
+    classDef deferred fill:#F1F2F4,stroke:#9198A1,color:#555B63,stroke-dasharray:8 5;
+    class AgentCore,AgentPlugin,ServerCore,ServerPlugin,ServerCA core;
+    class Provider evidence;
+    class GuestTSM,QEMU,QGS hardware;
+    class Trustee,NodePolicy,Collateral appraisal;
+    class StaticTrust,ProofKey,Bootstrap static;
+    class TCAPI,OpenViking,WorkloadIdentity,Delivery deferred;
 ```
 
-主方案只保留五个运行角色、六项必要控制和一条 fail-closed 认证链。部署控制、测试工具、审计归档和线协议细节不再被描述成新的运行组件。
+#### 1.1.2 时间流程图
+
+![当前 Node Attestation 时间流程](./assets/argus-node-attestation-sequence.png)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant AC as SPIRE Agent Core
+    participant AP as Agent NodeAttestor
+    participant EP as Evidence Provider
+    participant TDX as Guest TSM / QEMU / QGS
+    participant SC as SPIRE Server Core
+    participant SP as Server NodeAttestor
+    participant TAS as Trustee
+    participant CA as Server CA
+
+    AC->>SC: 使用 bootstrap trust bundle 认证 Server 并建立 enrollment stream
+    AC->>AP: AidAttestation；插件加载 Ed25519 proof key
+    AP->>AC: AgentHello(proof_public_key)
+    AC->>SC: 初始 payload
+    SC->>SP: 中继 AgentHello
+    SP->>SP: 校验固定 identity slot 的 proof-key SHA-256 pin
+    SP-->>SC: fresh nonce + expires_at_unix_ms（仅保存在本 stream）
+    SC-->>AC: challenge
+    AC-->>AP: NodeChallenge
+    AP->>AP: 校验字段、大小和过期时间
+    AP->>EP: UDS POST /node-evidence {nonce, proof_public_key}
+    EP->>EP: canonical runtime data = domain + fixed Agent ID + nonce + public key
+    EP->>TDX: REPORTDATA = SHA-384(runtime data) + 16B zero
+    TDX-->>EP: raw hardware-signed TDX Quote
+    EP-->>AP: verifier-neutral raw Quote
+    AP->>AP: Ed25519 签署 key + nonce + expiry + SHA-256(Quote) transcript
+    AP->>AC: NodeEvidenceResponse(Quote, transcript_signature)
+    AC->>SC: challenge response
+    SC->>SP: 中继 Quote + PoP
+    SP->>SP: 校验时效、Quote 边界与 transcript PoP；独立重算 runtime data
+    SP->>TAS: HTTPS POST /attestation<br/>exact Quote + runtime_data.raw(64B REPORTDATA) + fixed policy
+    TAS->>TAS: 验证 Quote / collateral / TCB / measurement / binding / policy
+    TAS-->>SP: signed EAR (compact JWT)
+    SP->>SP: 校验 ES256、issuer/profile、iat/exp、policy、affirming、report_data<br/>再次校验 challenge 未过期
+    SP-->>SC: AgentAttributes(fixed Agent ID, selectors=nil, CanReattest=true)
+    SC->>CA: accepted Agent + 当前 enrollment CSR
+    CA-->>SC: short-lived Agent SVID
+    SC-->>AC: 完成 Agent 准入并交付 Agent SVID
+
+    Note over AC,CA: 任一步格式、pin、PoP、Quote/EAR、超时或 freshness 校验失败：fail closed；不返回 AgentAttributes，不签发 Agent SVID。
+    Note over AC,CA: re-attestation 重复 fresh nonce → 新 Quote → Trustee appraisal 全链；Agent SVID 轮换本身不等于新 Quote。
+```
+
+主方案只保留五个运行角色、六项必要控制和一条 fail-closed 认证链。部署控制、测试工具、审计归档和线协议细节不再被描述成新的运行组件。TCAPI、OpenViking、WorkloadAttestor、Workload API / Broker API、Helper / NGINX 和外部业务 mTLS 只作为下游边界出现，不是当前 Node Attestation 的完成项。下游当前设计见[NGINX + Broker-aware SPIFFE Helper Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。
 
 ### 1.2 已冻结的决策
 
@@ -199,7 +260,7 @@ Provider 明确不负责：
 - 返回 `ALLOW/DENY`、selectors 或 SVID；
 - 业务请求授权。
 
-Trustee 的 wire encoding 和 EAR 验证放在 Server 侧 `TrusteeClient` 中。这样更换 verifier 合同时不需要重新修改 TD Guest 内的 Provider，也不会把 Trustee v0.21.0 schema 传播到未来 WorkloadAttestor。
+在 Stage 1 Node 路径中，Trustee 的 wire encoding 和 EAR 验证放在 Server 侧 `TrusteeClient` 中。这样更换 Node verifier 合同时不需要重新修改 TD Guest 内的 Provider。Stage 2 WorkloadAttestor使用独立的 workload evidence/verdict合同，不继承本段的Node EAR边界。
 
 Provider在Node binding中使用fixed Agent ID，不表示它拥有身份授权权威；该值是部署时固定的协议常量。只有Server NodeAttestor能在appraisal通过后把该ID写入`AgentAttributes`。
 
@@ -504,7 +565,7 @@ SPIRE Agent
 8. Provider返回verifier-neutral TDX evidence；不返回policy verdict、Agent ID、selector或Trustee envelope。
 9. Agent plugin校验`evidence_type`和`quote_format`等于本方案冻结的唯一值，解码并限制raw Quote大小，然后对当前Hello、Challenge和exact raw Quote bytes组成的transcript签名；Agent Core将response中继到Server Core，再交给Server plugin。
 10. Server NodeAttestor消费nonce，验证stream状态、过期时间和Ed25519 PoP，并独立重算`node_runtime_data`。
-11. Server侧TrusteeClient将raw Quote编成锁定AS版本要求的TDX evidence JSON，使用Server自己的`node_runtime_data`和固定policy构造`/attestation`请求；建立连接时认证配置的AS TLS endpoint。
+11. Server侧TrusteeClient将raw Quote编成锁定AS版本要求的TDX evidence JSON，把Server独立重算的`node_runtime_data`映射为64-byte REPORTDATA，并与固定policy共同构造`/attestation`请求；建立连接时认证配置的AS TLS endpoint。
 12. Trustee验证Quote、collateral、TCB/debug、MRTD/RTMR、runtime-data binding和Node policy，返回signed EAR。
 13. Server NodeAttestor验证EAR signer、issuer、algorithm、时间窗、与本次exact request的关联、policy ID以及完整appraisal结果。
 14. 全部通过后，Server NodeAttestor向Server Core返回固定Agent ID对应的`AgentAttributes`；失败时不返回部分attributes。
@@ -693,21 +754,23 @@ raw Quote
 语义固定为：
 
 ```text
-tee                = tdx
-evidence           = Server-encoded TDX evidence containing exact raw Quote
-runtime_data.raw   = exact node_runtime_data
-runtime_data_hash  = sha384
-policy             = Server-configured content-addressed Node policy
+tee                         = tdx
+evidence                    = Server-encoded TDX evidence containing exact raw Quote
+runtime_data.raw            = SHA-384(exact node_runtime_data) || zero[16]
+runtime_data_hash_algorithm = sha384
+policy_ids[0]               = Server-configured content-addressed Node policy ID
 ```
 
-Server 传给 AS 的是完整 `node_runtime_data`，不是已经计算好的 48-byte digest，避免 AS 对 digest 再哈希一次。
+当前客户端把上述完整64-byte REPORTDATA作为`runtime_data.raw`发送，而不是发送未哈希的
+`node_runtime_data`。这是当前代码和client test锁定的wire行为；它与真实Trustee版本的
+兼容性仍须由G0真实成功样本验证，未通过前不能写成已完成的appraisal合同。
 
 精确Trustee evidence JSON、EAR serialization、claim path/type、clock skew和
 collateral receipt必须由G0的真实成功样本冻结，不能根据测试schema猜测，也不加入
 多版本alias/fallback。Server不维护第二份本地YAML MRTD/RTMR evaluator；它验证
 固定policy确实返回完整通过结果。
 
-signed EAR必须可认证地对应本次exact raw Quote、`node_runtime_data`/REPORTDATA和
+signed EAR必须可认证地对应本次exact raw Quote、派生的REPORTDATA和
 policy ID。Server不能只检查“签名有效、时间新、policy pass”，也不能依赖“它刚从
 同一HTTPS响应返回”作为关联证明。G0必须冻结EAR中的evidence/request hash、verified
 runtime-data/report-data claim或AS支持的request nonce等实际关联机制；若真实EAR无法

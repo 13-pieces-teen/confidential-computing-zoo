@@ -9,10 +9,12 @@
 | 历史主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
 | 当前仓库基线 | Broker组件不在当前可信身份运行链 |
 | 文档性质 | 历史方案与详细设计记录；不是当前执行说明 |
-| 关键限制 | Workload Attestation和第二次Quote尚未详细设计；SPIRE 1.15.2 的 Broker API 仍标记为 experimental |
+| 当前继任方案 | [NGINX + Broker-aware SPIFFE Helper Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) |
+| 关键限制 | 本历史方案形成时尚未详细设计Workload Attestation和第二次Quote；SPIRE 1.15.2 的 Broker API 仍标记为 experimental |
 
-> 当前状态：Workload Attestation和第二次Quote尚未详细设计。本文保留设计背景，
-> 不提供可执行部署入口。
+> 当前状态：本文中的Go Broker Sidecar数据面已经被Broker-aware Helper + NGINX
+> 目标设计取代。本文只保留Broker API、PID reference和生命周期设计背景，不提供
+> 当前可执行部署入口。
 
 ### 方案决策
 
@@ -21,11 +23,11 @@
 本文记录的历史主方案是 **Broker Sidecar**。TDVM Host Broker Gateway仅作为文末
 备选形态记录；两者都不进入当前Stage 1运行范围。
 
-目标运行链只包含一条身份与mTLS路径：OpenViking Python保持原生HTTP服务，Broker Sidecar代表经过验证的目标PID持有身份并终止mTLS。
+当时的目标运行链只包含一条身份与mTLS路径：OpenViking Python保持原生HTTP服务，Broker Sidecar代表经过验证的目标PID持有身份并终止mTLS。
 
 ## 1. 结论
 
-推荐把 OpenViking 的身份获取和 mTLS 从 Python 进程中完全移出，交给一个专用的 **OpenViking Broker Sidecar**：
+该历史方案当时推荐把 OpenViking 的身份获取和 mTLS 从 Python 进程中完全移出，交给一个专用的 **OpenViking Broker Sidecar**：
 
 1. OpenViking 仍按原生方式运行，不调用 SPIRE，也不持有 SVID 私钥。
 2. Sidecar 先通过普通 Workload API 获取自己的 Broker SVID 和信任域 bundle。
