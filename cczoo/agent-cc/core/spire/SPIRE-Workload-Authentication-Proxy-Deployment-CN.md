@@ -14,6 +14,8 @@
 | 版本约束 | NGINX 与 Envoy 的最终版本/镜像不在本文中替代部署方决定；上线前必须固定版本并用该二进制验证配置 |
 | 文档性质 | 架构与部署参考；路径、SPIFFE ID、selector、端口和授权策略必须按实际运行环境实例化 |
 
+OpenViking 的具体业务流程见 [NGINX + Broker-aware SPIFFE Helper Workload 认证方案](../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。该方案通过 Broker API 为指定 OpenViking 进程取得身份，包含 TC API 启动、TDX/Trustee 评估和实例生命周期约束；TC API 原日志上传保留，本轮不加入 Rekor 验证门禁。本文保留普通 Helper 经 Workload API 取得调用者身份的通用部署说明。
+
 本文使用“Workload 认证阶段”作为总称，但 SPIFFE/SPIRE 中实际包含四个不同环节：
 
 1. **Workload Attestation**：SPIRE Agent 识别本地调用者，并得到 selectors。
