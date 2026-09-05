@@ -2,6 +2,8 @@
 
 > 本文详细设计第一次 Quote（SPIRE Node Attestation）。第二次 Quote 只冻结目标与边界，不展开 workload 启动信息、可信观察、binding、policy、selector 或 SVID 生命周期设计。
 
+> 2026-09-05 版本更新：当前运行入口与两个 Attestor SDK 统一到官方 SPIRE v1.15.3。Node challenge、PoP、REPORTDATA 和 EAR 验证合同保持不变；本文及历史报告中的 v1.15.2 实测记录保留原版本含义。新部署和公司复验步骤见 [Workload 运行手册](../core/spire/workload/README.md)。
+
 ## 1. 结论与范围
 
 ### 1.1 当前 Node Attestation 架构与时间流程
