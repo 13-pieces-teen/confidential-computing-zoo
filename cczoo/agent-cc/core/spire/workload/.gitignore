@@ -1,0 +1,7 @@
+/build/
+/trustee-contract/target/
+!/trustee-contract/Cargo.lock
+# This is the Go target-inspection package, not a Rust build directory.
+!/target/
+!/target/**
+__pycache__/

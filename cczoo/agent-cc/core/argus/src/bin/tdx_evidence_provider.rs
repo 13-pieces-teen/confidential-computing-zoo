@@ -38,21 +38,24 @@ use std::{
 };
 use tdx_quote::{tsm::TsmInstanceQuoteGenerator, QuoteError, ReportData};
 
+mod workload;
+
 const DEFAULT_SOCKET_PATH: &str = "/run/argus/evidence-provider.sock";
 const DEFAULT_TSM_REPORT_ROOT: &str = "/sys/kernel/config/tsm/report";
 const NODE_BINDING_DOMAIN: &[u8] = b"argus.node.tdx.reportdata";
-const NODE_AGENT_ID: &[u8] =
-    b"spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
+const NODE_AGENT_ID: &[u8] = b"spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
 
 /// Runtime paths for the guest-local socket and Linux TSM report interface.
 #[derive(Debug, PartialEq, Eq)]
 struct Config {
     socket_path: PathBuf,
     tsm_report_root: PathBuf,
+    workload_registration_path: Option<PathBuf>,
 }
 
 impl Config {
     fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Self> {
+        let mut workload_registration_path = None;
         let mut socket_path = PathBuf::from(DEFAULT_SOCKET_PATH);
         let mut tsm_report_root = PathBuf::from(DEFAULT_TSM_REPORT_ROOT);
         let mut args = args.into_iter();
@@ -71,6 +74,12 @@ impl Config {
                             .ok_or_else(|| anyhow!("--tsm-report-root requires a value"))?,
                     );
                 }
+                value if value == OsStr::new("--workload-registration-path") => {
+                    workload_registration_path =
+                        Some(PathBuf::from(args.next().ok_or_else(|| {
+                            anyhow!("--workload-registration-path requires a value")
+                        })?));
+                }
                 _ => bail!("unknown argument: {:?}", argument),
             }
         }
@@ -78,6 +87,7 @@ impl Config {
         Ok(Self {
             socket_path,
             tsm_report_root,
+            workload_registration_path,
         })
     }
 }
@@ -112,6 +122,8 @@ impl QuoteSource for TsmInstanceQuoteGenerator {
 #[derive(Clone)]
 struct AppState {
     quote_source: Arc<dyn QuoteSource>,
+    workload_registration_path: Option<PathBuf>,
+    observe: fn(&Path) -> Result<workload::Target>,
 }
 
 #[derive(Debug)]
@@ -166,7 +178,11 @@ fn append_lp16(buffer: &mut Vec<u8>, value: &[u8]) {
 /// `ReportData` type zero-fills the remaining 16 bytes required by TDX.
 fn node_report_data(nonce: &[u8; 32], proof_public_key: &[u8; 32]) -> ReportData {
     let mut runtime_data = Vec::with_capacity(
-        2 + NODE_BINDING_DOMAIN.len() + 2 + NODE_AGENT_ID.len() + nonce.len() + proof_public_key.len(),
+        2 + NODE_BINDING_DOMAIN.len()
+            + 2
+            + NODE_AGENT_ID.len()
+            + nonce.len()
+            + proof_public_key.len(),
     );
     append_lp16(&mut runtime_data, NODE_BINDING_DOMAIN);
     append_lp16(&mut runtime_data, NODE_AGENT_ID);
@@ -200,10 +216,61 @@ async fn node_evidence_handler(
 }
 
 /// Expose only the Node Evidence API used by the SPIRE Agent plugin.
+#[cfg(test)]
 fn router(quote_source: Arc<dyn QuoteSource>) -> Router {
-    Router::new()
-        .route("/node-evidence", post(node_evidence_handler))
-        .with_state(AppState { quote_source })
+    provider_router(AppState {
+        quote_source,
+        workload_registration_path: None,
+        observe: workload::load_and_check,
+    })
+}
+fn provider_router(state: AppState) -> Router {
+    let mut app = Router::new().route("/node-evidence", post(node_evidence_handler));
+    if state.workload_registration_path.is_some() {
+        app = app.route("/ra/v1/workload-evidence", post(workload_evidence_handler));
+    }
+    app.layer(axum::extract::DefaultBodyLimit::max(32768))
+        .with_state(state)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkloadEvidenceRequest {
+    protocol: String,
+    nonce: String,
+    pid: i32,
+}
+
+async fn workload_evidence_handler(
+    State(state): State<AppState>,
+    Json(request): Json<WorkloadEvidenceRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if request.protocol != workload::PROTOCOL
+        || request.pid <= 0
+        || decode_fixed_32("nonce", &request.nonce).is_err()
+    {
+        return Err((StatusCode::BAD_REQUEST, "invalid workload request".into()));
+    }
+    let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value> {
+        let path = state.workload_registration_path.context("workload endpoint disabled")?;
+        let before = (state.observe)(&path)?;
+        if before["pid"] != request.pid.to_string() {bail!("PID is not the registered target");}
+        let data = workload::runtime_data(&before, &request.nonce)?;
+        let quote = state.quote_source.generate_quote(&workload::report_data(&data)?)?;
+        if (state.observe)(&path)? != before {bail!("target changed while generating Quote");}
+        tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], nonce=%request.nonce, "fresh workload TDX Quote generated");
+        Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data}))
+    }).await;
+    match result {
+        Ok(Ok(value)) => Ok(Json(value)),
+        error => {
+            tracing::error!(?error, "workload evidence failed");
+            Err((
+                StatusCode::FORBIDDEN,
+                "workload evidence unavailable; inspect Provider log".into(),
+            ))
+        }
+    }
 }
 
 /// Removes only the socket created by this Provider when the listener exits.
@@ -256,8 +323,7 @@ fn bind_socket(path: &Path) -> Result<(tokio::net::UnixListener, SocketGuard)> {
 /// Wait for either interactive shutdown or the service manager's terminate signal.
 #[cfg(unix)]
 async fn shutdown_signal() -> std::io::Result<()> {
-    let mut terminate =
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         result = tokio::signal::ctrl_c() => result,
         _ = terminate.recv() => Ok(()),
@@ -271,7 +337,11 @@ async fn serve(config: Config) -> Result<()> {
     use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 
     let quote_source = Arc::new(TsmInstanceQuoteGenerator::with_path(config.tsm_report_root));
-    let app = router(quote_source);
+    let app = provider_router(AppState {
+        quote_source,
+        workload_registration_path: config.workload_registration_path,
+        observe: workload::load_and_check,
+    });
     let (listener, _socket_guard) = bind_socket(&config.socket_path)?;
     tracing::info!(socket = %config.socket_path.display(), "TDX Evidence Provider listening");
 
@@ -361,8 +431,7 @@ mod tests {
             report_data: Mutex::new(None),
         });
         let nonce: [u8; 32] = std::array::from_fn(|index| index as u8);
-        let proof_public_key: [u8; 32] =
-            std::array::from_fn(|index| (index + 32) as u8);
+        let proof_public_key: [u8; 32] = std::array::from_fn(|index| (index + 32) as u8);
 
         let response = router(quote_source.clone())
             .oneshot(request(serde_json::json!({
@@ -457,7 +526,12 @@ mod tests {
 
         let health = app
             .clone()
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(health.status(), StatusCode::NOT_FOUND);
@@ -481,7 +555,146 @@ mod tests {
             Config {
                 socket_path: PathBuf::from(DEFAULT_SOCKET_PATH),
                 tsm_report_root: PathBuf::from(DEFAULT_TSM_REPORT_ROOT),
+                workload_registration_path: None,
             }
         );
+    }
+
+    struct TestRegistration(PathBuf);
+    impl TestRegistration {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "argus-provider-test-{}-{}.json",
+                std::process::id(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+            let vector = vector();
+            let mut target = vector["runtime_data"].as_object().unwrap().clone();
+            target.remove("nonce");
+            target.remove("protocol");
+            std::fs::write(&path, serde_json::to_vec(&target).unwrap()).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for TestRegistration {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+    fn vector() -> serde_json::Value {
+        serde_json::from_str(include_str!(
+            "../../../spire/workload/testdata/runtime-data.json"
+        ))
+        .unwrap()
+    }
+    // Only the runtime observation boundary is substituted. The handler still
+    // validates the request, builds real REPORTDATA and compares both observations.
+    fn observe_fixture(path: &Path) -> Result<workload::Target> {
+        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
+    }
+    fn workload_app(registration: &TestRegistration, source: Arc<dyn QuoteSource>) -> Router {
+        provider_router(AppState {
+            quote_source: source,
+            workload_registration_path: Some(registration.0.clone()),
+            observe: observe_fixture,
+        })
+    }
+    fn workload_request(body: serde_json::Value) -> Request<Body> {
+        let mut r = request(body);
+        *r.uri_mut() = "/ra/v1/workload-evidence".parse().unwrap();
+        r
+    }
+    fn valid_workload_request() -> serde_json::Value {
+        serde_json::json!({"protocol":workload::PROTOCOL,"nonce":vector()["runtime_data"]["nonce"],"pid":1234})
+    }
+    #[tokio::test]
+    async fn workload_handler_binds_observed_instance_to_shared_vector() {
+        let registration = TestRegistration::new();
+        let source = Arc::new(RecordingQuoteSource {
+            quote: vec![0xde, 0xad],
+            report_data: Mutex::new(None),
+        });
+        let response = workload_app(&registration, source.clone())
+            .oneshot(workload_request(valid_workload_request()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(body["runtime_data"], vector()["runtime_data"]);
+        assert_eq!(body["quote"], "3q0");
+        assert_eq!(
+            hex::encode(source.report_data.lock().unwrap().unwrap()),
+            vector()["report_data_hex"].as_str().unwrap()
+        );
+    }
+    #[tokio::test]
+    async fn workload_handler_rejects_invalid_requests_before_quote() {
+        let registration = TestRegistration::new();
+        let source = Arc::new(RecordingQuoteSource {
+            quote: vec![1],
+            report_data: Mutex::new(None),
+        });
+        for (field, value, status) in [
+            ("nonce", serde_json::json!("short"), StatusCode::BAD_REQUEST),
+            (
+                "protocol",
+                serde_json::json!("argus.node.tdx.v1"),
+                StatusCode::BAD_REQUEST,
+            ),
+            ("pid", serde_json::json!(0), StatusCode::BAD_REQUEST),
+            ("pid", serde_json::json!(1235), StatusCode::FORBIDDEN),
+            (
+                "unknown",
+                serde_json::json!(true),
+                StatusCode::UNPROCESSABLE_ENTITY,
+            ),
+        ] {
+            let mut body = valid_workload_request();
+            body[field] = value;
+            let r = workload_app(&registration, source.clone())
+                .oneshot(workload_request(body))
+                .await
+                .unwrap();
+            assert_eq!(r.status(), status, "{field}");
+            assert!(source.report_data.lock().unwrap().is_none());
+        }
+    }
+    struct ReplacingQuoteSource(PathBuf);
+    impl QuoteSource for ReplacingQuoteSource {
+        fn generate_quote(&self, _: &ReportData) -> Result<Vec<u8>, QuoteError> {
+            let mut t = observe_fixture(&self.0).unwrap();
+            t.insert("start_time".into(), "999999".into());
+            std::fs::write(&self.0, serde_json::to_vec(&t).unwrap()).unwrap();
+            Ok(vec![1])
+        }
+    }
+    #[tokio::test]
+    async fn workload_handler_rejects_instance_replacement_and_tsm_failure() {
+        let registration = TestRegistration::new();
+        for source in [
+            Arc::new(FailingQuoteSource) as Arc<dyn QuoteSource>,
+            Arc::new(ReplacingQuoteSource(registration.0.clone())),
+        ] {
+            let r = workload_app(&registration, source)
+                .oneshot(workload_request(valid_workload_request()))
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        }
+        // An unreadable observation must also fail before generating evidence.
+        std::fs::write(&registration.0, b"invalid JSON").unwrap();
+        let source = Arc::new(RecordingQuoteSource {
+            quote: vec![1],
+            report_data: Mutex::new(None),
+        });
+        let r = workload_app(&registration, source.clone())
+            .oneshot(workload_request(valid_workload_request()))
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        assert!(source.report_data.lock().unwrap().is_none());
     }
 }

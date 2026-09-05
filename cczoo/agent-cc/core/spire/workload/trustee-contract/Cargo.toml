@@ -1,0 +1,13 @@
+[package]
+name = "argus-workload-trustee-contract"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Same canonicalizer and Rego engine used by Trustee v0.21.0.
+[dev-dependencies]
+serde_json = "1.0.150"
+serde_json_canonicalizer = "0.3"
+sha2 = "0.11"
+hex = "0.4"
+regorus = { version = "=0.10.1", default-features = false, features = ["regex", "base64", "time", "std"] }
