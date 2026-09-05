@@ -1,104 +1,265 @@
+// Package trustee submits raw TDX evidence for appraisal and verifies the
+// signed EAR returned by Trustee. It does not parse or appraise Quotes locally.
 package trustee
 
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 	"io"
+	"log"
+	"math/big"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
-
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 )
 
-// Client submits opaque evidence to the remote Trustee and decodes its
-// appraisal. The workload attestor remains responsible for binding the verdict
-// to the current request before exposing selectors to SPIRE.
-type Client struct {
-	httpClient       *http.Client
-	endpoint         string
-	maxResponseBytes int64
+type tdxEvidence struct {
+	CCEventLog any    `json:"cc_eventlog"`
+	Quote      string `json:"quote"`
 }
 
-// NewClient requires mTLS and adds an exact Trustee SPIFFE-ID check to normal
-// certificate-chain and DNS-name verification. This authenticates the Trustee
-// connection; the Trustee's verdict separately appraises the target workload.
-func NewClient(endpoint *url.URL, tlsConfig *tls.Config, expectedSPIFFEID string, timeout time.Duration, maxResponseBytes int64) (*Client, error) {
-	if endpoint == nil || endpoint.Scheme != "https" {
-		return nil, fmt.Errorf("Trustee endpoint must use HTTPS")
+type runtimeData struct {
+	Structured protocol.RuntimeData `json:"structured"`
+}
+
+type individualAttestationRequest struct {
+	TEE                      string      `json:"tee"`
+	Evidence                 string      `json:"evidence"`
+	RuntimeData              runtimeData `json:"runtime_data"`
+	RuntimeDataHashAlgorithm string      `json:"runtime_data_hash_algorithm"`
+}
+
+type attestationRequest struct {
+	VerificationRequests []individualAttestationRequest `json:"verification_requests"`
+	PolicyIDs            []string                       `json:"policy_ids"`
+}
+
+type earHeader struct {
+	Algorithm string `json:"alg"`
+}
+
+type annotatedEvidence struct {
+	ReportData string `json:"report_data"`
+}
+
+type appraisal struct {
+	Status            string            `json:"ear.status"`
+	PolicyID          string            `json:"ear.appraisal-policy-id"`
+	AnnotatedEvidence annotatedEvidence `json:"ear.veraison.annotated-evidence"`
+}
+
+type earClaims struct {
+	Profile   string               `json:"eat_profile"`
+	Issuer    string               `json:"iss"`
+	IssuedAt  int64                `json:"iat"`
+	NotBefore int64                `json:"nbf"`
+	Expires   int64                `json:"exp"`
+	Submods   map[string]appraisal `json:"submods"`
+}
+
+// Client calls one pinned Trustee origin and verifies EARs against fixed
+// issuer, profile, policy, and signing-key expectations.
+type Client struct {
+	httpClient       *http.Client
+	attestationURL   string
+	earPublicKey     *ecdsa.PublicKey
+	expectedIssuer   string
+	expectedProfile  string
+	policyID         string
+	maxResponseBytes int64
+	now              func() time.Time
+}
+
+// NewClient constructs a bounded Trustee appraisal client.
+func NewClient(
+	endpoint *url.URL,
+	tlsConfig *tls.Config,
+	earPublicKey *ecdsa.PublicKey,
+	expectedIssuer string,
+	expectedProfile string,
+	policyID string,
+	timeout time.Duration,
+	maxResponseBytes int64,
+) (*Client, error) {
+	if endpoint == nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
+		return nil, fmt.Errorf("Trustee endpoint must be an HTTPS origin")
 	}
-	if tlsConfig == nil || len(tlsConfig.Certificates) == 0 || tlsConfig.RootCAs == nil {
-		return nil, fmt.Errorf("Trustee mTLS configuration is incomplete")
+	if endpoint.Path != "" && endpoint.Path != "/" {
+		return nil, fmt.Errorf("Trustee endpoint must not contain a path")
 	}
-	if expectedSPIFFEID == "" || timeout <= 0 || maxResponseBytes <= 0 {
-		return nil, fmt.Errorf("Trustee client arguments are invalid")
+	if tlsConfig == nil || tlsConfig.RootCAs == nil {
+		return nil, fmt.Errorf("Trustee TLS configuration is incomplete")
 	}
+	if earPublicKey == nil || earPublicKey.Curve != elliptic.P256() {
+		return nil, fmt.Errorf("EAR public key must use P-256")
+	}
+	if expectedIssuer == "" || expectedProfile == "" || policyID == "" || url.PathEscape(policyID) != policyID {
+		return nil, fmt.Errorf("Trustee EAR configuration is invalid")
+	}
+	if timeout <= 0 || maxResponseBytes <= 0 {
+		return nil, fmt.Errorf("Trustee client limits are invalid")
+	}
+
+	attestationEndpoint := *endpoint
+	attestationEndpoint.Path = "/attestation"
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
 	transport.TLSClientConfig = tlsConfig.Clone()
-	transport.TLSClientConfig.VerifyConnection = func(state tls.ConnectionState) error {
-		return verifyTrusteeIdentity(state, expectedSPIFFEID)
-	}
 	return &Client{
-		httpClient:       &http.Client{Transport: transport, Timeout: timeout},
-		endpoint:         endpoint.String(),
+		httpClient:       &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+		attestationURL:   attestationEndpoint.String(),
+		earPublicKey:     earPublicKey,
+		expectedIssuer:   expectedIssuer,
+		expectedProfile:  expectedProfile,
+		policyID:         policyID,
 		maxResponseBytes: maxResponseBytes,
+		now:              time.Now,
 	}, nil
 }
 
-// Verify calls the Trustee and strictly decodes its response. It does not grant
-// trust: the workload attestor still checks request binding and requires a
-// valid allow verdict.
-func (client *Client) Verify(ctx context.Context, input protocol.VerifyRequest) (protocol.Verdict, error) {
-	body, err := json.Marshal(input)
+// Verify accepts only a signed, current Trustee appraisal bound to this request.
+func (client *Client) Verify(ctx context.Context, input protocol.Evidence) error {
+	canonical, err := input.RuntimeData.Canonical()
 	if err != nil {
-		return protocol.Verdict{}, fmt.Errorf("marshal Trustee request: %w", err)
+		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.endpoint, bytes.NewReader(body))
+	if input.RuntimeData.PolicyID != client.policyID {
+		return fmt.Errorf("workload policy mismatch")
+	}
+	requestBody, err := buildRequest(input, client.policyID)
 	if err != nil {
-		return protocol.Verdict{}, fmt.Errorf("create Trustee request: %w", err)
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.attestationURL, bytes.NewReader(requestBody))
+	if err != nil {
+		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Accept", "application/jwt")
 	response, err := client.httpClient.Do(request)
 	if err != nil {
-		return protocol.Verdict{}, fmt.Errorf("call Trustee: %w", err)
+		return fmt.Errorf("call Trustee: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-		return protocol.Verdict{}, fmt.Errorf("Trustee returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("Trustee returned HTTP %d", response.StatusCode)
 	}
-	// Read one byte past the limit to distinguish a complete response from a
-	// truncated oversized one.
-	contents, err := io.ReadAll(io.LimitReader(response.Body, client.maxResponseBytes+1))
+	token, err := readLimited(response.Body, client.maxResponseBytes)
 	if err != nil {
-		return protocol.Verdict{}, fmt.Errorf("read Trustee response: %w", err)
+		return err
 	}
-	if int64(len(contents)) > client.maxResponseBytes {
-		return protocol.Verdict{}, fmt.Errorf("Trustee response exceeds %d bytes", client.maxResponseBytes)
+	if err := verifyEAR(token, client.earPublicKey, client.expectedIssuer, client.expectedProfile, client.policyID, canonical, client.now()); err != nil {
+		return err
 	}
-	var verdict protocol.Verdict
-	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&verdict); err != nil {
-		return protocol.Verdict{}, fmt.Errorf("decode Trustee response: %w", err)
-	}
-	return verdict, nil
+	hash := sha256.Sum256(token)
+	log.Printf("workload EAR accepted launch_id=%s nonce=%s policy=%s ear_sha256=%x", input.RuntimeData.LaunchID, input.RuntimeData.Nonce, client.policyID, hash)
+	return nil
 }
 
-// verifyTrusteeIdentity accepts only an exact URI SAN on the leaf certificate;
-// another identity in the same trust domain is not an interchangeable Trustee.
-func verifyTrusteeIdentity(state tls.ConnectionState, expectedSPIFFEID string) error {
-	if len(state.PeerCertificates) == 0 {
-		return fmt.Errorf("Trustee presented no certificate")
+// Trustee v0.21 JCS-canonicalizes structured runtime data before SHA-384 hashing.
+// TDX pads that 48-byte digest with sixteen zero bytes for REPORTDATA.
+func buildRequest(input protocol.Evidence, policyID string) ([]byte, error) {
+	if _, err := input.RuntimeData.Canonical(); err != nil {
+		return nil, err
 	}
-	for _, uri := range state.PeerCertificates[0].URIs {
-		if uri.String() == expectedSPIFFEID {
-			return nil
-		}
+	quote, err := base64.RawURLEncoding.Strict().DecodeString(input.Quote)
+	if err != nil || len(quote) == 0 {
+		return nil, fmt.Errorf("invalid TDX Quote")
 	}
-	return fmt.Errorf("Trustee SPIFFE ID mismatch")
+	inner, err := json.Marshal(tdxEvidence{CCEventLog: nil, Quote: base64.StdEncoding.EncodeToString(quote)})
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(attestationRequest{
+		VerificationRequests: []individualAttestationRequest{{
+			TEE: "tdx", Evidence: base64.RawURLEncoding.EncodeToString(inner),
+			RuntimeData: runtimeData{Structured: input.RuntimeData}, RuntimeDataHashAlgorithm: "sha384",
+		}},
+		PolicyIDs: []string{policyID},
+	})
+}
+
+// verifyEAR authenticates the compact JWT before accepting its appraisal and
+// annotated evidence as the result of Quote verification.
+func verifyEAR(token []byte, publicKey *ecdsa.PublicKey, expectedIssuer, expectedProfile, policyID string, runtimeData []byte, now time.Time) error {
+	parts := strings.Split(string(token), ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("Trustee response is not a compact JWT")
+	}
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return fmt.Errorf("decode EAR header: %w", err)
+	}
+	var header earHeader
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		return fmt.Errorf("decode EAR header: %w", err)
+	}
+	if header.Algorithm != "ES256" {
+		return fmt.Errorf("EAR algorithm must be ES256")
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || len(signature) != 64 {
+		return fmt.Errorf("decode EAR signature")
+	}
+	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+	r := new(big.Int).SetBytes(signature[:32])
+	s := new(big.Int).SetBytes(signature[32:])
+	if !ecdsa.Verify(publicKey, digest[:], r, s) {
+		return fmt.Errorf("EAR signature verification failed")
+	}
+
+	claimsBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("decode EAR claims: %w", err)
+	}
+	var claims earClaims
+	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		return fmt.Errorf("decode EAR claims: %w", err)
+	}
+	if claims.Issuer != expectedIssuer || claims.Profile != expectedProfile {
+		return fmt.Errorf("EAR issuer or profile mismatch")
+	}
+	nowUnix := now.Unix()
+	if claims.NotBefore > nowUnix || claims.IssuedAt <= 0 || claims.IssuedAt > nowUnix || claims.Expires <= nowUnix || claims.Expires <= claims.IssuedAt {
+		return fmt.Errorf("EAR validity window is not current")
+	}
+	cpu, ok := claims.Submods["cpu0"]
+	if !ok || cpu.Status != "affirming" {
+		return fmt.Errorf("EAR cpu0 appraisal is not affirming")
+	}
+	if cpu.PolicyID != policyID {
+		return fmt.Errorf("EAR appraisal policy ID mismatch")
+	}
+	reportData, err := hex.DecodeString(cpu.AnnotatedEvidence.ReportData)
+	if err != nil {
+		return fmt.Errorf("decode EAR report_data: %w", err)
+	}
+	runtimeDigest := sha512.Sum384(runtimeData)
+	expectedReportData := append(runtimeDigest[:], make([]byte, 16)...)
+	if !bytes.Equal(reportData, expectedReportData) {
+		return fmt.Errorf("EAR report_data does not match workload runtime data")
+	}
+	return nil
+}
+
+func readLimited(reader io.Reader, maximum int64) ([]byte, error) {
+	contents, err := io.ReadAll(io.LimitReader(reader, maximum+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(contents)) > maximum {
+		return nil, fmt.Errorf("response exceeds %d bytes", maximum)
+	}
+	return contents, nil
 }
