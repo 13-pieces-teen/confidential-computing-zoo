@@ -22,17 +22,19 @@ Workload Attestation、第二次 Quote、Broker身份和双 TDVM业务 mTLS 不�
 ## 推荐阅读顺序
 
 1. [真实 TDX Node Evidence 与 Trustee 改造方案及执行状态](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md)
-2. [NGINX + Broker-aware SPIFFE Helper Workload Attestation 当前设计](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
-3. [双 TDVM + Egress/Ingress Broker 历史架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
-4. [历史实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
-5. [已被当前 Helper + NGINX 方案取代的 OpenViking Broker Sidecar历史设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
-6. [历史软件链远程验证报告](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
+2. [IP2 TDVM 真实 Node Attestation Enrollment 执行记录](./Argus-IP2-TDVM-Node-Attestation-Real-Enrollment-Report-CN.md)
+3. [NGINX + Broker-aware SPIFFE Helper Workload Attestation 当前设计](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
+4. [双 TDVM + Egress/Ingress Broker 历史架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
+5. [历史实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
+6. [已被当前 Helper + NGINX 方案取代的 OpenViking Broker Sidecar历史设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
+7. [历史软件链远程验证报告](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
 
 ## 顶层文档职责
 
 | 文档 | 职责 | 状态 |
 |---|---|---|
-| [Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md) | 自定义 Node 流程、真实 Evidence Provider/Trustee改造和验收门槛 | 当前事实源；真实E2E仍受网络和policy阻塞 |
+| [Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md) | 自定义 Node 流程、真实 Evidence Provider/Trustee改造和验收门槛 | 当前事实源；真实 Node Attestation 已一次成功（见执行记录），re-attestation 观察与 Stage 2 仍待验收 |
+| [Argus-IP2-TDVM-Node-Attestation-Real-Enrollment-Report-CN.md](./Argus-IP2-TDVM-Node-Attestation-Real-Enrollment-Report-CN.md) | IP2 TDVM 真实 Node Attestation Enrollment 全轮执行记录（诊断包、尝试1/2根因、传输闸门排查、第3次成功） | POC 运行记录，对应 commit `9564035`；非生产 acceptance |
 | [Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) | Stage 2目标PID证明、Broker-aware Helper取证、PEM发布与NGINX mTLS完整流程 | 当前设计基线；尚未实现或真实E2E验收 |
 | [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 历史双 Broker组件、身份和请求时序 | 非当前运行架构 |
 | [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 历史双 Broker代码与验证计划 | 不再是执行入口 |
