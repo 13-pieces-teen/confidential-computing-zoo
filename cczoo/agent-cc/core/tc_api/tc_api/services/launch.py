@@ -27,6 +27,7 @@ from ..config import (
     SKOPEO_CMD,
 )
 from ..docktap.workload_store import WorkloadStore
+from . import workload_profile
 from ..models import LaunchResult, TransparencyResult
 from ..transparency.commit_client import TrustedLogAPI
 from ..transparency.events import EventEntryKey
@@ -105,7 +106,15 @@ class LaunchServiceMixin:
             logger.debug("Falling back to synthetic digest for %s: %s", image_ref, exc)
         return self._sha384_digest(image_ref)
 
-    def _build_launch_security_projection(self, launch_id: str, workload_id: str) -> Dict[str, Any]:
+    def _build_launch_security_projection(self, launch_id: str, workload_id: str, metadata=None) -> Dict[str, Any]:
+        settings = workload_profile.profile_settings(metadata, workload_id)
+        if settings is not None:
+            return {"launch_id": launch_id, "workload_id": workload_id, "privileged": False,
+                    "network_mode": "bridge", "mounts": [settings["ARGUS_OPENVIKING_CONFIG_PATH"] + ":/etc/openviking/ov.conf:ro", settings["ARGUS_OPENVIKING_DATA_PATH"] + ":/var/lib/openviking"],
+                    "devices": [], "capabilities": [], "read_only_rootfs": True,
+                    "published_ports": ["1943:1943"], "attestation_profile": workload_profile.PROFILE,
+                    "launch_env_keys": ["OPENVIKING_CONFIG_FILE", "OPENVIKING_WITH_BOT", "PYTHONDONTWRITEBYTECODE"],
+                    "launch_env_digest": self._json_sha384_digest({"OPENVIKING_CONFIG_FILE": "/etc/openviking/ov.conf", "OPENVIKING_WITH_BOT": "0", "PYTHONDONTWRITEBYTECODE": "1"})}
         mounts = [
             "/etc/hosts:/etc/hosts",
             "/etc/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf",
@@ -335,7 +344,11 @@ class LaunchServiceMixin:
         image_digest: Optional[str] = None,
         service_name: Optional[str] = None,
         dockercmd: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ):
+        attested_settings = workload_profile.profile_settings(metadata, workload_id)
+        if attested_settings is not None and dockercmd:
+            raise ValueError('attested profile does not accept dockercmd overrides')
         image_dir = 'oci:' + os.path.join(launch_pth,'encrypted')
         if image_id.startswith("oci:"):
             local_tag = launch_id or workload_id or f"local-{uuid.uuid4().hex[:12]}"
@@ -382,7 +395,9 @@ class LaunchServiceMixin:
                 return False
 
             # run docker image
-            if dockercmd:
+            if attested_settings is not None:
+                docker_cmd = workload_profile.docker_command(DOCKER_CMD, attested_settings)
+            elif dockercmd:
                 docker_cmd = dockercmd.strip().split(" ")
                 docker_gid = subprocess.run(["stat", "-c", "'%g'", "/var/run/docker.sock"], capture_output=True, text=True).stdout.replace('\n', '').strip("'")
                 if docker_gid != None:
@@ -442,20 +457,21 @@ class LaunchServiceMixin:
                 docker_cmd.extend(["--label", f"io.trucon.workload-id={workload_id}"])
             if launch_id:
                 docker_cmd.extend(["--label", f"io.trucon.launch-id={launch_id}"])
-            docker_cmd.extend([
-                "-v",
-                "/etc/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf",
-                "-v",
-                "/dev/tdx_guest:/dev/tdx_guest",
-                "-v",
-                "/usr/share/doc/libtdx-attest-dev/examples/:/td-attest/",
-                "-v",
-                "/etc/tdx-attest.conf:/etc/tdx-attest.conf",
-            ])
+            if attested_settings is None:
+                docker_cmd.extend([
+                    "-v",
+                    "/etc/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf",
+                    "-v",
+                    "/dev/tdx_guest:/dev/tdx_guest",
+                    "-v",
+                    "/usr/share/doc/libtdx-attest-dev/examples/:/td-attest/",
+                    "-v",
+                    "/etc/tdx-attest.conf:/etc/tdx-attest.conf",
+                ])
 
             docker_cmd.append(loaded_image_ref)
             logger.info(f"Runcmd : {' '.join(docker_cmd)}")
-            dockerRUn = subprocess.run(docker_cmd, capture_output=True, text=True)
+            dockerRUn = subprocess.run(docker_cmd, capture_output=True, text=True, timeout=120)
             if dockerRUn.returncode == 0:
                 logger.info(f"Success run image {image_id}.")
                 tlog.add_entry(record_id, Entry(key="launch_cmd", value={"launch_cmd": " ".join(docker_cmd),
@@ -503,6 +519,12 @@ class LaunchServiceMixin:
                 return False
             
             container_info = {"container_ID": containerID, "container_Status": status_text}
+            if attested_settings is not None:
+                inspect_result = subprocess.run([DOCKER_CMD, "inspect", containerID], capture_output=True, text=True, timeout=30, check=True)
+                inspected = json.loads(inspect_result.stdout)
+                if len(inspected) != 1:
+                    raise ValueError("expected exactly one launched container")
+                container_info = workload_profile.observed_container(inspected[0], launch_id, workload_id)
             tlog.add_entry(record_id, Entry(key="container_info", value=container_info))
             if workload_id:
                 workload_store = WorkloadStore()
