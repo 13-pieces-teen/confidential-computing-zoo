@@ -1,0 +1,13 @@
+[Unit]
+Description=Official SPIRE v1.15.3 Agent with preserved Node and Workload attestors
+Requires=argus-tdx-provider.service
+After=argus-tdx-provider.service network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/spire-1.15.3/bin/spire-agent run -config /etc/argus-workload/agent.conf
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=5
+KillMode=control-group

@@ -1,0 +1,14 @@
+[Unit]
+Description=NGINX local SPIFFE client authorization
+
+[Service]
+Type=simple
+User=root
+Group=argus-nginx
+RuntimeDirectory=argus-authz
+RuntimeDirectoryMode=0750
+ExecStart=/opt/argus-workload/bin/spiffe-authz -socket /run/argus-authz/authz.sock -client-id spiffe://argus.local/agent/openclaw
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=5
+NoNewPrivileges=yes

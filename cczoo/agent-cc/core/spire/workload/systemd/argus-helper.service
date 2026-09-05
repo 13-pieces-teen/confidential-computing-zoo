@@ -1,0 +1,25 @@
+[Unit]
+Description=Argus SPIFFE Helper Broker for OpenViking
+Requires=argus-workload-agent.service argus-authz.service
+BindsTo=argus-authz.service
+After=argus-workload-agent.service argus-authz.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+UMask=0077
+RuntimeDirectory=argus-credentials
+RuntimeDirectoryMode=0700
+ExecStartPre=/opt/argus-workload/bin/argus-workload -action check
+ExecStart=/opt/argus-workload/bin/spiffe-helper -config /etc/argus-workload/helper.conf
+ExecStopPost=/opt/argus-workload/bin/nginx-hook.sh stop
+ExecStopPost=/opt/argus-workload/bin/nginx-hook.sh clear
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=5s
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
