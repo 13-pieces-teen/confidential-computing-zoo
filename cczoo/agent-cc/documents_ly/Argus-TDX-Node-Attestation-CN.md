@@ -32,7 +32,7 @@ sequenceDiagram
     A->>S: AgentHello(proof public key)
     S->>S: 核对固定公钥 pin
     S-->>A: fresh nonce + challenge expiry
-    A->>P: UDS /node-evidence(nonce, proof public key)
+    A->>P: UDS POST /ra/v1/node-evidence(nonce, proof public key)
     P->>Q: 生成绑定 REPORTDATA 的 TDX Quote
     Q-->>P: raw Quote
     P-->>A: raw Quote
@@ -97,12 +97,14 @@ pin、PoP、challenge 或 EAR 校验失败，以及 Provider/Trustee 调用失�
 
 ## 5. 与 Workload 实现的衔接
 
-TDX identity Provider 现已支持两个独立 handler：
+TDX identity Provider 的两个独立 handler 统一使用 `/ra/v1/` 前缀：
 
 | 接口 | 调用方 | 绑定方式 |
 |---|---|---|
-| `/node-evidence` | Agent NodeAttestor | 固定 Agent ID、nonce、proof public key |
-| `/ra/v1/workload-evidence` | Agent WorkloadAttestor | OpenViking 运行实例与 nonce；配置 workload 参数后启用 |
+| `POST /ra/v1/node-evidence` | Agent NodeAttestor | 固定 Agent ID、nonce、proof public key |
+| `POST /ra/v1/workload-evidence` | Agent WorkloadAttestor | OpenViking 运行实例与 nonce；配置 workload 参数后启用 |
+
+Provider 与 Agent NodeAttestor 必须一起更新，旧的无版本路径不再注册。安装新插件后，按运行手册重新生成 Agent 配置以更新 `plugin_checksum`，再重启服务。部署配置仍指定 UDS socket，HTTP 路径由插件固定。
 
 两者复用 QuoteSource，但不复用身份主体、request schema 或 policy。Workload 使用结构化 runtime data；Node 继续使用上述二进制绑定。新部署通过 [配置合并工具](../core/spire/helpers/spiffe-helper/cmd/argus-agent-config/) 保留原 Node 配置与密钥，再加入 WorkloadAttestor、Broker socket 和当前 Provider 配置。
 

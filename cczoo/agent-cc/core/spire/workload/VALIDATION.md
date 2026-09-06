@@ -55,6 +55,16 @@
 
 这些现有 build/encryption/KBS API 与测试的偏差未纳入本次 Workload 改造，也未把整个 TC API 测试集标为通过。
 
+## Evidence Provider 接口命名统一（2026-09-06）
+
+两个 UDS 接口统一为 `POST /ra/v1/node-evidence` 与 `POST /ra/v1/workload-evidence`，不保留无版本别名。Provider 路由、NodeAttestor 客户端、现有测试及当前运行文档已同步；部署脚本只配置 socket，构建入口同时构建 Provider 与 Node 插件。
+
+复核确认，旧 Node 路径仅保留在 404 拒绝测试和明确标注的历史归档中。构建、安装、配置合并和 systemd 链路无旧路径引用；运行手册补充了安装新 Node 插件后通过 `render` 更新 `plugin_checksum` 的要求。`start` 已在启动服务前调用 `render`，本次未修改部署脚本。
+
+本次在 Windows / Go 1.26.5 下，NodeAttestor 与 WorkloadAttestor 两个模块的 `go test -mod=readonly -count=1 ./...`、`go vet -mod=readonly ./...` 均通过。Node 请求测试通过 `NewClient` 创建客户端，检查实际使用的版本化路径及原请求内容。
+
+Rust Provider 测试已更新为使用新 Node 路径，并检查旧 Node 路径及未配置的 Workload 路径返回 404；本次未执行这些 Rust 测试：本机无可用 Cargo，Docker daemon 无法连接，WSL 不可访问。上方此前的 Rust/Linux 通过记录不代表本次路由改动已复验。Linux 环境需运行 `cargo test --locked --bin argus-tdx-evidence-provider` 或完整构建入口后，再执行公司环境验收。
+
 ## 公司环境待执行
 
 按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及 OpenClaw 客户端 SVID，执行：

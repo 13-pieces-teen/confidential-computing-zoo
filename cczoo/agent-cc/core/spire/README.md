@@ -39,8 +39,9 @@ spire/
 
 The TDX identity Evidence Provider is implemented by
 [`../argus/src/bin/tdx_evidence_provider.rs`](../argus/src/bin/tdx_evidence_provider.rs).
-It serves `/node-evidence` and, when workload configuration is supplied,
-`/ra/v1/workload-evidence`. These handlers use separate binding contracts and
+It serves `POST /ra/v1/node-evidence` and, when workload configuration is supplied,
+`POST /ra/v1/workload-evidence`. Both routes use the `/ra/v1/` namespace, with no
+unversioned route aliases. These handlers use separate binding contracts and
 share the real TSM Quote source. Workload SVID rotation does not generate a new
 Quote; Helper reconnection triggers a new subscription and attestation.
 

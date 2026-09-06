@@ -32,6 +32,8 @@ sudo bash scripts/install.sh
 
 把相同构建产物安装到 TDVM 与 Server 主机。Server 只使用其中的 Server/Node 插件和 Entry 工具。安装不会启动或启用新服务；现有配置不会被覆盖。
 
+Evidence Provider 的 UDS 路由统一为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。更新时同时安装 Provider 与 NodeAttestor 插件，执行 `workload.py render` 使 Agent 配置中的 `plugin_checksum` 对应新 Node 插件，再重启 Provider、SPIRE Agent；`workload.py start` 会自动执行 `render`。旧的无版本路径不再提供。配置仍只指定 UDS socket，无需填写 HTTP 路径。
+
 参考 `config/environment.example.json` 建立两台主机各自的 `/etc/argus-workload/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的批准基线及 Helper 二进制必须一致。
 
 ## 3. 保留 Node 合同，升级到官方 v1.15.3

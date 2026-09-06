@@ -72,7 +72,7 @@ canonical = RFC 8785-compatible compact JSON with sorted keys
 REPORTDATA = SHA-384(canonical) || 16 zero bytes
 ```
 
-Provider 通过 Linux TSM 生成真实 TDX Quote。Node 的 `/node-evidence` 保持；新增 `/ra/v1/workload-evidence`。runtime 不提供 mock fallback。
+Provider 通过 Linux TSM 生成真实 TDX Quote。两个本机 UDS 接口统一为 `POST /ra/v1/node-evidence` 与 `POST /ra/v1/workload-evidence`，不保留无版本路径。Provider 与 NodeAttestor 需一起部署更新；runtime 不提供 mock fallback。
 
 [共用向量](../core/spire/workload/testdata/runtime-data.json) 由 Go、Rust Provider 和采用 Trustee 相同 canonicalizer 的测试共同验证。Quote 的密码学与平台评估交给 Trustee，本地插件不自行把 Quote 内容解释为通过。
 

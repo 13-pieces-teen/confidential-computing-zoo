@@ -225,7 +225,7 @@ fn router(quote_source: Arc<dyn QuoteSource>) -> Router {
     })
 }
 fn provider_router(state: AppState) -> Router {
-    let mut app = Router::new().route("/node-evidence", post(node_evidence_handler));
+    let mut app = Router::new().route("/ra/v1/node-evidence", post(node_evidence_handler));
     if state.workload_registration_path.is_some() {
         app = app.route("/ra/v1/workload-evidence", post(workload_evidence_handler));
     }
@@ -418,7 +418,7 @@ mod tests {
     fn request(body: serde_json::Value) -> Request<Body> {
         Request::builder()
             .method("POST")
-            .uri("/node-evidence")
+            .uri("/ra/v1/node-evidence")
             .header("content-type", "application/json")
             .body(Body::from(serde_json::to_vec(&body).unwrap()))
             .unwrap()
@@ -518,34 +518,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn provider_exposes_only_the_node_evidence_route() {
+    async fn node_only_provider_rejects_legacy_and_unconfigured_routes() {
         let app = router(Arc::new(RecordingQuoteSource {
             quote: vec![1],
             report_data: Mutex::new(None),
         }));
 
-        let health = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri("/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(health.status(), StatusCode::NOT_FOUND);
-
-        let generic_evidence = app
-            .oneshot(
-                Request::builder()
-                    .uri("/evidence")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(generic_evidence.status(), StatusCode::NOT_FOUND);
+        for path in [
+            "/health",
+            "/evidence",
+            "/node-evidence",
+            "/ra/v1/workload-evidence",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{path}");
+        }
     }
 
     #[test]
