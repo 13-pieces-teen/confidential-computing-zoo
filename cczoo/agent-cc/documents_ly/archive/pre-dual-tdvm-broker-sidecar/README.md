@@ -2,13 +2,14 @@
 
 归档日期：2026-08-20。
 
-本目录保存当前“OpenClaw TDVM + OpenViking TDVM + OpenViking Broker Sidecar”
+本目录保存历史“OpenClaw TDVM + OpenViking TDVM + OpenViking Broker Sidecar”
 组合方案形成前的架构、实施计划、会议记录和运行证据。
 
 当前方案请参阅：
 
-- [双 TDVM + OpenViking Broker Sidecar 架构](../../Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
-- [实施与验证计划](../../Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
+- [Node Attestation](../../Argus-TDX-Node-Attestation-CN.md)
+- [NGINX + SPIFFE Helper Workload Attestation](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
+- [运行手册](../../../core/spire/workload/README.md)
 - [文档总索引](../../README.md)
 
 ## 归档内容
@@ -19,15 +20,14 @@
 - `Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md`
 - `Argus-Asymmetric-Attestation-SPIFFE-Evaluation-Plan.md`
 
-该方案只有 OpenViking 位于 TDX/TDVM 证明侧，不能代表当前双方均在独立 TDVM
-中的架构。
+该方案只有 OpenViking 位于 TDX/TDVM 证明侧，反映当时的架构选择，不定义当前部署拓扑。
 
 ### 2. 旧双 TDVM 直连方案
 
 - `Argus-Dual-TDVM-SPIFFE-Design.md`
 
 该版本让 OpenViking 直接挂载 Workload API，并通过 materializer/Python TLS 路径
-取得和使用 SVID；已被 OpenViking Broker Sidecar 取代。
+取得和使用 SVID；其后的 Broker Sidecar 方案也已归入 [历史记录](../pre-workload-implementation/README.md)。
 
 ### 3. 早期 Workload Attestation 讨论
 
@@ -48,7 +48,7 @@
 - 三份带 run 时间戳的 E8 报告
 
 这些报告绑定到各自记录的旧提交、日期和 Python TLS/materializer Profile。报告中的
-PASS 仍是有效历史证据，但不能用作当前双 TDVM Broker Profile 的验收结果。
+PASS 仍是有效历史证据，但不能用作当前 Workload 实现的验收结果。
 
 ## 使用规则
 

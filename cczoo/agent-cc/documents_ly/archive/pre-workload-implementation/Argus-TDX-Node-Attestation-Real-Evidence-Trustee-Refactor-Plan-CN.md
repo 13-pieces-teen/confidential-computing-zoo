@@ -1,8 +1,10 @@
 # Argus TDX + SPIFFE 两阶段真实认证重构方案
 
+> 历史归档（2026-09-06，来源提交 `9f493f8`）：保留 Node 重构时的决策、里程碑和当时的验证缺口。文中的“Stage 2 未实现/禁用”“无 Workload endpoint”“无部署入口”已过时，不作为当前限制。当前说明见 [Node Attestation](../../Argus-TDX-Node-Attestation-CN.md) 与 [Workload Attestation](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。
+
 > 本文详细设计第一次 Quote（SPIRE Node Attestation）。第二次 Quote 只冻结目标与边界，不展开 workload 启动信息、可信观察、binding、policy、selector 或 SVID 生命周期设计。
 
-> 2026-09-05 版本更新：当前运行入口与两个 Attestor SDK 统一到官方 SPIRE v1.15.3。Node challenge、PoP、REPORTDATA 和 EAR 验证合同保持不变；本文及历史报告中的 v1.15.2 实测记录保留原版本含义。新部署和公司复验步骤见 [Workload 运行手册](../core/spire/workload/README.md)。
+> 2026-09-05 版本更新：当前运行入口与两个 Attestor SDK 统一到官方 SPIRE v1.15.3。Node challenge、PoP、REPORTDATA 和 EAR 验证合同保持不变；本文及历史报告中的 v1.15.2 实测记录保留原版本含义。新部署和公司复验步骤见 [Workload 运行手册](../../../core/spire/workload/README.md)。
 
 ## 1. 结论与范围
 
@@ -140,7 +142,7 @@ sequenceDiagram
     Note over AC,CA: re-attestation 重复 fresh nonce → 新 Quote → Trustee appraisal 全链；Agent SVID 轮换本身不等于新 Quote。
 ```
 
-主方案只保留五个运行角色、六项必要控制和一条 fail-closed 认证链。部署控制、测试工具、审计归档和线协议细节不再被描述成新的运行组件。TCAPI、OpenViking、WorkloadAttestor、Workload API / Broker API、Helper / NGINX 和外部业务 mTLS 只作为下游边界出现，不是当前 Node Attestation 的完成项。下游当前设计见[NGINX + Broker-aware SPIFFE Helper Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。
+主方案只保留五个运行角色、六项必要控制和一条 fail-closed 认证链。部署控制、测试工具、审计归档和线协议细节不再被描述成新的运行组件。TCAPI、OpenViking、WorkloadAttestor、Workload API / Broker API、Helper / NGINX 和外部业务 mTLS 只作为下游边界出现，不是当前 Node Attestation 的完成项。下游当前设计见[NGINX + Broker-aware SPIFFE Helper Workload Attestation](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。
 
 ### 1.2 已冻结的决策
 
@@ -1025,9 +1027,9 @@ Stage 2 只冻结以下前提：
 
 ## 15. 参考资料
 
-- [Agent-CC Argus architecture（Evidence Provider / Verifier / Guard职责）](../core/argus/docs/architecture.md)
-- [Agent-CC Argus API（EvidenceEngine、Runtime Binding与Evidence Envelope）](../core/argus/docs/api.md)
-- [Agent-CC历史总览（RATS Attester / Relying Party / Verifier）](../core/argus/README_bak.md)
+- [Agent-CC Argus architecture（Evidence Provider / Verifier / Guard职责）](../../../core/argus/docs/architecture.md)
+- [Agent-CC Argus API（EvidenceEngine、Runtime Binding与Evidence Envelope）](../../../core/argus/docs/api.md)
+- [Agent-CC历史总览（RATS Attester / Relying Party / Verifier）](../../../core/argus/README_bak.md)
 - [SPIRE 1.15.2 release index](https://github.com/spiffe/spire/releases)
 - [SPIRE Server configuration](https://github.com/spiffe/spire/blob/main/doc/spire_server.md)
 - [SPIRE NodeAttestor plugin contracts](https://github.com/spiffe/spire-plugin-sdk/tree/main/proto/spire/plugin/server/nodeattestor)

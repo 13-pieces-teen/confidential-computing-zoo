@@ -1,28 +1,48 @@
 # Argus SPIRE integration
 
-The current executable scope is the first OpenViking Node Attestation stage:
+The current implementation includes Node Attestation and OpenViking Workload
+Attestation with SPIRE Server/Agent and both Attestor SDKs pinned to v1.15.3:
 
 ```text
 SPIRE Server -> argus_tdx Server NodeAttestor -> Trustee /attestation
 SPIRE Agent  -> argus_tdx Agent NodeAttestor  -> TDX Evidence Provider UDS
 TDX Evidence Provider -> Guest TSM -> QEMU/QGS -> real TDX Quote
+
+TC API -> OpenViking service process -> protected target registration
+SPIFFE Helper -> local SPIRE Broker API -> argus_tdx WorkloadAttestor
+WorkloadAttestor -> TDX Evidence Provider UDS -> instance-bound TDX Quote
+WorkloadAttestor -> Trustee /attestation -> verified EAR
+Verified selectors -> static Entry -> target SVID -> Helper -> NGINX mTLS/AuthZ
 ```
 
-The repository does not define an end-to-end deployment entry. The target
-environment must supply the Trustee trust material and policy, the fixed
-proof-key pin, the SPIRE bundle, and a reachable Agent-to-Server address.
+The [Workload runbook](workload/README.md) is the build, installation, Node
+upgrade, launch, registration, and lifecycle entry point. The target environment
+supplies approved image/configuration/platform baselines, existing Node
+configuration and proof key, Trustee trust material and policy, and the SPIRE
+bundle. [Validation records](workload/VALIDATION.md) distinguish completed local
+tests from pending company TDVM acceptance.
+
+Architecture: [Node Attestation](../../documents_ly/Argus-TDX-Node-Attestation-CN.md)
+and [Workload Attestation](../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md).
 
 ## Directory map
 
 ```text
 spire/
-  plugins/argus-tdx-nodeattestor/  current Agent and Server plug-ins
-  tests/tdvm/                       TD Host and Guest preflight utilities
+  plugins/argus-tdx-nodeattestor/      Agent and Server Node plug-ins
+  plugins/argus-tdx-workloadattestor/  PID-reference Workload plug-in
+  helpers/spiffe-helper/             upstream v0.11.0 + Argus Broker/AuthZ tools
+  workload/                         runbook, contracts, policy and lifecycle tools
+  scripts/argus-node-attestation.sh   standalone Node operator commands
+  tests/tdvm/                        TD Host and Guest preflight utilities
 ```
 
 The TDX identity Evidence Provider is implemented by
-`../argus/src/bin/tdx_evidence_provider.rs`. Workload Attestation and the
-second Quote remain outside the current runtime scope.
+[`../argus/src/bin/tdx_evidence_provider.rs`](../argus/src/bin/tdx_evidence_provider.rs).
+It serves `/node-evidence` and, when workload configuration is supplied,
+`/ra/v1/workload-evidence`. These handlers use separate binding contracts and
+share the real TSM Quote source. Workload SVID rotation does not generate a new
+Quote; Helper reconnection triggers a new subscription and attestation.
 
 ## Node Attestation operator script
 
@@ -32,10 +52,11 @@ the policy deadline, pinned-key configuration, public trust bundle, Evidence
 Provider socket, TLS certificate, ALPN, and HTTP/2 transport before starting an
 Agent.
 
-On the Agent node:
+For an existing Node deployment, run from `cczoo/agent-cc` on the Agent node.
+Set the actual approved policy deadline; the example below is a placeholder:
 
 ```bash
-export ARGUS_POLICY_NOT_AFTER=2026-09-04T10:09:27Z
+export ARGUS_POLICY_NOT_AFTER='<approved RFC3339 policy deadline>'
 sudo core/spire/scripts/argus-node-attestation.sh preflight
 sudo core/spire/scripts/argus-node-attestation.sh run
 sudo core/spire/scripts/argus-node-attestation.sh status
@@ -50,3 +71,6 @@ expiration:
 ```bash
 sudo core/spire/scripts/argus-node-attestation.sh server-status
 ```
+
+These commands inspect or run the existing Node configuration. Use the
+[Workload runbook](workload/README.md) to deploy the combined authentication stack.

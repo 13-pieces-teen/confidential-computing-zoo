@@ -5,7 +5,8 @@
 
 当前主方案：
 
-- [双 TDVM + OpenViking Broker Sidecar 架构](../../Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
+- [Node Attestation](../../Argus-TDX-Node-Attestation-CN.md)
+- [NGINX + SPIFFE Helper Workload Attestation](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
 - [documents_ly 文档索引](../../README.md)
 
 归档内容：
@@ -16,7 +17,7 @@
 | `Argus-SPIFFE-v2-Execution-Status.md` | 早期完成度快照，不代表当前状态 |
 | `Argus-SPIFFE-v2-Pre-RA-Hardening-Plan.md` | hostile-caller增强防护计划，不再作为默认Argus核心门槛 |
 | `Argus-SPIFFE-v2-Pre-RA-Hardening-Remote-Verification-Report.md` | 对应旧Pre-RA计划的历史远程验证证据 |
-| `Argus-SPIFFE-v2-Evaluation-and-Capacity-Plan.md` | 基于代理链路的旧评测合同，需按direct Profile重写后才能重新启用 |
+| `Argus-SPIFFE-v2-Evaluation-and-Capacity-Plan.md` | 基于旧代理链路的评测合同，不定义当前容量或评估计划 |
 
 归档文件仍保留历史结论和证据边界。引用它们时应注明对应提交、Profile、Mock/Real
-状态和验证日期，不得用历史 PASS 替代当前 Broker Sidecar Profile 的远程验收。
+状态和验证日期，不得用历史 PASS 替代当前 Workload 实现的远程验收。

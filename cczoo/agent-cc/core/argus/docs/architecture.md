@@ -43,11 +43,19 @@ Agent identity. Workload Attestation subsequently identifies a concrete process
 or container, applies workload selectors and registration policy, and enables
 workload SVID issuance.
 
-The current Argus-SPIFFE implementation covers SPIRE Node Attestation through
-the TDX Evidence Provider, external Agent and Server NodeAttestor plugins,
-Trustee appraisal, and SPIRE Agent SVID issuance. A successful Node Attestation
-does not prove the OpenViking process, image, or business endpoint; those
-workload constraints belong to the subsequent SPIRE Workload Attestation stage.
+The current Argus-SPIFFE implementation includes both stages. Node Attestation
+uses the TDX Evidence Provider, external Agent and Server NodeAttestor plugins,
+Trustee appraisal, and SPIRE Agent SVID issuance. OpenViking Workload Attestation
+uses a separate instance-bound Quote and Trustee policy, a custom WorkloadAttestor,
+strict Registration Entries, Broker-aware SPIFFE Helper, and NGINX mTLS/AuthZ.
+A successful Node Attestation alone does not prove the OpenViking process,
+image, or business endpoint.
+
+The current [Node contract](../../../documents_ly/Argus-TDX-Node-Attestation-CN.md)
+and [Workload contract](../../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
+define these identity flows. Build/deployment steps and the boundary between
+local testing and company TDVM acceptance are maintained in the
+[runbook](../../spire/workload/README.md) and [validation records](../../spire/workload/VALIDATION.md).
 
 ## Design Goals
 

@@ -7,6 +7,8 @@
 
 这些文件用于追溯历史决策和实现证据，不再定义当前默认架构。当前目标架构请参阅：
 
-- [双 TDVM + OpenViking Broker Sidecar 架构](../../Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
+- [Node Attestation](../../Argus-TDX-Node-Attestation-CN.md)
+- [NGINX + SPIFFE Helper Workload Attestation](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
+- [文档总索引](../../README.md)
 
-已有的 `../argus-spiffe-v2/` 目录属于更早一轮 v2 计划归档，本次未修改其内容。
+[argus-spiffe-v2](../argus-spiffe-v2/README.md) 保存更早一轮 v2 计划；全部历史材料见 [归档索引](../README.md)。

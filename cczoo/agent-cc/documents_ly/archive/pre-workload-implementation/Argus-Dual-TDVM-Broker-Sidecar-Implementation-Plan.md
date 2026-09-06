@@ -1,5 +1,7 @@
 # Argus 双 TDVM Egress / Ingress Broker 实施与验证计划
 
+> 历史归档（2026-09-06）：本文不再作为执行入口。当前部署步骤见 [Workload 运行手册](../../../core/spire/workload/README.md)。
+
 > 对应架构：[双 TDVM Broker 架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
 >
 > 状态：历史实施记录，不作为当前执行说明

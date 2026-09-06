@@ -1,6 +1,6 @@
 # OpenViking Workload 认证方案：NGINX + SPIFFE Helper
 
-修订日期：2026-09-05。本文件为首轮实现对应的当前方案，取代此前同名文档中的 Rekor 强制门禁与 Agent 持续重证明设计。代码、配置及公司环境步骤见 [运行手册](../core/spire/workload/README.md)，执行结果见 [验证记录](../core/spire/workload/VALIDATION.md)。
+修订日期：2026-09-06；代码核对基线：`9f493f8`。本文件对应已实现的首轮 Workload 认证链。前置节点准入见 [Node Attestation](./Argus-TDX-Node-Attestation-CN.md)；代码、配置及公司环境步骤见 [运行手册](../core/spire/workload/README.md)，执行结果见 [验证记录](../core/spire/workload/VALIDATION.md)。本地软件与集成测试已执行，公司真实 TDX 全链路仍待验收。
 
 ## 1. 目标与本轮边界
 

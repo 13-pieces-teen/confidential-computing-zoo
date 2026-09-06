@@ -13,7 +13,11 @@ stages:
 2. Workload Attestation then identifies a concrete process or
    container and enables workload SVID issuance under registration policy.
 
-The current implementation covers the SPIRE Node Attestation stage.
+The current implementation covers both Node and OpenViking Workload
+Attestation. The shared TDX identity Evidence Provider supports separate Node
+and workload binding contracts; the workload path uses a custom WorkloadAttestor,
+Broker-aware SPIFFE Helper, and NGINX. See the [current architecture index](../../documents_ly/README.md),
+[deployment runbook](../spire/workload/README.md), and [validation records](../spire/workload/VALIDATION.md).
 
 On the A2S path, before a caller sends sensitive data to a peer service, Argus
 fetches evidence for that peer, verifies it through an external attestation or
@@ -98,7 +102,7 @@ application workload or issue a workload SVID.
 
 * Rust 1.88+
 
-* Go 1.23.12
+* Go 1.25.3+ for the combined SPIRE Node/Workload build
 
 * SPIRE v1.15.3
 
@@ -292,8 +296,9 @@ including transport protection, collateral, policy, and deployment requirements.
 
 The SPIRE Node Attestation path provides:
 
-* A fresh SPIRE Server nonce and expiry bound with the Agent SPIFFE ID
-  and Agent proof public key into TDX `REPORTDATA`.
+* A fresh SPIRE Server nonce bound with the fixed Agent SPIFFE ID and proof
+  public key into TDX `REPORTDATA`; the transcript also binds challenge expiry
+  and the exact Quote.
 
 * A pinned Agent-slot proof key and an Ed25519 transcript signature that proves
   possession of the key bound into the Quote.
@@ -303,9 +308,13 @@ The SPIRE Node Attestation path provides:
 
 * Agent SVID issuance by the SPIRE Server CA only after node admission succeeds.
 
-This path currently covers Node Attestation only. Workload identity,
-Registration Entries, business mTLS, and Guard authorization require the
-subsequent Workload Attestation and service-integration stages.
+These guarantees describe Node admission. The implemented
+[OpenViking Workload Attestation path](../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
+separately binds the running service instance to TDX evidence and a Trustee
+policy, obtains its SVID through a strict Registration Entry and Broker-aware
+Helper, and enforces NGINX mTLS with exact client SPIFFE ID authorization.
+Local tests and pending company acceptance are recorded in
+[Workload validation](../spire/workload/VALIDATION.md).
 
 ## Documentation
 

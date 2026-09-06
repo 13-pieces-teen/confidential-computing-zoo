@@ -1,5 +1,7 @@
 # OpenViking 非侵入式 Workload Attestation 与 SPIFFE Broker Sidecar 完整方案
 
+> 历史归档（2026-09-06）：本文中的“当前”均指原设计阶段，不定义当前运行架构。
+
 ## 文档状态
 
 | 项目 | 内容 |
@@ -9,7 +11,7 @@
 | 历史主方案 | SPIRE 1.15.2 SPIFFE Broker API + `WorkloadPIDReference` + 自定义 WorkloadAttestor + Broker Sidecar |
 | 当前仓库基线 | Broker组件不在当前可信身份运行链 |
 | 文档性质 | 历史方案与详细设计记录；不是当前执行说明 |
-| 当前继任方案 | [NGINX + Broker-aware SPIFFE Helper Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) |
+| 当前继任方案 | [NGINX + Broker-aware SPIFFE Helper Workload Attestation](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) |
 | 关键限制 | 本历史方案形成时尚未详细设计Workload Attestation和第二次Quote；SPIRE 1.15.2 的 Broker API 仍标记为 experimental |
 
 > 当前状态：本文中的Go Broker Sidecar数据面已经被Broker-aware Helper + NGINX

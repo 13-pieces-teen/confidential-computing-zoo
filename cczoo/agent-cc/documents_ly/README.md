@@ -1,59 +1,33 @@
 # documents_ly 文档索引
 
-本目录按 Node Attestation、OpenViking Workload Attestation 和历史设计组织文档。
-[archive](./archive/) 保存更早的架构材料。
+更新日期：2026-09-06；代码核对基线：`feat/argus-spiffe-v2-val` / `9f493f8`。
 
-## 当前方案
+本目录顶层只保留当前 Node Attestation 与 OpenViking Workload Attestation 说明。两阶段的代码和部署工具均已实现；当前 Workload 路径采用 **真实取证 Provider + Trustee + SPIRE Broker API + SPIFFE Helper + NGINX**。
 
-Node 阶段的 Evidence Provider、TDX Quote、Trustee 评估与 SPIRE 节点准入，见
-[Node Attestation 方案](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md)。
+## 当前文档与阅读顺序
 
-[NGINX + Broker-aware SPIFFE Helper Workload 认证方案](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
-以 Node Attestation 已完成为前提，描述 TC API 启动、目标进程真实取证（本轮不依赖 Rekor 验证）、
-Trustee workload 评估、Broker 身份交付，以及 NGINX 服务入口与失效处理。
-这是当前 Workload 设计与验收依据，已经原位替换此前同名方案。
-
-构建、部署和公司执行入口见 [Workload 运行手册](../core/spire/workload/README.md)，
-本地测试、提交前 review 修复及公司待验项目见 [验证记录](../core/spire/workload/VALIDATION.md)。
-
-运行验证状态以对应环境、版本和日期的验证记录为准；设计文档不能替代实际验收。
-其余 Broker 顶层文档保留历史设计和验证结果，不定义当前业务方案。
-
-## 推荐阅读顺序
-
-1. [真实 TDX Node Evidence 与 Trustee 改造方案及执行状态](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md)
-2. [OpenViking Workload 认证方案：NGINX + Broker-aware SPIFFE Helper](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
-3. [双 TDVM + Egress/Ingress Broker 历史架构](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md)
-4. [历史实施与验证计划](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md)
-5. [已被当前 Helper + NGINX 方案取代的 OpenViking Broker Sidecar历史设计](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
-6. [历史软件链远程验证报告](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md)
-
-## 顶层文档职责
-
-| 文档 | 职责 | 状态 |
+| 顺序 | 文档 | 内容 |
 |---|---|---|
-| [Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md](./Argus-TDX-Node-Attestation-Real-Evidence-Trustee-Refactor-Plan-CN.md) | Node Evidence、Trustee 与 SPIRE 准入方案及验收门槛 | Node 设计与执行记录；运行状态见对应环境验证记录 |
-| [Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) | TC API、真实 Quote/Trustee、Helper 身份交付、NGINX mTLS 与生命周期 | 首轮实现与验收依据；SPIRE 1.15.3 / Helper 0.11.0 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Architecture.md](./Argus-Dual-TDVM-Broker-Sidecar-Architecture.md) | 历史双 Broker组件、身份和请求时序 | 非当前运行架构 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md](./Argus-Dual-TDVM-Broker-Sidecar-Implementation-Plan.md) | 历史双 Broker代码与验证计划 | 不再是执行入口 |
-| [OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md](./OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md) | OpenViking Broker API和PID reference历史设计输入 | 已由当前Helper + NGINX Stage 2设计取代 |
-| [Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md](./Argus-Dual-TDVM-Broker-Sidecar-Remote-Validation-Report.md) | 历史软件链远程证据 | 不能复用为当前PASS |
+| 1 | [Node Attestation](./Argus-TDX-Node-Attestation-CN.md) | 节点准入、proof key、Quote/REPORTDATA、Trustee EAR 与 Agent SVID |
+| 2 | [OpenViking Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) | 实际服务进程取证、目标身份交付、NGINX mTLS、AuthZ 与失效处理 |
+| 3 | [Workload 运行手册](../core/spire/workload/README.md) | 构建安装、Node 升级、policy/Entry、TC API 启动、登记与生命周期操作 |
+| 4 | [验证记录](../core/spire/workload/VALIDATION.md) | 已执行测试、证据边界、既有失败和公司环境待验项目 |
 
-## 历史归档
+代码入口见 [SPIRE README](../core/spire/README.md)。运行步骤和验证记录随代码放置，本目录通过链接引用，避免维护重复副本。
 
-- [pre-dual-tdvm-broker-sidecar](./archive/pre-dual-tdvm-broker-sidecar/README.md)：
-  当前组合方案形成前的非对称架构、旧双 TDVM 直连方案、会议记录及历史评估报告。
-- [pre-asymmetric-architecture](./archive/pre-asymmetric-architecture/README.md)：
-  非对称架构形成前的设计和验证材料。
-- [argus-spiffe-v2](./archive/argus-spiffe-v2/README.md)：
-  更早的 v2 执行、Pre-RA 强化和容量计划。
+## 当前实现与验证状态
 
-归档文档只用于追溯对应提交、Profile、日期和决策过程，不定义当前架构。
+- SPIRE Server/Agent 与两个 Attestor SDK 为 **v1.15.3**；Helper 基于 **v0.11.0**，定制版本为 **0.11.0-argus.1**；Trustee 接口基线为 **v0.21.0**。
+- Node 与 Workload 使用独立的绑定合同和 policy。Workload 绑定本次 OpenViking 服务进程实例，Helper 代表该实例获取身份，NGINX 使用目标 SVID 终止 mTLS。
+- TC API 原日志上传保持；当前身份门禁不依赖 Rekor 验证。普通 SVID 轮换不生成新 Quote；Helper 重连会重新认证，Agent 独立周期重证明尚未实现。
+- 最新验证记录覆盖本地软件与 Linux 容器集成测试。公司环境的 v1.15.3 Node 复验、真实 Quote/DCAP、Trustee、OpenViking 业务和生命周期验收仍待执行，不能用旧报告代替。
 
-## 文档维护规则
+## 历史材料
 
-1. 当前架构变化先更新架构文档，再更新实施计划。
-2. 代码骨架、测试替身和历史 Profile PASS不得写成当前真实Node路径已验收。
-3. Registration Entry 是静态匹配规则；WorkloadAttestor 在验证成功后返回 selector。
-4. 软件链测试不代表真实Quote、QGS、TC-API/Rekor或生产Trustee验证。
-5. 每轮远程执行都记录对应 commit；新改动通过前不得复用旧 commit 的运行结论。
+旧重构计划、双 Broker 架构和旧版本验证报告统一放在 [archive](./archive/README.md)，不进入当前阅读顺序或部署步骤。包含 Envoy + SDS 的旧代理部署方案及绘图风格草稿已删除。
+
+## 维护规则
+
+1. 架构和协议变化更新对应阶段说明；部署命令更新运行手册；执行结果更新验证记录。
+2. 被替代的方案移入 archive，明确失效范围并修复链接；没有追溯价值的草稿直接删除。
+3. 验证结论注明提交、版本、环境和日期，区分代码实现、本地测试与真实环境验收。

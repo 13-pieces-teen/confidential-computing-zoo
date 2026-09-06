@@ -1,5 +1,7 @@
 # Argus 双 TDVM + OpenClaw Egress / OpenViking Ingress Broker 架构
 
+> 历史归档（2026-09-06）：本文记录已被替代的双 Broker 架构。当前实现见 [Workload 方案](../../Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。
+
 > 状态：历史 Broker架构记录
 >
 > 当前实现边界：不作为当前 Node Attestation部署或验收入口

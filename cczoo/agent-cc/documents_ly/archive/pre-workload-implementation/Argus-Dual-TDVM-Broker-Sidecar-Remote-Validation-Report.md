@@ -1,5 +1,7 @@
 # 双 TDVM + Broker Sidecar 远程验证报告
 
+> 历史归档（2026-09-06）：保留原提交、环境与测试结果。当前实现的验证状态见 [Workload 验证记录](../../../core/spire/workload/VALIDATION.md)。
+
 > 状态：历史软件链验证记录，仅适用于下列指定commit。它不能证明当前HEAD的
 > 真实TDX Node Attestation、Trustee
 > appraisal或Workload Attestation通过。
