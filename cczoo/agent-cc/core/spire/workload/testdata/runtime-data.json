@@ -1,0 +1,24 @@
+{
+  "runtime_data": {
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "boot_id": "00112233-4455-6677-8899-aabbccddeeff",
+    "config_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config_path": "/etc/openviking/ov.conf",
+    "container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executable": "/usr/local/bin/python3.12",
+    "image_config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "launch_id": "launch-test-001",
+    "listen_port": "1933",
+    "net_namespace": "net:[4026533001]",
+    "pid": "1234",
+    "pid_namespace": "pid:[4026533000]",
+    "policy_id": "argus-workload-openviking-v1",
+    "rootfs_read_only": "true",
+    "start_time": "654321",
+    "workload_id": "openviking-cmem",
+    "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "protocol": "argus.workload.tdx.v1"
+  },
+  "canonical": "{\"agent_id\":\"spiffe://argus.local/spire/agent/argus_tdx/openviking-node\",\"boot_id\":\"00112233-4455-6677-8899-aabbccddeeff\",\"config_digest\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"config_path\":\"/etc/openviking/ov.conf\",\"container_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"executable\":\"/usr/local/bin/python3.12\",\"image_config_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"launch_id\":\"launch-test-001\",\"listen_port\":\"1933\",\"net_namespace\":\"net:[4026533001]\",\"nonce\":\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\",\"pid\":\"1234\",\"pid_namespace\":\"pid:[4026533000]\",\"policy_id\":\"argus-workload-openviking-v1\",\"protocol\":\"argus.workload.tdx.v1\",\"rootfs_read_only\":\"true\",\"start_time\":\"654321\",\"workload_id\":\"openviking-cmem\"}",
+  "report_data_hex": "c205981161fdb3e0938f083640e9daadade6d49ad32f80bf5529d8777a4fd431eebac812a77fd42c830061f714a4f6e300000000000000000000000000000000"
+}

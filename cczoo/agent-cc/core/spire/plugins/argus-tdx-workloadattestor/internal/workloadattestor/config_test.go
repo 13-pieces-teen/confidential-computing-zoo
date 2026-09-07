@@ -1,41 +1,42 @@
 package workloadattestor
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
-func TestParseConfigAcceptsMockBoundaryEndpoints(t *testing.T) {
-	config, notes := parseConfig(`
-evidence_endpoint = "http://127.0.0.1:18080/ra/v1/workload-evidence"
-trustee_endpoint = "https://mock-trustee:18443/v1/verify/tdx-workload"
-trustee_ca_path = "/opt/spire/conf/certs/ca.pem"
-trustee_client_cert_path = "/opt/spire/conf/certs/client.pem"
-trustee_client_key_path = "/opt/spire/conf/certs/client-key.pem"
-trustee_server_name = "trustee.argus.local"
-trustee_spiffe_id = "spiffe://argus.local/trustee"
-request_timeout = "10s"
-max_response_bytes = 1048576
-`)
-	if len(notes) != 0 {
-		t.Fatalf("notes = %v", notes)
-	}
-	if config.EvidenceEndpoint.Path != "/ra/v1/workload-evidence" {
-		t.Fatalf("evidence endpoint = %s", config.EvidenceEndpoint)
-	}
-	if config.TrusteeSPIFFEID != "spiffe://argus.local/trustee" {
-		t.Fatalf("Trustee SPIFFE ID = %q", config.TrusteeSPIFFEID)
-	}
+func validConfig(t *testing.T) string {
+	d := fixture(t)
+	return fmt.Sprintf(`
+ evidence_endpoint="unix:///run/argus/evidence-provider.sock"
+ trustee_endpoint="https://trustee.example"
+ target_registration_path="/run/argus-workload/target.json"
+ trustee_ca_path="/etc/argus/ca.pem"
+ trustee_server_name="trustee.example"
+ ear_public_key_path="/etc/argus/ear.pem"
+ ear_expected_issuer="https://trustee.example"
+ ear_expected_profile="tag:github.com,2024:confidential-containers/Trustee"
+ workload_id=%q
+ policy_id=%q
+ image_config_digest=%q
+ config_digest=%q
+ `, d.WorkloadID, d.PolicyID, d.ImageConfigDigest, d.ConfigDigest)
 }
-
-func TestParseConfigRejectsExpandedBoundary(t *testing.T) {
-	_, notes := parseConfig(`
-evidence_endpoint = "http://192.0.2.10:18080/ra/v1/workload-evidence"
-trustee_endpoint = "http://mock-trustee:18443/v1/verify/tdx-workload"
-trustee_ca_path = "relative/ca.pem"
-trustee_client_cert_path = "relative/client.pem"
-trustee_client_key_path = "relative/client-key.pem"
-trustee_server_name = ""
-trustee_spiffe_id = "not-a-spiffe-id"
-`)
-	if len(notes) != 7 {
-		t.Fatalf("notes = %v, want seven validation failures", notes)
+func TestConfigRequiresFixedTrustAndLocalEvidence(t *testing.T) {
+	valid := validConfig(t)
+	if _, notes := parseConfig(valid); len(notes) > 0 {
+		t.Fatal(notes)
+	}
+	for _, pair := range [][2]string{
+		{"unix:///run/argus/evidence-provider.sock", "http://127.0.0.1/evidence"},
+		{"https://trustee.example", "http://trustee.example"},
+		{"https://trustee.example", "https://trustee.example/custom"},
+		{fixture(t).ImageConfigDigest, "openviking:latest"},
+		{"ear_public_key_path", "retired_field"},
+	} {
+		if _, notes := parseConfig(strings.ReplaceAll(valid, pair[0], pair[1])); len(notes) == 0 {
+			t.Errorf("accepted %v", pair)
+		}
 	}
 }

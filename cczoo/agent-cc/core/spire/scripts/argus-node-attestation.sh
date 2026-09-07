@@ -2,13 +2,13 @@
 set -euo pipefail
 
 ACTION="${1:-status}"
-AGENT_BINARY="${ARGUS_AGENT_BINARY:-/opt/spire-1.15.2/bin/spire-agent}"
+AGENT_BINARY="${ARGUS_AGENT_BINARY:-/opt/spire-1.15.3/bin/spire-agent}"
 AGENT_CONFIG="${ARGUS_AGENT_CONFIG:-/etc/spire/argus-poc/agent.conf}"
 AGENT_LOG="${ARGUS_AGENT_LOG:-/var/log/argus-node-attestation/agent.log}"
 AGENT_PID_FILE="${ARGUS_AGENT_PID_FILE:-/run/argus-node-attestation/agent.pid}"
 POLICY_NOT_AFTER="${ARGUS_POLICY_NOT_AFTER:-}"
 EXPECTED_AGENT_ID="${ARGUS_AGENT_ID:-spiffe://argus.local/spire/agent/argus_tdx/openviking-node}"
-SERVER_BINARY="${ARGUS_SERVER_BINARY:-/opt/spire-1.15.2/bin/spire-server}"
+SERVER_BINARY="${ARGUS_SERVER_BINARY:-/opt/spire-1.15.3/bin/spire-server}"
 SERVER_SOCKET="${ARGUS_SERVER_SOCKET:-/run/spire/server/private/api.sock}"
 TRANSPORT_TIMEOUT="${ARGUS_TRANSPORT_TIMEOUT:-8}"
 
@@ -182,7 +182,17 @@ check_transport() {
     rm -f "$output" "$error_file" "$response_file"
 }
 
+check_binary_version() {
+    local binary="$1" version
+    [[ -x "$binary" ]] || fail "SPIRE binary missing: $binary"
+    version="$("$binary" -version 2>&1)"
+    [[ "$version" == "1.15.3" ]] || fail "expected SPIRE 1.15.3, got $version from $binary"
+    printf 'SPIRE_BINARY=%s VERSION=%s\n' "$binary" "$version"
+}
+
 preflight() {
+    check_binary_version "$AGENT_BINARY"
+    check_binary_version "$SERVER_BINARY"
     require_command date
     require_command openssl
     require_command sha256sum
@@ -317,6 +327,7 @@ run_agent() {
 }
 
 server_status() {
+    check_binary_version "$SERVER_BINARY"
     [[ -x "$SERVER_BINARY" ]] || fail "SPIRE Server binary is not executable: $SERVER_BINARY"
     [[ -S "$SERVER_SOCKET" ]] || fail "SPIRE Server API socket is unavailable: $SERVER_SOCKET"
     "$SERVER_BINARY" healthcheck -socketPath "$SERVER_SOCKET"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Attested OpenViking NGINX mTLS ingress
+BindsTo=argus-helper.service argus-authz.service
+After=argus-helper.service argus-authz.service
+
+[Service]
+Type=simple
+User=root
+RuntimeDirectory=argus-nginx
+RuntimeDirectoryMode=0755
+ExecStartPre=/opt/argus-workload/bin/argus-workload -action check
+ExecStart=/opt/argus-workload/bin/nginx-hook.sh exec
+ExecReload=/opt/argus-workload/bin/nginx-hook.sh reload
+TimeoutStopSec=5s
+KillSignal=SIGQUIT
+KillMode=control-group

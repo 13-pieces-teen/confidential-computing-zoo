@@ -1,0 +1,15 @@
+[Unit]
+Description=Guest-local real TDX Node and Workload Evidence Provider
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+RuntimeDirectory=argus
+RuntimeDirectoryMode=0700
+ExecStart=/opt/argus-workload/bin/argus-tdx-evidence-provider --socket-path /run/argus/evidence-provider.sock --workload-registration-path /run/argus-workload/target.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+KillMode=control-group

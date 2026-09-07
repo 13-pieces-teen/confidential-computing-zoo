@@ -17,7 +17,7 @@ TC-API 启动 OpenViking
 具体代码路径、部署顺序和验收命令见：
 
 - [Broker Sidecar 实施与远程验证方案](./Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md)
-- [SPIRE asymmetric runtime](../../../core/spire/runtime/asymmetric/README.md)
+- SPIRE asymmetric runtime：`core/spire/runtime/asymmetric/README.md`（历史路径，已删除）
 - [Broker Sidecar](../../../adapters/OpenViking/broker_sidecar)
 - [自定义 WorkloadAttestor](../../../core/spire/plugins/argus-tdx-workloadattestor)
 

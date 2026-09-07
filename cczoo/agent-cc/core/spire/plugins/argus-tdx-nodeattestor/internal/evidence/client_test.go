@@ -25,37 +25,37 @@ func TestGetNodeEvidenceUsesTypedNodeEndpoint(t *testing.T) {
 	publicKey := bytes.Repeat([]byte{0x22}, protocol.PublicKeySize)
 	quote := []byte{0x01, 0x02, 0x03, 0xff}
 
-	client := &Client{
-		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			if request.Method != http.MethodPost {
-				t.Errorf("method = %s", request.Method)
-			}
-			if request.URL.Path != "/node-evidence" {
-				t.Errorf("path = %s", request.URL.Path)
-			}
-			if request.Header.Get("Content-Type") != "application/json" {
-				t.Errorf("Content-Type = %q", request.Header.Get("Content-Type"))
-			}
-			var body nodeEvidenceRequest
-			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
-				t.Fatal(err)
-			}
-			if body.Nonce != base64.RawURLEncoding.EncodeToString(nonce) {
-				t.Errorf("nonce = %q", body.Nonce)
-			}
-			if body.ProofPublicKey != base64.RawURLEncoding.EncodeToString(publicKey) {
-				t.Errorf("proof public key = %q", body.ProofPublicKey)
-			}
-			response := `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":"` + base64.RawURLEncoding.EncodeToString(quote) + `"}`
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(response)),
-				Header:     make(http.Header),
-			}, nil
-		})},
-		requestURL: "http://unix/node-evidence",
-		maxBytes:   1024,
+	client, err := NewClient("/run/argus/evidence-provider.sock", time.Second, 1024)
+	if err != nil {
+		t.Fatal(err)
 	}
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodPost {
+			t.Errorf("method = %s", request.Method)
+		}
+		if request.URL.Path != "/ra/v1/node-evidence" {
+			t.Errorf("path = %s", request.URL.Path)
+		}
+		if request.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %q", request.Header.Get("Content-Type"))
+		}
+		var body nodeEvidenceRequest
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Nonce != base64.RawURLEncoding.EncodeToString(nonce) {
+			t.Errorf("nonce = %q", body.Nonce)
+		}
+		if body.ProofPublicKey != base64.RawURLEncoding.EncodeToString(publicKey) {
+			t.Errorf("proof public key = %q", body.ProofPublicKey)
+		}
+		response := `{"evidence_type":"tdx_quote","quote_format":"tdx","quote":"` + base64.RawURLEncoding.EncodeToString(quote) + `"}`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(response)),
+			Header:     make(http.Header),
+		}, nil
+	})
 
 	got, err := client.GetNodeEvidence(context.Background(), nonce, publicKey)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestGetNodeEvidenceRejectsInvalidProviderResponses(t *testing.T) {
 				httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 					return &http.Response{StatusCode: test.statusCode, Body: io.NopCloser(strings.NewReader(test.body)), Header: make(http.Header)}, nil
 				})},
-				requestURL: "http://unix/node-evidence",
+				requestURL: nodeEvidenceURL,
 				maxBytes:   1,
 			}
 			if _, err := client.GetNodeEvidence(context.Background(), make([]byte, protocol.NonceSize), make([]byte, protocol.PublicKeySize)); err == nil {
@@ -119,7 +119,7 @@ func TestNewClientRequiresAbsoluteUnixSocketAndLimits(t *testing.T) {
 }
 
 func TestGetNodeEvidenceRejectsInvalidRequestLengths(t *testing.T) {
-	client := &Client{httpClient: http.DefaultClient, requestURL: "http://unix/node-evidence", maxBytes: 1}
+	client := &Client{httpClient: http.DefaultClient, requestURL: nodeEvidenceURL, maxBytes: 1}
 	if _, err := client.GetNodeEvidence(context.Background(), make([]byte, protocol.NonceSize-1), make([]byte, protocol.PublicKeySize)); err == nil {
 		t.Fatal("invalid nonce was accepted")
 	}

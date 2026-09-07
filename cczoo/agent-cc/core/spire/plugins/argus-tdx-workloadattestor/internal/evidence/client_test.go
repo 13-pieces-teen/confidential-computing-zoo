@@ -2,50 +2,25 @@ package evidence
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
-
-	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 )
 
-func TestCollectUsesWorkloadEvidenceContract(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodPost || request.URL.Path != "/ra/v1/workload-evidence" {
-			t.Fatalf("request = %s %s", request.Method, request.URL.Path)
+func TestEvidenceRejectsMalformedOversizedOrLegacyResponse(t *testing.T) {
+	for _, body := range []string{`{"allow":true}`, `{}` + `{}`, `not-json`, string(make([]byte, 100))} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
+		c := &Client{httpClient: server.Client(), endpoint: server.URL, maxBytes: 64}
+		if _, err := c.Collect(context.Background(), protocol.EvidenceRequest{}); err == nil {
+			t.Errorf("accepted %q", body)
 		}
-		var input protocol.EvidenceRequest
-		if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
-			t.Fatal(err)
-		}
-		if input.PID != 4321 || input.Nonce != "workload-nonce" {
-			t.Fatalf("input = %#v", input)
-		}
-		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"protocol_version":1,"nonce":"workload-nonce","pid":4321}`))
-	}))
-	defer server.Close()
-	endpoint, err := url.Parse(server.URL + "/ra/v1/workload-evidence")
-	if err != nil {
-		t.Fatal(err)
+		server.Close()
 	}
-	client, err := NewClient(endpoint, time.Second, 4096)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	document, err := client.Collect(context.Background(), protocol.EvidenceRequest{
-		ProtocolVersion: protocol.Version,
-		Nonce:           "workload-nonce",
-		PID:             4321,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(document) != `{"protocol_version":1,"nonce":"workload-nonce","pid":4321}` {
-		t.Fatalf("document = %s", document)
+	ep, _ := url.Parse("http://127.0.0.1/evidence")
+	if _, err := NewClient(ep, time.Second, 4096); err == nil {
+		t.Fatal("accepted non-UDS provider")
 	}
 }

@@ -2,19 +2,22 @@ package workloadattestor
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/evidence"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/trustee"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/target"
 	"github.com/spiffe/go-spiffe/v2/exp/proto/spiffe/broker"
 	workloadattestorv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/workloadattestor/v1"
 	configv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/service/common/config/v1"
@@ -26,196 +29,142 @@ import (
 
 const workloadPIDReferenceTypeURL = "type.googleapis.com/spiffe.broker.WorkloadPIDReference"
 
-// EvidenceCollector obtains evidence for a target PID without deciding whether
-// that workload is trusted.
 type EvidenceCollector interface {
-	Collect(context.Context, protocol.EvidenceRequest) (json.RawMessage, error)
+	Collect(context.Context, protocol.EvidenceRequest) (protocol.Evidence, error)
 }
-
-// TrusteeVerifier appraises evidence and returns an allow/deny verdict. It does
-// not issue an SVID or choose the workload's SPIFFE ID.
 type TrusteeVerifier interface {
-	Verify(context.Context, protocol.VerifyRequest) (protocol.Verdict, error)
+	Verify(context.Context, protocol.Evidence) error
 }
-
-// Plugin implements SPIRE Agent workload attestation and configuration. It
-// orchestrates evidence collection and remote appraisal, then returns trusted
-// selectors for SPIRE registration-entry matching; SPIRE remains the SVID
-// issuer.
 type Plugin struct {
 	workloadattestorv1.UnimplementedWorkloadAttestorServer
 	configv1.UnimplementedConfigServer
-
 	clientsMu sync.RWMutex
 	evidence  EvidenceCollector
 	trustee   TrusteeVerifier
+	config    *Config
 	nonce     func() (string, error)
+	load      func(string) (protocol.Target, error)
+	check     func(protocol.Target) error
 }
 
-// New creates a plugin with optional injected clients. SPIRE supplies the real
-// clients through Configure; injection keeps protocol tests independent of the
-// network.
-func New(evidence EvidenceCollector, trustee TrusteeVerifier) *Plugin {
-	return &Plugin{evidence: evidence, trustee: trustee, nonce: newNonce}
+func New(e EvidenceCollector, t TrusteeVerifier) *Plugin {
+	return &Plugin{evidence: e, trustee: t, nonce: newNonce, load: target.Load, check: target.Check}
 }
 
-// Attest deliberately returns no selectors for the ordinary PID-only Workload
-// API path. Remote-attestation selectors are available only through the typed
-// SPIFFE Broker reference handled by AttestReference.
-func (plugin *Plugin) Attest(context.Context, *workloadattestorv1.AttestRequest) (*workloadattestorv1.AttestResponse, error) {
+// Ordinary Workload API callers cannot obtain the remote-attestation selectors.
+func (p *Plugin) Attest(context.Context, *workloadattestorv1.AttestRequest) (*workloadattestorv1.AttestResponse, error) {
 	return &workloadattestorv1.AttestResponse{}, nil
 }
-
-// AttestReference attests the PID named by a Broker reference. Every failure is
-// fail-closed: only an allow verdict bound to the same protocol, nonce, and PID
-// can produce selectors. Those selectors are claims for SPIRE to match, not an
-// SVID issued by this plugin.
-func (plugin *Plugin) AttestReference(ctx context.Context, request *workloadattestorv1.AttestReferenceRequest) (*workloadattestorv1.AttestReferenceResponse, error) {
-	// Snapshot both clients under one lock so a concurrent Configure call cannot
-	// mix Evidence Provider and Trustee instances from different configurations.
-	evidenceClient, trusteeClient, err := plugin.clients()
+func (p *Plugin) AttestReference(ctx context.Context, r *workloadattestorv1.AttestReferenceRequest) (*workloadattestorv1.AttestReferenceResponse, error) {
+	p.clientsMu.RLock()
+	ec, tc, c := p.evidence, p.trustee, p.config
+	p.clientsMu.RUnlock()
+	if ec == nil || tc == nil || c == nil {
+		return nil, status.Error(codes.FailedPrecondition, "plugin is not configured")
+	}
+	ref := r.GetReference()
+	if ref.GetTypeUrl() != workloadPIDReferenceTypeURL {
+		return nil, status.Error(codes.InvalidArgument, "unsupported workload reference")
+	}
+	var pid broker.WorkloadPIDReference
+	if err := anypb.UnmarshalTo(ref, &pid, proto.UnmarshalOptions{}); err != nil || pid.Pid <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid workload PID")
+	}
+	t, err := p.load(c.TargetRegistrationPath)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "load target: %v", err)
+	}
+	if err = c.checkApproved(t); err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
+	if t.PID != strconv.FormatInt(int64(pid.Pid), 10) {
+		return nil, status.Error(codes.PermissionDenied, "PID is not the registered instance")
+	}
+	if err = p.check(t); err != nil {
+		return nil, status.Errorf(codes.PermissionDenied, "target changed: %v", err)
+	}
+	nonce, err := p.nonce()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "nonce: %v", err)
+	}
+	req := protocol.EvidenceRequest{Protocol: protocol.Version, Nonce: nonce, PID: pid.Pid}
+	ev, err := ec.Collect(ctx, req)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "collect evidence: %v", err)
+	}
+	if err = ev.Validate(req, t); err != nil {
+		return nil, status.Errorf(codes.PermissionDenied, "evidence binding: %v", err)
+	}
+	if err = tc.Verify(ctx, ev); err != nil {
+		return nil, status.Errorf(codes.PermissionDenied, "Trustee appraisal: %v", err)
+	}
+	if err = p.check(t); err != nil {
+		return nil, status.Errorf(codes.PermissionDenied, "target changed during appraisal: %v", err)
+	}
+	// All values originate in the locally approved, Quote-bound target. SPIRE CA issues the SVID.
+	return &workloadattestorv1.AttestReferenceResponse{SelectorValues: []string{
+		"verified:true", "workload_id:" + t.WorkloadID, "policy:" + t.PolicyID,
+		"image_config_digest:" + t.ImageConfigDigest, "config_digest:" + t.ConfigDigest,
+		"agent_id:" + t.AgentID,
+	}}, nil
+}
+func (p *Plugin) Validate(_ context.Context, r *configv1.ValidateRequest) (*configv1.ValidateResponse, error) {
+	_, notes := parseConfig(r.GetHclConfiguration())
+	return &configv1.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
+}
+func (p *Plugin) Configure(_ context.Context, r *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
+	c, notes := parseConfig(r.GetHclConfiguration())
+	if len(notes) > 0 {
+		return nil, status.Error(codes.InvalidArgument, strings.Join(notes, "; "))
+	}
+	tlsConfig, key, err := loadTrust(c)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Trustee trust: %v", err)
+	}
+	ec, err := evidence.NewClient(c.EvidenceEndpoint, c.RequestTimeout, c.MaxResponseBytes)
 	if err != nil {
 		return nil, err
 	}
-	reference := request.GetReference()
-	if reference.GetTypeUrl() != workloadPIDReferenceTypeURL {
-		return nil, status.Errorf(codes.InvalidArgument, "unsupported workload reference type %q", reference.GetTypeUrl())
-	}
-	var pidReference broker.WorkloadPIDReference
-	if err := anypb.UnmarshalTo(reference, &pidReference, proto.UnmarshalOptions{}); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "decode workload PID reference: %v", err)
-	}
-	if pidReference.Pid <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "workload PID must be positive")
-	}
-	// A numeric PID is only a lookup key and can be reused. If process-incarnation
-	// binding is required, the Evidence Provider and Trustee must cover stable
-	// process facts in the evidence; the checks below bind only the echoed PID.
-	nonce, err := plugin.nonce()
+	tc, err := trustee.NewClient(c.TrusteeEndpoint, tlsConfig, key, c.EARExpectedIssuer, c.EARExpectedProfile, c.PolicyID, c.RequestTimeout, c.MaxResponseBytes)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "generate attestation nonce: %v", err)
+		return nil, err
 	}
-	evidenceRequest := protocol.EvidenceRequest{
-		ProtocolVersion: protocol.Version,
-		Nonce:           nonce,
-		PID:             pidReference.Pid,
-	}
-	evidence, err := evidenceClient.Collect(ctx, evidenceRequest)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable, "collect workload evidence: %v", err)
-	}
-	verdict, err := trusteeClient.Verify(ctx, protocol.VerifyRequest{
-		ProtocolVersion: protocol.Version,
-		Nonce:           nonce,
-		PID:             pidReference.Pid,
-		Evidence:        evidence,
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable, "verify workload evidence: %v", err)
-	}
-	// Reject replayed, cross-PID, or cross-version verdicts even if they say
-	// "allow".
-	if verdict.ProtocolVersion != protocol.Version || verdict.Nonce != nonce || verdict.PID != pidReference.Pid {
-		return nil, status.Error(codes.Unavailable, "Trustee verdict is not bound to the workload request")
-	}
-	if verdict.Decision != "allow" {
-		return nil, status.Errorf(codes.PermissionDenied, "Trustee denied workload attestation with code %q", verdict.StableErrorCode)
-	}
-	if verdict.StableErrorCode != "OK" || !validSelectorComponent(verdict.WorkloadID) || !validSelectorComponent(verdict.PolicyID) {
-		return nil, status.Error(codes.Unavailable, "Trustee returned an invalid allow verdict")
-	}
-	// SPIRE maps these selector values through registration entries and retains
-	// authority over the resulting SPIFFE ID and SVID lifecycle.
-	return &workloadattestorv1.AttestReferenceResponse{SelectorValues: []string{
-		"verified:true",
-		"workload_id:" + verdict.WorkloadID,
-		"policy:" + verdict.PolicyID,
-	}}, nil
-}
-
-// Validate checks configuration syntax and security boundaries without loading
-// certificate files or changing the active clients.
-func (plugin *Plugin) Validate(_ context.Context, request *configv1.ValidateRequest) (*configv1.ValidateResponse, error) {
-	if request == nil {
-		return &configv1.ValidateResponse{Valid: false, Notes: []string{"request is required"}}, nil
-	}
-	_, notes := parseConfig(request.HclConfiguration)
-	return &configv1.ValidateResponse{Valid: len(notes) == 0, Notes: notes}, nil
-}
-
-// Configure loads the Trustee mTLS material, builds both boundary clients, and
-// swaps them into service as one consistent pair.
-func (plugin *Plugin) Configure(_ context.Context, request *configv1.ConfigureRequest) (*configv1.ConfigureResponse, error) {
-	if request == nil {
-		return nil, status.Error(codes.InvalidArgument, "request is required")
-	}
-	config, notes := parseConfig(request.HclConfiguration)
-	if len(notes) > 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid configuration: %s", strings.Join(notes, "; "))
-	}
-	tlsConfig, err := loadTrusteeTLS(config)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "load Trustee mTLS configuration: %v", err)
-	}
-	evidenceClient, err := evidence.NewClient(config.EvidenceEndpoint, config.RequestTimeout, config.MaxResponseBytes)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "configure Evidence Provider client: %v", err)
-	}
-	trusteeClient, err := trustee.NewClient(config.TrusteeEndpoint, tlsConfig, config.TrusteeSPIFFEID, config.RequestTimeout, config.MaxResponseBytes)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "configure Trustee client: %v", err)
-	}
-	plugin.clientsMu.Lock()
-	plugin.evidence = evidenceClient
-	plugin.trustee = trusteeClient
-	plugin.clientsMu.Unlock()
+	p.clientsMu.Lock()
+	p.evidence, p.trustee, p.config = ec, tc, c
+	p.clientsMu.Unlock()
 	return &configv1.ConfigureResponse{}, nil
 }
-
-func (plugin *Plugin) clients() (EvidenceCollector, TrusteeVerifier, error) {
-	plugin.clientsMu.RLock()
-	defer plugin.clientsMu.RUnlock()
-	if plugin.evidence == nil || plugin.trustee == nil {
-		return nil, nil, status.Error(codes.FailedPrecondition, "plugin is not configured")
-	}
-	return plugin.evidence, plugin.trustee, nil
-}
-
-func loadTrusteeTLS(config *Config) (*tls.Config, error) {
-	// These credentials authenticate the plugin-to-Trustee channel. They are not
-	// evidence that the referenced workload itself is trusted.
-	certificate, err := tls.LoadX509KeyPair(config.TrusteeClientCertPath, config.TrusteeClientKeyPath)
+func loadTrust(c *Config) (*tls.Config, *ecdsa.PublicKey, error) {
+	b, err := os.ReadFile(c.TrusteeCAPath)
 	if err != nil {
-		return nil, fmt.Errorf("load client certificate: %w", err)
-	}
-	caPEM, err := os.ReadFile(config.TrusteeCAPath)
-	if err != nil {
-		return nil, fmt.Errorf("read Trustee CA: %w", err)
+		return nil, nil, err
 	}
 	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(caPEM) {
-		return nil, fmt.Errorf("Trustee CA contains no certificates")
+	if !roots.AppendCertsFromPEM(b) {
+		return nil, nil, fmt.Errorf("empty Trustee CA")
 	}
-	return &tls.Config{
-		MinVersion:   tls.VersionTLS12,
-		Certificates: []tls.Certificate{certificate},
-		RootCAs:      roots,
-		ServerName:   config.TrusteeServerName,
-	}, nil
+	b, err = os.ReadFile(c.EARPublicKeyPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	block, rest := pem.Decode(b)
+	if block == nil || block.Type != "PUBLIC KEY" || strings.TrimSpace(string(rest)) != "" {
+		return nil, nil, fmt.Errorf("EAR key must contain one PKIX PUBLIC KEY")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	key, ok := pub.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, nil, fmt.Errorf("EAR key must be ECDSA")
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, ServerName: c.TrusteeServerName}, key, nil
 }
-
 func newNonce() (string, error) {
-	// A fresh 256-bit nonce lets the plugin correlate evidence and verdict with
-	// exactly one attestation attempt.
-	value := make([]byte, 32)
-	if _, err := rand.Read(value); err != nil {
-		return "", fmt.Errorf("read random bytes: %w", err)
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(value), nil
-}
-
-func validSelectorComponent(value string) bool {
-	// Colons and whitespace would change SPIRE's selector type/value grammar or
-	// make the emitted claim ambiguous.
-	return value != "" && !strings.ContainsAny(value, ":\r\n\t ")
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }

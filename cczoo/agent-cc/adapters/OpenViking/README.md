@@ -1,10 +1,19 @@
-# OpenViking Ingress Broker adapter
+# OpenViking adapter
 
-This adapter launches the official OpenViking server without changing its
+The current Workload Attestation deployment uses TC API's
+`nginx-spiffe-helper-v1` launch profile, the shared TDX Evidence Provider,
+SPIRE WorkloadAttestor, Broker-aware SPIFFE Helper, and NGINX. See the
+[current design](../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md),
+[runbook](../../core/spire/workload/README.md), and
+[validation records](../../core/spire/workload/VALIDATION.md).
+
+## Legacy Ingress Broker adapter
+
+The older adapter in this directory launches the official OpenViking server without changing its
 source code and represents its real process to SPIRE through a separate
 Ingress Broker.
 
-## Runtime boundary
+### Historical runtime boundary
 
 - OpenViking listens on TD Guest loopback port 1933.
 - OpenViking does not mount the Workload API or Broker API socket.
@@ -18,17 +27,17 @@ Ingress Broker.
 The Broker is not configured to restart automatically because a restarted
 container must not reuse a stale target PID.
 
-## Deployment status
+### Deployment status
 
 This directory contains the adapter implementation and launcher only; it is
 not an integrated SPIRE deployment and does not create Registration Entries on
-its own. The Workload Attestation stage remains outside the current trusted
-identity path.
+its own. It is not used by the current Helper + NGINX deployment. Its historical
+architecture and tests are kept in the [documentation archive](../../documents_ly/archive/pre-workload-implementation/README.md).
 
-## Verification
+### Legacy adapter verification
 
-The adapter unit tests check its local contracts. A future integrated runtime
-must additionally verify that:
+The adapter unit tests check its local contracts. Its historical integration
+criteria were:
 
 - OpenViking has no SPIRE or SVID mount;
 - the Ingress Broker references the current OpenViking host PID;
@@ -39,4 +48,4 @@ must additionally verify that:
 
 Go unit tests and Linux cross-builds can run in a local checkout. Docker,
 Broker UDS permissions, PID namespaces, `pidfd_open`, and end-to-end SPIRE
-issuance remain Linux/TDVM verification items.
+issuance require Linux/TDVM evidence. Current acceptance uses the runbook linked above.
