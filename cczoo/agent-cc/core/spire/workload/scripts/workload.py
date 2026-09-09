@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Company-host lifecycle. No mock evidence, automatic policy approval, or Rekor gate."""
 import argparse
+import calendar
 import hashlib
 import http.client
 import json
@@ -386,7 +387,8 @@ def verify(c):
     if proof["client_spiffe_id"] != "spiffe://argus.local/agent/openclaw" or proof["server_serial"] != s["target_serial"]:
         raise ValueError("business call did not use the expected client/current target SVID")
     started = json.loads(protected_file(RECORDS / "start.json").read_text())["started_at"]
-    journal = run(["journalctl", "-u", "argus-tdx-provider", "-u", "argus-workload-agent", "-u", "argus-helper", "--since", started, "--no-pager", "-o", "cat"])
+    started_epoch = calendar.timegm(time.strptime(started, "%Y-%m-%dT%H:%M:%SZ"))
+    journal = run(["journalctl", "-u", "argus-tdx-provider", "-u", "argus-workload-agent", "-u", "argus-helper", "--since", f"@{started_epoch}", "--no-pager", "-o", "cat"])
     appraisals = [line for line in journal.splitlines() if "workload EAR accepted" in line and "launch_id=" + target["launch_id"] in line]
     if not appraisals or "target SVID published serial=" + proof["server_serial"] not in journal:
         raise ValueError("missing correlated EAR acceptance/SVID publication log for this launch")
