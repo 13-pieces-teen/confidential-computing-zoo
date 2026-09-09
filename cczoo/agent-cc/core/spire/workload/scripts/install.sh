@@ -18,6 +18,7 @@ install -m 0755 "$OUT"/spire-1.15.3/bin/* /opt/spire-1.15.3/bin/
 install -m 0755 "$ROOT/scripts/nginx-hook.sh" /opt/argus-workload/bin/
 install -m 0755 "$ROOT/scripts/workload.py" /opt/argus-workload/scripts/
 install -m 0755 "$ROOT/scripts/verify-lifecycle.py" /opt/argus-workload/scripts/
+install -m 0755 "$ROOT/scripts/watch-attestation.py" /opt/argus-workload/scripts/
 install -m 0644 "$ROOT"/config/* /opt/argus-workload/config/
 install -m 0644 "$ROOT"/policy/* /opt/argus-workload/policy/
 install -m 0644 "$ROOT"/systemd/* /opt/argus-workload/systemd/

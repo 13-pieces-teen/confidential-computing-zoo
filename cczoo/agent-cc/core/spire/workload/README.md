@@ -147,6 +147,27 @@ Helper 持有目标 pidfd，约每 500 ms 复核实例。目标退出、身份�
 
 ## 7. 公司验收与记录
 
+### 终端查看 Workload 认证状态
+
+在 IP2 打开一个终端，运行只读日志入口：
+
+```bash
+sudo python3 /opt/argus-workload/scripts/watch-attestation.py
+```
+
+它先打印最近一小时的已有事件，再持续显示新事件；按 `Ctrl+C` 只退出查看器。每行保留 journal 的原始 UTC 时间和 unit，使用 `[INSTANCE]`、`[QUOTE]`、`[EAR]`、`[SVID]` 标记订阅实例、Quote 生成、EAR 校验接受、目标 SVID 发布；已知认证/凭据错误显示 `[ERROR]`，其他进程错误显示 `[PROCESS-ERROR]` 并保留原日志。原日志字段中的 `launch_id`、PID、nonce、policy、EAR 摘要和 serial 可直接用于关联。SVID 行额外输出 `serial_hex`，便于与 OpenClaw 请求的十六进制序列号比较。
+
+查看更早的一次准入、打印后退出：
+
+```bash
+sudo python3 /opt/argus-workload/scripts/watch-attestation.py \
+  --since '2026-09-07 00:00:00 UTC' --no-follow
+```
+
+已有部署可以直接从更新后的仓库运行 `scripts/watch-attestation.py`，不必为查看日志重跑安装、重启服务或重新证明。脚本仅使用 Python 标准库和 `journalctl`。它不生成 Quote，不接触密钥，不修改策略，不把无日志当作通过；`[EAR]` 后仍需结合实例检查和目标 SVID 判断完整准入，`[SVID]` 轮换不是一次新认证。它显示原事件中的策略 ID，不根据名称推断 `tcb_status`；真实 TCB 结论仍以对应 EAR/验收记录为准。
+
+### 联合验证
+
 `verify` 同时检查实例、实际业务 2xx、客户端/服务端 SPIFFE ID、NGINX 当前证书序列号、固定 Entry、与本次启动关联的 EAR 接受日志。记录保存到 `/var/log/argus-workload/`，不写出私钥、原始 Quote 或 EAR token；保存 nonce、launch、policy、EAR 摘要与 SVID 序列号关联。
 
 以下入口会故意中断指定测试工作负载，只在公司验收实例运行：
