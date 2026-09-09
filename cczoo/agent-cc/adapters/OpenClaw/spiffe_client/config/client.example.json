@@ -1,0 +1,7 @@
+{
+  "origin": "https://openviking.argus.local:1943",
+  "clientSpiffeId": "spiffe://argus.local/agent/openclaw",
+  "serverSpiffeId": "spiffe://argus.local/service/openviking-cmem",
+  "credentialsDir": "/run/argus-openclaw/credentials",
+  "requestTimeoutMs": 120000
+}

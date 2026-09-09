@@ -1,6 +1,8 @@
 """No hardware claims: exercise deployment rejection boundaries and policy rendering."""
 import importlib.util
 import json
+import hashlib
+import tempfile
 import os
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -72,6 +74,25 @@ class RuntimeContractTests(unittest.TestCase):
         policy = runtime.render_policy(runtime.baseline(c))
         self.assertNotIn("@IMAGE_CONFIG_DIGEST@", policy)
         self.assertIn(c["approved"]["image_config_digest"], policy)
+
+    def test_policy_artifact_requires_exact_bytes_and_explicit_digest(self):
+        c = {"approved": self.approved()}
+        # A PoC-looking ID alone never drops the strict UpToDate requirement.
+        c['approved']['policy_id'] = 'poc-ignore-tcb'
+        self.assertIn(b'UpToDate', runtime.policy_bytes(c))
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'reviewed.rego'
+            data = b'# explicitly reviewed bytes\r\npackage policy\r\n'
+            path.write_bytes(data)
+            c['approved_policy_artifact'] = {'path': str(path), 'sha256': hashlib.sha256(data).hexdigest()}
+            with patch.object(runtime, 'protected_file', side_effect=Path):
+                self.assertEqual(runtime.policy_bytes(c), data)
+                path.write_bytes(data.replace(b'\r\n', b'\n'))
+                with self.assertRaisesRegex(ValueError, 'SHA-256'):
+                    runtime.policy_bytes(c)
+            del c['approved_policy_artifact']['sha256']
+            with self.assertRaises(ValueError):
+                runtime.policy_bytes(c)
 
     def test_audit_all_same_identity_entries(self):
         required = runtime.selectors({"approved": self.approved()}, runtime.TARGET_ID)

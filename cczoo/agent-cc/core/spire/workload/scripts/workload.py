@@ -83,11 +83,32 @@ def render_policy(a):
     return text
 
 
+def policy_bytes(c):
+    """Default remains strict. An explicit reviewed artifact is byte/hash pinned.
+
+    This does not infer a TCB exception from the policy ID or edit any Rego.
+    The operator supplies the exact policy already reviewed on IP1.
+    """
+    baseline(c)
+    artifact = c.get("approved_policy_artifact")
+    if artifact is None:
+        return render_policy(c["approved"]).encode()
+    if (not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}
+            or not re.fullmatch(r"[0-9a-f]{64}", artifact.get("sha256", ""))
+            or not Path(artifact.get("path", "")).is_absolute()):
+        raise ValueError("approved_policy_artifact requires absolute path and explicit SHA-256")
+    contents = protected_file(artifact["path"]).read_bytes()
+    if not contents or len(contents) > 65536 or hashlib.sha256(contents).hexdigest() != artifact["sha256"]:
+        raise ValueError("approved policy artifact is empty, oversized or SHA-256 differs")
+    contents.decode("utf-8")
+    return contents
+
+
 def render(c):
     a = baseline(c)
     ETC.mkdir(parents=True, exist_ok=True, mode=0o700)
-    policy = render_policy(a)
-    (ETC / (a["policy_id"] + "_cpu.rego")).write_text(policy)
+    policy = policy_bytes(c)
+    (ETC / (a["policy_id"] + "_cpu.rego")).write_bytes(policy)
     plugin = {
         "evidence_endpoint": "unix:///run/argus/evidence-provider.sock",
         "target_registration_path": "/run/argus-workload/target.json",
@@ -130,7 +151,8 @@ plugins {
         shutil.copyfile(PACKAGE / "config" / f, ETC / f)
     for f in ETC.glob("*.conf"):
         f.chmod(0o600)
-    return {"rendered": str(ETC), "policy_sha256": hashlib.sha256(policy.encode()).hexdigest()}
+    return {"rendered": str(ETC), "policy_sha256": hashlib.sha256(policy).hexdigest(),
+            "policy_source": "reviewed-artifact" if c.get("approved_policy_artifact") else "strict-template"}
 
 
 def binary_version(binary):
@@ -240,7 +262,7 @@ def direct_trustee(c):
         response = http.client.HTTPResponse(channel)
         response.begin()
         contents = response.read(65537)
-        if response.status != 200 or contents != render_policy(c["approved"]).encode():
+        if response.status != 200 or contents != policy_bytes(c):
             raise ValueError("Trustee workload policy is missing or differs from the rendered approved policy")
     key = run(["openssl", "pkey", "-pubin", "-in", c["ear_public_key_path"], "-text", "-noout"])
     if "prime256v1" not in key and "P-256" not in key:

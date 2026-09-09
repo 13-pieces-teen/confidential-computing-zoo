@@ -25,7 +25,7 @@
 | 节点身份 | `spiffe://argus.local/spire/agent/argus_tdx/openviking-node` | SPIRE Agent |
 | Helper 调用 Broker | `spiffe://argus.local/infra/openviking-helper` | Helper 的 Workload API source |
 | OpenViking 服务身份 | `spiffe://argus.local/service/openviking-cmem` | Agent 管理并交付；Helper 发布；NGINX 终止 TLS |
-| 固定客户端身份 | `spiffe://argus.local/agent/openclaw` | 获准 OpenClaw 客户端或其身份代理 |
+| 固定客户端身份 | `spiffe://argus.local/agent/openclaw` | OpenClaw Gateway 插件的原生 HTTPS 客户端；凭据由本机专用交付进程提供 |
 
 被证明主体是本次启动的 **OpenViking 实际服务进程实例**；SVID 的 TLS 使用者是 NGINX。OpenViking 不接触 SPIRE socket 或私钥。Helper 自身身份仅用于 Broker mTLS，不作为 OpenViking 目标身份写入 PEM。
 
@@ -122,6 +122,8 @@ Broker 开始订阅时触发 WorkloadAttestor。Helper 对返回消息采用完�
 NGINX 进入 OpenViking 的专用 network namespace，只对外发布 1943。OpenViking 的 1933 回环接口不能从宿主机/容器外直接访问。NGINX 先完成 TLS 客户端证书链验证，再经 root/NGINX 组保护的 AuthZ UDS 发送实际证书。
 
 AuthZ 校验 NGINX 的 TLS 验证结果、实际叶证书中的唯一合法 SPIFFE URI、有效期、非 CA、key usage、client/server EKU，以及固定 OpenClaw ID。外部客户端发送的同名请求头由 NGINX 覆盖；业务响应必须通过 AuthZ。客户端同时核对 OpenViking 目标 ID。
+
+OpenClaw 侧的已实现接入见 [原生客户端方案与部署步骤](../adapters/OpenClaw/spiffe_client/README.md)。它使用自己的 Agent/Broker 和真实 Gateway PID 获取 OpenClaw SVID，在插件进程内完成 mTLS、固定服务端身份验证及凭据轮换；凭据交付进程不转发 HTTP 业务。OpenClaw 自身的准入和证明条件由其 Agent 与 Entry 决定，本服务端的证明结论不能代替客户端证明。
 
 TLS session resumption 与 early data 关闭。Helper 检测目标退出、实例变化、目标身份移除、订阅断开、凭据过期或发布失败后，撤下 readiness、清除 PEM 并停止 NGINX。Helper 崩溃由 systemd 依赖和退出清理兜底。停服连接清理默认最多 5 秒，目标检测另有约 500 ms 轮询与调度延迟。
 

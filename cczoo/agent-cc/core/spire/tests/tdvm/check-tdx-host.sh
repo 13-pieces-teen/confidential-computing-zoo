@@ -4,6 +4,8 @@ set -euo pipefail
 QEMU_BINARY="${QEMU_BINARY:-qemu-system-x86_64}"
 TDVF_FIRMWARE="${TDVF_FIRMWARE:-/usr/share/edk2/ovmf/OVMF.inteltdx.fd}"
 TDX_QGS_SOCKET="${TDX_QGS_SOCKET:-/var/run/tdx-qgs/qgs.socket}"
+SCOPE="${1:-attestation}"
+[[ "$SCOPE" == boot || "$SCOPE" == attestation ]] || { echo 'scope must be boot or attestation' >&2; exit 1; }
 
 fail() {
     printf 'TDX Host preflight: FAIL: %s\n' "$1" >&2
@@ -17,10 +19,12 @@ fail() {
 command -v "$QEMU_BINARY" >/dev/null 2>&1 || fail "$QEMU_BINARY is unavailable"
 "$QEMU_BINARY" -object help 2>&1 | grep -q '^  tdx-guest$' || fail "QEMU does not expose the tdx-guest object"
 [[ -r "$TDVF_FIRMWARE" ]] || fail "TDVF firmware is unavailable at $TDVF_FIRMWARE"
-[[ -S "$TDX_QGS_SOCKET" ]] || fail "QGS socket is unavailable at $TDX_QGS_SOCKET; install/start Host QGS before requesting a TD Quote"
+if [[ "$SCOPE" == attestation ]]; then
+    [[ -S "$TDX_QGS_SOCKET" ]] || fail "QGS socket is unavailable at $TDX_QGS_SOCKET; install/start Host QGS before requesting a TD Quote"
+fi
 
 printf 'TDX Host preflight: PASS\n'
 printf 'KVM TDX: enabled\n'
 printf 'QEMU: %s\n' "$(command -v "$QEMU_BINARY")"
 printf 'TDVF: %s\n' "$TDVF_FIRMWARE"
-printf 'QGS socket: %s\n' "$TDX_QGS_SOCKET"
+printf 'Scope: %s (preconditions only, no Quote verified)\n' "$SCOPE"

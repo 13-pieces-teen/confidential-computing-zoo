@@ -1,0 +1,17 @@
+{
+  "server_address": "REPLACE_WITH_IP1_REACHABLE_FROM_GUEST",
+  "server_port": 8081,
+  "node_certificate_sha1": "REPLACE_WITH_CERT_DER_SHA1_40_HEX",
+  "openclaw_image": "REPLACE_WITH_REGISTRY_IMAGE@sha256:REPLACE_WITH_MANIFEST_DIGEST",
+  "image_config_digest": "sha256:REPLACE_WITH_DOCKER_IMAGE_INSPECT_ID",
+  "helper_sha256": "REPLACE_WITH_DELIVERED_LINUX_BINARY_SHA256",
+  "openviking_origin": "https://openviking.argus.local:1943",
+  "container_name": "agentcc-openclaw-sbx-gateway",
+  "gateway_uid": 1000,
+  "gateway_gid": 1000,
+  "reader_gid": 20000,
+  "gateway_executable": "/usr/local/bin/node",
+  "gateway_command": ["openclaw", "gateway", "--bind", "loopback", "--allow-unconfigured"],
+  "server_socket": "/run/spire/server/api.sock",
+  "server_unit": "spire-server"
+}

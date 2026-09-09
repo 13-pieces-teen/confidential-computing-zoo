@@ -18,7 +18,7 @@ PYTHONPATH="$SPIRE_ROOT/../tc_api:$SPIRE_ROOT/../tlog${PYTHONPATH:+:$PYTHONPATH}
 (cd "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" && go build -trimpath -o "$OUT/bin/argus-tdx-workloadattestor" ./cmd/argus-tdx-workloadattestor)
 (cd "$WORKLOAD_ROOT" && go build -trimpath -o "$OUT/bin/argus-workload" ./cmd/argus-workload)
 (cd "$SPIRE_ROOT/helpers/spiffe-helper" && go build -trimpath -ldflags '-X github.com/spiffe/spiffe-helper/pkg/version.gittag=0.11.0-argus.1' -o "$OUT/bin/spiffe-helper" ./cmd/spiffe-helper)
-for tool in argus-agent-config spiffe-authz spiffe-mtls-probe; do
+for tool in argus-agent-config spiffe-authz spiffe-mtls-probe spiffe-client-credentials; do
     (cd "$SPIRE_ROOT/helpers/spiffe-helper" && go build -trimpath -o "$OUT/bin/$tool" "./cmd/$tool")
 done
 (export CARGO_TARGET_DIR="$OUT/cargo-provider"; cd "$SPIRE_ROOT/../argus" && cargo test --locked --bin argus-tdx-evidence-provider && cargo build --locked --release --bin argus-tdx-evidence-provider)

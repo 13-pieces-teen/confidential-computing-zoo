@@ -1,5 +1,7 @@
 # OpenViking Workload Attestation：公司环境运行手册
 
+2026-09-09 补充：已批准的 `OutOfDate` PoC 原始策略可通过 `approved_policy_artifact.path` 和 `approved_policy_artifact.sha256` 显式输入；本地文件与 Trustee 回读必须逐字节匹配。未配置该项时严格模板仍要求 `UpToDate`，不会根据策略名称自动放宽。客户端部署及使用方式见 [IP1 OpenClaw TDVM 操作手册](../../../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md)。
+
 本目录交付首轮真实取证链的代码、配置和验收入口。SPIRE Server/Agent 与两个 Attestor SDK 使用 **v1.15.3**；Helper 基于官方 **v0.11.0**，定制构建版本为 **0.11.0-argus.1**。Trustee 接口基线为 **v0.21.0**。
 
 完整流程和信任边界见 [当前方案](../../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。本轮不验证 Rekor；TC API 原有日志上传保持。普通 SVID 轮换不会生成新 Quote；Helper 重连才重新订阅、重新认证。真实 TDX 验收需要公司 TDVM。
@@ -136,6 +138,8 @@ preflight 检查批准基线、真实版本、同身份 Entry、Trustee 直连 H
 start 在通过预检后停止配置中指定的旧 Agent/Provider unit，启动新 systemd 栈。手工启动的旧进程不会被自动杀掉；需先按 PID 停止。首次目标凭据通过链、身份和密钥检查，完整代次切换，再经 NGINX `-t` 与实际 TLS 加载检查后，才原子发布 readiness；发布期间过期会清理凭据并停服。
 
 NGINX 进入 OpenViking 的 network namespace，对外终止 mTLS；OpenViking 内部端口只监听该 namespace 的回环。NGINX 先验证客户端证书链，再把实际 TLS 证书及验证状态覆盖写入受控 UDS 请求。AuthZ 检查唯一 SPIFFE URI、用途、有效期与固定 OpenClaw ID。客户端工具同时核对服务端目标 ID。
+
+OpenClaw 的实际插件调用按 [原生 SPIFFE mTLS 接入手册](../../../adapters/OpenClaw/spiffe_client/README.md)部署。新增 `spiffe-client-credentials` 通过 OpenClaw 自己的 Agent/Broker 引用真实 Gateway PID，将目标凭据交付给插件内的 HTTPS 客户端；连接脚本区分安装、PID 登记和配置生效，业务验收检查 Gateway 的实际 mTLS 写入日志。这里的 `verify` 探针仍用于 OpenViking 服务端验收，不能替代完整的 OpenClaw 插件业务验收。
 
 PEM 位于 root 所有的 0700 tmpfs 目录；每代包含证书、PKCS#8 私钥、bundle。每次变更创建新文件和目录，避免 NGINX 因文件缓存沿用旧证书。TLS session cache/tickets/early data 关闭。
 

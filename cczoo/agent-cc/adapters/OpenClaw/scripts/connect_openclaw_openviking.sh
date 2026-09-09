@@ -14,119 +14,46 @@
 # limitations under the License.
 
 set -euo pipefail
-
-TARGET_URI="${TARGET_URI:-http://argus-dual-openclaw-egress:1934}"
-OPENCLAW_CONTAINER="${OPENCLAW_CONTAINER:-agentcc-openclaw-sbx-gateway}"
-OPENCLAW_USER="${OPENCLAW_USER:-node}"
-OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-/home/node/.openclaw/openclaw.json}"
-OPENCLAW_PLUGIN_SPEC="${OPENCLAW_PLUGIN_SPEC:-clawhub:@openviking/openclaw-plugin}"
-OPENCLAW_INSTALL_PLUGIN="${OPENCLAW_INSTALL_PLUGIN:-1}"
-OPENCLAW_RESTART_GATEWAY="${OPENCLAW_RESTART_GATEWAY:-1}"
-OPENVIKING_API_KEY="${OPENVIKING_API_KEY:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/openclaw_spiffe_common.sh"
+PHASE="${1:-connect}"
+OPENCLAW_RESTART_GATEWAY="${OPENCLAW_RESTART_GATEWAY:-0}"
 OPENVIKING_REQUIRE_READY="${OPENVIKING_REQUIRE_READY:-0}"
+OPENCLAW_PLUGIN_ARCHIVE="${OPENCLAW_PLUGIN_ARCHIVE:-$SCRIPT_DIR/../spiffe_client/dist/openviking-openclaw-plugin-2026.6.18-argus.2.tgz}"
 WAIT_ATTEMPTS="${WAIT_ATTEMPTS:-60}"
 WAIT_INTERVAL="${WAIT_INTERVAL:-2}"
-
-log() {
-    printf '[openviking-plugin] %s\n' "$*"
-}
-
-require_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        echo "Missing required command: $1" >&2
-        exit 1
-    fi
-}
-
-wait_http() {
-    local url="$1"
-    local name="$2"
-    local attempt
-
-    for ((attempt=1; attempt<=WAIT_ATTEMPTS; attempt++)); do
-        if docker exec -i -u "$OPENCLAW_USER" "$OPENCLAW_CONTAINER" \
-            node - "$url" >/dev/null 2>&1 <<'NODE'
-const url = process.argv[2];
-
-async function main() {
-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-  if (!response.ok) {
-    throw new Error(`${url} returned HTTP ${response.status}`);
-  }
-}
-
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
-NODE
-        then
-            log "$name is ready: $url"
-            return 0
-        fi
-        sleep "$WAIT_INTERVAL"
-    done
-
-    echo "$name did not become ready: $url" >&2
-    exit 1
-}
-
-main() {
-    require_command docker
-    docker inspect "$OPENCLAW_CONTAINER" >/dev/null 2>&1 || {
-        echo "OpenClaw container does not exist: $OPENCLAW_CONTAINER" >&2
-        exit 1
-    }
-    if [[ "$(docker inspect "$OPENCLAW_CONTAINER" --format '{{.State.Running}}')" != true ]]; then
-        echo "OpenClaw container is not running: $OPENCLAW_CONTAINER" >&2
-        exit 1
-    fi
-
-    if [[ -z "$OPENVIKING_API_KEY" ]]; then
-        echo "OPENVIKING_API_KEY must contain a non-root OpenViking user key." >&2
-        exit 1
-    fi
-    if [[ "$OPENCLAW_RESTART_GATEWAY" != 0 && "$OPENCLAW_RESTART_GATEWAY" != 1 ]]; then
-        echo "OPENCLAW_RESTART_GATEWAY must be 0 or 1." >&2
-        exit 1
-    fi
-    if [[ "$OPENVIKING_REQUIRE_READY" != 0 && "$OPENVIKING_REQUIRE_READY" != 1 ]]; then
-        echo "OPENVIKING_REQUIRE_READY must be 0 or 1." >&2
-        exit 1
-    fi
-
-    wait_http "$TARGET_URI/health" "openviking health"
-    if [[ "$OPENVIKING_REQUIRE_READY" == 1 ]]; then
-        wait_http "$TARGET_URI/ready" "openviking readiness"
-    fi
-
-    if [[ "$OPENCLAW_INSTALL_PLUGIN" == "1" ]]; then
-        log "Installing the OpenViking OpenClaw plugin"
-        docker exec -u "$OPENCLAW_USER" \
-            -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
-            "$OPENCLAW_CONTAINER" \
-            openclaw plugins install "$OPENCLAW_PLUGIN_SPEC"
-    fi
-
-    log "Configuring the OpenViking context engine"
-    docker exec -u "$OPENCLAW_USER" \
-        -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
-        "$OPENCLAW_CONTAINER" \
-        openclaw openviking setup \
-        --base-url "$TARGET_URI" \
-        --api-key "$OPENVIKING_API_KEY" \
-        --json
-
-    if [[ "$OPENCLAW_RESTART_GATEWAY" == 1 ]]; then
-        log "Restarting the OpenClaw gateway"
-        docker restart "$OPENCLAW_CONTAINER" >/dev/null
-
-        log "Verifying the OpenViking plugin status"
-        docker exec -u "$OPENCLAW_USER" \
-            -e OPENCLAW_CONFIG_PATH="$OPENCLAW_CONFIG_PATH" \
-            "$OPENCLAW_CONTAINER" \
-            openclaw openviking status --json
-    fi
-}
-
-main "$@"
+# Restart changes the attested process instance; it needs a new PID registration.
+[[ "$OPENCLAW_RESTART_GATEWAY" == 0 ]] || { echo 'Restart requires a new OpenClaw PID registration; use the documented lifecycle sequence' >&2; exit 1; }
+[[ "$PHASE" == install || "$PHASE" == connect ]] || { echo 'Usage: connect_openclaw_openviking.sh [install|connect]' >&2; exit 1; }
+[[ "$OPENVIKING_REQUIRE_READY" == 0 || "$OPENVIKING_REQUIRE_READY" == 1 ]] || { echo 'OPENVIKING_REQUIRE_READY must be 0 or 1' >&2; exit 1; }
+spiffe_preflight
+if [[ "$PHASE" == install ]]; then
+    digest="$(python3 - "$OPENCLAW_PLUGIN_ARCHIVE" <<'PY'
+import hashlib, json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+receipt = json.loads(p.with_suffix('.json').read_text())
+digest = hashlib.sha256(p.read_bytes()).hexdigest()
+if digest != receipt['sha256'] or receipt['customization'] != 'argus.2':
+    raise SystemExit('Plugin artifact digest/revision mismatch; rebuild with build_plugin.py')
+print(digest)
+PY
+)"
+    remote_archive="/tmp/argus-openviking-$digest.tgz"
+    trap 'docker exec "$OPENCLAW_CONTAINER" rm -f -- "$remote_archive" >/dev/null 2>&1 || true' EXIT
+    docker cp "$OPENCLAW_PLUGIN_ARCHIVE" "$OPENCLAW_CONTAINER:$remote_archive" >/dev/null
+    oc openclaw plugins install "$remote_archive" --force
+fi
+resolve_spiffe_plugin
+if [[ "$PHASE" == install ]]; then
+    printf '%s\n' 'Pinned plugin installed. Start/restart the gateway, register its actual PID, and start credential delivery before running connect.'
+    exit 0
+fi
+ready=0
+for ((attempt=1; attempt<=WAIT_ATTEMPTS; attempt++)); do
+    if spiffe_health && { [[ "$OPENVIKING_REQUIRE_READY" == 0 ]] || spiffe_health /ready; }; then ready=1; break; fi
+    sleep "$WAIT_INTERVAL"
+done
+[[ "$ready" == 1 ]] || { echo 'OpenViking SPIFFE mTLS health check failed' >&2; exit 1; }
+oc openclaw openviking setup --base-url "$TARGET_URI" --api-key "$OPENVIKING_API_KEY" --json
+oc openclaw openviking status --json
+printf '%s\n' 'CLI mTLS and plugin configuration ready. Complete the gateway restart + PID re-registration sequence before business acceptance.'
