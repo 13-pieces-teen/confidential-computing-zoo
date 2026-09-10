@@ -1029,7 +1029,7 @@ Stage 2 只冻结以下前提：
 
 - [Agent-CC Argus architecture（Evidence Provider / Verifier / Guard职责）](../../../core/argus/docs/architecture.md)
 - [Agent-CC Argus API（EvidenceEngine、Runtime Binding与Evidence Envelope）](../../../core/argus/docs/api.md)
-- [Agent-CC历史总览（RATS Attester / Relying Party / Verifier）](../../../core/argus/README_bak.md)
+- [Agent-CC历史总览（RATS Attester / Relying Party / Verifier）](../pre-asymmetric-architecture/argus-inital.md)
 - [SPIRE 1.15.2 release index](https://github.com/spiffe/spire/releases)
 - [SPIRE Server configuration](https://github.com/spiffe/spire/blob/main/doc/spire_server.md)
 - [SPIRE NodeAttestor plugin contracts](https://github.com/spiffe/spire-plugin-sdk/tree/main/proto/spire/plugin/server/nodeattestor)

@@ -1,8 +1,8 @@
 # IP1 新建 OpenClaw TDVM → IP2 OpenViking TDVM：首阶段实施计划
 
-修订日期：2026-09-09。设计核对基线：`feat/argus-spiffe-v2-val` / `25fa9f6`；本阶段客户端代码随该分支交付，部署时以实际检出的完整提交 SHA 为准。本文是实施计划，新增 TDVM 和客户端的公司部署尚未执行。
+修订日期：2026-09-09。设计核对基线：`feat/argus-spiffe-v2-val` / `25fa9f6`；本阶段客户端代码随该分支交付，部署时以实际检出的完整提交 SHA 为准。本文保留首阶段设计与交付计划，后续公司执行结果见 [2026-09-09 客户端验收报告](../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)。
 
-代码交付已完成：TDVM OpenClaw profile、x509pop 部署生成器与身份登记、客户端 Broker 存活检查、`argus.2` 真实业务/召回验收和连续生命周期证据工具。执行入口为 [IP1 / Guest / IP2 操作手册](../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md)，已执行的软件验证见 [VALIDATION.md](../adapters/OpenClaw/spiffe_client/VALIDATION.md)。公司运行步骤仍由操作者执行，不把本地测试记为公司验收。
+代码交付已完成：TDVM OpenClaw profile、x509pop 部署生成器与身份登记、客户端 Broker 存活检查、`argus.2` 真实业务/召回验收和连续生命周期证据工具。执行入口为 [IP1 / Guest / IP2 操作手册](../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md)，本地软件验证见 [VALIDATION.md](../adapters/OpenClaw/spiffe_client/VALIDATION.md)，公司结果以对应执行报告为准。
 
 按用户最新确定的范围：IP1 创建一个 TDVM，在其中运行 OpenClaw；OpenClaw 首阶段不接入 TDX Quote/Trustee 远程证明。OpenClaw 通过普通 SPIRE 身份接入取得 SVID，调用 IP2 已通过 PoC Workload Attestation 的 OpenViking，双方通过 mTLS 验证身份，业务响应沿同一连接返回。
 

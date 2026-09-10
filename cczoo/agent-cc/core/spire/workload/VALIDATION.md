@@ -2,6 +2,8 @@
 
 执行日期：2026-09-05 至 2026-09-06（Asia/Shanghai）。实现和 review 的基线为分支 `feat/argus-spiffe-v2-val`、提交 `9ced0e3`；本轮按模块分开提交，没有部署到公司环境。开始时已 fetch，远端与本地基线无差异。
 
+本文保留首轮测试及当时的待验清单。后续公司执行结果见 [2026-09-09 Workload 状态报告](../../../../../documents_ly/argus-openviking-workload-attestation-status-20260909.md)和 [OpenClaw 客户端验收报告](../../../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)；各记录仅对应其注明的提交、环境与时间。
+
 ## 本地已执行
 
 本机为 Windows；涉及 UDS、pidfd、POSIX signal 和 NGINX 的测试在 Docker Linux 容器执行。Go 使用 1.26.5，Rust 使用 1.88，TC API 测试使用 Python 3.12 与仓库 requirements。下表中的 PASS 不代表真实硬件证明已验收。

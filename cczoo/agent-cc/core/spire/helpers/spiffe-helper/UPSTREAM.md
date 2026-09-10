@@ -6,8 +6,11 @@
 - Source archive SHA-256: 124b009c0dc737c5e5f7afd11eed4fe41b0ac9b98e98fc51cd1a49b38b3e6090
 - Build identity: **0.11.0-argus.1**.
 
-Imported sample/CI files and config test strings have trailing whitespace and
-extra blank lines at EOF normalized; shell scripts retain executable mode.
+Imported samples, integration scripts and config test strings have trailing
+whitespace and extra blank lines at EOF normalized; shell scripts retain
+executable mode. Upstream repository workflows, image publishing automation,
+Dependabot configuration and CODEOWNERS are omitted from this embedded copy.
+The Makefile, its image loader, integration tests and examples remain available.
 
 Opt-in changes: `broker {}` configuration and dispatch, `pkg/broker` local PID subscription,
 generation publication and failure handling; `pkg/authz`; the Agent HCL merge and
