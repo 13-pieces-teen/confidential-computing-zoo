@@ -101,6 +101,39 @@ systemd unit 仍为 `argus-tdx-provider.service`，启动检查同时识别旧�
 以刷新插件校验摘要。Linux 构建与集成验证入口仍为 [scripts/build.sh](scripts/build.sh)；
 真实环境验收沿用下列步骤。
 
+## 迁移后链路 review 与部署修复（2026-09-13）
+
+在迁移提交 `b7ff67d2940fd18b1f420a73b4ac76c01a295b32` 上复核身份绑定、
+Node/Workload 接口和部署衔接。未发现迁移引入的协议回归；Rust/Go 身份校验、
+LP16/SHA-384 REPORTDATA、Trustee appraisal 输入与最终 AgentAttributes 使用同一身份，
+原 Workload 身份保持不变。PoP、expiry、EAR 和请求大小限制保留。
+
+发现并修复一项 P2 升级安装问题：构建失败后旧 `SHA256SUMS` 仍可能有效，
+安装脚本会复制旧 Provider，却安装引用新 Provider 名称的 systemd unit，
+最终输出 `INSTALL=PASS`，而 `ExecStart` 指向不存在的文件。
+通过实际 build/install 脚本和隔离的安装目录复现了这一组合。
+
+修复后，构建开始即废弃旧成功清单，所有检查成功后原子发布新清单；安装在任何
+主机修改前，校验 [完整产物列表](scripts/build-artifacts.sh) 中的 12 个可执行文件
+及其哈希，包括新 Provider 和官方 SPIRE Agent/Server，并只安装列表中的文件。
+升级需要完整重建；旧清单、缺失产物和被修改的二进制均在安装前被拒绝。
+
+| 状态 | 本轮检查 | 结果与边界 |
+|------|----------|------------|
+| PASS | Node 定向回归 | `go test -count=1 ./internal/protocol ./internal/server ./internal/trustee` 三个包通过；覆盖身份和绑定、错误 PoP、过期挑战、其他身份 EAR 及 appraisal 失败拒绝。 |
+| PASS | Linux 隔离安装回归 | `test_build_install` 4 项通过：失败重建使旧清单失效、旧 Provider 包拒绝、未列入新 Provider 或被修改的 SPIRE 拒绝、完整包只安装已校验文件。账号和服务命令为测试替身，安装目标重定向至临时目录，未安装到宿主机。 |
+| PASS | Linux Python 合并回归 | WSL Ubuntu-20.04、独立 Python 3.11.16：`test_build_install` 4 项、`test_runtime` 8 项、`test_spire_cli.OfficialSPIRETests` 2 项，共 14 passed、0 skipped。系统 Python 3.8 的旧用例曾因不支持的语法报错，换用项目支持的 Python 后通过，未修改系统 Python。 |
+| PASS | 官方 SPIRE 配置与 Entry 集成 | 使用校验固定 SHA-256 的官方 SPIRE v1.15.3；四个 Go 工具从本轮提交源码重新交叉编译为 Linux 二进制。临时 Server 实际执行 Entry create/show/audit，生成 Agent 配置通过官方 validate。 |
+| PASS | 实际 Node Server 插件 Configure | 新增测试启动官方 SPIRE Server 和当前 NodeAttestor 插件：原 Agent ID 与 `argus.local` 配置通过 healthcheck；Agent ID 的 trust domain 不一致时，实际 Configure 报错并阻止 Server 启动。测试未请求 Trustee 或执行 Node join。 |
+| PASS | 静态检查 | Shell `bash -n`、Rust Provider 格式与 Git 差异空白检查通过。 |
+| NOT_RUN | Linux Rust Provider UDS 与完整 Linux 构建 | 本轮未执行。WSL 缺少 Rust/C 工具链，Docker 因本机 socket 错误未能启动；未将 Windows Rust handler 测试视为 Linux UDS 验收。 |
+| NOT_RUN | 真实 TDX/Trustee/SVID 与 systemd 部署 | 未执行硬件 Quote、真实 Trustee appraisal、Node join/re-attestation、Agent/Workload SVID 签发及公司主机安装。 |
+
+本节补齐上节尚未执行的官方 SPIRE CLI 集成，保留此前测试的时间与环境边界。
+开发机日志、二进制哈希与环境来源记录位于 `.git/pr364-chain-review/spire-cli/`，
+其中 `linux-python311-combined.log` 记录 14 项合并回归结果。该目录不属于源码交付。
+临时 Server 数据已清理，未留下运行中的测试 Server。
+
 ## 公司环境待执行
 
 按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及 OpenClaw 客户端 SVID，执行：

@@ -32,6 +32,11 @@ sudo bash scripts/install.sh
 
 `build.sh` 执行 Node、Workload、官方 Helper、NGINX、TC API 启动和 Trustee 合同测试，并用官方 SPIRE 校验生成配置与真实 Entry JSON，下载官方 SPIRE v1.15.3 二进制并检查固定 SHA-256。它不编译或修改 SPIRE Core。产物位于 `build/`，包含插件、Helper、Provider、辅助工具及哈希清单。
 
+构建开始时会使旧的 `SHA256SUMS` 失效，全部检查成功后才原子发布新清单。
+安装前检查 [完整可执行产物列表](scripts/build-artifacts.sh) 中的 12 个文件及其哈希，
+包括新 Provider 和官方 SPIRE Agent/Server；只安装这些文件。
+升级需要完整重建，旧清单、缺失产物或被修改的二进制都会在安装前被拒绝。
+
 把相同构建产物安装到 TDVM 与 Server 主机。Server 只使用其中的 Server/Node 插件和 Entry 工具。安装不会启动或启用新服务；现有配置不会被覆盖。
 
 Evidence Provider 的 UDS 路由统一为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。更新时同时安装 Provider 与 NodeAttestor 插件，执行 `workload.py render` 使 Agent 配置中的 `plugin_checksum` 对应新 Node 插件，再重启 Provider、SPIRE Agent；`workload.py start` 会自动执行 `render`。旧的无版本路径不再提供。配置仍只指定 UDS socket，无需填写 HTTP 路径。

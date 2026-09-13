@@ -1,5 +1,6 @@
 """Exercise built deployment binaries and SPIRE contracts; no node join or TDX claim."""
 import configparser
+import hashlib
 import http.client
 import json
 import os
@@ -74,6 +75,88 @@ class ProviderDeploymentTests(unittest.TestCase):
 @unittest.skipUnless(os.environ.get("SPIRE_BIN_DIR") and os.environ.get("ARGUS_WORKLOAD_TOOLS_DIR"),
                      "requires built tools and official SPIRE v1.15.3")
 class OfficialSPIRETests(unittest.TestCase):
+    def test_server_configures_node_plugin_and_rejects_identity_mismatch(self):
+        spire = Path(os.environ["SPIRE_BIN_DIR"])
+        plugin = Path(os.environ["ARGUS_WORKLOAD_TOOLS_DIR"]) / "argus-tdx-nodeattestor-server"
+        checksum = hashlib.sha256(plugin.read_bytes()).hexdigest()
+        self.assertEqual(runtime.binary_version(spire / "spire-server"), "1.15.3")
+        with tempfile.TemporaryDirectory(prefix="argus-node-config-") as directory:
+            root = Path(directory)
+            runtime.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+                         "-nodes", "-days", "1", "-subj", "/CN=Local Trustee test CA",
+                         "-keyout", root / "ca-key.pem", "-out", root / "ca.pem"])
+            runtime.run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256",
+                         "-out", root / "ear-key.pem"])
+            runtime.run(["openssl", "pkey", "-in", root / "ear-key.pem", "-pubout", "-out", root / "ear-public.pem"])
+            for case, agent_id, expected_error in (
+                ("matching", runtime.AGENT_ID, None),
+                ("mismatched", "spiffe://other.example/spire/agent/argus_tdx/openviking-node",
+                 "invalid configuration: agent_id trust domain must match core trust_domain"),
+            ):
+                with self.subTest(case=case):
+                    case_root = root / case
+                    case_root.mkdir()
+                    server_socket = case_root / "server.sock"
+                    settings = {
+                        "agent_id": agent_id,
+                        "slot_owner_key_sha256": hashlib.sha256(bytes(range(32))).hexdigest(),
+                        # No join is attempted. Configure must not require an
+                        # external appraisal request; this origin is local only.
+                        "trustee_url": "https://127.0.0.1:1",
+                        "trustee_ca_path": str(root / "ca.pem"),
+                        "trustee_server_name": "trustee.test",
+                        "ear_public_key_path": str(root / "ear-public.pem"),
+                        "ear_expected_issuer": "https://trustee.test",
+                        "ear_expected_profile": "tag:github.com,2024:confidential-containers/Trustee",
+                        "policy_id": "argus-local-config-test",
+                    }
+                    plugin_data = "\n".join(f"  {key} = {json.dumps(value)}" for key, value in settings.items())
+                    config = case_root / "server.conf"
+                    config.write_text('''server {
+ bind_address="127.0.0.1" bind_port=0 trust_domain="argus.local"
+ socket_path="%s" data_dir="%s"
+ ca_subject { country=["CN"] organization=["Local contract test"] common_name="SPIRE test" }
+}
+plugins {
+ DataStore "sql" { plugin_data { database_type="sqlite3" connection_string="%s" } }
+ KeyManager "memory" {}
+ NodeAttestor "argus_tdx" {
+  plugin_cmd=%s plugin_checksum=%s
+  plugin_data {
+%s
+  }
+ }
+}
+''' % (server_socket, case_root / "data", case_root / "db.sqlite",
+                       json.dumps(str(plugin)), json.dumps(checksum), plugin_data))
+                    with (case_root / "server.log").open("w+") as log:
+                        server = subprocess.Popen([str(spire / "spire-server"), "run", "-config", str(config)],
+                                                  stdout=log, stderr=log)
+                        try:
+                            deadline = time.monotonic() + 20
+                            while server.poll() is None and not server_socket.exists() and time.monotonic() < deadline:
+                                time.sleep(0.05)
+                            log.seek(0)
+                            contents = log.read()
+                            if expected_error:
+                                self.assertIsNotNone(server.poll(), "invalid NodeAttestor config did not stop SPIRE: " + contents)
+                                self.assertNotEqual(server.returncode, 0)
+                                # This prefix comes from Configure's error path,
+                                # not SPIRE's syntax-only validate command.
+                                self.assertIn(expected_error, contents)
+                            else:
+                                self.assertIsNone(server.poll(), contents)
+                                self.assertTrue(server_socket.exists(), "configured SPIRE did not become ready: " + contents)
+                                runtime.run([spire / "spire-server", "healthcheck", "-socketPath", server_socket])
+                                self.assertIn("plugin_name=argus_tdx", contents)
+                        finally:
+                            server.terminate()
+                            try:
+                                server.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                server.kill()
+                                server.wait(timeout=5)
+
     def test_generated_config_and_actual_entry_json(self):
         spire = Path(os.environ["SPIRE_BIN_DIR"])
         tools = Path(os.environ["ARGUS_WORKLOAD_TOOLS_DIR"])
