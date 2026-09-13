@@ -8,7 +8,7 @@ use tdx_quote::ReportData;
 
 pub type Target = BTreeMap<String, String>;
 pub const PROTOCOL: &str = "argus.workload.tdx.v1";
-const AGENT: &str = "spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
+pub(super) const AGENT: &str = "spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
 const FIELDS: &[&str] = &[
     "agent_id",
     "boot_id",

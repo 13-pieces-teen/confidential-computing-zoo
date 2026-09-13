@@ -36,6 +36,8 @@ sudo bash scripts/install.sh
 
 Evidence Provider 的 UDS 路由统一为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。更新时同时安装 Provider 与 NodeAttestor 插件，执行 `workload.py render` 使 Agent 配置中的 `plugin_checksum` 对应新 Node 插件，再重启 Provider、SPIRE Agent；`workload.py start` 会自动执行 `render`。旧的无版本路径不再提供。配置仍只指定 UDS socket，无需填写 HTTP 路径。
 
+Provider 二进制已更名为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。运行中的 systemd unit 仍叫 `argus-tdx-provider.service`；升级时用本分支安装脚本更新 unit，使 `ExecStart` 指向新二进制，并显式传入 `--agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node`。旧二进制名不再作为构建产物交付。
+
 参考 `config/environment.example.json` 建立两台主机各自的 `/etc/argus-workload/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的批准基线及 Helper 二进制必须一致。
 
 ## 3. 保留 Node 合同，升级到官方 v1.15.3
@@ -64,6 +66,10 @@ sudo python3 /opt/argus-workload/scripts/workload.py render
 ```
 
 Agent 配置从原 Node 配置合并生成，保留 proof key 路径等协议设置，更新 Node 插件二进制、Provider socket、Workload API socket，加入 WorkloadAttestor 与本机 Broker。生成结果可在 `/etc/argus-workload/agent.conf` 审查。
+
+新版 NodeAttestor 支持配置 Agent ID，Provider 的 `--agent-id` 是必填项，必须等于 Server `plugin_data.agent_id`；该 ID 的 trust domain 必须与 SPIRE `trust_domain` 一致。当前 OpenViking Workload 合同、静态 Entry 和 policy 继续使用 `spiffe://argus.local/spire/agent/argus_tdx/openviking-node`，因此本轮部署保留 `argus.local` 及原身份。这里的配置能力只覆盖单个已固定 proof key 的 Node slot，不表示 Workload 已支持任意 Agent ID 或多节点注册；完整格式见 [身份配置合同](../../argus/docs/configuration.md#spire-node-attestation)。
+
+Provider 将配置中的 Agent ID、Server nonce 和 proof public key 绑定到 `REPORTDATA`；expiry 和 Quote digest 由 PoP transcript 签名覆盖。Trustee 负责 Quote/TCB/policy 评估，Server NodeAttestor 验证 PoP 与签名 EAR 后才返回 `AgentAttributes`，最终由 SPIRE Server CA 签发 Agent SVID。业务服务的 SVID 仍由后续 Workload 证明和静态 Entry 独立控制。
 
 原 Node 运行脚本 `core/spire/scripts/argus-node-attestation.sh` 已改为 v1.15.3 路径并检查 Agent/Server 二进制版本；新 Workload preflight 进一步通过远端 `server-check` 核对 **正在运行** 的 Server executable。Node 加入必须在公司环境重新验收；历史 v1.15.2 报告仍表示当时的真实版本。
 

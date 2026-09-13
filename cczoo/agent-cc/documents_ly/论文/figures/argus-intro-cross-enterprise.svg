@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1120" viewBox="0 0 1400 1120" role="img" aria-labelledby="title desc">
+  <title id="title">跨企业协作：先确认实际接收实例，再交付敏感输入</title>
+  <desc id="desc">上方比较 Bosch 式联合研发和跨银行融资核验的资源依赖与参与动机。下方展示 A 的敏感输入留在本地，B 通过可信启动器在 TDX TDVM 中启动实际服务，受信组件取证并生成 Quote，双方认可的控制面核验并实施身份准入，入口关联后 A 才交付。实例更换后需停用旧依据并重新准入。</desc>
+  <defs>
+    <marker id="dataArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#176c91"/></marker>
+    <marker id="controlArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#626d7e"/></marker>
+    <style>
+      text { font-family: 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; fill: #203044; }
+      .title { font-size: 32px; font-weight: 700; }
+      .section { font-size: 24px; font-weight: 700; }
+      .label { font-size: 21px; font-weight: 700; }
+      .body { font-size: 19px; }
+      .small { font-size: 16px; fill: #506177; }
+      .sub { font-size: 18px; fill: #506177; }
+      .control { fill: none; stroke: #626d7e; stroke-width: 2.4; stroke-dasharray: 7 5; marker-end: url(#controlArrow); }
+      .data { fill: none; stroke: #176c91; stroke-width: 3; marker-end: url(#dataArrow); }
+      .setup { fill: none; stroke: #626d7e; stroke-width: 2.4; marker-end: url(#controlArrow); }
+    </style>
+  </defs>
+  <rect width="1400" height="1120" fill="#ffffff"/>
+  <text x="36" y="56" class="title">跨企业协作：先确认实际接收实例，再交付敏感输入</text>
+  <text x="36" y="91" class="sub">Argus Introduction · 基于 Bosch 联合研发与跨银行核验构想的 A2S 场景</text>
+
+  <rect x="36" y="119" width="650" height="253" rx="14" fill="#f2f7fb" stroke="#bfd3e4"/>
+  <text x="60" y="156" class="section">联合研发 · Bosch 案例启发</text>
+  <text x="60" y="195" class="body"><tspan font-weight="700">A 缺什么：</tspan> B 的内部组件版本、调试资产和测试环境</text>
+  <text x="60" y="234" class="body"><tspan font-weight="700">B 为何提供：</tspan> 完成联调，减少内部资产的完整分发</text>
+  <text x="60" y="273" class="body"><tspan font-weight="700">A 交付什么：</tspan> 未发布接口配置、故障复现输入</text>
+  <text x="60" y="312" class="body"><tspan font-weight="700">业务结果：</tspan> 测试摘要 → 修订 → 复测</text>
+  <text x="60" y="346" class="small">实际服务：按获准程序与配置执行的集成测试服务</text>
+
+  <rect x="714" y="119" width="650" height="253" rx="14" fill="#f1f8f5" stroke="#bfdaca"/>
+  <text x="738" y="156" class="section">跨银行核验 · MonetaGo 案例启发</text>
+  <text x="738" y="195" class="body"><tspan font-weight="700">A 缺什么：</tspan> 其他机构的融资登记信息与核验网络</text>
+  <text x="738" y="234" class="body"><tspan font-weight="700">B 为何提供：</tspan> 促成机构参与，提供受控核验能力</text>
+  <text x="738" y="273" class="body"><tspan font-weight="700">A 交付什么：</tspan> 必要发票字段，仍涉及交易关系与金额</text>
+  <text x="738" y="312" class="body"><tspan font-weight="700">业务结果：</tspan> 匹配信息 → 既有审批或人工复核</text>
+  <text x="738" y="346" class="small">实际服务：指纹生成与匹配；B 是核验网络运营机构</text>
+
+  <text x="36" y="418" class="section">两种业务，共用一条启动、证明与交付链</text>
+  <path d="M894 409 H936" class="data"/><text x="947" y="415" class="small">业务数据</text>
+  <path d="M1107 409 H1149" class="control"/><text x="1160" y="415" class="small">证明／身份</text>
+
+  <rect x="340" y="449" width="1024" height="511" rx="16" fill="#fafbfd" stroke="#c6cfda" stroke-width="1.6"/>
+  <text x="364" y="480" class="label">B 的远程服务环境</text>
+  <text x="613" y="480" class="small">基础设施可由受托云运营方承载</text>
+  <rect x="364" y="496" width="612" height="440" rx="12" fill="#f0f7f3" stroke="#51866d" stroke-width="2"/>
+  <text x="389" y="527" class="label">Intel TDX TDVM · 获准 Guest 与服务组件</text>
+
+  <rect x="36" y="496" width="250" height="440" rx="12" fill="#f2f7fb" stroke="#9bbbd2" stroke-width="1.6"/>
+  <text x="60" y="528" class="label">企业 A</text>
+  <rect x="60" y="548" width="202" height="86" rx="9" fill="#ffffff" stroke="#9bbbd2"/>
+  <text x="161" y="582" text-anchor="middle" class="label">研发／信贷 Agent</text>
+  <text x="161" y="612" text-anchor="middle" class="small">代表获授权的业务方</text>
+  <rect x="60" y="663" width="202" height="102" rx="9" fill="#ffffff" stroke="#9bbbd2" stroke-dasharray="5 4"/>
+  <text x="161" y="695" text-anchor="middle" class="label">准备必要输入</text>
+  <text x="161" y="724" text-anchor="middle" class="body">准入条件满足前</text>
+  <text x="161" y="750" text-anchor="middle" class="body">保留在 A 本地</text>
+  <text x="60" y="803" class="body">核对预期服务身份</text>
+  <text x="60" y="912" class="small">依赖双方认可的准入规则</text>
+
+  <rect x="389" y="551" width="226" height="94" rx="9" fill="#ffffff" stroke="#80a792"/>
+  <text x="502" y="583" text-anchor="middle" class="label">1 可信启动器</text>
+  <text x="502" y="612" text-anchor="middle" class="body">启动获准镜像与配置</text>
+  <text x="502" y="636" text-anchor="middle" class="small">登记实际实例</text>
+  <path d="M615 592 H704" class="setup"/>
+  <text x="660" y="580" text-anchor="middle" class="small">受控启动</text>
+
+  <rect x="705" y="551" width="241" height="102" rx="9" fill="#ffffff" stroke="#51866d" stroke-width="2"/>
+  <text x="825" y="582" text-anchor="middle" class="label">实际业务服务实例</text>
+  <text x="825" y="611" text-anchor="middle" class="body">集成测试／融资核验</text>
+  <text x="825" y="638" text-anchor="middle" class="small">使用 B 的获授权业务资产</text>
+
+  <path d="M825 653 V682" class="control"/>
+  <rect x="705" y="682" width="241" height="85" rx="9" fill="#ffffff" stroke="#80a792"/>
+  <text x="825" y="714" text-anchor="middle" class="label">2 受信取证组件</text>
+  <text x="825" y="742" text-anchor="middle" class="small">实例／镜像／配置 + 新鲜挑战</text>
+  <path d="M946 723 H1006" class="control"/>
+  <text x="977" y="705" text-anchor="middle" class="small">Quote</text>
+
+  <text x="1007" y="580" class="label">双方认可的控制面</text>
+  <rect x="1007" y="600" width="328" height="184" rx="10" fill="#ffffff" stroke="#9ba9bb" stroke-width="1.6"/>
+  <text x="1171" y="636" text-anchor="middle" class="label">Quote 与政策核验</text>
+  <text x="1171" y="665" text-anchor="middle" class="small">验证证据及绑定的工作负载材料</text>
+  <path d="M1027 684 H1315" stroke="#d8dfe8"/>
+  <text x="1171" y="718" text-anchor="middle" class="label">3 身份准入</text>
+  <text x="1171" y="748" text-anchor="middle" class="body">SPIFFE / SPIRE</text>
+  <text x="1171" y="774" text-anchor="middle" class="small">按核验结果实施签发规则</text>
+  <text x="1171" y="822" text-anchor="middle" class="small">控制面不接收业务正文</text>
+
+  <rect x="405" y="793" width="230" height="92" rx="9" fill="#ffffff" stroke="#176c91" stroke-width="2"/>
+  <text x="520" y="827" text-anchor="middle" class="label">实际通信入口</text>
+  <text x="520" y="858" text-anchor="middle" class="body">与获准实例受控关联</text>
+  <path d="M1171 784 V904 H520 V885" class="control"/>
+  <rect x="1000" y="866" width="233" height="25" fill="#fafbfd"/>
+  <text x="1115" y="885" text-anchor="middle" class="small">准入 → 身份交付 → 入口</text>
+
+  <path d="M286 828 H405" class="data"/>
+  <text x="345" y="813" text-anchor="middle" class="small">4 敏感输入</text>
+  <text x="345" y="851" text-anchor="middle" class="small">mTLS</text>
+  <path d="M405 866 H286" class="data"/>
+  <text x="345" y="890" text-anchor="middle" class="small">5 约定结果</text>
+  <path d="M635 839 H959 V602 H946" class="data" marker-start="url(#dataArrow)"/>
+  <text x="792" y="865" text-anchor="middle" class="small">受保护的业务后端路径</text>
+
+  <rect x="36" y="985" width="1328" height="75" rx="10" fill="#fff7ec" stroke="#d7b17e"/>
+  <text x="60" y="1017" class="label">运行变化：实例更换 → 旧依据按规则停用 → 新实例重新登记与准入 → 后续交付</text>
+  <text x="60" y="1045" class="small">检测、传播与停用存在时间窗口；普通证书轮换不等于生成新 Quote。</text>
+  <text x="36" y="1095" class="small">拟议流程，不表示 Bosch 或 MonetaGo 已部署 Argus；应用输出规则与获准 Guest 仍属于声明的信任边界。</text>
+</svg>

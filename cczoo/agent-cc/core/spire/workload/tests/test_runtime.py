@@ -5,6 +5,7 @@ import hashlib
 import tempfile
 import os
 from pathlib import Path
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 import unittest
@@ -18,6 +19,38 @@ spec.loader.exec_module(runtime)
 
 
 class RuntimeContractTests(unittest.TestCase):
+    def test_preflight_rejects_an_install_with_only_the_legacy_provider(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binaries = Path(directory)
+            for name in ("spiffe-helper", "argus-agent-config", "argus-workload", "spiffe-authz",
+                         "spiffe-mtls-probe", "argus-tdx-workloadattestor", "argus-tdx-evidence-provider"):
+                (binaries / name).touch(mode=0o755)
+            with patch.object(runtime, "BIN", binaries), \
+                    patch.object(runtime.shutil, "which", return_value="available"), \
+                    patch.object(runtime, "binary_version", return_value="1.15.3"), \
+                    patch.object(runtime, "remote_check", return_value={}), \
+                    patch.object(runtime, "direct_trustee", return_value="PASS"), \
+                    self.assertRaisesRegex(ValueError, "missing executable: .*argus-spire-evidence-provider"):
+                runtime.preflight({"approved": self.approved()})
+
+    def test_start_rejects_both_provider_names_before_starting_services(self):
+        for name in ("argus-tdx-evidence-provider", "argus-spire-evidence-provider"):
+            with self.subTest(provider=name):
+                process_command = "/usr/local/bin/" + name + " --socket-path /run/argus/evidence-provider.sock"
+                def running_process(argv, **kwargs):
+                    if argv[0] == "pgrep" and re.search(argv[2], process_command):
+                        return "2345"
+                    return ""
+                with patch.object(runtime, "preflight", return_value={}), \
+                        patch.object(runtime, "render"), \
+                        patch.object(runtime, "run", side_effect=running_process) as commands, \
+                        self.assertRaisesRegex(ValueError, name + " is still running with PID\\(s\\) 2345"):
+                    runtime.start({"previous_provider_unit": "previous-provider.service"})
+                self.assertEqual(commands.call_args_list[0].args[0],
+                                 ["systemctl", "stop", "previous-provider.service"])
+                self.assertFalse(any(call.args[0][:2] == ["systemctl", "start"]
+                                     for call in commands.call_args_list))
+
     def test_tc_api_does_not_forward_credentials_on_redirect(self):
         received = []
         class Destination(BaseHTTPRequestHandler):

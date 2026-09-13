@@ -277,7 +277,7 @@ def preflight(c):
             raise ValueError(f"missing command: {tool}")
     result = {"agent_binary_version": binary_version(SPIRE / "spire-agent"),
               "server": remote_check(c), "trustee_direct": direct_trustee(c)}
-    for executable in ("spiffe-helper", "argus-agent-config", "argus-workload", "spiffe-authz", "spiffe-mtls-probe", "argus-tdx-workloadattestor", "argus-tdx-evidence-provider"):
+    for executable in ("spiffe-helper", "argus-agent-config", "argus-workload", "spiffe-authz", "spiffe-mtls-probe", "argus-tdx-workloadattestor", "argus-spire-evidence-provider"):
         if not os.access(BIN / executable, os.X_OK):
             raise ValueError(f"missing executable: {BIN / executable}")
     if run([BIN / "spiffe-helper", "-version"]) != "0.11.0-argus.1":
@@ -362,9 +362,9 @@ def start(c):
     for key in ("previous_agent_unit", "previous_provider_unit"):
         if c.get(key):
             run(["systemctl", "stop", c[key]])
-    # A manually started old process must be stopped by its owner. Never unlink
-    # a live Provider socket or race two Agents over one data directory.
-    for name in ("spire-agent", "argus-tdx-evidence-provider"):
+    # Check both Provider names during upgrades. A manually started process must
+    # be stopped by its owner before reusing its socket or Agent data directory.
+    for name in ("spire-agent", "argus-tdx-evidence-provider", "argus-spire-evidence-provider"):
         running = run(["pgrep", "-f", "(^|/)" + name + "( |$)"], check=False)
         if running:
             raise ValueError(f"{name} is still running with PID(s) {running}; stop the old process before start")

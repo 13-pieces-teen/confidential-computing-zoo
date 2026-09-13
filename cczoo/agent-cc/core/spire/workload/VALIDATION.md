@@ -67,6 +67,40 @@
 
 Rust Provider 测试已更新为使用新 Node 路径，并检查旧 Node 路径及未配置的 Workload 路径返回 404；本次未执行这些 Rust 测试：本机无可用 Cargo，Docker daemon 无法连接，WSL 不可访问。上方此前的 Rust/Linux 通过记录不代表本次路由改动已复验。Linux 环境需运行 `cargo test --locked --bin argus-tdx-evidence-provider` 或完整构建入口后，再执行公司环境验收。
 
+## Node Attestation PR #364 同步（2026-09-13）
+
+在 `feat/argus-spiffe-v2-val` 的 `1e2247d` 基础上，迁入已合并
+[PR #364](https://github.com/intel/confidential-computing-zoo/pull/364) 的 review 修订。
+上游 `5e51ac9` 与原 PR 最终提交 `59e9c37` 的文件树一致。
+
+同步范围包括配置化 Agent ID、Rust/Go 共享身份和 REPORTDATA 向量、Server
+trust domain 校验、appraisal 与 AgentAttributes 的身份一致性、Provider 更名、
+Node 插件 Intel module/Proto 路径和许可证，以及配置与部署文档。
+SPIRE SDK 已是 v1.15.3；本轮仅清除 go.sum 中旧 v1.15.2 的两项记录。
+
+Provider 现在使用 `argus-spire-evidence-provider`，必须传入 `--agent-id`。
+保留 `/ra/v1/node-evidence`、`/ra/v1/workload-evidence`、Workload 取证及 32 KiB
+请求体限制。现有 Workload 部署显式使用
+`spiffe://argus.local/spire/agent/argus_tdx/openviking-node`；启用 Workload 登记时，
+Provider 在启动前拒绝另一 Node 身份。测试也确认原身份的 REPORTDATA 字节不变。
+systemd unit 仍为 `argus-tdx-provider.service`，启动检查同时识别旧、新 Provider 进程。
+
+| 状态 | 本轮检查 | 结果与边界 |
+|------|----------|------------|
+| PASS | NodeAttestor Go | Windows Go 1.26.5：`go test -mod=readonly -count=1 ./...`、`go vet -mod=readonly ./...`、`go mod verify` 通过；6 个测试包。 |
+| PASS | WorkloadAttestor 与 Workload Go | 两个模块的 `go test -mod=readonly -count=1 ./...` 和 `go vet -mod=readonly ./...` 通过；Windows 不执行 Linux `/proc` 测试。 |
+| PASS | Linux Go 平台回归 | Windows 交叉编译后在 WSL Ubuntu-20.04 实际执行 6 个包、22 个顶层测试，0 skipped：Node Agent proof-key 权限、Workload protocol/target 的 pidfd 退出与 root-owned registration 检查，以及 WorkloadAttestor evidence/Trustee/plugin 回归。 |
+| PASS | Rust Provider | Rust 1.88.0 / Windows GNU：`cargo test --locked --bin argus-spire-evidence-provider`，14 passed；包括共享身份向量、原部署绑定不变、配置不一致拒绝和既有 Workload handler 回归。Quote Source 与运行观察由测试替身提供。 |
+| PASS | Argus 完整目标编译检查 | `cargo check --locked --all-targets` 通过，Cargo.lock 未改变；包含既有未使用代码警告。该 Windows 检查不编译 `cfg(unix)` 路径。 |
+| PASS | Python 部署回归 | `python -m unittest discover -s cczoo/agent-cc/core/spire/workload/tests -v`：8 passed、2 skipped；覆盖仅安装旧 Provider 的拒绝及两种残留进程阻止启动。 |
+| PASS | Shell、格式和文档 | build/install/Node operator 脚本 `bash -n` 通过；Go/Rust 格式、文档本地链接及 SVG XML 检查通过。 |
+| NOT_RUN | Linux Rust Provider UDS 集成 | 已加入使用实际 systemd `ExecStart` 的测试，验证必填 Agent ID、两条版本化路由及旧路由 404，并接入 `scripts/build.sh`；本机 WSL 无 Rust/C 工具链，本轮未执行。 |
+| NOT_RUN | 官方 SPIRE CLI 集成及真实 TDX 验收 | Python 官方 SPIRE 用例本轮缺少构建产物而跳过；未执行真实 Quote、Trustee appraisal、Node join/re-attestation、Agent/Workload SVID 签发或公司部署。历史验证记录不替代本轮验收。 |
+
+升级时同时安装新 Provider 与 Node 插件，更新 unit 并重新执行 `workload.py render`
+以刷新插件校验摘要。Linux 构建与集成验证入口仍为 [scripts/build.sh](scripts/build.sh)；
+真实环境验收沿用下列步骤。
+
 ## 公司环境待执行
 
 按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及 OpenClaw 客户端 SVID，执行：

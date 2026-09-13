@@ -38,12 +38,27 @@ spire/
 ```
 
 The TDX identity Evidence Provider is implemented by
-[`../argus/src/bin/tdx_evidence_provider.rs`](../argus/src/bin/tdx_evidence_provider.rs).
+[`../argus/src/bin/spire_evidence_provider.rs`](../argus/src/bin/spire_evidence_provider.rs),
+built as `argus-spire-evidence-provider`.
 It serves `POST /ra/v1/node-evidence` and, when workload configuration is supplied,
 `POST /ra/v1/workload-evidence`. Both routes use the `/ra/v1/` namespace, with no
 unversioned route aliases. These handlers use separate binding contracts and
 share the real TSM Quote source. Workload SVID rotation does not generate a new
 Quote; Helper reconnection triggers a new subscription and attestation.
+
+The Provider's required `--agent-id` and the Server NodeAttestor's `agent_id`
+must match, and the identity's trust domain must match SPIRE's core
+`trust_domain`. The Node configuration supports one pinned Agent slot. The
+combined OpenViking deployment keeps the explicit identity
+`spiffe://argus.local/spire/agent/argus_tdx/openviking-node`, which is also used
+by Workload binding, registration entries, and policy. See the
+[identity configuration contract](../argus/docs/configuration.md#spire-node-attestation).
+
+The Provider generates the raw Quote inside the attested TD; Trustee appraises
+it, the Server NodeAttestor verifies the signed EAR and proof of possession,
+and the SPIRE Server CA issues the Agent SVID. That SVID authenticates the
+infrastructure Agent. The separate Workload flow above establishes a service
+identity and its SVID.
 
 ## Node Attestation operator script
 

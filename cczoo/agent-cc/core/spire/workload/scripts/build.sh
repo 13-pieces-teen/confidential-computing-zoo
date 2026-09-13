@@ -21,8 +21,8 @@ PYTHONPATH="$SPIRE_ROOT/../tc_api:$SPIRE_ROOT/../tlog${PYTHONPATH:+:$PYTHONPATH}
 for tool in argus-agent-config spiffe-authz spiffe-mtls-probe spiffe-client-credentials; do
     (cd "$SPIRE_ROOT/helpers/spiffe-helper" && go build -trimpath -o "$OUT/bin/$tool" "./cmd/$tool")
 done
-(export CARGO_TARGET_DIR="$OUT/cargo-provider"; cd "$SPIRE_ROOT/../argus" && cargo test --locked --bin argus-tdx-evidence-provider && cargo build --locked --release --bin argus-tdx-evidence-provider)
-install -m 0755 "$OUT/cargo-provider/release/argus-tdx-evidence-provider" "$OUT/bin/"
+(export CARGO_TARGET_DIR="$OUT/cargo-provider"; cd "$SPIRE_ROOT/../argus" && cargo test --locked --bin argus-spire-evidence-provider && cargo build --locked --release --bin argus-spire-evidence-provider)
+install -m 0755 "$OUT/cargo-provider/release/argus-spire-evidence-provider" "$OUT/bin/"
 (export CARGO_TARGET_DIR="$OUT/cargo-trustee"; cd "$WORKLOAD_ROOT/trustee-contract" && cargo test --locked)
 archive="$OUT/spire-1.15.3-linux-amd64-musl.tar.gz"
 curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
