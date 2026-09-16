@@ -38,7 +38,6 @@ def main():
     prefixes=['adapters/OpenClaw/spiffe_client/','core/spire/helpers/spiffe-helper/','core/spire/workload/','core/spire/tests/tdvm/']
     scripts={'openclaw_tdvm.sh','openclaw_spiffe_common.sh','connect_openclaw_openviking.sh',
              'verify_openclaw_plugin_e2e.sh','observe_openclaw_lifecycle.sh'}
-    documents={'Argus-IP1-OpenClaw-IP2-OpenViking-Implementation-Plan-CN.md'}
     files={}
     for name in paths:
         if not name: continue
@@ -48,7 +47,6 @@ def main():
         except ValueError: continue
         if (any(rel.startswith(v) for v in prefixes)
                 or (rel.startswith('adapters/OpenClaw/scripts/') and file.name in scripts)
-                or (rel.startswith('documents_ly/') and file.name in documents)
                 or rel in ('LICENSE','NOTICE')):
             data=file.read_bytes()
             # Windows checkouts may use CRLF; Linux shell delivery must use LF.

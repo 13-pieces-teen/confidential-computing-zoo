@@ -18,7 +18,7 @@ TC-API 启动 OpenViking
 
 - [Broker Sidecar 实施与远程验证方案](./Argus-Asymmetric-Attestation-SPIFFE-Implementation-Plan.md)
 - SPIRE asymmetric runtime：`core/spire/runtime/asymmetric/README.md`（历史路径，已删除）
-- [Broker Sidecar](../../../adapters/OpenViking/broker_sidecar)
+- Broker Sidecar：`adapters/OpenViking/broker_sidecar`（历史源码路径，见 Git 历史）
 - [自定义 WorkloadAttestor](../../../core/spire/plugins/argus-tdx-workloadattestor)
 
 旧的 `spiffe_server/`、`entrypoint-spiffe.sh` 和 OpenViking Python 直接获取 SVID 的

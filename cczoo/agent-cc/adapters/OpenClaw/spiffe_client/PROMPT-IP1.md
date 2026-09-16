@@ -6,7 +6,7 @@
 
 先执行：
 1. 在现有 confidential-computing-zoo 仓库读取适用 AGENTS.md，检查工作区并 git fetch origin。使用用户指定的本次提交；若现有部署目录有修改，建立该提交的独立 worktree，不覆盖原部署目录。记录实际完整 SHA，确认本次提交属于 origin/feat/argus-spiffe-v2-val。
-2. 阅读 cczoo/agent-cc/adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md、README.md、VALIDATION.md，以及 cczoo/agent-cc/documents_ly/Argus-IP1-OpenClaw-IP2-OpenViking-Implementation-Plan-CN.md。dist 产物不在 Git；从此提交构建插件和 Linux Helper，或核对用户交付包清单，不能默认拉取代码后已有二进制。只需构建客户端，不运行 IP2 的整套 Workload build/launch。
+2. 阅读 cczoo/agent-cc/adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md、README.md、VALIDATION.md。dist 产物不在 Git；从此提交构建插件和 Linux Helper，或核对用户交付包清单，不能默认拉取代码后已有二进制。只需构建客户端，不运行 IP2 的整套 Workload build/launch。
 3. 记录既有 SPIRE Server/Trustee 的实际配置、unit、可执行版本、CA/bundle、监听地址和当前状态。向操作者索取 IP2 的接入交接信息；在其尚未返回时，继续完成 Host 预检、TDVM 创建和 Guest 准备。
 
 实施：

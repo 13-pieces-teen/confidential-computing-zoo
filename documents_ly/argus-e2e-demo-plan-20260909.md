@@ -244,7 +244,7 @@ NGINX 当前默认 access log 未记录 request ID/SPIFFE ID，不能假定存�
 - IP1 新证据根：`/root/argus-ip1-openclaw/20260909T144253+0800-ip1-openclaw-client/`。
 - IP1 原 Workload 证据根：`/root/.copilot/session-state/ada7d94c-d335-4314-8cbf-0bf403447a00/files/20260907T125754+0800-ip1-workload-attestation/`。
 - 已完成归档 session：`7e3b3bfe-ce2a-46f0-9f2b-b341ea588668`；task：`163b22d8-dc1b-4789-b0ab-ec4bb4501b2b`。只作已有 context 读取的候选；本次 WebUI 写入使用新标记并读取实际新 session。
-- 日志实现：[Quote 生成](../cczoo/agent-cc/core/argus/src/bin/tdx_evidence_provider.rs)、[EAR 校验](../cczoo/agent-cc/core/spire/plugins/argus-tdx-workloadattestor/internal/trustee/client.go)、[Helper 订阅与 SVID 发布](../cczoo/agent-cc/core/spire/helpers/spiffe-helper/pkg/broker/run.go)、[Gateway mTLS 回执](../cczoo/agent-cc/adapters/OpenClaw/spiffe_client/lib/transport.mjs)。
+- 日志实现：[Quote 生成](../cczoo/agent-cc/core/argus/src/bin/spire_evidence_provider.rs)、[EAR 校验](../cczoo/agent-cc/core/spire/plugins/argus-tdx-workloadattestor/internal/trustee/client.go)、[Helper 订阅与 SVID 发布](../cczoo/agent-cc/core/spire/helpers/spiffe-helper/pkg/broker/run.go)、[Gateway mTLS 回执](../cczoo/agent-cc/adapters/OpenClaw/spiffe_client/lib/transport.mjs)。
 - 现有交叉检查：[Workload verify](../cczoo/agent-cc/core/spire/workload/scripts/workload.py)、[Gateway 写入回执校验](../cczoo/agent-cc/adapters/OpenClaw/spiffe_client/verify_audit.py)。
 
 本地本次交付为环境准备与用户操作手册，尚未执行公司主机配置。主机 Agent 完成基础准备并给出现场准确操作说明后，用户自行操作 WebUI；用户聊天和截图不属于主机 Agent 的自动执行任务。

@@ -6,6 +6,7 @@
 
 | 归档 | 内容 |
 |---|---|
+| [OpenClaw 客户端首阶段计划](./openclaw-client-stage1/Argus-IP1-OpenClaw-IP2-OpenViking-Implementation-Plan-CN.md) | 2026-09-09 的 IP1 → IP2 首阶段设计与交付快照；2026-09-16 归档，部署步骤由现行客户端手册维护，不再进入交付包 |
 | [pre-workload-implementation](./pre-workload-implementation/README.md) | 本次移入的 Node 重构计划及旧图、双 Broker 架构/实施/远程报告、OpenViking Broker Sidecar 详细方案 |
 | [pre-dual-tdvm-broker-sidecar](./pre-dual-tdvm-broker-sidecar/README.md) | 更早的非对称方案、Python 直连 Workload API、会议记录与性能报告 |
 | [pre-asymmetric-architecture](./pre-asymmetric-architecture/README.md) | 早期 SPIFFE 集成设计与验证材料 |

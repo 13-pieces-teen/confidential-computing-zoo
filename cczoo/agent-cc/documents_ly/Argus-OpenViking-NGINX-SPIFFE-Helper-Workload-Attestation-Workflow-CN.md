@@ -1,8 +1,8 @@
 # OpenViking Workload 认证方案：NGINX + SPIFFE Helper
 
-修订日期：2026-09-06；代码核对基线：`9f493f8`。本文件对应已实现的首轮 Workload 认证链。前置节点准入见 [Node Attestation](./Argus-TDX-Node-Attestation-CN.md)；代码、配置及公司环境步骤见 [运行手册](../core/spire/workload/README.md)，执行结果见 [验证记录](../core/spire/workload/VALIDATION.md)。本地软件与集成测试已执行，公司真实 TDX 全链路仍待验收。
+修订日期：2026-09-16；代码核对基线：`a0f19e0`。本文维护服务实例绑定、EAR/selector 校验、Helper/NGINX 身份交付与服务端失效处理的细节。整体拓扑见 [当前代码总览](./Argus-SPIFFE-Current-Code-Architecture-CN.md)，前置节点协议见 [Node Attestation](./Argus-TDX-Node-Attestation-CN.md)，构建部署见 [运行手册](../core/spire/workload/README.md)。本地与公司执行记录见文末，源码实现和报告结论分别维护。
 
-## 1. 目标与本轮边界
+## 1. 目标与实现边界
 
 贯通 **TC API 启动 OpenViking → Helper 引用实际服务 PID → WorkloadAttestor → 真实 TDX Quote → Trustee 评估 → SPIRE 目标 SVID → NGINX mTLS → OpenViking 业务响应**。
 
@@ -11,7 +11,7 @@
 | SPIRE | 官方 Server/Agent v1.15.3；两个 Attestor SDK 同步 v1.15.3 |
 | Helper | 官方 v0.11.0 源码扩展 Broker 模式，定制版本 0.11.0-argus.1 |
 | Trustee | 直接使用 v0.21.0 的 HTTPS `/attestation`，固定 EAR 公钥与固定 workload policy |
-| 部署 | 每个 TDVM 一个 OpenViking 服务进程；Provider、Agent、Helper、NGINX、AuthZ 由宿主机管理 |
+| 部署 | 每个 TDVM 一个 OpenViking 服务进程；Provider、Agent、Helper、NGINX、AuthZ 由 TDVM Guest OS 管理 |
 | Rekor | TC API/TruCon 原有日志上传保持，本轮不验证 Rekor，也不把上传成功作为身份门禁 |
 | 失效处理 | Helper 持有 pidfd，systemd 联动 NGINX；Agent 独立持续监测和周期重新证明后续实现 |
 | 完成边界 | 本地软件测试与公司真实 TDX 验收分别记录 |
@@ -31,11 +31,11 @@
 
 Trustee HTTPS 使用独立预置 CA 与固定 EAR 签名公钥，不依赖尚未签发的 OpenViking SVID。避免启动时用目标身份申请目标身份的循环依赖。
 
-## 3. Node 前提与版本迁移
+## 3. Node 前提与部署配置
 
-保留原 Node challenge、PoP、证明公钥、REPORTDATA 编码、固定 Agent ID 和 Trustee EAR 验证合同。升级 SDK 与二进制路径；Agent 的原 proof key、Server 的 CA/Node policy 继续使用。
+Node 必须先完成准入，其绑定编码、proof key 与 EAR 检查由 [Node 专题](./Argus-TDX-Node-Attestation-CN.md) 定义。当前组合部署仍固定 `argus.local` 和 `openviking-node`；Node-only 的可配置 Agent ID 不会自动放宽 Workload 合同。
 
-配置合并工具仅更新 Node 插件可执行文件及 SHA-256、Agent 的 Provider/Workload API socket，并加入 Workload/Broker 设置。历史 v1.15.2 报告保留原版本；必须在公司重新验证 v1.15.3 节点加入。
+配置合并工具更新 Node 插件可执行文件及 SHA-256、Agent 的 Provider/Workload API socket，并加入 Workload/Broker 设置，保留原 proof key 和 Node 身份配置。构建与升级步骤统一由运行手册维护。
 
 启动预检既检查待运行 Agent 二进制，也通过已有 SSH 信任连接读取 Server 的实际 `/proc/<MainPID>/exe` 版本和当前 Entry，不能只凭配置中的版本字符串判断。
 
@@ -48,6 +48,8 @@ Trustee HTTPS 使用独立预置 CA 与固定 EAR 签名公钥，不依赖尚未
 5. Helper 在发起订阅之前，校验登记并同步打开 pidfd。替换目标必须停止旧栈，重新登记和认证。
 
 镜像内容身份使用 Docker 实际 `.Image` / image inspect `.Id` 的 SHA-256 config digest。image tag、名称及其摘要不进入身份授权依据。
+
+当前 [启动工具](../core/spire/workload/scripts/workload.py) 向 TC API 传入 `attestation_required: false`，控制的是 TC API 原有可选 attestation 分支。本文的 TDX Workload 取证发生在后续 Broker/Attestor 路径，该字段不会取消这里的 Quote、EAR 或身份门禁。
 
 ## 5. Workload 绑定合同与取证
 
@@ -72,7 +74,7 @@ canonical = RFC 8785-compatible compact JSON with sorted keys
 REPORTDATA = SHA-384(canonical) || 16 zero bytes
 ```
 
-Provider 通过 Linux TSM 生成真实 TDX Quote。两个本机 UDS 接口统一为 `POST /ra/v1/node-evidence` 与 `POST /ra/v1/workload-evidence`，不保留无版本路径。Provider 与 NodeAttestor 需一起部署更新；runtime 不提供 mock fallback。
+Provider 通过 Linux TSM 生成真实 TDX Quote。两个本机 UDS 接口为 `POST /ra/v1/node-evidence` 与 `POST /ra/v1/workload-evidence`。实际输入及启用条件见 [配置参考](../core/argus/docs/configuration.md#spire-node-attestation)。
 
 [共用向量](../core/spire/workload/testdata/runtime-data.json) 由 Go、Rust Provider 和采用 Trustee 相同 canonicalizer 的测试共同验证。Quote 的密码学与平台评估交给 Trustee，本地插件不自行把 Quote 内容解释为通过。
 
@@ -86,7 +88,7 @@ WorkloadAttestor 直接向固定 HTTPS origin 的 `/attestation` 提交：
 
 Trustee 校验 Quote 与 REPORTDATA 绑定，向 Rego 暴露经过绑定的 `runtime_data_claims`。固定 policy 检查 TDX 平台、TCB 状态、非 debug、批准启动测量、镜像/配置内容摘要、workload 与运行属性。
 
-插件只接受固定 P-256 公钥验证的 ES256 EAR，同时核对 issuer/profile、iat/exp/nbf、`cpu0` affirming 状态、policy ID 与本次 runtime data 对应的 64 字节 REPORTDATA。停止接受旧自定义 `allow` JSON。
+插件只接受固定 P-256 公钥验证的 ES256 EAR，同时核对 issuer/profile、iat/exp/nbf、`cpu0` affirming 状态、policy ID 与本次 runtime data 对应的 64 字节 REPORTDATA。
 
 只有上述检查和本地实例二次检查通过，插件才返回：
 
@@ -135,12 +137,16 @@ TLS session resumption 与 early data 关闭。Helper 检测目标退出、实�
 
 Trustee appraisal 与 Rekor 日志属于项目自定义取证/审计流程；SPIFFE 不要求必须使用某个启动器或 Rekor。SPIFFE 本身也不证明业务执行结果，实际 2xx 响应单独验收。
 
-本方案信任 TDVM 内的宿主机内核、Provider、Agent、TC API/Docker 控制链、Helper、NGINX 与 AuthZ。只读镜像、真实 config digest 和实例绑定覆盖取证时的运行状态，不声称证明运行后所有内存、动态代码或被攻陷宿主机的行为。NGINX 与 Helper 作为目标身份代理属于可信计算基础。
+本方案信任 TDVM 内的 Guest 内核、Provider、Agent、TC API/Docker 控制链、Helper、NGINX 与 AuthZ。只读镜像、真实 config digest 和实例绑定覆盖取证时的运行状态，不声称证明运行后所有内存、动态代码或被攻陷 Guest 内核的行为。NGINX 与 Helper 作为目标身份代理属于可信计算基础。
 
-## 10. 验收
+绑定合同中的 `executable` 是实际可执行路径，不是单独的可执行文件内容哈希。Workload Quote 绑定运行属性，没有包含 SVID 公钥；身份密钥由 SPIRE 管理并交付，不据此声称 SVID 私钥已硬件封存。运行属性检查见 [Provider](../core/argus/src/bin/workload/mod.rs) 与 [WorkloadAttestor](../core/spire/plugins/argus-tdx-workloadattestor/internal/workloadattestor/plugin.go)。
 
-本地验证包括 Node 原绑定/PoP/EAR 回归、Workload nonce/实例/基线与 EAR 反例、Rust/Go/Trustee 共用向量、真实 Rego 引擎、Helper 身份隔离/完整快照/PEM/reload 失败、真实 Linux pidfd，以及 NGINX mTLS/AuthZ/轮换。
+## 10. 验证记录与后续验收
 
-公司验收另行执行 v1.15.3 Node 加入、真实 Quote/DCAP、直接 Trustee HTTPS、固定 policy、目标 SVID、OpenViking 业务调用、Helper crash/目标退出/普通轮换，并保存版本、launch、PID、nonce、EAR 摘要、policy、SVID 序列号和业务结果关联。没有公司记录时不标记真实 TDX 链路已跑通。
+本地验证范围和结果见 [Workload VALIDATION](../core/spire/workload/VALIDATION.md)，覆盖 Node 绑定/PoP/EAR 回归、Workload 反例、共用向量、Rego、Helper 与 Linux/NGINX 集成。具体通过项以各轮记录为准。
+
+[2026-09-09 公司 Workload 报告](../../../documents_ly/argus-openviking-workload-attestation-status-20260909.md) 已记录真实 Node/Workload 链路的 PoC 结果，同时保留严格 UpToDate TCB 验收阻塞及未执行的生命周期项。该报告不等于本次代码基线或现场状态已复验。
+
+后续执行按 [运行手册](../core/spire/workload/README.md) 保存版本、launch、PID、nonce、EAR 摘要、policy、SVID 序列号和业务结果关联。客户端业务与长期记忆召回结论单独见 [客户端验收报告](../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)，不能由服务端 mTLS 成功推定。
 
 接口依据：[SPIRE v1.15.3 Broker](https://github.com/spiffe/spire/blob/v1.15.3/doc/spire_agent.md#spiffe-broker-api)、[官方 Helper v0.11.0](https://github.com/spiffe/spiffe-helper/tree/v0.11.0)、[Trustee v0.21 runtime data](https://github.com/confidential-containers/trustee/blob/v0.21.0/attestation-service/src/lib.rs)、[EAR claims 与 policy](https://github.com/confidential-containers/trustee/blob/v0.21.0/attestation-service/src/ear_token/broker.rs)。

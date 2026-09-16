@@ -1,8 +1,12 @@
 # IP1 新建 OpenClaw TDVM → IP2 OpenViking TDVM：首阶段实施计划
 
-修订日期：2026-09-09。设计核对基线：`feat/argus-spiffe-v2-val` / `25fa9f6`；本阶段客户端代码随该分支交付，部署时以实际检出的完整提交 SHA 为准。本文保留首阶段设计与交付计划，后续公司执行结果见 [2026-09-09 客户端验收报告](../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)。
+> **历史归档，归档日期：2026-09-16。** 本文保留 2026-09-09 首阶段计划及当时的交付状态，不再作为当前部署步骤、配置或待办。正文中的“10 秒 keepalive”“客户端代码尚未提交”和旧 Broker socket 路径属于历史描述。
+>
+> 当前操作见 [IP1 / Guest / IP2 部署手册](../../../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md)，凭据交付与失效合同见 [客户端说明](../../../adapters/OpenClaw/spiffe_client/README.md)，执行结果见 [2026-09-09 客户端验收报告](../../../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)。交付脚本仅携带现行客户端文档，不再打包本计划。
 
-代码交付已完成：TDVM OpenClaw profile、x509pop 部署生成器与身份登记、客户端 Broker 存活检查、`argus.2` 真实业务/召回验收和连续生命周期证据工具。执行入口为 [IP1 / Guest / IP2 操作手册](../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md)，本地软件验证见 [VALIDATION.md](../adapters/OpenClaw/spiffe_client/VALIDATION.md)，公司结果以对应执行报告为准。
+修订日期：2026-09-09。设计核对基线：`feat/argus-spiffe-v2-val` / `25fa9f6`；本阶段客户端代码随该分支交付，部署时以实际检出的完整提交 SHA 为准。本文保留首阶段设计与交付计划，后续公司执行结果见 [2026-09-09 客户端验收报告](../../../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)。
+
+代码交付已完成：TDVM OpenClaw profile、x509pop 部署生成器与身份登记、客户端 Broker 存活检查、`argus.2` 真实业务/召回验收和连续生命周期证据工具。执行入口为 [IP1 / Guest / IP2 操作手册](../../../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md)，本地软件验证见 [VALIDATION.md](../../../adapters/OpenClaw/spiffe_client/VALIDATION.md)，公司结果以对应执行报告为准。
 
 按用户最新确定的范围：IP1 创建一个 TDVM，在其中运行 OpenClaw；OpenClaw 首阶段不接入 TDX Quote/Trustee 远程证明。OpenClaw 通过普通 SPIRE 身份接入取得 SVID，调用 IP2 已通过 PoC Workload Attestation 的 OpenViking，双方通过 mTLS 验证身份，业务响应沿同一连接返回。
 
@@ -160,4 +164,4 @@ Linux 验证复用现有 `spiffe_client/test-client.sh`、Go clientcredentials/B
 
 当前代码固定 `openviking-node` 和 OpenViking workload profile 的限制仍存在，但已不阻塞本阶段。严格 UpToDate 验收、IP2 target-exit/重新 launch、动态 RTMR2 自动更新、独立周期重证明和大规模性能实验另行安排。
 
-参考：[公司 Workload 报告](../../../documents_ly/argus-openviking-workload-attestation-status-20260909.md)、[OpenClaw 接入](../adapters/OpenClaw/spiffe_client/README.md)、[客户端验证](../adapters/OpenClaw/spiffe_client/VALIDATION.md)、[TDVM 工具](../core/spire/tests/tdvm/README.md)、[Workload 手册](../core/spire/workload/README.md)。
+参考：[公司 Workload 报告](../../../../../documents_ly/argus-openviking-workload-attestation-status-20260909.md)、[OpenClaw 接入](../../../adapters/OpenClaw/spiffe_client/README.md)、[客户端验证](../../../adapters/OpenClaw/spiffe_client/VALIDATION.md)、[TDVM 工具](../../../core/spire/tests/tdvm/README.md)、[Workload 手册](../../../core/spire/workload/README.md)。

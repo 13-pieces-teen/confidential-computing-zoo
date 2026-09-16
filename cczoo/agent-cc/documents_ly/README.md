@@ -1,6 +1,6 @@
 # documents_ly 文档索引
 
-索引整理日期：2026-09-10。架构、运行步骤与执行结果分别维护；各验证记录中的提交、版本、环境和日期是其结论边界。
+索引整理日期：2026-09-16。架构、运行步骤与执行结果分别维护；各验证记录中的提交、版本、环境和日期是其结论边界。
 
 本目录顶层包含通用 Agent/Agent Service 通信设计，以及当前 Node Attestation 与 OpenViking Workload Attestation 说明。通用设计同时包含 **Go/Java 等原生 SDK + Workload API** 与 **Helper 兼容接入**，两端可独立选择。当前具体 OpenViking Workload 实现采用 **真实取证 Provider + Trustee + SPIRE Broker API + SPIFFE Helper + NGINX**。设计目标、已有代码和执行结果分别标明。
 
@@ -8,13 +8,15 @@
 
 | 顺序 | 文档 | 内容 |
 |---|---|---|
-| 1 | [通用 Agent 与 Agent Service 可信通信](./Argus-Agent-Agent-Service-Trusted-Communication-CN.md) | 背景价值、原生 SDK 与 Helper 接入、准入与 mTLS、上下文交付、跨语言互通及验收 |
-| 2 | [Node Attestation](./Argus-TDX-Node-Attestation-CN.md) | 节点准入、proof key、Quote/REPORTDATA、Trustee EAR 与 Agent SVID |
-| 3 | [OpenViking Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) | 实际服务进程取证、目标身份交付、NGINX mTLS、AuthZ 与失效处理 |
-| 4 | [Workload 运行手册](../core/spire/workload/README.md) | 构建安装、Node 升级、policy/Entry、TC API 启动、登记与生命周期操作 |
-| 5 | [OpenClaw 客户端接入](../adapters/OpenClaw/spiffe_client/README.md) | Gateway PID 登记、客户端凭据交付与原生 HTTPS 接入 |
-| 6 | [IP1 OpenClaw TDVM → IP2 OpenViking 实施计划](./Argus-IP1-OpenClaw-IP2-OpenViking-Implementation-Plan-CN.md) | 首阶段设计与交付范围；OpenClaw 远程证明延期，执行结果见下表 |
-| 7 | [E2E 演示操作手册](../../../documents_ly/argus-e2e-demo-plan-20260909.md) | 环境准备顺序、WebUI 操作与认证日志观察 |
+| 1 | [当前代码总览](./Argus-SPIFFE-Current-Code-Architecture-CN.md) | 组件拓扑、端到端流程、代码导航及文档分工 |
+| 2 | [通用 Agent 与 Agent Service 可信通信](./Argus-Agent-Agent-Service-Trusted-Communication-CN.md) | 背景价值、原生 SDK 与 Helper 接入及设计目标 |
+| 3 | [Node Attestation](./Argus-TDX-Node-Attestation-CN.md) | 节点身份配置、proof key、Quote/REPORTDATA、Trustee EAR 与 Agent SVID |
+| 4 | [OpenViking Workload Attestation](./Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md) | 实际服务进程取证、目标身份交付、NGINX mTLS、AuthZ 与失效处理 |
+| 5 | [配置参考](../core/argus/docs/configuration.md) | 实际环境变量、SPIRE Provider CLI、插件输入与 Guard 策略 YAML |
+| 6 | [Workload 运行手册](../core/spire/workload/README.md) | 构建安装、Node 升级、policy/Entry、TC API 启动、登记与生命周期操作 |
+| 7 | [OpenClaw 客户端接入](../adapters/OpenClaw/spiffe_client/README.md) | Gateway PID 登记、凭据交付、原生 HTTPS 及失效合同 |
+| 8 | [OpenClaw 客户端部署手册](../adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md) | IP1 / Guest / IP2 部署顺序、产物、运行与验收步骤 |
+| 9 | [E2E 演示操作手册](../../../documents_ly/argus-e2e-demo-plan-20260909.md) | 环境准备顺序、WebUI 操作与认证日志观察 |
 
 ## 验证记录
 
@@ -45,10 +47,10 @@
 
 ## 历史材料
 
-旧重构计划、双 Broker 架构和旧版本验证报告统一放在 [archive](./archive/README.md)，用于追溯设计与证据。
+首阶段 OpenClaw → OpenViking 实施计划、旧重构计划、双 Broker 架构和旧版本验证报告统一放在 [archive](./archive/README.md)，用于追溯设计与证据。现行部署及交付包使用上表的运行手册。
 
 ## 维护规则
 
-1. 架构和协议变化更新对应阶段说明；部署命令更新运行手册；执行结果更新验证记录。
+1. 总览维护拓扑、流程和导航；绑定合同、EAR 校验与服务端失效细节更新 Node/Workload 专题，客户端失效合同更新客户端说明；部署命令更新运行手册；执行结果更新验证记录。
 2. 被替代的方案移入 archive，明确失效范围并修复链接；没有追溯价值的草稿直接删除。
 3. 验证结论注明提交、版本、环境和日期，区分代码实现、本地测试与真实环境验收。

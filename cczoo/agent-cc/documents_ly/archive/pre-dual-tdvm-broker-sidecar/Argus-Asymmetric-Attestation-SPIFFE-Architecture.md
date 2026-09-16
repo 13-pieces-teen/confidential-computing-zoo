@@ -144,4 +144,4 @@ OpenViking 容器没有 SPIRE socket、SVID 文件或私钥。Broker 自身身�
 - [Broker Sidecar 详细方案](../pre-workload-implementation/OpenViking-Non-Intrusive-SPIFFE-Broker-Sidecar-Plan-CN.md)
 - SPIRE asymmetric runtime：`core/spire/runtime/asymmetric/README.md`（历史路径，已删除）
 - [WorkloadAttestor](../../../core/spire/plugins/argus-tdx-workloadattestor)
-- [Broker Sidecar](../../../adapters/OpenViking/broker_sidecar)
+- Broker Sidecar：`adapters/OpenViking/broker_sidecar`（历史源码路径，见 Git 历史）
