@@ -117,7 +117,7 @@ func main() {
 		os.Exit(1)
 	}
 }
-func upgradeNode(source []byte, role, binary string) ([]byte, error) {
+func configureNode(source []byte, role, binary string) ([]byte, error) {
 	contents, err := os.ReadFile(binary)
 	if err != nil {
 		return nil, err
@@ -160,14 +160,17 @@ func upgradeNode(source []byte, role, binary string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 func run() error {
-	source := flag.String("source", "", "existing Node Agent HCL")
+	source := flag.String("source", "", "Node Agent or Server HCL")
 	overlay := flag.String("overlay", "", "generated Workload overlay HCL")
 	output := flag.String("output", "", "new combined configuration")
 	role := flag.String("role", "agent", "agent or server")
-	nodeBinary := flag.String("node-binary", "", "upgraded NodeAttestor binary")
+	nodeBinary := flag.String("node-binary", "", "required NodeAttestor binary for this deployment")
 	flag.Parse()
 	if *role != "agent" && *role != "server" {
 		return fmt.Errorf("role must be agent or server")
+	}
+	if *nodeBinary == "" {
+		return fmt.Errorf("node-binary is required")
 	}
 	a, err := os.ReadFile(*source)
 	if err != nil {
@@ -184,11 +187,9 @@ func run() error {
 			return err
 		}
 	}
-	if *nodeBinary != "" {
-		merged, err = upgradeNode(merged, *role, *nodeBinary)
-		if err != nil {
-			return err
-		}
+	merged, err = configureNode(merged, *role, *nodeBinary)
+	if err != nil {
+		return err
 	}
 	return os.WriteFile(*output, merged, 0600)
 }

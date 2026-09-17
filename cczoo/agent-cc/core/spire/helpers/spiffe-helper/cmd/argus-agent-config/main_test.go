@@ -59,7 +59,7 @@ func TestOverlayCannotChangeOtherExperimentalSettings(t *testing.T) {
 	}
 }
 
-func TestUpgradeNodePreservesTrustAndProofPaths(t *testing.T) {
+func TestConfigureNodePreservesTrustAndProofPaths(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "node-plugin")
 	if err := os.WriteFile(binary, []byte("version-1.15.3"), 0600); err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestUpgradeNodePreservesTrustAndProofPaths(t *testing.T) {
  plugin_data { evidence_socket_path="/old/evidence.sock" proof_key_path="/existing/proof.pem" trustee_ca_bundle_path="/existing/ca.pem" ear_verification_key_path="/existing/ear.pem" }
 } }`)
 	for _, role := range []string{"agent", "server"} {
-		got, err := upgradeNode(source, role, binary)
+		got, err := configureNode(source, role, binary)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,7 +85,7 @@ func TestUpgradeNodePreservesTrustAndProofPaths(t *testing.T) {
 			t.Fatal("Server plugin_data changed")
 		}
 		if role == "agent" && !strings.Contains(string(got), "/run/argus/evidence-provider.sock") {
-			t.Fatal("Agent not pointed at upgraded Provider")
+			t.Fatal("Agent not pointed at configured Provider")
 		}
 	}
 }

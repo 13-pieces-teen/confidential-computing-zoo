@@ -134,6 +134,30 @@ LP16/SHA-384 REPORTDATA、Trustee appraisal 输入与最终 AgentAttributes 使�
 其中 `linux-python311-combined.log` 记录 14 项合并回归结果。该目录不属于源码交付。
 临时 Server 数据已清理，未留下运行中的测试 Server。
 
+## 2026-09-17 初步修复：日志关联、Helper 初始化和当前部署流程
+
+`verify` 改用 JSON journal，根据 boot、当前 Helper systemd invocation 与订阅顺序，
+逐字段核对 launch、container、PID、start time、policy 和完整 SVID 序列号。
+Helper 与 WorkloadAttestor 日志补齐实例字段，缺少字段直接拒绝验收。
+这些字段用于本机受信任日志的运行关联，不构成 EAR 到 SVID 的新增密码学证明。
+
+Helper 的 60 秒启动预算覆盖 Workload API 初始身份、Broker 建连和首次凭据完整发布。
+目标 watcher 从初始化阶段就能取消等待；首次发布成功后关闭启动计时器，保留目标监控
+和凭据过期检查。失败仍进入既有清理与停止 hook。
+
+正式部署脚本和示例配置移除旧 Provider 名、`previous_*` 停服设置及升级分支；
+Node 配置工具必须指定本次部署的插件二进制。产物白名单、哈希、失败构建清单失效、
+现有进程冲突检查和 Node 信任配置保持。本文件上方保留各日期的历史记录。
+
+| 状态 | 检查 | 结果与边界 |
+|------|------|------------|
+| PASS | Python 运行合同 | `test_runtime` 11 项通过；包括 launch/serial 前缀、错误 policy/container/start time、旧 invocation、错误 unit/boot、缺失或乱序事件、重复字段、验证期间重启和正常轮换。外部命令使用替身。 |
+| PASS | Linux Helper 生命周期 | Go 1.26.5 交叉编译后在 WSL Linux 执行 `pkg/broker`，9 项顶层测试全部通过、0 skipped。真实 go-spiffe SDK 的初始身份等待可被超时和目标退出取消；首次目标等待/发布受预算限制，成功发布后可继续运行并响应目标退出。目标 watcher 的错误通道使用测试替身，未执行公司 systemd 栈。 |
+| PASS | Helper 与配置工具 | Windows 下 `go test -mod=readonly -count=1 ./pkg/broker ./cmd/argus-agent-config` 及对应 `go vet` 通过；Linux 专属行为以上一行实际执行为准。 |
+| PASS | WorkloadAttestor | `go test -mod=readonly -count=1 ./...` 和 `go vet -mod=readonly ./...` 通过。 |
+| PASS | Linux 构建/安装合同 | Python 3.11.16 执行 `test_build_install` 4 项通过、0 skipped；使用伪构建产物、服务命令替身和临时安装根目录。 |
+| NOT_RUN | 实际服务验收 | 本次未执行真实 NGINX、systemd 部署、硬件 Quote、Trustee、SVID 签发及 OpenViking 业务验收；未改动 Rust Provider 和路由。 |
+
 ## 公司环境待执行
 
 按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及 OpenClaw 客户端 SVID，执行：

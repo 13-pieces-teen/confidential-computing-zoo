@@ -1,7 +1,5 @@
 {
   "node_agent_config": "/etc/spire/argus-poc/agent.conf",
-  "previous_agent_unit": "spire-agent.service",
-  "previous_provider_unit": "argus-node-evidence-provider.service",
   "trustee_url": "https://trustee.example.internal",
   "trustee_ca_path": "/etc/argus-workload/trustee-ca.pem",
   "trustee_server_name": "trustee.example.internal",

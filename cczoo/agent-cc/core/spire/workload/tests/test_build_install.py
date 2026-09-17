@@ -44,13 +44,13 @@ def manifest(output, names):
 
 @unittest.skipUnless(LINUX_TOOLS, "requires Linux bash and coreutils")
 class BuildPackagingTests(unittest.TestCase):
-    def test_failed_rebuild_invalidates_previous_success_and_legacy_provider(self):
+    def test_failed_rebuild_invalidates_success_manifest(self):
         with tempfile.TemporaryDirectory(prefix="argus-failed-build-") as directory:
             root = Path(directory)
             output = root / "build"
-            legacy = "bin/argus-tdx-evidence-provider"
-            executable(output / legacy)
-            manifest(output, [legacy])
+            provider = "bin/argus-spire-evidence-provider"
+            executable(output / provider)
+            manifest(output, [provider])
             (output / "SHA256SUMS.tmp").write_text("interrupted older build")
             executable(root / "commands/go", "#!/bin/sh\nexit 27\n")
             result = subprocess.run(
@@ -62,7 +62,6 @@ class BuildPackagingTests(unittest.TestCase):
             self.assertEqual(result.returncode, 27, result.stderr)
             self.assertFalse((output / "SHA256SUMS").exists())
             self.assertFalse((output / "SHA256SUMS.tmp").exists())
-            self.assertFalse((output / legacy).exists())
 
 
 @unittest.skipUnless(ROOT_LINUX, "requires Linux root; host operations are redirected to a temporary directory")
@@ -114,18 +113,16 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
         self.assertFalse((self.root / "install.log").exists(), result.stderr)
         self.assertFalse((self.host / "opt").exists(), result.stderr)
 
-    def test_legacy_package_cannot_install_the_new_systemd_unit(self):
+    def test_missing_provider_cannot_install_the_systemd_unit(self):
         names = self.package()
         current = "bin/argus-spire-evidence-provider"
         (self.output / current).unlink()
-        legacy = "bin/argus-tdx-evidence-provider"
-        executable(self.output / legacy)
-        manifest(self.output, [legacy if name == current else name for name in names])
+        manifest(self.output, [name for name in names if name != current])
         result = self.install()
         self.assert_rejected_before_install(result)
         self.assertIn("missing executable build artifact: " + current, result.stderr)
 
-    def test_unlisted_new_provider_and_modified_spire_are_rejected(self):
+    def test_unlisted_provider_and_modified_spire_are_rejected(self):
         names = self.package()
         manifest(self.output, [name for name in names if name != "bin/argus-spire-evidence-provider"])
         self.assert_rejected_before_install(self.install())
@@ -135,7 +132,7 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
 
     def test_complete_package_installs_only_the_hashed_current_payload(self):
         names = self.package()
-        for extra in ("argus-tdx-evidence-provider", "unhashed-extra"):
+        for extra in ("unlisted-tool", "unhashed-extra"):
             executable(self.output / "bin" / extra)
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -144,7 +141,7 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
             destination = (self.host / "opt/argus-workload" / name if name.startswith("bin/")
                            else self.host / "opt" / name)
             self.assertEqual(destination.read_bytes(), (self.output / name).read_bytes())
-        for extra in ("argus-tdx-evidence-provider", "unhashed-extra"):
+        for extra in ("unlisted-tool", "unhashed-extra"):
             self.assertFalse((self.host / "opt/argus-workload/bin" / extra).exists())
         unit = (self.host / "etc/systemd/system/argus-tdx-provider.service").read_text()
         self.assertIn("/opt/argus-workload/bin/argus-spire-evidence-provider --agent-id ", unit)

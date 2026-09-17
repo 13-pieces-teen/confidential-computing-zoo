@@ -280,7 +280,7 @@ The combined OpenViking deployment continues to use
 Workload binding, registration entries, and policies depend on that identity.
 See the [configuration contract](./docs/configuration.md#spire-node-attestation)
 for identity syntax and the [runbook](../spire/workload/README.md) for the
-Provider upgrade.
+Provider deployment.
 
 ## Security Guarantees
 

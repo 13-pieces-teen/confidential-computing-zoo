@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/target"
 	api "github.com/spiffe/go-spiffe/v2/exp/proto/spiffe/broker"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
@@ -48,6 +49,35 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 	if err != nil {
 		return err
 	}
+	return supervise(ctx, watchErr, 60*time.Second, func(ctx context.Context, published func()) error {
+		return subscribe(ctx, agentAddress, c, t, p, published)
+	})
+}
+
+// Monitor the target while the Workload API and Broker are initializing as well
+// as during publication. The startup budget ends only after the first publish.
+func supervise(parent context.Context, targetErrors <-chan error, timeout time.Duration, run func(context.Context, func()) error) error {
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
+	startup := time.AfterFunc(timeout, func() {
+		cancel(fmt.Errorf("target credentials unavailable during initialization: %w", context.DeadlineExceeded))
+	})
+	defer startup.Stop()
+	go func() {
+		select {
+		case <-ctx.Done():
+		case err := <-targetErrors:
+			if err == nil {
+				err = errors.New("target watch ended")
+			}
+			cancel(fmt.Errorf("target instance ended: %w", err))
+		}
+	}()
+	err := run(ctx, func() { startup.Stop() })
+	return errors.Join(context.Cause(ctx), err)
+}
+
+func subscribe(ctx context.Context, agentAddress string, c Config, t protocol.Target, p *Publisher, published func()) error {
 	helperID, _ := spiffeid.FromString(c.HelperSPIFFEID)
 	agentID, _ := spiffeid.FromString(c.AgentSPIFFEID)
 	targetID, _ := spiffeid.FromString(c.TargetSPIFFEID)
@@ -83,12 +113,13 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 	if err != nil {
 		return err
 	}
+	// Emit before sending the request so appraisal events follow this boundary.
+	log.Printf("workload subscription launch_id=%s container_id=%s pid=%s start_time=%s policy=%s", t.LaunchID, t.ContainerID, t.PID, t.StartTime, t.PolicyID)
 	stream, err := api.NewAPIClient(conn).SubscribeToX509SVID(metadata.AppendToOutgoingContext(ctx, "broker.spiffe.io", "true"), &api.SubscribeToX509SVIDRequest{Reference: &api.WorkloadReference{Reference: ref}})
 	if err != nil {
 		return err
 	}
-	log.Printf("workload subscription launch_id=%s container_id=%s pid=%s policy=%s", t.LaunchID, t.ContainerID, t.PID, t.PolicyID)
-	return consume(ctx, stream.Recv, watchErr, p, targetID, func() error {
+	return consume(ctx, stream.Recv, p, targetID, t, published, func() error {
 		s, err := source.GetX509SVID()
 		if err != nil {
 			return err
@@ -102,7 +133,7 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 
 // A disconnect exits and clears credentials. systemd may start a new process,
 // which performs a new Broker subscription and therefore fresh attestation.
-func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse, error), targetErrors <-chan error, p *Publisher, id spiffeid.ID, checkSelf func() error) error {
+func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse, error), p *Publisher, id spiffeid.ID, t protocol.Target, published func(), checkSelf func() error) error {
 	type message struct {
 		snapshot *api.SubscribeToX509SVIDResponse
 		err      error
@@ -123,15 +154,13 @@ func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse,
 	}()
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()
-	deadline := time.Now().Add(60 * time.Second)
+	var deadline time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case err := <-targetErrors:
-			return fmt.Errorf("target instance ended: %w", err)
 		case <-tick.C:
-			if !time.Now().Before(deadline) {
+			if !deadline.IsZero() && !time.Now().Before(deadline) {
 				return fmt.Errorf("target credentials unavailable or expired")
 			}
 			if err := checkSelf(); err != nil {
@@ -148,8 +177,12 @@ func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse,
 			if err = p.Publish(ctx, c); err != nil {
 				return err
 			}
+			published()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			deadline = c.Expires
-			log.Printf("target SVID published serial=%s expires=%s; certificate update is not a new Quote", c.Serial, c.Expires.UTC().Format(time.RFC3339))
+			log.Printf("target SVID published serial=%s expires=%s launch_id=%s container_id=%s pid=%s start_time=%s policy=%s", c.Serial, c.Expires.UTC().Format(time.RFC3339), t.LaunchID, t.ContainerID, t.PID, t.StartTime, t.PolicyID)
 		}
 	}
 }

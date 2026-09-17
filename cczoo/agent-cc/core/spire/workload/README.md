@@ -8,7 +8,7 @@
 
 ## 1. 运行前提供的材料
 
-准备原来已调通的 Node Agent/Server 配置、SPIRE bootstrap bundle、原 proof key、Trustee TLS CA、固定 EAR P-256 公钥及 issuer/profile。保留原 Node policy 与对应信任材料。
+准备已批准的 Node Agent/Server 配置、SPIRE bootstrap bundle、proof key、Trustee TLS CA、固定 EAR P-256 公钥及 issuer/profile，以及 Node policy 与对应信任材料。
 
 同时提供：
 
@@ -17,7 +17,7 @@
 - OpenClaw 客户端的有效 SVID、私钥、bundle，以及可返回 2xx 的 OpenViking 业务 URL。业务 API key 如需要，通过 `OPENVIKING_API_KEY` 环境变量提供。
 - TDVM 上可以直连 Trustee 的 HTTPS 地址；可通过已配置 SSH alias 查询 SPIRE Server。SSH 必须使用已有 host key 校验，目标账号需能读取 Server socket 和运行中进程信息。
 
-镜像 ID、配置摘要必须经过审批后填写基线。运行工具不会把当前观察值自动写成批准值。TC API 旧 `image_digest` 日志字段可能采用旧摘要格式；本轮授权只使用新 `runtime_image_config_digest` 与 Provider 实际观察的 SHA-256 内容 ID。
+镜像 ID、配置摘要必须经过审批后填写基线。运行工具不会把当前观察值自动写成批准值。授权使用 `runtime_image_config_digest` 与 Provider 实际观察的 SHA-256 内容 ID。
 
 ## 2. 构建与安装
 
@@ -34,20 +34,20 @@ sudo bash scripts/install.sh
 
 构建开始时会使旧的 `SHA256SUMS` 失效，全部检查成功后才原子发布新清单。
 安装前检查 [完整可执行产物列表](scripts/build-artifacts.sh) 中的 12 个文件及其哈希，
-包括新 Provider 和官方 SPIRE Agent/Server；只安装这些文件。
-升级需要完整重建，旧清单、缺失产物或被修改的二进制都会在安装前被拒绝。
+包括 Provider 和官方 SPIRE Agent/Server；只安装这些文件。
+部署使用完整构建产物，缺失清单、缺失产物或被修改的二进制都会在安装前被拒绝。
 
 把相同构建产物安装到 TDVM 与 Server 主机。Server 只使用其中的 Server/Node 插件和 Entry 工具。安装不会启动或启用新服务；现有配置不会被覆盖。
 
-Evidence Provider 的 UDS 路由统一为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。更新时同时安装 Provider 与 NodeAttestor 插件，执行 `workload.py render` 使 Agent 配置中的 `plugin_checksum` 对应新 Node 插件，再重启 Provider、SPIRE Agent；`workload.py start` 会自动执行 `render`。旧的无版本路径不再提供。配置仍只指定 UDS socket，无需填写 HTTP 路径。
+Evidence Provider 的 UDS 路由为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。Provider 与 NodeAttestor 插件来自同一次完整构建；`workload.py render` 将插件路径与 SHA-256 写入 Agent 配置，`workload.py start` 自动执行 `render`。配置只指定 UDS socket，无需填写 HTTP 路径。
 
-Provider 二进制已更名为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。运行中的 systemd unit 仍叫 `argus-tdx-provider.service`；升级时用本分支安装脚本更新 unit，使 `ExecStart` 指向新二进制，并显式传入 `--agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node`。旧二进制名不再作为构建产物交付。
+Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，其 `ExecStart` 指向该二进制，并显式传入 `--agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node`。
 
 参考 `config/environment.example.json` 建立两台主机各自的 `/etc/argus-workload/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的批准基线及 Helper 二进制必须一致。
 
-## 3. 保留 Node 合同，升级到官方 v1.15.3
+## 3. 配置官方 SPIRE v1.15.3 与 Node 插件
 
-先在 Server 上生成升级配置：
+先在 Server 上用已批准的 Node 配置生成部署配置：
 
 ```bash
 sudo /opt/argus-workload/bin/argus-agent-config -role server \
@@ -56,7 +56,7 @@ sudo /opt/argus-workload/bin/argus-agent-config -role server \
   -output /etc/argus-workload/server.conf
 ```
 
-该工具只更新 Node 插件命令和校验摘要，保留 Server Node `plugin_data`、challenge、PoP、REPORTDATA、Trustee EAR 信任配置及 CA 配置。将现有 Server systemd unit 的 `ExecStart` 改为：
+该工具要求显式指定 `-node-binary`，写入插件命令和校验摘要，保留 Server Node `plugin_data`、challenge、PoP、REPORTDATA、Trustee EAR 信任配置及 CA 配置。Server systemd unit 的 `ExecStart` 配置为：
 
 ```ini
 [Service]
@@ -70,13 +70,13 @@ ExecStart=/opt/spire-1.15.3/bin/spire-server run -config /etc/argus-workload/ser
 sudo python3 /opt/argus-workload/scripts/workload.py render
 ```
 
-Agent 配置从原 Node 配置合并生成，保留 proof key 路径等协议设置，更新 Node 插件二进制、Provider socket、Workload API socket，加入 WorkloadAttestor 与本机 Broker。生成结果可在 `/etc/argus-workload/agent.conf` 审查。
+Agent 配置从已批准的 Node 配置合并生成，保留 proof key 路径等协议设置，设置 Node 插件二进制、Provider socket、Workload API socket，加入 WorkloadAttestor 与本机 Broker。生成结果可在 `/etc/argus-workload/agent.conf` 审查。
 
-新版 NodeAttestor 支持配置 Agent ID，Provider 的 `--agent-id` 是必填项，必须等于 Server `plugin_data.agent_id`；该 ID 的 trust domain 必须与 SPIRE `trust_domain` 一致。当前 OpenViking Workload 合同、静态 Entry 和 policy 继续使用 `spiffe://argus.local/spire/agent/argus_tdx/openviking-node`，因此本轮部署保留 `argus.local` 及原身份。这里的配置能力只覆盖单个已固定 proof key 的 Node slot，不表示 Workload 已支持任意 Agent ID 或多节点注册；完整格式见 [身份配置合同](../../argus/docs/configuration.md#spire-node-attestation)。
+NodeAttestor 支持配置 Agent ID，Provider 的 `--agent-id` 是必填项，必须等于 Server `plugin_data.agent_id`；该 ID 的 trust domain 必须与 SPIRE `trust_domain` 一致。当前 OpenViking Workload 合同、静态 Entry 和 policy 使用 `spiffe://argus.local/spire/agent/argus_tdx/openviking-node`，部署使用 `argus.local` 及该身份。这里的配置能力只覆盖单个已固定 proof key 的 Node slot，不表示 Workload 已支持任意 Agent ID 或多节点注册；完整格式见 [身份配置合同](../../argus/docs/configuration.md#spire-node-attestation)。
 
 Provider 将配置中的 Agent ID、Server nonce 和 proof public key 绑定到 `REPORTDATA`；expiry 和 Quote digest 由 PoP transcript 签名覆盖。Trustee 负责 Quote/TCB/policy 评估，Server NodeAttestor 验证 PoP 与签名 EAR 后才返回 `AgentAttributes`，最终由 SPIRE Server CA 签发 Agent SVID。业务服务的 SVID 仍由后续 Workload 证明和静态 Entry 独立控制。
 
-原 Node 运行脚本 `core/spire/scripts/argus-node-attestation.sh` 已改为 v1.15.3 路径并检查 Agent/Server 二进制版本；新 Workload preflight 进一步通过远端 `server-check` 核对 **正在运行** 的 Server executable。Node 加入必须在公司环境重新验收；历史 v1.15.2 报告仍表示当时的真实版本。
+Node 运行脚本 `core/spire/scripts/argus-node-attestation.sh` 使用 v1.15.3 路径并检查 Agent/Server 二进制版本；Workload preflight 通过远端 `server-check` 核对 **正在运行** 的 Server executable。Node 加入需要公司环境验收。
 
 ## 4. 安装固定 workload policy 与静态 Entry
 
@@ -109,7 +109,7 @@ Helper Entry 同时要求 root UID、实际二进制路径和 SHA-256。目标 E
 
 ## 5. TC API 启动与目标登记
 
-升级 TDVM 的 TC API 至本分支代码。给 TC API 容器传入：
+在 TDVM 部署本分支的 TC API。给 TC API 容器传入：
 
 ```text
 ARGUS_OPENVIKING_CONFIG_PATH=/srv/openviking/ov.conf
@@ -146,7 +146,7 @@ sudo python3 /opt/argus-workload/scripts/workload.py stop
 
 preflight 检查批准基线、真实版本、同身份 Entry、Trustee 直连 HTTPS/REST/policy、固定 EAR 公钥、TSM、目标当前实例与客户端材料。缺项直接停止并报告，不转向 mock、代理或旧 `allow` JSON。
 
-start 在通过预检后停止配置中指定的旧 Agent/Provider unit，启动新 systemd 栈。手工启动的旧进程不会被自动杀掉；需先按 PID 停止。首次目标凭据通过链、身份和密钥检查，完整代次切换，再经 NGINX `-t` 与实际 TLS 加载检查后，才原子发布 readiness；发布期间过期会清理凭据并停服。
+start 在通过预检并生成配置后启动 systemd 栈。如果 SPIRE Agent 或 Provider 进程已运行，启动检查会报告 PID 并停止执行；需先停止占用进程。首次目标凭据通过链、身份和密钥检查，完整代次切换，再经 NGINX `-t` 与实际 TLS 加载检查后，才原子发布 readiness；发布期间过期会清理凭据并停服。
 
 NGINX 进入 OpenViking 的 network namespace，对外终止 mTLS；OpenViking 内部端口只监听该 namespace 的回环。NGINX 先验证客户端证书链，再把实际 TLS 证书及验证状态覆盖写入受控 UDS 请求。AuthZ 检查唯一 SPIFFE URI、用途、有效期与固定 OpenClaw ID。客户端工具同时核对服务端目标 ID。
 
@@ -154,7 +154,7 @@ OpenClaw 的实际插件调用按 [原生 SPIFFE mTLS 接入手册](../../../ada
 
 PEM 位于 root 所有的 0700 tmpfs 目录；每代包含证书、PKCS#8 私钥、bundle。每次变更创建新文件和目录，避免 NGINX 因文件缓存沿用旧证书。TLS session cache/tickets/early data 关闭。
 
-Helper 持有目标 pidfd，约每 500 ms 复核实例。目标退出、身份移除、订阅断开、凭据过期、PEM 或 reload 失败会清除 readiness/PEM 并停止 NGINX。Helper 被 SIGKILL 时，由 systemd BindsTo、ExecStopPost 和 RuntimeDirectory 清理兜底。NGINX 停服后连接清理上限为 5 秒；实例检测另有轮询调度时间。重连会重新证明；Agent 独立周期重证明尚未实现。
+Helper 持有目标 pidfd，约每 500 ms 复核实例。60 秒启动预算覆盖等待 Helper 自身 SVID、建立 Broker 订阅、等待目标 SVID 和首次完整发布；首次发布成功后解除启动计时，继续检查凭据有效期。初始化期间目标退出也会取消正在等待的调用。目标退出、身份移除、订阅断开、凭据过期、PEM 或 reload 失败会清除 readiness/PEM 并停止 NGINX。Helper 被 SIGKILL 时，由 systemd BindsTo、ExecStopPost 和 RuntimeDirectory 清理兜底。NGINX 停服后连接清理上限为 5 秒；实例检测另有轮询调度时间。重连会重新证明；Agent 独立周期重证明尚未实现。
 
 ## 7. 公司验收与记录
 
@@ -179,7 +179,7 @@ sudo python3 /opt/argus-workload/scripts/watch-attestation.py \
 
 ### 联合验证
 
-`verify` 同时检查实例、实际业务 2xx、客户端/服务端 SPIFFE ID、NGINX 当前证书序列号、固定 Entry、与本次启动关联的 EAR 接受日志。记录保存到 `/var/log/argus-workload/`，不写出私钥、原始 Quote 或 EAR token；保存 nonce、launch、policy、EAR 摘要与 SVID 序列号关联。
+`verify` 同时检查实例、实际业务 2xx、客户端/服务端 SPIFFE ID、NGINX 当前证书序列号与固定 Entry。它读取 JSON journal，只接受当前 boot 和 Helper systemd invocation 内按订阅、EAR 接受、SVID 发布顺序关联的事件，逐字段精确比较 launch、container、PID、start time、policy 和完整证书序列号；验证期间 Helper 重启或就绪状态变化会拒绝通过。当前构建的 Helper 与 WorkloadAttestor 必须一并部署，缺少关联字段会拒绝验收。记录保存到 `/var/log/argus-workload/`，原始 JSON journal 保存为 `last-verify-journal.jsonl`；不写出私钥、原始 Quote 或 EAR token，保存 nonce、实例、policy、EAR 摘要与 SVID 序列号的运行日志关联。
 
 以下入口会故意中断指定测试工作负载，只在公司验收实例运行：
 

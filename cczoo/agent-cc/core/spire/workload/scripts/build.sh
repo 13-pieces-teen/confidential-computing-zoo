@@ -6,7 +6,7 @@ OUT="${ARGUS_WORKLOAD_BUILD_DIR:-$WORKLOAD_ROOT/build}"
 mkdir -p "$OUT/bin"
 OUT="$(cd "$OUT" && pwd)"
 # A failed rebuild must not leave an earlier build marked installable.
-rm -f -- "$OUT/SHA256SUMS" "$OUT/SHA256SUMS.tmp" "$OUT/bin/argus-tdx-evidence-provider"
+rm -f -- "$OUT/SHA256SUMS" "$OUT/SHA256SUMS.tmp"
 source "$WORKLOAD_ROOT/scripts/build-artifacts.sh"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || { echo "TDX build requires Linux x86_64" >&2; exit 1; }
 for module in "$WORKLOAD_ROOT" "$SPIRE_ROOT/plugins/argus-tdx-nodeattestor" "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" "$SPIRE_ROOT/helpers/spiffe-helper"; do
