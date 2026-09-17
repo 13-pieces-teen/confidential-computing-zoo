@@ -16,7 +16,7 @@ Verified selectors -> static Entry -> target SVID -> Helper -> NGINX mTLS/AuthZ
 ```
 
 The [Workload runbook](workload/README.md) is the build, installation, Node
-upgrade, launch, registration, and lifecycle entry point. The target environment
+configuration, launch, registration, and lifecycle entry point. The target environment
 supplies approved image/configuration/platform baselines, existing Node
 configuration and proof key, Trustee trust material and policy, and the SPIRE
 bundle. [Validation records](workload/VALIDATION.md) distinguish completed local

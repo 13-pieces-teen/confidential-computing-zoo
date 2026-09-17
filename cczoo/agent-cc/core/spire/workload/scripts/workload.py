@@ -338,7 +338,7 @@ def launch(c):
                 raise ValueError("expected one TC API container")
             info = instances[0]
             if info.get("launch_id") != launch_id or info.get("attestation_profile") != "nginx-spiffe-helper-v1":
-                raise ValueError("TC API did not retain the launch/profile association; upgrade TC API")
+                raise ValueError("TC API response is missing the required launch/profile association")
             RUN.mkdir(parents=True, exist_ok=True, mode=0o700)
             write_json(RUN / "launch.json", {"launch_id": launch_id, "container": info})
             return {"launch_id": launch_id, "container_id": info["container_ID"]}
@@ -359,15 +359,11 @@ def start(c):
     record = preflight(c)
     render(c)
     record["started_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    for key in ("previous_agent_unit", "previous_provider_unit"):
-        if c.get(key):
-            run(["systemctl", "stop", c[key]])
-    # Check both Provider names during upgrades. A manually started process must
-    # be stopped by its owner before reusing its socket or Agent data directory.
-    for name in ("spire-agent", "argus-tdx-evidence-provider", "argus-spire-evidence-provider"):
+    # Do not reuse a socket or Agent data directory owned by a running process.
+    for name in ("spire-agent", "argus-spire-evidence-provider"):
         running = run(["pgrep", "-f", "(^|/)" + name + "( |$)"], check=False)
         if running:
-            raise ValueError(f"{name} is still running with PID(s) {running}; stop the old process before start")
+            raise ValueError(f"{name} is still running with PID(s) {running}; stop it before start")
     run(["systemctl", "start", "argus-helper.service"])
     deadline = time.monotonic() + 65
     while time.monotonic() < deadline:
@@ -399,10 +395,61 @@ def stop(c):
     return {"stopped": True, "reregistration_required": True}
 
 
+def event_fields(message, event):
+    match = re.search(r"(?:^|\s)" + re.escape(event) + r"\s+(.+)", message)
+    if not match:
+        return None
+    pairs = re.findall(r'(?:^|\s)([a-z_][a-z0-9_]*)=([^\s"\\]+)(?=\s|"|$)', match[1])
+    fields = dict(pairs)
+    return fields if len(fields) == len(pairs) else None
+
+
+def correlated_appraisal(journal, target, serial, invocation):
+    expected = {k: target[k] for k in ("launch_id", "container_id", "pid", "start_time")}
+    expected["policy"] = target["policy_id"]
+    boot = target["boot_id"].replace("-", "")
+    subscribed, appraisal, matched = False, None, None
+    for line in journal.splitlines():
+        record = json.loads(line)
+        message = record.get("MESSAGE")
+        if not isinstance(message, str) or record.get("_BOOT_ID") != boot:
+            continue
+        unit = record.get("_SYSTEMD_UNIT")
+        helper = unit == "argus-helper.service" and record.get("_SYSTEMD_INVOCATION_ID") == invocation
+        if helper:
+            fields = event_fields(message, "workload subscription")
+            if fields is not None:
+                subscribed = all(fields.get(k) == v for k, v in expected.items())
+                appraisal, matched = None, None
+        if not subscribed:
+            continue
+        if unit == "argus-workload-agent.service":
+            fields = event_fields(message, "workload EAR accepted")
+            if fields and all(fields.get(k) == v for k, v in expected.items()) and \
+                    re.fullmatch(r"[A-Za-z0-9_-]{43}", fields.get("nonce", "")) and \
+                    re.fullmatch(r"[0-9a-f]{64}", fields.get("ear_sha256", "")):
+                appraisal = message
+        if helper:
+            fields = event_fields(message, "target SVID published")
+            if fields and all(fields.get(k) == v for k, v in expected.items()) and fields.get("serial") == serial:
+                matched = appraisal
+    if matched is None:
+        raise ValueError("missing correlated EAR acceptance/SVID publication log for the current Helper invocation and target")
+    return matched
+
+
+def helper_invocation():
+    invocation = run(["systemctl", "show", "argus-helper", "--property=InvocationID", "--value"])
+    if not re.fullmatch(r"[0-9a-f]{32}", invocation):
+        raise ValueError("current Helper invocation is unavailable")
+    return invocation
+
+
 def verify(c):
     s = status(c)
     if not s["ready"]:
         raise ValueError("workload is not ready")
+    invocation = helper_invocation()
     target = json.loads(run([BIN / "argus-workload", "-action", "check"]))
     proof = json.loads(run([BIN / "spiffe-mtls-probe", "-url", c["business_url"], "-cert", c["client_cert"],
                            "-key", c["client_key"], "-bundle", c["client_bundle"], "-server-id", TARGET_ID]))
@@ -410,15 +457,16 @@ def verify(c):
         raise ValueError("business call did not use the expected client/current target SVID")
     started = json.loads(protected_file(RECORDS / "start.json").read_text())["started_at"]
     started_epoch = calendar.timegm(time.strptime(started, "%Y-%m-%dT%H:%M:%SZ"))
-    journal = run(["journalctl", "-u", "argus-tdx-provider", "-u", "argus-workload-agent", "-u", "argus-helper", "--since", f"@{started_epoch}", "--no-pager", "-o", "cat"])
-    appraisals = [line for line in journal.splitlines() if "workload EAR accepted" in line and "launch_id=" + target["launch_id"] in line]
-    if not appraisals or "target SVID published serial=" + proof["server_serial"] not in journal:
-        raise ValueError("missing correlated EAR acceptance/SVID publication log for this launch")
+    journal = run(["journalctl", "-u", "argus-tdx-provider", "-u", "argus-workload-agent", "-u", "argus-helper", "--since", f"@{started_epoch}", "--no-pager", "-o", "json"])
+    appraisal = correlated_appraisal(journal, target, proof["server_serial"], invocation)
+    if helper_invocation() != invocation or status(c) != s:
+        raise ValueError("workload changed during verification; retry with the current instance")
     RECORDS.mkdir(parents=True, exist_ok=True, mode=0o700)
-    (RECORDS / "last-verify-journal.log").write_text(journal)
-    (RECORDS / "last-verify-journal.log").chmod(0o600)
-    return {"target": target, "svid_and_business": proof, "server": remote_check(c), "appraisal": appraisals[-1],
-            "evidence_kind": "COMPANY_REAL_TDX_RUN", "appraisal_log": str(RECORDS / "last-verify-journal.log")}
+    (RECORDS / "last-verify-journal.jsonl").write_text(journal)
+    (RECORDS / "last-verify-journal.jsonl").chmod(0o600)
+    return {"target": target, "svid_and_business": proof, "server": remote_check(c), "appraisal": appraisal,
+            "helper_invocation_id": invocation, "evidence_kind": "COMPANY_REAL_TDX_RUN",
+            "appraisal_log": str(RECORDS / "last-verify-journal.jsonl")}
 
 
 def main():

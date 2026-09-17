@@ -9,8 +9,10 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
 	api "github.com/spiffe/go-spiffe/v2/exp/proto/spiffe/broker"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"io"
 	"math/big"
 	"net/url"
@@ -217,7 +219,11 @@ func TestSubscriptionAndTargetFailureTerminate(t *testing.T) {
 				checkSelf = func() error { return errors.New("Helper SVID removed") }
 			}
 			done := make(chan error, 1)
-			go func() { done <- consume(ctx, recv, exited, p, spiffeid.RequireFromString(targetURI), checkSelf) }()
+			go func() {
+				done <- supervise(ctx, exited, time.Second, func(ctx context.Context, published func()) error {
+					return consume(ctx, recv, p, spiffeid.RequireFromString(targetURI), protocol.Target{}, published, checkSelf)
+				})
+			}()
 			select {
 			case err := <-done:
 				if err == nil {
@@ -227,5 +233,125 @@ func TestSubscriptionAndTargetFailureTerminate(t *testing.T) {
 				t.Fatal("failure did not stop subscriber")
 			}
 		})
+	}
+}
+
+func TestInitializationStopsBeforeHelperSVID(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Workload API uses a Linux Unix socket")
+	}
+	for _, kind := range []string{"timeout", "target exit"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			exited := make(chan error, 1)
+			targetExit := errors.New("pidfd exited during initialization")
+			budget := 100 * time.Millisecond
+			if kind == "target exit" {
+				budget = time.Minute
+			}
+			address := "unix://" + filepath.Join(t.TempDir(), "unavailable.sock")
+			err := supervise(ctx, exited, budget, func(ctx context.Context, _ func()) error {
+				if kind == "target exit" {
+					timer := time.AfterFunc(50*time.Millisecond, func() { exited <- targetExit })
+					defer timer.Stop()
+				}
+				// The real SDK blocks here without an initial Workload API response.
+				source, err := workloadapi.NewX509Source(ctx, workloadapi.WithClientOptions(workloadapi.WithAddr(address)))
+				if source != nil {
+					source.Close()
+				}
+				return err
+			})
+			if ctx.Err() != nil {
+				t.Fatalf("initialization reached the outer timeout: %v", err)
+			}
+			want := error(context.DeadlineExceeded)
+			if kind == "target exit" {
+				want = targetExit
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("expected %v, got %v", want, err)
+			}
+		})
+	}
+}
+
+func TestStartupBudgetIncludesFirstPublication(t *testing.T) {
+	for _, stage := range []string{"waiting for target SVID", "publishing"} {
+		t.Run(stage, func(t *testing.T) {
+			p := testPublisher(t)
+			update := &api.SubscribeToX509SVIDResponse{Svids: []*api.X509SVID{credentialsFor(t, targetURI, 123)}}
+			p.Hook = func(ctx context.Context, _ string) error { <-ctx.Done(); return ctx.Err() }
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			err := supervise(ctx, nil, 100*time.Millisecond, func(ctx context.Context, published func()) error {
+				recv := func() (*api.SubscribeToX509SVIDResponse, error) {
+					if stage == "publishing" && update != nil {
+						response := update
+						update = nil
+						return response, nil
+					}
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				return consume(ctx, recv, p, spiffeid.RequireFromString(targetURI), protocol.Target{}, published, func() error { return nil })
+			})
+			if !errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+				t.Fatalf("startup budget did not cancel %s: %v", stage, err)
+			}
+			if _, err := os.Stat(filepath.Join(p.Dir, "ready")); !os.IsNotExist(err) {
+				t.Fatalf("failed startup retained readiness: %v", err)
+			}
+		})
+	}
+}
+
+func TestPublishedCredentialsOutliveStartupBudget(t *testing.T) {
+	p := testPublisher(t)
+	update := &api.SubscribeToX509SVIDResponse{Svids: []*api.X509SVID{credentialsFor(t, targetURI, 123)}}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	exited := make(chan error, 1)
+	ready := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- supervise(ctx, exited, 400*time.Millisecond, func(ctx context.Context, published func()) error {
+			recv := func() (*api.SubscribeToX509SVIDResponse, error) {
+				if update != nil {
+					response := update
+					update = nil
+					return response, nil
+				}
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}
+			return consume(ctx, recv, p, spiffeid.RequireFromString(targetURI), protocol.Target{}, func() {
+				published()
+				close(ready)
+			}, func() error { return nil })
+		})
+	}()
+	select {
+	case <-ready:
+	case err := <-done:
+		t.Fatalf("first publication failed: %v", err)
+	case <-ctx.Done():
+		t.Fatal("first publication blocked")
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("successful startup was canceled: %v", err)
+	case <-time.After(800 * time.Millisecond):
+	}
+	targetExit := errors.New("pidfd exited after publication")
+	exited <- targetExit
+	select {
+	case err := <-done:
+		if !errors.Is(err, targetExit) {
+			t.Fatalf("target monitoring stopped after publication: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("target exit did not cancel subscription")
 	}
 }

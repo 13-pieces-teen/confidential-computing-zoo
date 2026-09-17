@@ -19,6 +19,7 @@ ERRORS = (
     "workload evidence failed", "collect evidence:", "evidence binding:",
     "Trustee appraisal:", "target changed during appraisal:",
     "target instance ended:", "target credentials unavailable or expired",
+    "target credentials unavailable during initialization:",
     "Broker subscription ended:", "Helper identity removed or expired",
     "registered target identity mismatch", "PID is not the registered instance",
     "Helper identity unavailable", "target changed:",

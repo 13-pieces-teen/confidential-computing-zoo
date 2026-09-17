@@ -163,7 +163,7 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) error
 		return err
 	}
 	hash := sha256.Sum256(token)
-	log.Printf("workload EAR accepted launch_id=%s nonce=%s policy=%s ear_sha256=%x", input.RuntimeData.LaunchID, input.RuntimeData.Nonce, client.policyID, hash)
+	log.Printf("workload EAR accepted launch_id=%s nonce=%s policy=%s ear_sha256=%x container_id=%s pid=%s start_time=%s", input.RuntimeData.LaunchID, input.RuntimeData.Nonce, client.policyID, hash, input.RuntimeData.ContainerID, input.RuntimeData.PID, input.RuntimeData.StartTime)
 	return nil
 }
 
