@@ -10,14 +10,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 )
 
 func main() {
-	socket := flag.String("socket", "/run/argus-authz/authz.sock", "protected local UDS")
-	client := flag.String("client-id", "spiffe://argus.local/agent/openclaw", "exact allowed client SPIFFE ID")
+	socket := flag.String("socket", "", "required protected local UDS")
+	client := flag.String("client-id", "", "required exact allowed client SPIFFE ID")
 	flag.Parse()
+	if !filepath.IsAbs(*socket) || filepath.Clean(*socket) != *socket {
+		log.Fatal("socket must be a clean absolute path")
+	}
 	id, err := spiffeid.FromString(*client)
 	if err != nil {
 		log.Fatal(err)

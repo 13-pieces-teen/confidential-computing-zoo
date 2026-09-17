@@ -49,9 +49,10 @@ Quote; Helper reconnection triggers a new subscription and attestation.
 The Provider's required `--agent-id` and the Server NodeAttestor's `agent_id`
 must match, and the identity's trust domain must match SPIRE's core
 `trust_domain`. The Node configuration supports one pinned Agent slot. The
-combined OpenViking deployment keeps the explicit identity
-`spiffe://argus.local/spire/agent/argus_tdx/openviking-node`, which is also used
-by Workload binding, registration entries, and policy. See the
+combined OpenViking deployment takes identities, ports and directories from
+[one deployment configuration](workload/config/environment.example.json).
+The configured Agent ID is checked by Provider, WorkloadAttestor, Helper,
+registration entries and policy; no workload-specific Agent ID is built in. See the
 [identity configuration contract](../argus/docs/configuration.md#spire-node-attestation).
 
 The Provider generates the raw Quote inside the attested TD; Trustee appraises

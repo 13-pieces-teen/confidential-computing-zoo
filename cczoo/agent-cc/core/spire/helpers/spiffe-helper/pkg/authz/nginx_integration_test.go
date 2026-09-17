@@ -58,8 +58,8 @@ func TestNGINXMTLSAuthzAndRotation(t *testing.T) {
 		pk, _ := x509.MarshalPKCS8PrivateKey(key)
 		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pk})
 	}
-	const serverID = "spiffe://argus.local/service/openviking-cmem"
-	const clientID = "spiffe://argus.local/agent/openclaw"
+	const serverID = "spiffe://example.org/service/memory"
+	const clientID = "spiffe://example.org/agent/assistant"
 	write := func(name string, b []byte) {
 		t.Helper()
 		if err := os.WriteFile(filepath.Join(dir, name), b, 0600); err != nil {
@@ -100,17 +100,23 @@ func TestNGINXMTLSAuthzAndRotation(t *testing.T) {
 	}
 	addr := free.Addr().String()
 	free.Close()
-	conf := fmt.Sprintf(`user root; worker_processes 1; daemon off; pid %s/nginx.pid;
- error_log %s/error.log info; worker_shutdown_timeout 1s;
- events { worker_connections 64; } http { access_log off; client_body_temp_path %s/body; proxy_temp_path %s/proxy;
- server { listen %s ssl; ssl_certificate %s/current/svid.pem; ssl_certificate_key %s/current/key.pem;
- ssl_client_certificate %s/current/bundle.pem; ssl_verify_client on; ssl_verify_depth 5;
- ssl_protocols TLSv1.2 TLSv1.3; ssl_session_cache off; ssl_session_tickets off;
- location = /_auth { internal; proxy_pass http://unix:%s:/authorize; proxy_method GET; proxy_pass_request_body off;
- proxy_set_header Content-Length ""; proxy_set_header X-Argus-TLS-Cert $ssl_client_escaped_cert; proxy_set_header X-Argus-TLS-Verified $ssl_client_verify; }
- location / { auth_request /_auth; proxy_pass %s; }
- }}`, dir, dir, dir, dir, addr, dir, dir, dir, socketPath, upstream.URL)
+	template, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "workload", "config", "nginx.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstreamPort := strings.TrimPrefix(upstream.URL, "http://127.0.0.1:")
+	conf := strings.NewReplacer("@NGINX_RUN@", dir, "@CREDENTIALS@", dir,
+		"@AUTHZ_SOCKET@", socketPath, "@TLS_PORT@", addr, "@LISTEN_PORT@", upstreamPort,
+		"user argus-nginx;", "user root; daemon off;",
+		"error_log stderr info;", "error_log "+dir+"/error.log info;").Replace(string(template))
+	if strings.Contains(conf, "@") {
+		t.Fatal("unrendered NGINX deployment token")
+	}
+
 	write("nginx.conf", []byte(conf))
+	if output, err := exec.Command(nginx, "-t", "-c", filepath.Join(dir, "nginx.conf")).CombinedOutput(); err != nil {
+		t.Fatalf("initial nginx -t: %v %s", err, output)
+	}
 	command := exec.Command(nginx, "-c", filepath.Join(dir, "nginx.conf"))
 	if err = command.Start(); err != nil {
 		t.Fatal(err)
@@ -139,7 +145,7 @@ func TestNGINXMTLSAuthzAndRotation(t *testing.T) {
 		return &http.Client{Transport: &http.Transport{TLSClientConfig: tlsconfig.MTLSClientConfig(s, b, tlsconfig.AuthorizeID(spiffeid.RequireFromString(serverID))), DisableKeepAlives: true}, Timeout: time.Second}
 	}
 	good := clientFor(clientID)
-	bad := clientFor("spiffe://argus.local/agent/wrong")
+	bad := clientFor("spiffe://example.org/agent/wrong")
 	endpoint := "https://" + addr
 	fetch := func(client *http.Client) (int, string, *tls.ConnectionState, error) {
 		res, err := client.Get(endpoint)

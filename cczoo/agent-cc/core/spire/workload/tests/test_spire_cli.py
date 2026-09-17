@@ -14,20 +14,23 @@ import time
 import unittest
 from unittest.mock import patch
 import test_runtime as contracts
+from test_deployment import alternative
 
 runtime = contracts.runtime
+EXAMPLE = contracts.RuntimeContractTests().config()
+AGENT_ID = EXAMPLE["identity"]["agent_id"]
 
 
-@unittest.skipUnless(sys.platform == "linux" and os.environ.get("ARGUS_WORKLOAD_TOOLS_DIR"),
+@unittest.skipUnless(sys.platform == "linux" and os.environ.get("ARGUS_WORKLOAD_TOOLS_DIR") and (Path(os.environ["ARGUS_WORKLOAD_TOOLS_DIR"]) / "argus-spire-evidence-provider").is_file(),
                      "requires the built Linux Evidence Provider")
 class ProviderDeploymentTests(unittest.TestCase):
     def test_systemd_command_preserves_identity_and_both_versioned_routes(self):
         unit = configparser.ConfigParser(interpolation=None)
-        unit.read(runtime.PACKAGE / "systemd/argus-tdx-provider.service")
+        unit.read_string(runtime.Deployment(EXAMPLE).render((runtime.PACKAGE / "systemd/argus-tdx-provider.service").read_text()))
         command = shlex.split(unit["Service"]["ExecStart"])
         command[0] = str(Path(os.environ["ARGUS_WORKLOAD_TOOLS_DIR"]) / Path(command[0]).name)
         identity_index = command.index("--agent-id")
-        self.assertEqual(command[identity_index + 1], runtime.AGENT_ID)
+        self.assertEqual(command[identity_index + 1], AGENT_ID)
         missing_identity = command[:identity_index] + command[identity_index + 2:]
         rejected = subprocess.run(missing_identity, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(rejected.returncode, 0)
@@ -89,7 +92,7 @@ class OfficialSPIRETests(unittest.TestCase):
                          "-out", root / "ear-key.pem"])
             runtime.run(["openssl", "pkey", "-in", root / "ear-key.pem", "-pubout", "-out", root / "ear-public.pem"])
             for case, agent_id, expected_error in (
-                ("matching", runtime.AGENT_ID, None),
+                ("matching", AGENT_ID, None),
                 ("mismatched", "spiffe://other.example/spire/agent/argus_tdx/openviking-node",
                  "invalid configuration: agent_id trust domain must match core trust_domain"),
             ):
@@ -165,7 +168,7 @@ plugins {
             conf = root / "server.conf"
             socket = root / "server.sock"
             conf.write_text('''server {
- bind_address="127.0.0.1" bind_port=0 trust_domain="argus.local"
+ bind_address="127.0.0.1" bind_port=0 trust_domain="example.org"
  socket_path="%s" data_dir="%s"
  ca_subject { country=["CN"] organization=["Local contract test"] common_name="SPIRE test" }
 }
@@ -187,12 +190,14 @@ plugins {
                             log.seek(0)
                             self.fail("local SPIRE Server failed: " + log.read())
                         time.sleep(0.05)
-                    c = json.loads((runtime.PACKAGE / "config/environment.example.json").read_text())
-                    c["approved"] = contracts.RuntimeContractTests().approved()
+                    c = alternative()
+                    c["paths"].update(install_dir=str(tools.parent), config_dir=str(root / "rendered"),
+                                      records_dir=str(root / "records"), spire_bin_dir=str(spire))
+                    d = runtime.Deployment(c)
                     c["server_socket"] = str(socket)
                     node = root / "node.conf"
                     node.write_text('''agent {
- trust_domain="argus.local" server_address="127.0.0.1" server_port=8081
+ trust_domain="example.org" server_address="127.0.0.1" server_port=8081
  data_dir="%s" insecure_bootstrap=true
 }
 plugins {
@@ -205,19 +210,24 @@ plugins {
                     c["node_agent_config"] = str(node)
                     # This fixture belongs to the test runner, which may be an
                     # unprivileged CI user. Root-file checks are tested separately.
-                    with patch.object(runtime, "SPIRE", spire), patch.object(runtime, "BIN", tools), patch.object(runtime, "ETC", root / "rendered"), patch.object(runtime, "protected_file", lambda p: Path(p)):
+                    real_run = runtime.run
+                    def command(argv, **kwargs):
+                        if argv[0] in ("systemctl", "install"):
+                            return ""
+                        return real_run(argv, **kwargs)
+                    with patch.object(runtime, "run", side_effect=command), patch.object(runtime, "protected_file", lambda p: Path(p)):
                         runtime.render(c)
-                        runtime.run([spire / "spire-agent", "validate", "-config", runtime.ETC / "agent.conf"])
-                        required = runtime.selectors(c, runtime.TARGET_ID)
+                        runtime.run([spire / "spire-agent", "validate", "-config", d.etc / "agent.conf"])
+                        required = runtime.selectors(c, d.identity["target_id"])
                         cmd = [spire / "spire-server", "entry", "create", "-socketPath", socket,
-                               "-parentID", runtime.AGENT_ID, "-spiffeID", runtime.TARGET_ID,
+                               "-parentID", d.identity["agent_id"], "-spiffeID", d.identity["target_id"],
                                "-x509SVIDTTL", "300", "-disableX509SVIDPrefetch"]
                         for selector in sorted(required):
                             cmd += ["-selector", selector]
                         runtime.run(cmd)
-                        entries = runtime.server_entries(c, runtime.TARGET_ID)
+                        entries = runtime.server_entries(c, d.identity["target_id"])
                         self.assertEqual(len(entries), 1)
-                        runtime.audit_entries(entries, required, runtime.TARGET_ID)
+                        runtime.audit_entries(c, entries, required, d.identity["target_id"])
                 finally:
                     server.terminate()
                     try:

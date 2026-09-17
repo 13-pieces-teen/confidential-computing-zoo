@@ -3,6 +3,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ARGUS_WORKLOAD_BUILD_DIR:-$ROOT/build}"
 [[ "$EUID" == 0 ]] || { echo "run install as root" >&2; exit 1; }
+[[ "$#" == 2 && "$1" == --config ]] || { echo "usage: install.sh --config /absolute/environment.json" >&2; exit 1; }
+INPUT="$2"
+settings="$(python3 "$ROOT/scripts/deployment.py" paths --config "$INPUT")"
+mapfile -t paths <<< "$settings"
+INSTALL_DIR="${paths[0]}"
+CONFIG_DIR="${paths[1]}"
+RECORDS_DIR="${paths[2]}"
+SPIRE_DIR="${paths[3]}"
+RUN_DIR="${paths[4]}"
 [[ -f "$OUT/SHA256SUMS" ]] || { echo "run build.sh first" >&2; exit 1; }
 source "$ROOT/scripts/build-artifacts.sh"
 for artifact in "${ARGUS_WORKLOAD_ARTIFACTS[@]}"; do
@@ -16,23 +25,28 @@ for tool in python3 nginx nsenter docker systemctl openssl timeout; do
     command -v "$tool" >/dev/null || { echo "missing command: $tool" >&2; exit 1; }
 done
 nginx -V 2>&1 | grep -q -- --with-http_auth_request_module || { echo "NGINX auth_request module required" >&2; exit 1; }
-getent group argus-nginx >/dev/null || groupadd --system argus-nginx
-id argus-nginx >/dev/null 2>&1 || useradd --system --gid argus-nginx --no-create-home --shell /usr/sbin/nologin argus-nginx
-install -d -m 0755 /opt/argus-workload/bin /opt/argus-workload/scripts /opt/argus-workload/config /opt/argus-workload/policy /opt/argus-workload/systemd /opt/spire-1.15.3/bin
-install -d -m 0700 /etc/argus-workload /run/argus-workload /var/log/argus-workload
-for artifact in "${ARGUS_WORKLOAD_ARTIFACTS[@]}"; do
-    case "$artifact" in
-        bin/*) install -m 0755 "$OUT/$artifact" /opt/argus-workload/bin/ ;;
-        spire-1.15.3/bin/*) install -m 0755 "$OUT/$artifact" /opt/spire-1.15.3/bin/ ;;
+for unit in argus-helper argus-nginx argus-authz argus-workload-agent argus-tdx-provider; do
+    state="$(systemctl is-active "$unit" || true)"
+    case "$state" in
+        active|activating|reloading|deactivating) echo "stop $unit before installing deployment configuration" >&2; exit 1 ;;
     esac
 done
-install -m 0755 "$ROOT/scripts/nginx-hook.sh" /opt/argus-workload/bin/
-install -m 0755 "$ROOT/scripts/workload.py" /opt/argus-workload/scripts/
-install -m 0755 "$ROOT/scripts/verify-lifecycle.py" /opt/argus-workload/scripts/
-install -m 0755 "$ROOT/scripts/watch-attestation.py" /opt/argus-workload/scripts/
-install -m 0644 "$ROOT"/config/* /opt/argus-workload/config/
-install -m 0644 "$ROOT"/policy/* /opt/argus-workload/policy/
-install -m 0644 "$ROOT"/systemd/* /opt/argus-workload/systemd/
-install -m 0644 "$ROOT"/systemd/* /etc/systemd/system/
+getent group argus-nginx >/dev/null || groupadd --system argus-nginx
+id argus-nginx >/dev/null 2>&1 || useradd --system --gid argus-nginx --no-create-home --shell /usr/sbin/nologin argus-nginx
+install -d -m 0755 "$INSTALL_DIR/bin" "$INSTALL_DIR/scripts" "$INSTALL_DIR/config" "$INSTALL_DIR/policy" "$INSTALL_DIR/systemd" "$SPIRE_DIR"
+install -d -m 0700 "$CONFIG_DIR" "$RUN_DIR" "$RECORDS_DIR"
+for artifact in "${ARGUS_WORKLOAD_ARTIFACTS[@]}"; do
+    case "$artifact" in
+        bin/*) install -m 0755 "$OUT/$artifact" "$INSTALL_DIR/bin/" ;;
+        spire-1.15.3/bin/*) install -m 0755 "$OUT/$artifact" "$SPIRE_DIR/" ;;
+    esac
+done
+install -m 0755 "$ROOT"/scripts/*.py "$INSTALL_DIR/scripts/"
+install -m 0644 "$ROOT/scripts/nginx-hook.sh" "$INSTALL_DIR/scripts/"
+install -m 0644 "$ROOT"/config/* "$INSTALL_DIR/config/"
+install -m 0644 "$ROOT"/policy/* "$INSTALL_DIR/policy/"
+install -m 0644 "$ROOT"/systemd/* "$INSTALL_DIR/systemd/"
+python3 "$ROOT/scripts/deployment.py" render-services --config "$INPUT"
+install -m 0644 "$CONFIG_DIR"/systemd/*.service /etc/systemd/system/
 systemctl daemon-reload
-printf 'INSTALL=PASS\nCONFIG=/etc/argus-workload/environment.json\n'
+printf 'INSTALL=PASS\nCONFIG=%s/environment.json\n' "$CONFIG_DIR"

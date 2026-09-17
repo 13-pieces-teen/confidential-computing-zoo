@@ -7,10 +7,13 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
 	"github.com/hashicorp/hcl/hcl/printer"
 	"os"
+	"path"
+	"strings"
 )
 
 func block(list *ast.ObjectList, name string) (*ast.ObjectList, error) {
@@ -117,7 +120,10 @@ func main() {
 		os.Exit(1)
 	}
 }
-func configureNode(source []byte, role, binary string) ([]byte, error) {
+func configureNode(source []byte, role, binary, trustDomain, agentID, evidenceSocket string) ([]byte, error) {
+	if protocol.ValidateAgentID(agentID) != nil || !strings.HasPrefix(agentID, "spiffe://"+trustDomain+"/") {
+		return nil, fmt.Errorf("expected Agent ID must match the deployment trust domain")
+	}
 	contents, err := os.ReadFile(binary)
 	if err != nil {
 		return nil, err
@@ -125,6 +131,13 @@ func configureNode(source []byte, role, binary string) ([]byte, error) {
 	tree, err := hcl.Parse(string(source))
 	if err != nil {
 		return nil, err
+	}
+	core, err := block(tree.Node.(*ast.ObjectList), role)
+	if err != nil {
+		return nil, err
+	}
+	if stringValue(core, "trust_domain") != trustDomain {
+		return nil, fmt.Errorf("Node configuration trust_domain differs from deployment")
 	}
 	plugins, err := block(tree.Node.(*ast.ObjectList), "plugins")
 	if err != nil {
@@ -145,13 +158,18 @@ func configureNode(source []byte, role, binary string) ([]byte, error) {
 	for _, item := range props.Node.(*ast.ObjectList).Items {
 		replace(obj.List, item)
 	}
+	data, err := block(obj.List, "plugin_data")
+	if err != nil {
+		return nil, err
+	}
 	if role == "agent" {
-		data, err := block(obj.List, "plugin_data")
-		if err != nil {
-			return nil, err
+		if !path.IsAbs(evidenceSocket) || path.Clean(evidenceSocket) != evidenceSocket {
+			return nil, fmt.Errorf("evidence-socket must be an absolute Linux path")
 		}
-		ep, _ := hcl.Parse(`evidence_socket_path = "/run/argus/evidence-provider.sock"`)
+		ep, _ := hcl.Parse(fmt.Sprintf("evidence_socket_path = %q", evidenceSocket))
 		replace(data, ep.Node.(*ast.ObjectList).Items[0])
+	} else if stringValue(data, "agent_id") != agentID {
+		return nil, fmt.Errorf("Server NodeAttestor agent_id differs from deployment")
 	}
 	var out bytes.Buffer
 	if err = printer.Fprint(&out, tree); err != nil {
@@ -159,12 +177,28 @@ func configureNode(source []byte, role, binary string) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
+
+func stringValue(list *ast.ObjectList, name string) string {
+	items := list.Filter(name).Items
+	if len(items) != 1 {
+		return ""
+	}
+	literal, ok := items[0].Val.(*ast.LiteralType)
+	if !ok {
+		return ""
+	}
+	value, _ := literal.Token.Value().(string)
+	return value
+}
 func run() error {
 	source := flag.String("source", "", "Node Agent or Server HCL")
 	overlay := flag.String("overlay", "", "generated Workload overlay HCL")
 	output := flag.String("output", "", "new combined configuration")
 	role := flag.String("role", "agent", "agent or server")
 	nodeBinary := flag.String("node-binary", "", "required NodeAttestor binary for this deployment")
+	trustDomain := flag.String("trust-domain", "", "expected deployment trust domain")
+	agentID := flag.String("agent-id", "", "expected NodeAttestor Agent identity")
+	evidenceSocket := flag.String("evidence-socket", "", "Agent-side Evidence Provider socket")
 	flag.Parse()
 	if *role != "agent" && *role != "server" {
 		return fmt.Errorf("role must be agent or server")
@@ -187,7 +221,7 @@ func run() error {
 			return err
 		}
 	}
-	merged, err = configureNode(merged, *role, *nodeBinary)
+	merged, err = configureNode(merged, *role, *nodeBinary, *trustDomain, *agentID, *evidenceSocket)
 	if err != nil {
 		return err
 	}

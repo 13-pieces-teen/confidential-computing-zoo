@@ -16,7 +16,6 @@ import (
 )
 
 const Version = "argus.workload.tdx.v1"
-const AgentID = "spiffe://argus.local/spire/agent/argus_tdx/openviking-node"
 
 // Target is a protected launch registration, never an authorization supplied
 // by the business process. Decimal strings avoid cross-language JSON numbers.
@@ -63,8 +62,19 @@ var bootID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 var decimal = regexp.MustCompile(`^[1-9][0-9]*$`)
 var namespace = regexp.MustCompile(`^(pid|net):\[[1-9][0-9]*\]$`)
 
+// ValidateAgentID uses the same identity grammar as the NodeAttestor. Expected
+// deployment identities are checked by consumers, independently of this schema.
+func ValidateAgentID(id string) error {
+	rest, ok := strings.CutPrefix(id, "spiffe://")
+	domain, node, found := strings.Cut(rest, "/spire/agent/argus_tdx/")
+	if !ok || !found || len(id) > 65535 || !regexp.MustCompile(`^[a-z0-9._-]+$`).MatchString(domain) || !component.MatchString(node) || strings.Trim(node, ".") == "" {
+		return fmt.Errorf("invalid SPIRE Agent identity")
+	}
+	return nil
+}
+
 func (t Target) Validate() error {
-	if t.AgentID != AgentID || !bootID.MatchString(t.BootID) {
+	if ValidateAgentID(t.AgentID) != nil || !bootID.MatchString(t.BootID) {
 		return fmt.Errorf("invalid node context")
 	}
 	for name, value := range map[string]string{"workload_id": t.WorkloadID, "policy_id": t.PolicyID, "launch_id": t.LaunchID} {

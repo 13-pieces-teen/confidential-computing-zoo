@@ -106,15 +106,13 @@ class LaunchServiceMixin:
             logger.debug("Falling back to synthetic digest for %s: %s", image_ref, exc)
         return self._sha384_digest(image_ref)
 
-    def _build_launch_security_projection(self, launch_id: str, workload_id: str, metadata=None) -> Dict[str, Any]:
-        settings = workload_profile.profile_settings(metadata, workload_id)
+    def _build_launch_security_projection(self, launch_id: str, workload_id: str, metadata=None, settings=None) -> Dict[str, Any]:
+        if settings is None:
+            settings = workload_profile.profile_settings(metadata, workload_id)
         if settings is not None:
-            return {"launch_id": launch_id, "workload_id": workload_id, "privileged": False,
-                    "network_mode": "bridge", "mounts": [settings["ARGUS_OPENVIKING_CONFIG_PATH"] + ":/etc/openviking/ov.conf:ro", settings["ARGUS_OPENVIKING_DATA_PATH"] + ":/var/lib/openviking"],
-                    "devices": [], "capabilities": [], "read_only_rootfs": True,
-                    "published_ports": ["1943:1943"], "attestation_profile": workload_profile.PROFILE,
-                    "launch_env_keys": ["OPENVIKING_CONFIG_FILE", "OPENVIKING_WITH_BOT", "PYTHONDONTWRITEBYTECODE"],
-                    "launch_env_digest": self._json_sha384_digest({"OPENVIKING_CONFIG_FILE": "/etc/openviking/ov.conf", "OPENVIKING_WITH_BOT": "0", "PYTHONDONTWRITEBYTECODE": "1"})}
+            projection = workload_profile.security_projection(settings, launch_id, workload_id)
+            projection["launch_env_digest"] = self._json_sha384_digest(workload_profile.launch_environment(settings))
+            return projection
         mounts = [
             "/etc/hosts:/etc/hosts",
             "/etc/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf",
@@ -345,8 +343,10 @@ class LaunchServiceMixin:
         service_name: Optional[str] = None,
         dockercmd: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        attested_settings: Optional[Dict[str, Any]] = None,
     ):
-        attested_settings = workload_profile.profile_settings(metadata, workload_id)
+        if attested_settings is None:
+            attested_settings = workload_profile.profile_settings(metadata, workload_id)
         if attested_settings is not None and dockercmd:
             raise ValueError('attested profile does not accept dockercmd overrides')
         image_dir = 'oci:' + os.path.join(launch_pth,'encrypted')

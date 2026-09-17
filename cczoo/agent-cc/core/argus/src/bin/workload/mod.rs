@@ -8,7 +8,8 @@ use tdx_quote::ReportData;
 
 pub type Target = BTreeMap<String, String>;
 pub const PROTOCOL: &str = "argus.workload.tdx.v1";
-pub(super) const AGENT: &str = "spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
+#[cfg(test)]
+pub(super) const TEST_AGENT: &str = "spiffe://argus.local/spire/agent/argus_tdx/openviking-node";
 const FIELDS: &[&str] = &[
     "agent_id",
     "boot_id",
@@ -48,7 +49,8 @@ pub fn validate(t: &Target) -> Result<()> {
     {
         bail!("target values must be printable ASCII");
     }
-    if t["agent_id"] != AGENT || t["rootfs_read_only"] != "true" {
+    super::validate_agent_id(&t["agent_id"])?;
+    if t["rootfs_read_only"] != "true" {
         bail!("invalid node or filesystem binding");
     }
     let boot = &t["boot_id"];
@@ -139,12 +141,41 @@ fn bounded(path: impl AsRef<Path>, max: u64) -> Result<Vec<u8>> {
     }
     Ok(v)
 }
+// Keep configuration and executable content outside every writable mount.
+fn validate_mounts(c: &Value, t: &Target, data_path: &Path) -> Result<()> {
+    for key in ["config_path", "executable"] {
+        let path = Path::new(&t[key]);
+        if path.starts_with(data_path) || path.starts_with("/tmp") {
+            bail!("configuration or executable overlaps a writable mount");
+        }
+    }
+    let mounts = c["Mounts"].as_array().context("missing mounts")?;
+    for mount in mounts {
+        let dest = mount["Destination"].as_str().context("invalid mount")?;
+        if dest != t["config_path"]
+            && Path::new(dest) != data_path
+            && !(dest == "/tmp" && mount["Type"] == "tmpfs")
+        {
+            bail!("unapproved workload mount");
+        }
+        if dest == t["config_path"] && mount["RW"] != false {
+            bail!("configuration mount must be read-only");
+        }
+    }
+    if !mounts
+        .iter()
+        .any(|m| m["Destination"].as_str() == Some(&t["config_path"]) && m["RW"] == false)
+    {
+        bail!("missing read-only configuration mount");
+    }
+    Ok(())
+}
 #[cfg(not(target_os = "linux"))]
-pub fn load_and_check(_: &Path) -> Result<Target> {
+pub fn load_and_check(_: &Path, _: &Path) -> Result<Target> {
     bail!("Workload evidence requires Linux");
 }
 #[cfg(target_os = "linux")]
-pub fn load_and_check(path: &Path) -> Result<Target> {
+pub fn load_and_check(path: &Path, data_path: &Path) -> Result<Target> {
     use std::{os::unix::fs::MetadataExt, process::Command};
     let meta = fs::symlink_metadata(path)?;
     if !meta.is_file() || meta.uid() != 0 || meta.mode() & 0o022 != 0 {
@@ -193,25 +224,7 @@ pub fn load_and_check(path: &Path) -> Result<Target> {
     if c["HostConfig"]["NetworkMode"] == "host" || c["HostConfig"]["PidMode"] == "host" {
         bail!("isolated container namespaces required");
     }
-    let mounts = c["Mounts"].as_array().context("missing mounts")?;
-    for mount in mounts {
-        let dest = mount["Destination"].as_str().context("invalid mount")?;
-        if dest != t["config_path"]
-            && dest != "/var/lib/openviking"
-            && !(dest == "/tmp" && mount["Type"] == "tmpfs")
-        {
-            bail!("unapproved workload mount");
-        }
-        if dest == t["config_path"] && mount["RW"] != false {
-            bail!("configuration mount must be read-only");
-        }
-    }
-    if !mounts
-        .iter()
-        .any(|m| m["Destination"].as_str() == Some(&t["config_path"]) && m["RW"] == false)
-    {
-        bail!("missing read-only configuration mount");
-    }
+    validate_mounts(c, &t, data_path)?;
     let pid = &t["pid"];
     let root = format!("/proc/{pid}");
     if fs::read_to_string("/proc/sys/kernel/random/boot_id")?.trim() != t["boot_id"] {
@@ -312,35 +325,56 @@ mod tests {
     use super::*;
     #[test]
     fn shared_go_trustee_vector() {
+        for fixture in [
+            include_str!("../../../../spire/workload/testdata/runtime-data.json"),
+            include_str!("../../../../spire/workload/testdata/runtime-data-alternative.json"),
+        ] {
+            let v: Value = serde_json::from_str(fixture).unwrap();
+            let data: Target = serde_json::from_value(v["runtime_data"].clone()).unwrap();
+            assert_eq!(
+                serde_json::to_string(&data).unwrap(),
+                v["canonical"].as_str().unwrap()
+            );
+            assert_eq!(
+                hex::encode(report_data(&data).unwrap().as_aligned_bytes()),
+                v["report_data_hex"].as_str().unwrap()
+            );
+            for f in [
+                "pid",
+                "nonce",
+                "launch_id",
+                "image_config_digest",
+                "config_digest",
+                "policy_id",
+            ] {
+                let mut changed = data.clone();
+                changed.insert(f.into(), format!("{}x", changed[f]));
+                assert!(
+                    report_data(&changed).is_err()
+                        || report_data(&changed).unwrap().as_aligned_bytes()
+                            != report_data(&data).unwrap().as_aligned_bytes()
+                );
+            }
+        }
+    }
+    #[test]
+    fn configured_data_mount_preserves_readonly_application_boundary() {
         let v: Value = serde_json::from_str(include_str!(
-            "../../../../spire/workload/testdata/runtime-data.json"
+            "../../../../spire/workload/testdata/runtime-data-alternative.json"
         ))
         .unwrap();
-        let data: Target = serde_json::from_value(v["runtime_data"].clone()).unwrap();
-        assert_eq!(
-            serde_json::to_string(&data).unwrap(),
-            v["canonical"].as_str().unwrap()
-        );
-        assert_eq!(
-            hex::encode(report_data(&data).unwrap().as_aligned_bytes()),
-            v["report_data_hex"].as_str().unwrap()
-        );
-        for f in [
-            "pid",
-            "nonce",
-            "launch_id",
-            "image_config_digest",
-            "config_digest",
-            "policy_id",
-        ] {
-            let mut changed = data.clone();
-            changed.insert(f.into(), format!("{}x", changed[f]));
-            assert!(
-                report_data(&changed).is_err()
-                    || report_data(&changed).unwrap().as_aligned_bytes()
-                        != report_data(&data).unwrap().as_aligned_bytes()
-            );
-        }
+        let t: Target = serde_json::from_value(v["runtime_data"].clone()).unwrap();
+        let c = serde_json::json!({"Mounts": [
+            {"Destination": t["config_path"], "RW": false, "Type": "bind"},
+            {"Destination": "/var/lib/memory", "RW": true, "Type": "bind"},
+            {"Destination": "/tmp", "RW": true, "Type": "tmpfs"}
+        ]});
+        assert!(validate_mounts(&c, &t, Path::new("/var/lib/memory")).is_ok());
+        assert!(validate_mounts(&c, &t, Path::new("/var/lib/openviking")).is_err());
+        assert!(validate_mounts(&c, &t, Path::new("/usr/local")).is_err());
+        let mut changed = c.clone();
+        changed["Mounts"][0]["RW"] = Value::Bool(true);
+        assert!(validate_mounts(&changed, &t, Path::new("/var/lib/memory")).is_err());
     }
     #[test]
     fn rejects_extra_fields_and_image_names() {

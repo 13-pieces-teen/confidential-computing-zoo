@@ -48,6 +48,7 @@ from ..transparency.commit_client import TrustedLogAPI
 from ..transparency.events import EventEntryKey, launch_security_entries
 from .request_auth import add_authenticated_identity_entries, authenticate_request_identity, get_authenticated_caller, require_authenticated_owner
 from . import runtime
+from ..services import workload_profile
 
 
 docker_service = runtime.docker_service
@@ -960,8 +961,9 @@ async def launch_container_async(
         tlog.add_entry(record_id, Entry(key="workload_id", value=workload_id))
 
         image_digest = docker_service._resolve_image_digest(request.image_url or request.image_id)
-        if (request.metadata or {}).get("workload_attestation_profile"):
-            security_projection = docker_service._build_launch_security_projection(launch_id, workload_id, request.metadata)
+        attested_settings = workload_profile.profile_settings(request.metadata, workload_id)
+        if attested_settings is not None:
+            security_projection = docker_service._build_launch_security_projection(launch_id, workload_id, request.metadata, settings=attested_settings)
         else:
             security_projection = docker_service._build_launch_security_projection(launch_id, workload_id)
         launch_config_digest = docker_service._json_sha384_digest(
@@ -1042,7 +1044,7 @@ async def launch_container_async(
             workload_id=workload_id,
             launch_id=launch_id,
             dockercmd=request.dockercmd,
-            **({"metadata": request.metadata} if (request.metadata or {}).get("workload_attestation_profile") else {}),
+            **({"metadata": request.metadata, "attested_settings": attested_settings} if attested_settings is not None else {}),
         )
         tlog.add_entry(record_id, Entry(key="launch_instance_ids", value={"launch_instance_ids": instance_ids}))
         if not instance_ids:

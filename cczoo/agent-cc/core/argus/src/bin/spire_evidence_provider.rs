@@ -52,12 +52,14 @@ struct Config {
     socket_path: PathBuf,
     tsm_report_root: PathBuf,
     workload_registration_path: Option<PathBuf>,
+    workload_data_path: Option<PathBuf>,
 }
 
 impl Config {
     fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Self> {
         let mut agent_id = None;
         let mut workload_registration_path = None;
+        let mut workload_data_path = None;
         let mut socket_path = PathBuf::from(DEFAULT_SOCKET_PATH);
         let mut tsm_report_root = PathBuf::from(DEFAULT_TSM_REPORT_ROOT);
         let mut args = args.into_iter();
@@ -90,18 +92,31 @@ impl Config {
                             anyhow!("--workload-registration-path requires a value")
                         })?));
                 }
+                value if value == OsStr::new("--workload-data-path") => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| anyhow!("--workload-data-path requires a value"))?;
+                    let text = value.to_str().context("workload data path must be UTF-8")?;
+                    if !text.starts_with('/')
+                        || text.ends_with('/')
+                        || text
+                            .split('/')
+                            .skip(1)
+                            .any(|p| p.is_empty() || p == "." || p == "..")
+                    {
+                        bail!("workload data path must be a clean absolute Linux directory");
+                    }
+                    workload_data_path = Some(PathBuf::from(value));
+                }
                 _ => bail!("unknown argument: {:?}", argument),
             }
         }
 
         let agent_id = agent_id.ok_or_else(|| anyhow!("--agent-id is required"))?;
         validate_agent_id(&agent_id)?;
-        // The current workload registration and appraisal contract has one
-        // deployment identity. Reject a split Node/workload configuration.
-        if workload_registration_path.is_some() && agent_id != workload::AGENT {
+        if workload_registration_path.is_some() != workload_data_path.is_some() {
             bail!(
-                "--agent-id must be {} when --workload-registration-path is set",
-                workload::AGENT
+                "--workload-registration-path and --workload-data-path must be configured together"
             );
         }
         Ok(Self {
@@ -109,6 +124,7 @@ impl Config {
             socket_path,
             tsm_report_root,
             workload_registration_path,
+            workload_data_path,
         })
     }
 }
@@ -170,7 +186,8 @@ struct AppState {
     agent_id: String,
     quote_source: Arc<dyn QuoteSource>,
     workload_registration_path: Option<PathBuf>,
-    observe: fn(&Path) -> Result<workload::Target>,
+    workload_data_path: Option<PathBuf>,
+    observe: fn(&Path, &Path) -> Result<workload::Target>,
 }
 
 #[derive(Debug)]
@@ -265,6 +282,7 @@ fn router(agent_id: String, quote_source: Arc<dyn QuoteSource>) -> Router {
         agent_id,
         quote_source,
         workload_registration_path: None,
+        workload_data_path: None,
         observe: workload::load_and_check,
     })
 }
@@ -297,11 +315,13 @@ async fn workload_evidence_handler(
     }
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value> {
         let path = state.workload_registration_path.context("workload endpoint disabled")?;
-        let before = (state.observe)(&path)?;
+        let data_path = state.workload_data_path.context("workload data path is not configured")?;
+        let before = (state.observe)(&path, &data_path)?;
+        if before["agent_id"] != state.agent_id {bail!("registered target differs from configured SPIRE Agent");}
         if before["pid"] != request.pid.to_string() {bail!("PID is not the registered target");}
         let data = workload::runtime_data(&before, &request.nonce)?;
         let quote = state.quote_source.generate_quote(&workload::report_data(&data)?)?;
-        if (state.observe)(&path)? != before {bail!("target changed while generating Quote");}
+        if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
         tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], nonce=%request.nonce, "fresh workload TDX Quote generated");
         Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data}))
     }).await;
@@ -385,6 +405,7 @@ async fn serve(config: Config) -> Result<()> {
         agent_id: config.agent_id,
         quote_source,
         workload_registration_path: config.workload_registration_path,
+        workload_data_path: config.workload_data_path,
         observe: workload::load_and_check,
     });
     let (listener, _socket_guard) = bind_socket(&config.socket_path)?;
@@ -609,6 +630,7 @@ mod tests {
                 socket_path: PathBuf::from(DEFAULT_SOCKET_PATH),
                 tsm_report_root: PathBuf::from(DEFAULT_TSM_REPORT_ROOT),
                 workload_registration_path: None,
+                workload_data_path: None,
             }
         );
     }
@@ -670,31 +692,31 @@ mod tests {
         // Explicitly configuring the existing deployment must preserve its
         // REPORTDATA and Trustee policy inputs.
         assert_eq!(
-            hex::encode(node_report_data(workload::AGENT, &nonce, &key).as_aligned_bytes()),
+            hex::encode(node_report_data(workload::TEST_AGENT, &nonce, &key).as_aligned_bytes()),
             "1f827005b702f0f5faeba4839f30bbf3b39846ccb6c4dfb3366c70a215a74181e99b7f441be8d5d4ea984c114643237100000000000000000000000000000000"
         );
     }
 
     #[test]
-    fn workload_configuration_requires_matching_node_identity() {
+    fn workload_configuration_requires_explicit_data_path_and_accepts_configured_identity() {
         let args = |id: &str| {
             [
                 "--agent-id",
                 id,
                 "--workload-registration-path",
                 "/run/argus-workload/target.json",
+                "--workload-data-path",
+                "/var/lib/test-workload",
             ]
             .map(OsString::from)
         };
-        let config = Config::parse(args(workload::AGENT)).unwrap();
-        assert_eq!(config.agent_id, workload::AGENT);
+        let config = Config::parse(args(TEST_AGENT_ID)).unwrap();
+        assert_eq!(config.agent_id, TEST_AGENT_ID);
         assert_eq!(
             config.workload_registration_path,
             Some(PathBuf::from("/run/argus-workload/target.json"))
         );
-        let error = Config::parse(args(TEST_AGENT_ID)).unwrap_err().to_string();
-        assert!(error.contains("--workload-registration-path"));
-        assert!(error.contains(workload::AGENT));
+        assert!(Config::parse(args(TEST_AGENT_ID).into_iter().take(4)).is_err());
     }
 
     struct TestRegistration(PathBuf);
@@ -727,14 +749,15 @@ mod tests {
     }
     // Only the runtime observation boundary is substituted. The handler still
     // validates the request, builds real REPORTDATA and compares both observations.
-    fn observe_fixture(path: &Path) -> Result<workload::Target> {
+    fn observe_fixture(path: &Path, _: &Path) -> Result<workload::Target> {
         Ok(serde_json::from_slice(&std::fs::read(path)?)?)
     }
     fn workload_app(registration: &TestRegistration, source: Arc<dyn QuoteSource>) -> Router {
         provider_router(AppState {
-            agent_id: workload::AGENT.to_string(),
+            agent_id: workload::TEST_AGENT.to_string(),
             quote_source: source,
             workload_registration_path: Some(registration.0.clone()),
+            workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
             observe: observe_fixture,
         })
     }
@@ -800,10 +823,40 @@ mod tests {
             assert!(source.report_data.lock().unwrap().is_none());
         }
     }
+    #[tokio::test]
+    async fn workload_identity_must_match_configured_provider() {
+        let registration = TestRegistration::new();
+        let source = Arc::new(RecordingQuoteSource {
+            quote: vec![1],
+            report_data: Mutex::new(None),
+        });
+        let state = AppState {
+            agent_id: TEST_AGENT_ID.to_string(),
+            quote_source: source.clone(),
+            workload_registration_path: Some(registration.0.clone()),
+            workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
+            observe: observe_fixture,
+        };
+        let response = provider_router(state.clone())
+            .oneshot(workload_request(valid_workload_request()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(source.report_data.lock().unwrap().is_none());
+        let mut t = observe_fixture(&registration.0, Path::new("/var/lib/test-workload")).unwrap();
+        t.insert("agent_id".into(), TEST_AGENT_ID.into());
+        std::fs::write(&registration.0, serde_json::to_vec(&t).unwrap()).unwrap();
+        let response = provider_router(state)
+            .oneshot(workload_request(valid_workload_request()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(source.report_data.lock().unwrap().is_some());
+    }
     struct ReplacingQuoteSource(PathBuf);
     impl QuoteSource for ReplacingQuoteSource {
         fn generate_quote(&self, _: &ReportData) -> Result<Vec<u8>, QuoteError> {
-            let mut t = observe_fixture(&self.0).unwrap();
+            let mut t = observe_fixture(&self.0, Path::new("/var/lib/test-workload")).unwrap();
             t.insert("start_time".into(), "999999".into());
             std::fs::write(&self.0, serde_json::to_vec(&t).unwrap()).unwrap();
             Ok(vec![1])

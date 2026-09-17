@@ -13,6 +13,7 @@ import (
 )
 
 type Config struct {
+	AgentID                                                                    string
 	EvidenceEndpoint, TrusteeEndpoint                                          *url.URL
 	TargetRegistrationPath, TrusteeCAPath, TrusteeServerName, EARPublicKeyPath string
 	EARExpectedIssuer, EARExpectedProfile, WorkloadID, PolicyID                string
@@ -21,6 +22,7 @@ type Config struct {
 	MaxResponseBytes                                                           int64
 }
 type hclConfig struct {
+	AgentID                string   `hcl:"agent_id"`
 	EvidenceEndpoint       string   `hcl:"evidence_endpoint"`
 	TrusteeEndpoint        string   `hcl:"trustee_endpoint"`
 	TargetRegistrationPath string   `hcl:"target_registration_path"`
@@ -44,6 +46,9 @@ func parseConfig(input string) (*Config, []string) {
 		return nil, []string{err.Error()}
 	}
 	var notes []string
+	if err := protocol.ValidateAgentID(raw.AgentID); err != nil {
+		notes = append(notes, err.Error())
+	}
 	if len(raw.Unused) > 0 {
 		notes = append(notes, "unknown configuration: "+strings.Join(raw.Unused, ", "))
 	}
@@ -88,7 +93,7 @@ func parseConfig(input string) (*Config, []string) {
 	if len(notes) > 0 {
 		return nil, notes
 	}
-	return &Config{ep, tp, raw.TargetRegistrationPath, raw.TrusteeCAPath, raw.TrusteeServerName, raw.EARPublicKeyPath, raw.EARExpectedIssuer, raw.EARExpectedProfile, raw.WorkloadID, raw.PolicyID, raw.ImageConfigDigest, raw.ConfigDigest, timeout, raw.MaxResponseBytes}, nil
+	return &Config{raw.AgentID, ep, tp, raw.TargetRegistrationPath, raw.TrusteeCAPath, raw.TrusteeServerName, raw.EARPublicKeyPath, raw.EARExpectedIssuer, raw.EARExpectedProfile, raw.WorkloadID, raw.PolicyID, raw.ImageConfigDigest, raw.ConfigDigest, timeout, raw.MaxResponseBytes}, nil
 }
 func validateEvidenceEndpoint(ep *url.URL) error {
 	if ep.Scheme != "unix" || ep.Host != "" || ep.User != nil || !path.IsAbs(ep.Path) || ep.RawQuery != "" || ep.Fragment != "" {
@@ -104,7 +109,7 @@ func (c *Config) checkApproved(t protocol.Target) error {
 	if err := t.Validate(); err != nil {
 		return err
 	}
-	if t.WorkloadID != c.WorkloadID || t.PolicyID != c.PolicyID || t.ImageConfigDigest != c.ImageConfigDigest || t.ConfigDigest != c.ConfigDigest {
+	if t.AgentID != c.AgentID || t.WorkloadID != c.WorkloadID || t.PolicyID != c.PolicyID || t.ImageConfigDigest != c.ImageConfigDigest || t.ConfigDigest != c.ConfigDigest {
 		return fmt.Errorf("target differs from approved workload baseline")
 	}
 	return nil

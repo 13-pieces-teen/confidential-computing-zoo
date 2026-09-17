@@ -42,7 +42,7 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 	if err != nil {
 		return err
 	}
-	if t.AgentID != c.AgentSPIFFEID || c.TargetSPIFFEID != "spiffe://argus.local/service/"+t.WorkloadID {
+	if t.AgentID != c.AgentSPIFFEID || t.WorkloadID != c.WorkloadID {
 		return fmt.Errorf("registered target identity mismatch")
 	}
 	watchErr, err := target.StartWatch(ctx, t)

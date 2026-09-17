@@ -236,17 +236,23 @@ func listenerPID(anchor string, port int) (string, error) {
 	panic("unreachable")
 }
 
-func Register(ctx context.Context, containerID, policyID, configPath string, port int) (protocol.Target, error) {
+func Register(ctx context.Context, containerID, agentID, workloadID, policyID, configPath string, port int) (protocol.Target, error) {
 	var result protocol.Target
+	if err := protocol.ValidateAgentID(agentID); err != nil {
+		return result, err
+	}
 	info, err := inspect(ctx, containerID)
 	if err != nil {
 		return result, err
+	}
+	if workloadID == "" || info.Config.Labels["io.trucon.workload-id"] != workloadID {
+		return result, fmt.Errorf("container differs from approved workload identity")
 	}
 	pid, err := listenerPID(strconv.Itoa(info.State.PID), port)
 	if err != nil {
 		return result, err
 	}
-	result = protocol.Target{AgentID: protocol.AgentID, ContainerID: info.ID, ImageConfigDigest: info.Image, LaunchID: info.Config.Labels["io.trucon.launch-id"], WorkloadID: info.Config.Labels["io.trucon.workload-id"], PolicyID: policyID, ConfigPath: configPath, ListenPort: strconv.Itoa(port), PID: pid, RootFSReadOnly: "true"}
+	result = protocol.Target{AgentID: agentID, ContainerID: info.ID, ImageConfigDigest: info.Image, LaunchID: info.Config.Labels["io.trucon.launch-id"], WorkloadID: workloadID, PolicyID: policyID, ConfigPath: configPath, ListenPort: strconv.Itoa(port), PID: pid, RootFSReadOnly: "true"}
 	boot, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	if err != nil {
 		return result, err
