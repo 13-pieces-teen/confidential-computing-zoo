@@ -3,6 +3,7 @@ import importlib.util
 import json
 import hashlib
 import tempfile
+import sys
 import os
 from pathlib import Path
 import re
@@ -13,25 +14,34 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 spec = importlib.util.spec_from_file_location("argus_workload_runtime", ROOT / "scripts/workload.py")
 runtime = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runtime)
 
 
 class RuntimeContractTests(unittest.TestCase):
+    def config(self):
+        c = json.loads((ROOT / "config/environment.example.json").read_text())
+        c["approved"] = self.approved()
+        return c
+
     def test_preflight_requires_the_provider(self):
         with tempfile.TemporaryDirectory() as directory:
             binaries = Path(directory)
             for name in ("spiffe-helper", "argus-agent-config", "argus-workload", "spiffe-authz",
                          "spiffe-mtls-probe", "argus-tdx-workloadattestor"):
                 (binaries / name).touch(mode=0o755)
-            with patch.object(runtime, "BIN", binaries), \
+            c = self.config()
+            deployment = runtime.Deployment(c)
+            deployment.bin = binaries
+            with patch.object(runtime, "Deployment", return_value=deployment), \
                     patch.object(runtime.shutil, "which", return_value="available"), \
                     patch.object(runtime, "binary_version", return_value="1.15.3"), \
                     patch.object(runtime, "remote_check", return_value={}), \
                     patch.object(runtime, "direct_trustee", return_value="PASS"), \
                     self.assertRaisesRegex(ValueError, "missing executable: .*argus-spire-evidence-provider"):
-                runtime.preflight({"approved": self.approved()})
+                runtime.preflight(c)
 
     def test_start_rejects_running_processes_before_starting_services(self):
         for name in ("spire-agent", "argus-spire-evidence-provider"):
@@ -80,15 +90,17 @@ class RuntimeContractTests(unittest.TestCase):
                 server.server_close()
 
     def test_status_handles_readiness_removal(self):
+        c = self.config()
         with patch.object(runtime, "run", return_value="active"), patch.object(Path, "read_text", side_effect=FileNotFoundError):
-            result = runtime.status({})
+            result = runtime.status(c)
         self.assertFalse(result["ready"])
         self.assertIsNone(result["target_serial"])
 
     def test_status_requires_a_complete_serial(self):
+        c = self.config()
         for contents, expected in (("", None), ("invalid", None), ("123\n", "123")):
             with self.subTest(contents=contents), patch.object(runtime, "run", return_value="active"), patch.object(Path, "read_text", return_value=contents):
-                result = runtime.status({})
+                result = runtime.status(c)
             self.assertEqual(result["target_serial"], expected)
             self.assertEqual(result["ready"], expected is not None)
 
@@ -125,12 +137,15 @@ class RuntimeContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "start.json").write_text(json.dumps({"started_at": "2026-09-17T00:00:00Z"}))
-            with patch.object(runtime, "RECORDS", root), \
+            c = self.config()
+            deployment = runtime.Deployment(c)
+            deployment.records = root
+            with patch.object(runtime, "Deployment", return_value=deployment), \
                     patch.object(runtime, "protected_file", side_effect=Path), \
                     patch.object(runtime, "status", return_value={"ready": True, "target_serial": "123"}), \
                     patch.object(runtime, "remote_check", return_value={}), \
                     patch.object(runtime, "run", side_effect=command):
-                return runtime.verify(dict.fromkeys(("business_url", "client_cert", "client_key", "client_bundle"), "test"))
+                return runtime.verify(c)
 
     def test_verify_accepts_exact_current_invocation_and_rotation(self):
         for wrapper in ('{}', 'level=info msg="{}" plugin_name=argus_tdx'):
@@ -194,12 +209,12 @@ class RuntimeContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.baseline(c)
         c["approved"] = self.approved()
-        policy = runtime.render_policy(runtime.baseline(c))
+        policy = runtime.policy_bytes(c).decode()
         self.assertNotIn("@IMAGE_CONFIG_DIGEST@", policy)
         self.assertIn(c["approved"]["image_config_digest"], policy)
 
     def test_policy_artifact_requires_exact_bytes_and_explicit_digest(self):
-        c = {"approved": self.approved()}
+        c = self.config()
         # A PoC-looking ID alone never drops the strict UpToDate requirement.
         c['approved']['policy_id'] = 'poc-ignore-tcb'
         self.assertIn(b'UpToDate', runtime.policy_bytes(c))
@@ -218,11 +233,13 @@ class RuntimeContractTests(unittest.TestCase):
                 runtime.policy_bytes(c)
 
     def test_audit_all_same_identity_entries(self):
-        required = runtime.selectors({"approved": self.approved()}, runtime.TARGET_ID)
-        good = {"id": "approved", "spiffe_id": runtime.TARGET_ID, "parent_id": runtime.AGENT_ID,
+        c = self.config()
+        target_id, agent_id = c["identity"]["target_id"], c["identity"]["agent_id"]
+        required = runtime.selectors(c, target_id)
+        good = {"id": "approved", "spiffe_id": target_id, "parent_id": agent_id,
                 "selectors": [{"type": s.split(":", 1)[0], "value": s.split(":", 1)[1]} for s in required],
                 "additional_attributes": {"disable_x509_svid_prefetch": True}}
-        runtime.audit_entries([good], required, runtime.TARGET_ID)
+        runtime.audit_entries(c, [good], required, target_id)
         for replacement in (
             {"selectors": [{"type": "unix", "value": "uid:0"}]},
             {"additional_attributes": {}},
@@ -230,9 +247,9 @@ class RuntimeContractTests(unittest.TestCase):
             {"admin": True},
         ):
             with self.subTest(replacement=replacement), self.assertRaises(ValueError):
-                runtime.audit_entries([good, good | replacement], required, runtime.TARGET_ID)
+                runtime.audit_entries(c, [good, good | replacement], required, target_id)
         with self.assertRaises(ValueError):
-            runtime.audit_entries([], required, runtime.TARGET_ID)
+            runtime.audit_entries(c, [], required, target_id)
 
 
 if __name__ == "__main__":

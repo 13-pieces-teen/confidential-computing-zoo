@@ -41,7 +41,7 @@ func configured(t *testing.T) *Plugin {
 		d.Nonce = r.Nonce
 		return protocol.Evidence{EvidenceType: "tdx_quote", Quote: "AQID", RuntimeData: d}, nil
 	}), verifier(func(context.Context, protocol.Evidence) error { return nil }))
-	p.config = &Config{TargetRegistrationPath: "/target.json", WorkloadID: d.WorkloadID, PolicyID: d.PolicyID, ImageConfigDigest: d.ImageConfigDigest, ConfigDigest: d.ConfigDigest}
+	p.config = &Config{AgentID: d.AgentID, TargetRegistrationPath: "/target.json", WorkloadID: d.WorkloadID, PolicyID: d.PolicyID, ImageConfigDigest: d.ImageConfigDigest, ConfigDigest: d.ConfigDigest}
 	p.load = func(string) (protocol.Target, error) { return d.Target, nil }
 	p.check = func(protocol.Target) error { return nil }
 	return p
@@ -77,10 +77,11 @@ func TestEvidenceAndInstanceFailuresNeverYieldSelectors(t *testing.T) {
 				return protocol.Evidence{}, fmt.Errorf("TSM failed")
 			})
 		},
-		"baseline image":  func(p *Plugin) { p.config.ImageConfigDigest = "sha256:wrong" },
-		"baseline config": func(p *Plugin) { p.config.ConfigDigest = "sha256:wrong" },
-		"baseline policy": func(p *Plugin) { p.config.PolicyID = "wrong" },
-		"target exited":   func(p *Plugin) { p.check = func(protocol.Target) error { return fmt.Errorf("pidfd exited") } },
+		"other valid Agent": func(p *Plugin) { p.config.AgentID = "spiffe://example.org/spire/agent/argus_tdx/worker-02" },
+		"baseline image":    func(p *Plugin) { p.config.ImageConfigDigest = "sha256:wrong" },
+		"baseline config":   func(p *Plugin) { p.config.ConfigDigest = "sha256:wrong" },
+		"baseline policy":   func(p *Plugin) { p.config.PolicyID = "wrong" },
+		"target exited":     func(p *Plugin) { p.check = func(protocol.Target) error { return fmt.Errorf("pidfd exited") } },
 		"target changed after quote": func(p *Plugin) {
 			n := 0
 			p.check = func(protocol.Target) error {
@@ -134,5 +135,22 @@ func TestNonceIsFresh(t *testing.T) {
 	b, _ := newNonce()
 	if a == b || len(a) != 43 {
 		t.Fatal("nonce not fresh")
+	}
+}
+
+func TestConfiguredAlternativeIdentity(t *testing.T) {
+	p := configured(t)
+	expected := "spiffe://example.org/spire/agent/argus_tdx/worker-02"
+	p.config.AgentID = expected
+	previous := p.evidence
+	p.evidence = collector(func(c context.Context, r protocol.EvidenceRequest) (protocol.Evidence, error) {
+		e, err := previous.Collect(c, r)
+		e.RuntimeData.AgentID = expected
+		return e, err
+	})
+	p.load = func(string) (protocol.Target, error) { d := fixture(t); d.AgentID = expected; return d.Target, nil }
+	result, err := p.AttestReference(context.Background(), request(t))
+	if err != nil || !slices.Contains(result.SelectorValues, "agent_id:"+expected) {
+		t.Fatal(result, err)
 	}
 }

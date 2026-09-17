@@ -17,11 +17,12 @@ func validConfig(t *testing.T) string {
  ear_public_key_path="/etc/argus/ear.pem"
  ear_expected_issuer="https://trustee.example"
  ear_expected_profile="tag:github.com,2024:confidential-containers/Trustee"
+ agent_id=%q
  workload_id=%q
  policy_id=%q
  image_config_digest=%q
  config_digest=%q
- `, d.WorkloadID, d.PolicyID, d.ImageConfigDigest, d.ConfigDigest)
+ `, d.AgentID, d.WorkloadID, d.PolicyID, d.ImageConfigDigest, d.ConfigDigest)
 }
 func TestConfigRequiresFixedTrustAndLocalEvidence(t *testing.T) {
 	valid := validConfig(t)
@@ -34,6 +35,8 @@ func TestConfigRequiresFixedTrustAndLocalEvidence(t *testing.T) {
 		{"https://trustee.example", "https://trustee.example/custom"},
 		{fixture(t).ImageConfigDigest, "openviking:latest"},
 		{"ear_public_key_path", "retired_field"},
+		{fixture(t).AgentID, "spiffe://example.org/service/not-a-node"},
+		{"agent_id", "retired_agent_id"},
 	} {
 		if _, notes := parseConfig(strings.ReplaceAll(valid, pair[0], pair[1])); len(notes) == 0 {
 			t.Errorf("accepted %v", pair)

@@ -24,13 +24,13 @@ executables := 3 if {
 configuration := 2 if {
  r := input.runtime_data_claims
  r.protocol == "argus.workload.tdx.v1"
- r.agent_id == "spiffe://argus.local/spire/agent/argus_tdx/openviking-node"
- r.workload_id == "openviking-cmem"
+ r.agent_id == @AGENT_ID@
+ r.workload_id == @WORKLOAD_ID@
  r.policy_id == @POLICY_ID@
  r.config_digest == @CONFIG_DIGEST@
- r.config_path == "/etc/openviking/ov.conf"
+ r.config_path == @CONFIG_PATH@
  r.executable == @EXECUTABLE@
- r.listen_port == "1933"
+ r.listen_port == @LISTEN_PORT@
  r.rootfs_read_only == "true"
  regex.match("^[A-Za-z0-9_-]{43}$", r.nonce)
  regex.match("^[1-9][0-9]*$", r.pid)

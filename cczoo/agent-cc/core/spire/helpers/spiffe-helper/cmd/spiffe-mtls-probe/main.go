@@ -27,7 +27,7 @@ func run() error {
 	cert := flag.String("cert", "", "client SVID PEM")
 	key := flag.String("key", "", "client key PEM")
 	bundle := flag.String("bundle", "", "trust bundle PEM")
-	target := flag.String("server-id", "spiffe://argus.local/service/openviking-cmem", "exact server SPIFFE ID")
+	target := flag.String("server-id", "", "required exact server SPIFFE ID")
 	endpoint := flag.String("url", "", "HTTPS business endpoint")
 	tlsOnly := flag.Bool("tls-only", false, "check that NGINX loaded the certificate given in -cert")
 	flag.Parse()

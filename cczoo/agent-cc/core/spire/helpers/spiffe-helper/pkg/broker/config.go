@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	WorkloadID             string                 `hcl:"workload_id"`
 	Endpoint               string                 `hcl:"endpoint"`
 	HelperSPIFFEID         string                 `hcl:"helper_spiffe_id"`
 	AgentSPIFFEID          string                 `hcl:"agent_spiffe_id"`
@@ -23,6 +24,9 @@ type Config struct {
 func (c Config) Validate(certDir string) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("Broker mode requires Linux pidfd")
+	}
+	if c.WorkloadID == "" {
+		return fmt.Errorf("approved workload_id is required")
 	}
 	ep, err := url.Parse(c.Endpoint)
 	if err != nil || ep.Scheme != "unix" || ep.Host != "" || ep.User != nil || !filepath.IsAbs(ep.Path) || ep.RawQuery != "" || ep.Fragment != "" {

@@ -6,6 +6,21 @@
 
 完整流程和信任边界见 [当前方案](../../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)。本轮不验证 Rekor；TC API 原有日志上传保持。普通 SVID 轮换不会生成新 Quote；Helper 重连才重新订阅、重新认证。真实 TDX 验收需要公司 TDVM。
 
+## 统一部署配置（方案 A）
+
+唯一输入是 [environment.example.json](config/environment.example.json) 对应的 `schema_version: 1` 配置；缺少字段、未知字段和旧 `previous_*` 字段直接拒绝。示例中的域名、身份、端口和目录仅为一套部署值，下面命令使用这套示例路径。部署仍限定 OpenViking、Docker、一个 Node slot 和一个目标监听进程；服务 unit 名与 `argus-nginx` 账号固定。
+
+| 配置段 | 内容及消费端 |
+|---|---|
+| `identity` | trust domain 与完整 Agent/Helper/target/client SPIFFE ID；贯通 Provider、Attestor、Helper、Broker allowlist、Entry、Rego、AuthZ 和验收探针。 |
+| `paths` | 安装、配置、记录、SPIRE 二进制目录与 `run_name`；渲染全部 unit、socket、凭据、NGINX 日志/临时目录和清理 hook。 |
+| `workload` | workload ID、宿主机/容器内配置与数据路径、内部监听端口、TLS 端口、宿主发布端口；贯通 TC API、登记、Provider、Rego 和 NGINX。 |
+| `approved` 与信任字段 | 显式批准的镜像/配置/平台摘要、policy 及 TLS/EAR 材料；不会从当前观察值自动批准。 |
+
+`run_name=argus` 派生 `/run/argus-workload/target.json`、`/run/argus/evidence-provider.sock`、`/run/argus-credentials/`、`/run/argus-nginx/`、`/run/argus-authz/authz.sock`。Workload API 与 Broker 分别使用 `/run/argus-spire-agent/agent.sock`、`/run/argus-spire-broker/broker.sock`，符合 SPIRE 对独立目录的要求。Linux 路径只接受干净的绝对路径；配置和可执行文件不能落入可写数据目录或 `/tmp`。
+
+安装与 `render` 生成 Helper/NGINX 配置、systemd units、hook、TC API 最小配置；`render` 还生成 Agent HCL 和批准策略。安装、配置、记录与 SPIRE 二进制目录不能与派生的运行目录重叠，避免停服清理删除配置或程序。两者更新 unit 后执行 `daemon-reload`，不自动启动服务。应用新配置之前必须先停止现有认证栈；活跃服务会导致拒绝安装/渲染，防止旧实例的清理 hook 读到新目录。应编辑单独的输入文件，停止旧实例后再应用，不直接覆盖运行中的 `environment.json`。
+
 ## 1. 运行前提供的材料
 
 准备已批准的 Node Agent/Server 配置、SPIRE bootstrap bundle、proof key、Trustee TLS CA、固定 EAR P-256 公钥及 issuer/profile，以及 Node policy 与对应信任材料。
@@ -27,7 +42,8 @@
 cd cczoo/agent-cc/core/spire/workload
 python3 -m pip install -r ../../tc_api/requirements.txt pytest pytest-asyncio
 bash scripts/build.sh
-sudo bash scripts/install.sh
+# 先复制示例、填写两台主机各自的路径与批准值，并保存为 root:root 0600。
+sudo bash scripts/install.sh --config /root/workload-environment.json
 ```
 
 `build.sh` 执行 Node、Workload、官方 Helper、NGINX、TC API 启动和 Trustee 合同测试，并用官方 SPIRE 校验生成配置与真实 Entry JSON，下载官方 SPIRE v1.15.3 二进制并检查固定 SHA-256。它不编译或修改 SPIRE Core。产物位于 `build/`，包含插件、Helper、Provider、辅助工具及哈希清单。
@@ -37,13 +53,13 @@ sudo bash scripts/install.sh
 包括 Provider 和官方 SPIRE Agent/Server；只安装这些文件。
 部署使用完整构建产物，缺失清单、缺失产物或被修改的二进制都会在安装前被拒绝。
 
-把相同构建产物安装到 TDVM 与 Server 主机。Server 只使用其中的 Server/Node 插件和 Entry 工具。安装不会启动或启用新服务；现有配置不会被覆盖。
+把相同构建产物安装到 TDVM 与 Server 主机。Server 只使用其中的 Server/Node 插件和 Entry 工具。安装不会启动或启用服务；会将指定输入写入 `paths.config_dir/environment.json` 并重新渲染本栈配置。原 Node 源配置保持原样。
 
 Evidence Provider 的 UDS 路由为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。Provider 与 NodeAttestor 插件来自同一次完整构建；`workload.py render` 将插件路径与 SHA-256 写入 Agent 配置，`workload.py start` 自动执行 `render`。配置只指定 UDS socket，无需填写 HTTP 路径。
 
-Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，其 `ExecStart` 指向该二进制，并显式传入 `--agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node`。
+Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，其 `ExecStart` 指向该二进制，并从统一配置显式传入 Agent ID、socket、登记文件及 `--workload-data-path`。
 
-参考 `config/environment.example.json` 建立两台主机各自的 `/etc/argus-workload/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的批准基线及 Helper 二进制必须一致。
+参考 `config/environment.example.json` 准备两台主机各自的输入配置，安装后保存至 `paths.config_dir/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的 Agent/Helper/目标身份、批准基线及 Helper 二进制必须一致；`paths.install_dir` 也须相同，因为 Server 使用本地同路径的 Helper 副本生成目标主机的 `unix:path` 与 `unix:sha256` selectors。TDVM 预检会逐项比较 Server 返回的 Entry 合同和本地预期，任一不一致直接拒绝。
 
 ## 3. 配置官方 SPIRE v1.15.3 与 Node 插件
 
@@ -53,6 +69,8 @@ Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/sr
 sudo /opt/argus-workload/bin/argus-agent-config -role server \
   -source /etc/spire/argus-poc/server.conf \
   -node-binary /opt/argus-workload/bin/argus-tdx-nodeattestor-server \
+  -trust-domain argus.local \
+  -agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node \
   -output /etc/argus-workload/server.conf
 ```
 
@@ -67,12 +85,12 @@ ExecStart=/opt/spire-1.15.3/bin/spire-server run -config /etc/argus-workload/ser
 重载 systemd 并重启该 Server unit。在 TDVM 执行：
 
 ```bash
-sudo python3 /opt/argus-workload/scripts/workload.py render
+sudo python3 /opt/argus-workload/scripts/workload.py render --config /etc/argus-workload/environment.json
 ```
 
 Agent 配置从已批准的 Node 配置合并生成，保留 proof key 路径等协议设置，设置 Node 插件二进制、Provider socket、Workload API socket，加入 WorkloadAttestor 与本机 Broker。生成结果可在 `/etc/argus-workload/agent.conf` 审查。
 
-NodeAttestor 支持配置 Agent ID，Provider 的 `--agent-id` 是必填项，必须等于 Server `plugin_data.agent_id`；该 ID 的 trust domain 必须与 SPIRE `trust_domain` 一致。当前 OpenViking Workload 合同、静态 Entry 和 policy 使用 `spiffe://argus.local/spire/agent/argus_tdx/openviking-node`，部署使用 `argus.local` 及该身份。这里的配置能力只覆盖单个已固定 proof key 的 Node slot，不表示 Workload 已支持任意 Agent ID 或多节点注册；完整格式见 [身份配置合同](../../argus/docs/configuration.md#spire-node-attestation)。
+NodeAttestor 支持配置 Agent ID，Provider 的 `--agent-id` 是必填项，必须等于 Server `plugin_data.agent_id`；该 ID 的 trust domain 必须与 SPIRE `trust_domain` 一致。Workload 合同保留 v1，只检查合法 Agent ID 格式；Provider、WorkloadAttestor、Helper、Entry 与策略进一步核对本次配置中的批准身份。更换域名/身份时还需同步现有 Node 配置与客户端身份材料；Server 工具会拒绝 Node 配置与部署值不一致。仍只支持单个已固定 proof key 的 Node slot，不新增多节点注册；完整格式见 [身份配置合同](../../argus/docs/configuration.md#spire-node-attestation)。
 
 Provider 将配置中的 Agent ID、Server nonce 和 proof public key 绑定到 `REPORTDATA`；expiry 和 Quote digest 由 PoP transcript 签名覆盖。Trustee 负责 Quote/TCB/policy 评估，Server NodeAttestor 验证 PoP 与签名 EAR 后才返回 `AgentAttributes`，最终由 SPIRE Server CA 签发 Agent SVID。业务服务的 SVID 仍由后续 Workload 证明和静态 Entry 独立控制。
 
@@ -99,8 +117,8 @@ PY
 在 SPIRE Server 主机执行：
 
 ```bash
-sudo python3 /opt/argus-workload/scripts/workload.py apply-entries
-sudo python3 /opt/argus-workload/scripts/workload.py server-check
+sudo python3 /opt/argus-workload/scripts/workload.py apply-entries --config /etc/argus-workload/environment.json
+sudo python3 /opt/argus-workload/scripts/workload.py server-check --config /etc/argus-workload/environment.json
 ```
 
 Helper Entry 同时要求 root UID、实际二进制路径和 SHA-256。目标 Entry 同时要求 `argus_tdx:verified:true`、workload、policy、Agent ID、实际镜像和配置摘要，并关闭 X.509-SVID 预取（`disableX509SVIDPrefetch=true`）。
@@ -112,43 +130,42 @@ Helper Entry 同时要求 root UID、实际二进制路径和 SHA-256。目标 E
 在 TDVM 部署本分支的 TC API。给 TC API 容器传入：
 
 ```text
-ARGUS_OPENVIKING_CONFIG_PATH=/srv/openviking/ov.conf
-ARGUS_OPENVIKING_DATA_PATH=/srv/openviking/data
+ARGUS_WORKLOAD_CONFIG=/etc/argus-workload/tc-api-workload.json
 ```
 
-上述路径必须同时在 Docker 宿主机存在，并以相同路径挂载给 TC API。配置文件只读挂载；配置中设定 `server.host=127.0.0.1`、`server.port=1933`、`storage.workspace=/var/lib/openviking`。基于现有 OpenViking 配置补齐模型、API key 等业务参数。
+该文件由统一配置导出，仅包含 schema 版本和 `workload` 段，以 root 所有且不可被组/其他用户写入的只读文件挂载给 TC API。`config_host_path` 与 `data_host_path` 必须同时在 Docker 宿主机存在，并以相同路径挂载给 TC API。OpenViking 配置中保持 `server.host=127.0.0.1`，`server.port` 等于 `workload.listen_port`、`storage.workspace` 等于 `workload.data_path`。基于现有 OpenViking 配置补齐模型、API key 等业务参数。
 
-专用 profile 固定非特权容器、只读 rootfs、独立 bridge network namespace、单个监听进程、仅发布 1943、只读配置 bind mount 与单独可写数据目录。无 TDX 设备、SPIRE socket 或私钥挂入业务容器。镜像如果声明额外 volume、服务启动多个共享监听 worker、或实际读取不同配置，Provider 会拒绝；先修正运行配置再登记。
+专用 profile 固定非特权容器、只读 rootfs、独立 bridge network namespace、单个监听进程、仅发布 `published_port:tls_port`、只读配置 bind mount 与单独可写数据目录。无 TDX 设备、SPIRE socket 或私钥挂入业务容器。镜像如果声明额外 volume、服务启动多个共享监听 worker、或实际读取不同配置，Provider 会拒绝；先修正运行配置再登记。
 
 ```bash
 # 使用公司已有 OIDC 登录流程取得 token；不关闭日志上传。
 export TC_API_IDENTITY_TOKEN=...
 # 查询结果默认复用 identity token 作为 Bearer；若网关另有要求，设置 TC_API_BEARER_TOKEN。
 sudo --preserve-env=TC_API_IDENTITY_TOKEN,TC_API_BEARER_TOKEN \
-  python3 /opt/argus-workload/scripts/workload.py launch
-sudo python3 /opt/argus-workload/scripts/workload.py register
+  python3 /opt/argus-workload/scripts/workload.py launch --config /etc/argus-workload/environment.json
+sudo python3 /opt/argus-workload/scripts/workload.py register --config /etc/argus-workload/environment.json
 ```
 
-`launch` 使用 TC API 的 `nginx-spiffe-helper-v1` profile，保留 container/launch/image 内容关联。请求拒绝 HTTP 重定向，需填写可以直接处理请求的 TC API 地址。`register` 在宿主机解析实际监听 1933 的进程，而非直接采用 container init PID；生成 root 保护的 `/run/argus-workload/target.json`。
+`launch` 使用 TC API 的 `nginx-spiffe-helper-v1` profile，保留 container/launch/image 内容关联。Docker argv 与启动日志的 mounts、ports、环境摘要使用同一份已校验配置快照；请求不能覆盖挂载或运行命令。请求拒绝 HTTP 重定向，需填写可以直接处理请求的 TC API 地址。`register` 在宿主机解析实际监听 `workload.listen_port` 的进程，而非直接采用 container init PID；生成 root 保护的 `/run/argus-workload/target.json`。
 
-首次登记不覆盖已有登记。替换实例需要先 `stop`，再启动/登记新实例；不支持原地切换成另一个进程。`stop` 停止认证栈并撤下入口；旧 OpenViking 容器仍由 TC API/Docker 管理，启动替换容器前需按旧 container ID 停止它，释放宿主机 1943 端口。业务容器不能修改登记文件。
+首次登记不覆盖已有登记。替换实例需要先 `stop`，再启动/登记新实例；不支持原地切换成另一个进程。`stop` 停止认证栈并撤下入口；旧 OpenViking 容器仍由 TC API/Docker 管理，启动替换容器前需按旧 container ID 停止它，释放 `workload.published_port` 指定的端口。业务容器不能修改登记文件。
 
 ## 6. 预检、启动、状态、验证与停止
 
 ```bash
-sudo python3 /opt/argus-workload/scripts/workload.py preflight
-sudo python3 /opt/argus-workload/scripts/workload.py start
-sudo python3 /opt/argus-workload/scripts/workload.py status
+sudo python3 /opt/argus-workload/scripts/workload.py preflight --config /etc/argus-workload/environment.json
+sudo python3 /opt/argus-workload/scripts/workload.py start --config /etc/argus-workload/environment.json
+sudo python3 /opt/argus-workload/scripts/workload.py status --config /etc/argus-workload/environment.json
 sudo --preserve-env=OPENVIKING_API_KEY \
-  python3 /opt/argus-workload/scripts/workload.py verify
-sudo python3 /opt/argus-workload/scripts/workload.py stop
+  python3 /opt/argus-workload/scripts/workload.py verify --config /etc/argus-workload/environment.json
+sudo python3 /opt/argus-workload/scripts/workload.py stop --config /etc/argus-workload/environment.json
 ```
 
 preflight 检查批准基线、真实版本、同身份 Entry、Trustee 直连 HTTPS/REST/policy、固定 EAR 公钥、TSM、目标当前实例与客户端材料。缺项直接停止并报告，不转向 mock、代理或旧 `allow` JSON。
 
 start 在通过预检并生成配置后启动 systemd 栈。如果 SPIRE Agent 或 Provider 进程已运行，启动检查会报告 PID 并停止执行；需先停止占用进程。首次目标凭据通过链、身份和密钥检查，完整代次切换，再经 NGINX `-t` 与实际 TLS 加载检查后，才原子发布 readiness；发布期间过期会清理凭据并停服。
 
-NGINX 进入 OpenViking 的 network namespace，对外终止 mTLS；OpenViking 内部端口只监听该 namespace 的回环。NGINX 先验证客户端证书链，再把实际 TLS 证书及验证状态覆盖写入受控 UDS 请求。AuthZ 检查唯一 SPIFFE URI、用途、有效期与固定 OpenClaw ID。客户端工具同时核对服务端目标 ID。
+NGINX 进入 OpenViking 的 network namespace，对外终止 mTLS；OpenViking 内部端口只监听该 namespace 的回环。NGINX 先验证客户端证书链，再把实际 TLS 证书及验证状态覆盖写入受控 UDS 请求。AuthZ 检查唯一 SPIFFE URI、用途、有效期与配置的 `identity.client_id`。客户端工具同时核对服务端目标 ID。
 
 OpenClaw 的实际插件调用按 [原生 SPIFFE mTLS 接入手册](../../../adapters/OpenClaw/spiffe_client/README.md)部署。新增 `spiffe-client-credentials` 通过 OpenClaw 自己的 Agent/Broker 引用真实 Gateway PID，将目标凭据交付给插件内的 HTTPS 客户端；连接脚本区分安装、PID 登记和配置生效，业务验收检查 Gateway 的实际 mTLS 写入日志。这里的 `verify` 探针仍用于 OpenViking 服务端验收，不能替代完整的 OpenClaw 插件业务验收。
 
@@ -184,12 +201,12 @@ sudo python3 /opt/argus-workload/scripts/watch-attestation.py \
 以下入口会故意中断指定测试工作负载，只在公司验收实例运行：
 
 ```bash
-sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py rotation
-sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py wrong-client \
+sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py rotation --config /etc/argus-workload/environment.json
+sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py wrong-client --config /etc/argus-workload/environment.json \
   --wrong-client-cert /approved-test-client/svid.pem --wrong-client-key /approved-test-client/key.pem
-sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py helper-crash
+sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py helper-crash --config /etc/argus-workload/environment.json
 # 重新 register/start/verify 后执行目标退出用例：
-sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py target-exit
+sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py target-exit --config /etc/argus-workload/environment.json
 ```
 
 普通轮换必须保持就绪、证书序列号改变且没有新的 appraisal；Helper crash/target exit 必须撤下入口并清理凭据。负向操作之后工具将栈停下，恢复需要重新登记。对 nonce、镜像、配置、policy、伪造/过期 EAR 的负向测试由插件/Provider 合同测试覆盖；公司还须验证真实 DCAP/Quote 拒绝行为。

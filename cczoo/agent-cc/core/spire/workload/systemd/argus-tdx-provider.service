@@ -6,9 +6,9 @@ Requires=docker.service
 [Service]
 Type=simple
 User=root
-RuntimeDirectory=argus
+RuntimeDirectory=@RUN_NAME@
 RuntimeDirectoryMode=0700
-ExecStart=/opt/argus-workload/bin/argus-spire-evidence-provider --agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node --socket-path /run/argus/evidence-provider.sock --workload-registration-path /run/argus-workload/target.json
+ExecStart=@BIN@/argus-spire-evidence-provider --agent-id @AGENT_ID@ --socket-path @PROVIDER_SOCKET@ --workload-registration-path @TARGET@ --workload-data-path @DATA_PATH@
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=5

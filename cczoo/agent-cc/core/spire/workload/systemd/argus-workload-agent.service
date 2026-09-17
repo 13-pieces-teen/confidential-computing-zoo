@@ -6,7 +6,9 @@ After=argus-tdx-provider.service network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/opt/spire-1.15.3/bin/spire-agent run -config /etc/argus-workload/agent.conf
+RuntimeDirectory=@RUN_NAME@-spire-agent @RUN_NAME@-spire-broker
+RuntimeDirectoryMode=0700
+ExecStart=@SPIRE@/spire-agent run -config @ETC@/agent.conf
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=5

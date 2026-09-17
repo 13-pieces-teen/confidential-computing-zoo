@@ -5,6 +5,8 @@ Build checks require Linux/bash; installer checks also require root because the
 real install.sh retains its production root check. Other platforms skip them.
 """
 import hashlib
+import json
+import shlex
 import os
 from pathlib import Path
 import shutil
@@ -74,6 +76,12 @@ class InstallPackagingTests(unittest.TestCase):
         self.host = self.root / "host"
         (self.host / "etc/systemd/system").mkdir(parents=True)
         self.command_dir = self.root / "commands"
+        c = json.loads((ROOT / "config/environment.example.json").read_text())
+        c["paths"].update(install_dir=str(self.host / "payload"), config_dir=str(self.host / "configuration"),
+                          records_dir=str(self.host / "records"), spire_bin_dir=str(self.host / "spire/bin"), run_name="install-test")
+        self.config = self.root / "environment.json"
+        self.config.write_text(json.dumps(c))
+        executable(self.command_dir / "python3", "#!/bin/sh\nexec " + shlex.quote(sys.executable) + ' -B "$@"\n')
         # All account/service operations are stubs. Only coreutils install runs,
         # with every production destination redirected beneath self.host.
         for name in ("getent", "id", "docker", "nsenter", "systemctl", "openssl", "timeout"):
@@ -105,7 +113,7 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
         return names
 
     def install(self):
-        return subprocess.run(["bash", str(SCRIPTS / "install.sh")], env=self.env,
+        return subprocess.run(["bash", str(SCRIPTS / "install.sh"), "--config", str(self.config)], env=self.env,
                               capture_output=True, text=True, timeout=10)
 
     def assert_rejected_before_install(self, result):
@@ -121,6 +129,13 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
         result = self.install()
         self.assert_rejected_before_install(result)
         self.assertIn("missing executable build artifact: " + current, result.stderr)
+
+    def test_active_services_prevent_replacing_configuration(self):
+        self.package()
+        executable(self.command_dir / "systemctl", "#!/bin/sh\necho active\n")
+        result = self.install()
+        self.assert_rejected_before_install(result)
+        self.assertIn("stop argus-helper", result.stderr)
 
     def test_unlisted_provider_and_modified_spire_are_rejected(self):
         names = self.package()
@@ -138,13 +153,16 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("INSTALL=PASS", result.stdout)
         for name in names:
-            destination = (self.host / "opt/argus-workload" / name if name.startswith("bin/")
-                           else self.host / "opt" / name)
+            destination = (self.host / "payload" / name if name.startswith("bin/")
+                           else self.host / "spire/bin" / Path(name).name)
             self.assertEqual(destination.read_bytes(), (self.output / name).read_bytes())
         for extra in ("unlisted-tool", "unhashed-extra"):
-            self.assertFalse((self.host / "opt/argus-workload/bin" / extra).exists())
+            self.assertFalse((self.host / "payload/bin" / extra).exists())
         unit = (self.host / "etc/systemd/system/argus-tdx-provider.service").read_text()
-        self.assertIn("/opt/argus-workload/bin/argus-spire-evidence-provider --agent-id ", unit)
+        self.assertIn(str(self.host / "payload/bin/argus-spire-evidence-provider") + " --agent-id ", unit)
+        self.assertIn("--workload-data-path /var/lib/openviking", unit)
+        self.assertIn("/run/install-test/", unit)
+        self.assertNotIn("@", unit)
 
 
 if __name__ == "__main__":

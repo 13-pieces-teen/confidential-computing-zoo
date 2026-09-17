@@ -161,7 +161,8 @@ provide the SPIRE Agent/Server, bootstrap trust, proof key, and Trustee policy.
 | Provider CLI | `--agent-id` | Required SPIRE Agent ID; must equal the Server plugin's `agent_id`. It is fixed for the lifetime of the Provider process and cannot be supplied in `/ra/v1/node-evidence` requests. |
 | Provider CLI | `--socket-path` | Defaults to `/run/argus/evidence-provider.sock`; the SPIRE Agent in the same TD must be able to access it. |
 | Provider CLI | `--tsm-report-root` | Defaults to `/sys/kernel/config/tsm/report`; Linux TSM supplies the Quote. |
-| Provider CLI | `--workload-registration-path` | Optional protected registration file enabling `POST /ra/v1/workload-evidence`; the current OpenViking contract requires `--agent-id spiffe://argus.local/spire/agent/argus_tdx/openviking-node` when this is set. |
+| Provider CLI | `--workload-registration-path` | Optional protected registration file enabling `POST /ra/v1/workload-evidence`; its Agent ID must match `--agent-id`. Requires `--workload-data-path` together. |
+| Provider CLI | `--workload-data-path` | Approved absolute data mount destination in the OpenViking container; required with workload registration. Configuration and executable paths must remain outside writable mounts. |
 | Agent plugin HCL | `evidence_socket_path` | Absolute path matching the Provider socket. |
 | Agent plugin HCL | `proof_key_path` | Absolute path to a regular PKCS#8 Ed25519 `PRIVATE KEY` PEM file with `0600` permissions on Linux. |
 | Server plugin HCL | `agent_id` | Same identity as the Provider; its trust domain must match SPIRE's core `trust_domain`. |
@@ -184,11 +185,11 @@ with distinct identities and proof-key pins. Service SVIDs require workload
 attestation and registration policy. A SPIFFE trust domain is an identity
 namespace; it is distinct from the TDX trust domain (TD) containing the Agent.
 
-The combined OpenViking deployment retains
-`spiffe://argus.local/spire/agent/argus_tdx/openviking-node` and the
-`argus.local` trust domain explicitly. Its Workload binding, registration
-entries, and policies still depend on that identity; the Provider rejects a
-different `--agent-id` when `--workload-registration-path` is configured.
+The combined OpenViking deployment renders Provider, WorkloadAttestor, Helper,
+entries and policy from one explicit deployment configuration. Different valid
+Agent IDs are accepted only when they match the configured deployment; an
+unapproved identity is rejected before Quote generation or selector issuance.
+The workload schema and its SHA-384 REPORTDATA encoding remain v1.
 Both SPIRE-mode evidence routes remain under `/ra/v1/`, without unversioned
 aliases. See the [Workload runbook](../../spire/workload/README.md) for the
 combined build, Provider unit, and deployment checks.

@@ -19,12 +19,17 @@ func main() {
 }
 func run() error {
 	action := flag.String("action", "check", "register or check")
-	registration := flag.String("registration", "/run/argus-workload/target.json", "root-owned registration")
+	registration := flag.String("registration", "", "required root-owned registration")
 	container := flag.String("container", "", "full Docker container ID")
+	agent := flag.String("agent-id", "", "approved SPIRE Agent identity")
+	workload := flag.String("workload-id", "", "approved workload identity")
 	policy := flag.String("policy", "", "fixed workload policy")
-	config := flag.String("config", "/etc/openviking/ov.conf", "actual workload configuration path")
-	port := flag.Int("port", 1933, "single IPv4 loopback service port")
+	config := flag.String("config", "", "actual workload configuration path")
+	port := flag.Int("port", 0, "single IPv4 loopback service port")
 	flag.Parse()
+	if !filepath.IsAbs(*registration) {
+		return fmt.Errorf("registration path must be absolute")
+	}
 	switch *action {
 	case "check":
 		t, err := target.Load(*registration)
@@ -39,7 +44,7 @@ func run() error {
 		if !filepath.IsAbs(*registration) {
 			return fmt.Errorf("registration path must be absolute")
 		}
-		t, err := target.Register(context.Background(), *container, *policy, *config, *port)
+		t, err := target.Register(context.Background(), *container, *agent, *workload, *policy, *config, *port)
 		if err != nil {
 			return err
 		}

@@ -158,6 +158,46 @@ Node 配置工具必须指定本次部署的插件二进制。产物白名单、
 | PASS | Linux 构建/安装合同 | Python 3.11.16 执行 `test_build_install` 4 项通过、0 skipped；使用伪构建产物、服务命令替身和临时安装根目录。 |
 | NOT_RUN | 实际服务验收 | 本次未执行真实 NGINX、systemd 部署、硬件 Quote、Trustee、SVID 签发及 OpenViking 业务验收；未改动 Rust Provider 和路由。 |
 
+## 2026-09-17 方案 A：统一部署配置
+
+新增严格 `schema_version: 1` 输入，渲染身份、端口、目录、Helper/NGINX/systemd、
+Agent HCL、Entry、Rego 及 TC API 最小配置。Agent 身份从协议中的示例常量改为
+“协议格式校验 + 消费端批准值匹配”，Workload v1 与 Node challenge/PoP 不变。
+保留 OpenViking 配置/环境约束，不增加旧 schema、Provider 名或路径变量回退。
+
+两套测试参数分别使用 `argus.local` 与 `example.org`，第二套采用 `memory-prod`、
+2933/2943/3943 端口及不同配置/数据/运行目录。安装和渲染拒绝覆盖活跃认证栈，
+避免新旧运行路径交叉；Broker 与 Workload API 使用独立目录。
+
+| 状态 | 检查 | 结果与边界 |
+|---|---|---|
+| PASS | Go 协议与 WorkloadAttestor | 共享原始/替代参数向量、非批准 Agent ID 拒绝及批准替代身份通过；模块测试和 `go vet` 通过。 |
+| PASS | Rust Provider | Rust 1.88 Windows GNU 离线构建，16 项测试通过；包含两套 Go/Rust REPORTDATA 向量、配置匹配、Provider 身份拒绝及可写挂载边界。Quote/运行观察使用替身。 |
+| PASS | Linux Helper | Go 1.26.5 交叉编译，在 WSL 执行配置工具、Helper config、Broker 和 AuthZ 测试；包括初始等待/首次发布超时、目标退出、过期、发布失败和快照移除。POSIX 信号相关测试在 Linux 通过。 |
+| PASS | 真实 NGINX | 隔离运行 Ubuntu NGINX 1.18.0，读取正式部署模板；非默认身份、随机端口和临时目录下验证 mTLS 2xx、错误客户端/伪造认证头 403、证书轮换与无效配置拒绝。所有临时目录均显式渲染，避免使用编译时默认目录。 |
+| PASS | Python 部署与安装 | Linux Python 3.11.16：20 项通过，0 skipped；涵盖两套配置、清理路径、严格 schema、活动服务拒绝、完整产物哈希清单和已有日志关联。安装/服务命令使用替身。 |
+| PASS | 官方 SPIRE | 官方 v1.15.3 启动本地测试 Server、配置 Node 插件、拒绝域名不匹配；非默认域名的生成 Agent HCL 和实际 Entry JSON 验证通过（2 项）。不执行 Node 加入。 |
+| PASS | Linux 进程与登记 | 2 项通过：真实子进程退出的 pidfd 观察、登记文件/父目录权限和符号链接拒绝。 |
+| PASS | TC API 本次范围 | 4 项通过，验证非默认路径/端口、OpenViking 参数拒绝、Docker argv 与日志/环境摘要一致及配置快照一致性。Docker、registry、日志提交使用替身。 |
+| EXISTING_FAILURE | TC API 扩展检查 | `test_control_plane_trucon_integration.py`、`test_subprocess_unit.py` 合计 11 passed / 16 failed；修改前 `946ddea` 隔离快照复现完全相同的 16 项失败。包括既有认证预期、SBOM/加密/KBS 调用签名，不作为本次通过项。 |
+| NOT_RUN | Linux Rust Provider 进程/完整构建 | 本机没有 Linux Rust 构建环境；Provider 的 Linux UDS 部署命令测试跳过 1 项。未执行完整 `build.sh` 或将这些开发机产物打包为可部署发行版。 |
+| NOT_RUN | 公司部署验收 | 未执行真实硬件 Quote、Trustee、目标 SVID/OpenViking 业务及完整 systemd SIGKILL/停服时限验收；仍按下节执行。 |
+
+本次代码未部署到公司主机。详细本机对照结果和源码摘要保存在开发机验证目录，
+不会作为真实 TDX 证据。历史记录中的旧流程仅表示当日状态；当前部署以 README 为准。
+
+### 2026-09-17 提交前复审
+
+复审覆盖本次配置贯通的代码、模板、安装/生命周期、TC API 和文档，修复了以下问题：
+
+- Server 自检通过不能证明其配置与 TDVM 一致。`server-check` 现在返回批准的 Entry 合同，TDVM 比较 Agent/Helper/目标身份、selectors、Helper 路径和二进制摘要；不一致或缺少合同直接拒绝，不增加旧响应回退。
+- 安装、配置、记录及 SPIRE 二进制目录此前可以与派生的 systemd 运行目录重叠，停服清理可能删除配置或程序。现在拒绝双前导斜线以及目录重叠，运行目录前缀变化也须重新检查。
+- 两项 TC API 测试此前在普通 Linux 用户下因测试文件不属于 root 而失败。现在只模拟指定临时配置文件的所有者，并独立验证非 root、组/其他用户可写、符号链接及超大文件仍被生产代码拒绝。
+
+新增回归用例在修复前复现失败，修复后通过。Linux Python 3.11.14 的部署/安装/运行合同检查为 **22 passed**；官方 SPIRE 两项与 Linux Provider 进程一项因本轮未提供二进制而跳过。TC API 本次范围在 UID 65534 的普通用户环境执行 **9 passed**，Docker、registry 和日志提交仍使用替身。
+
+复审开始时逐文件 SHA-256 核对，原 A 方案 50 个文件与上一轮验证快照全部一致。Go/Rust、真实 NGINX及官方 SPIRE 的先前结果以上表为准，本轮针对新增 Python 修复执行回归。TC API 已知基线失败、完整 Linux 构建和真实 TDX/systemd 验收边界保持不变。
+
 ## 公司环境待执行
 
 按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及 OpenClaw 客户端 SVID，执行：

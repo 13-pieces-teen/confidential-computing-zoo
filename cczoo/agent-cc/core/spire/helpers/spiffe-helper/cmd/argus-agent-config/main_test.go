@@ -66,10 +66,11 @@ func TestConfigureNodePreservesTrustAndProofPaths(t *testing.T) {
 	}
 	source := []byte(`plugins { NodeAttestor "argus_tdx" {
  plugin_cmd="/old/plugin" plugin_checksum="old-checksum"
- plugin_data { evidence_socket_path="/old/evidence.sock" proof_key_path="/existing/proof.pem" trustee_ca_bundle_path="/existing/ca.pem" ear_verification_key_path="/existing/ear.pem" }
+ plugin_data { agent_id="spiffe://example.org/spire/agent/argus_tdx/worker-02" evidence_socket_path="/old/evidence.sock" proof_key_path="/existing/proof.pem" trustee_ca_bundle_path="/existing/ca.pem" ear_verification_key_path="/existing/ear.pem" }
 } }`)
 	for _, role := range []string{"agent", "server"} {
-		got, err := configureNode(source, role, binary)
+		input := append([]byte(role+` { trust_domain="example.org" } `), source...)
+		got, err := configureNode(input, role, binary, "example.org", "spiffe://example.org/spire/agent/argus_tdx/worker-02", "/run/custom/provider.sock")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,8 +85,26 @@ func TestConfigureNodePreservesTrustAndProofPaths(t *testing.T) {
 		if role == "server" && !strings.Contains(string(got), "/old/evidence.sock") {
 			t.Fatal("Server plugin_data changed")
 		}
-		if role == "agent" && !strings.Contains(string(got), "/run/argus/evidence-provider.sock") {
+		if role == "agent" && !strings.Contains(string(got), "/run/custom/provider.sock") {
 			t.Fatal("Agent not pointed at configured Provider")
+		}
+	}
+}
+
+func TestConfigureNodeRejectsMismatchedDeployment(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "plugin")
+	if err := os.WriteFile(binary, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := []byte(`server { trust_domain="example.org" } plugins { NodeAttestor "argus_tdx" {
+        plugin_data { agent_id="spiffe://example.org/spire/agent/argus_tdx/worker-01" }
+    } }`)
+	for _, values := range [][2]string{
+		{"other.org", "spiffe://other.org/spire/agent/argus_tdx/worker-01"},
+		{"example.org", "spiffe://example.org/spire/agent/argus_tdx/worker-02"},
+	} {
+		if _, err := configureNode(source, "server", binary, values[0], values[1], ""); err == nil {
+			t.Fatal("accepted Node/deployment mismatch")
 		}
 	}
 }

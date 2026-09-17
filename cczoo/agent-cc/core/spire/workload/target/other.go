@@ -11,7 +11,7 @@ import (
 
 func checkOwner(os.FileInfo) error { return nil }
 func Check(protocol.Target) error  { return fmt.Errorf("target validation requires Linux") }
-func Register(context.Context, string, string, string, int) (protocol.Target, error) {
+func Register(context.Context, string, string, string, string, string, int) (protocol.Target, error) {
 	return protocol.Target{}, fmt.Errorf("target registration requires Linux")
 }
 func StartWatch(context.Context, protocol.Target) (<-chan error, error) {

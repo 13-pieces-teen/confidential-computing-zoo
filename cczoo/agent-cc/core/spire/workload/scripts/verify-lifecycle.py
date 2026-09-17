@@ -12,18 +12,19 @@ import workload
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("event", choices=["helper-crash", "target-exit", "rotation", "wrong-client"])
-    p.add_argument("--config", default="/etc/argus-workload/environment.json")
+    p.add_argument("--config", required=True)
     p.add_argument("--wrong-client-cert")
     p.add_argument("--wrong-client-key")
     args = p.parse_args()
     c = json.loads(workload.protected_file(args.config).read_text())
+    d = workload.Deployment(c)
     before = workload.verify(c)
     serial = before["svid_and_business"]["server_serial"]
     if args.event == "wrong-client":
         if not args.wrong_client_cert or not args.wrong_client_key:
             raise ValueError("supply a valid same-domain SVID with a different SPIFFE ID")
-        cmd = [workload.BIN / "spiffe-mtls-probe", "-url", c["business_url"], "-cert", args.wrong_client_cert,
-               "-key", args.wrong_client_key, "-bundle", c["client_bundle"]]
+        cmd = [d.bin / "spiffe-mtls-probe", "-url", c["business_url"], "-cert", args.wrong_client_cert,
+               "-key", args.wrong_client_key, "-bundle", c["client_bundle"], "-server-id", d.identity["target_id"]]
         r = subprocess.run([str(x) for x in cmd], capture_output=True, text=True, timeout=20)
         if r.returncode == 0 or "business HTTP 403" not in r.stderr:
             raise ValueError("expected AuthZ HTTP 403 for a valid wrong-identity client SVID")
@@ -47,7 +48,7 @@ def main():
     else:
         target = None
         if args.event == "target-exit":
-            target = json.loads(workload.run([workload.BIN / "argus-workload", "-action", "check"]))
+            target = json.loads(workload.run([d.bin / "argus-workload", "-action", "check", "-registration", d.target]))
         # Include the trigger command's latency; starting the clock after it
         # returns would under-report the observed shutdown interval.
         start = time.monotonic()
@@ -57,8 +58,8 @@ def main():
             workload.run(["docker", "kill", target["container_id"]])
         while time.monotonic() - start < 6:
             state = workload.run(["systemctl", "is-active", "argus-nginx"], check=False)
-            if state in ("inactive", "failed") and not Path("/run/argus-credentials/ready").exists():
-                if any(Path("/run/argus-credentials").rglob("*.pem")):
+            if state in ("inactive", "failed") and not (d.credentials / "ready").exists():
+                if any(d.credentials.rglob("*.pem")):
                     time.sleep(0.05)
                     continue
                 elapsed = time.monotonic() - start
@@ -70,7 +71,7 @@ def main():
             raise TimeoutError("NGINX/readiness not removed within stop timeout plus observation allowance")
         # Leave the deliberately disrupted test stopped for explicit re-registration.
         workload.stop(c)
-    workload.write_json(workload.RECORDS / ("lifecycle-" + args.event + ".json"), result)
+    workload.write_json(d.records / ("lifecycle-" + args.event + ".json"), result)
     print(json.dumps(result, indent=2))
 
 
