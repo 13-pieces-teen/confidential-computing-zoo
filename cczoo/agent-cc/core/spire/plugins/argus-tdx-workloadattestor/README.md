@@ -4,17 +4,53 @@ SPIRE v1.15.3 Agent plugin for the host-managed OpenViking workload flow. It
 implements `AttestReference` for a Broker `WorkloadPIDReference`; ordinary
 Workload API `Attest` calls receive no trusted selectors.
 
-The plugin loads the protected target registration, checks the approved Agent,
-workload, policy and content digests, requests fresh evidence over the local
-Provider UDS, and verifies the signed Trustee EAR and binding. The process
-instance is checked again before selectors are returned. Node admission is a
-separate prerequisite; SVID rotation is not a fresh attestation.
+```mermaid
+flowchart TB
+    RPC{"RPC entry"}
+    RPC -->|"Attest"| Empty["Empty selectors"]
+    RPC -->|"AttestReference"| Baseline{"Valid PID reference,<br/>approved target and current instance?"}
+    Baseline -->|"No"| Reject["Return error; no trusted selectors"]
+    Baseline -->|"Yes"| Evidence["Fresh nonce; collect Provider evidence"]
+    Evidence --> Binding{"Exact nonce and target binding?"}
+    Binding -->|"No"| Reject
+    Binding -->|"Yes"| EAR["Trustee appraisal; verify signed EAR"]
+    EAR --> Final{"EAR accepted and final instance check passes?"}
+    Final -->|"No"| Reject
+    Final -->|"Yes"| Selectors["Return six selector values"]
+```
+
+Transport/collection errors also return no selectors. Node admission is a
+prerequisite; the experimental Broker path supports one Linux/Docker OpenViking
+listener. See the [full sequence and trust boundaries](../../workload/ARCHITECTURE.md).
+The plugin does not measure process memory or writable data; SVID rotation does
+not trigger a fresh attestation.
+
+## Selectors
+
+After successful EAR verification and the final target check, the plugin returns
+the following values. SPIRE applies the configured plugin name `argus_tdx` as
+their selector type; the target Entry requires all six plus the approved parent
+Agent ID.
+
+| Selector value | Source |
+|---|---|
+| `verified:true` | Successful completion of this admission attempt. |
+| `workload_id:<id>` | Approved workload identity, matched to the registered target. |
+| `policy:<id>` | Configured policy ID, matched to the target and signed EAR. |
+| `image_config_digest:<sha256:...>` | Actual Docker image config digest, matched to the approved baseline. |
+| `config_digest:<sha256:...>` | Observed configuration-file digest, matched to the approved baseline. |
+| `agent_id:<SPIFFE-ID>` | Approved Agent identity, matched across deployment and evidence. |
+
+SPIRE Server's CA signs the target SVID after Entry matching; Helper receives it
+through the Agent Broker. The plugin itself returns only selectors.
 
 ## Configuration
 
 Use the [deployment runbook](../../workload/README.md) and its single
 `environment.json` input to generate the Agent HCL. The `argus_tdx` plugin data
-requires these fields; unknown fields fail configuration.
+accepts the fields below; the two fields with defaults may be omitted, and
+unknown fields fail configuration.
+The full deployment configuration is validated separately by the deployment tool.
 
 | Field | Contract |
 |---|---|
@@ -39,4 +75,5 @@ or Node challenge/PoP contract. The application checks remain OpenViking-specifi
 Run `go test ./...` and `go vet ./...` from this module. The shared Go/Rust vectors
 under `../../workload/testdata/` cover both the example and an alternative
 deployment. Tests substitute evidence/Trustee transports; hardware acceptance
-requires the company TDVM procedure in the runbook.
+requires the Linux TDX procedure in the runbook. Test outcomes and unexecuted
+checks are recorded separately in [VALIDATION.md](../../workload/VALIDATION.md).

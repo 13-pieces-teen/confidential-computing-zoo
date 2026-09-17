@@ -214,7 +214,8 @@ generation, verification, or business authorization.
 
 For SPIRE deployment, use the [Workload runbook](../../spire/workload/README.md):
 it covers approved measurements, trust material, HCL generation, Entry checks,
-protected workload registration and lifecycle validation. Protocol details
-belong in the [Node](../../../documents_ly/Argus-TDX-Node-Attestation-CN.md) and
-[Workload](../../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md)
-documents; execution outcomes belong in dated validation reports.
+protected workload registration and lifecycle validation. The Node configuration
+contract is documented [above](#spire-node-attestation). The
+[Workload architecture](../../spire/workload/ARCHITECTURE.md) describes instance
+binding, credential delivery and trust boundaries; execution outcomes belong in
+the dated [validation record](../../spire/workload/VALIDATION.md).

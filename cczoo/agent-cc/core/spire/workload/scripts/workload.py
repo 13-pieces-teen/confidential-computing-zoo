@@ -430,6 +430,9 @@ def event_fields(message, event):
 
 
 def correlated_appraisal(journal, target, serial, invocation):
+    # Correlate trusted local operational events, not independently verified
+    # Quote/EAR tokens. Invocation and instance fields exclude stale runs;
+    # later rotations may refer to the same subscription's accepted appraisal.
     expected = {k: target[k] for k in ("launch_id", "container_id", "pid", "start_time")}
     expected["policy"] = target["policy_id"]
     boot = target["boot_id"].replace("-", "")
@@ -490,6 +493,9 @@ def verify(c):
     d.records.mkdir(parents=True, exist_ok=True, mode=0o700)
     (d.records / "last-verify-journal.jsonl").write_text(journal)
     (d.records / "last-verify-journal.jsonl").chmod(0o600)
+    # The evidence_kind label describes this verifier's intended deployment.
+    # Hardware provenance and the tested policy must be recorded by acceptance;
+    # this label alone does not establish a real-TDX result.
     return {"target": target, "svid_and_business": proof, "server": remote_check(c), "appraisal": appraisal,
             "helper_invocation_id": invocation, "evidence_kind": "COMPANY_REAL_TDX_RUN",
             "appraisal_log": str(d.records / "last-verify-journal.jsonl")}

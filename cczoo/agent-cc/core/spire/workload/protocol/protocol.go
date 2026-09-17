@@ -17,8 +17,10 @@ import (
 
 const Version = "argus.workload.tdx.v1"
 
-// Target is a protected launch registration, never an authorization supplied
-// by the business process. Decimal strings avoid cross-language JSON numbers.
+// Target records observations made by the trusted guest launcher/collector.
+// File protection and runtime checks belong to target/ and the Provider;
+// configured baselines and Trustee policy supply approval. Executable is a
+// path, not a content hash. Decimal strings avoid cross-language JSON numbers.
 type Target struct {
 	AgentID           string `json:"agent_id"`
 	BootID            string `json:"boot_id"`
@@ -171,6 +173,8 @@ func (d RuntimeData) ReportData() ([64]byte, error) {
 	return result, nil
 }
 
+// Validate checks envelope shape and exact request/target binding. It does not
+// authenticate the Quote or appraise its platform; that requires Trustee/EAR.
 func (e Evidence) Validate(request EvidenceRequest, target Target) error {
 	if request.Protocol != Version || e.EvidenceType != "tdx_quote" || e.RuntimeData.Protocol != Version || e.RuntimeData.Nonce != request.Nonce || e.RuntimeData.Target != target || target.PID != strconv.FormatInt(int64(request.PID), 10) {
 		return fmt.Errorf("workload evidence does not match request and registered instance")

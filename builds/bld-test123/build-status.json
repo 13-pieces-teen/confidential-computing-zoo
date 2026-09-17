@@ -1,0 +1,16 @@
+{
+  "user_id": "alice",
+  "status": "success",
+  "log_id": null,
+  "transparencyLog_verify": null,
+  "error_message": null,
+  "created_at": "2026-09-17T12:02:08.203372",
+  "updated_at": "2026-09-17T12:02:08.203384",
+  "build_id": "bld-test123",
+  "current_step": null,
+  "image_id": "oci:/tmp/pytest-of-root/pytest-0/test_publish_flow_rejects_cros0/builds/bld-test123/plain",
+  "sbom_url": null,
+  "image_url": "oci:/tmp/pytest-of-root/pytest-0/test_publish_flow_rejects_cros0/builds/bld-test123/plain",
+  "cert_url": null,
+  "luks_path": ""
+}

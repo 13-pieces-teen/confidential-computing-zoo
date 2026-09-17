@@ -131,8 +131,9 @@ func subscribe(ctx context.Context, agentAddress string, c Config, t protocol.Ta
 	})
 }
 
-// A disconnect exits and clears credentials. systemd may start a new process,
-// which performs a new Broker subscription and therefore fresh attestation.
+// A disconnect returns to Run's credential cleanup and NGINX stop hook. systemd
+// may start a new process, which performs a new PID-reference subscription and
+// attestation. SVID updates on this stream alone do not request a fresh Quote.
 func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse, error), p *Publisher, id spiffeid.ID, t protocol.Target, published func(), checkSelf func() error) error {
 	type message struct {
 		snapshot *api.SubscribeToX509SVIDResponse

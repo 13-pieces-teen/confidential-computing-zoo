@@ -194,6 +194,14 @@ and the transparency log's mounts, published ports and environment digest from
 the same validated snapshot. Request mount strings and `dockercmd` overrides
 are rejected for this profile. Other existing launch flows retain their behavior.
 
+This profile constrains startup and records observed identifiers; a successful
+launch does not itself mean attestation passed or an SVID was issued. Target
+registration, Provider/Trustee appraisal, SPIRE issuance and Helper/NGINX
+publication occur in the separate [Workload flow](../spire/workload/ARCHITECTURE.md).
+The profile does not mount TDX devices, a SPIRE socket or SVID keys into the
+business container. Existing transparency-log submission remains in the launch
+flow; this integration does not use a Rekor verification gate for SVID admission.
+
 Run `pytest tests/test_workload_profile.py tests/test_workload_launch_flow.py -q`
 on Linux with the repository dependencies. The launch-flow test substitutes
 Docker, registry and log transports; it does not establish real TDX acceptance.

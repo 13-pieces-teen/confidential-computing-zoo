@@ -14,12 +14,12 @@
 
 //! CLI tool for serving TDX evidence to a guest-local SPIRE Agent.
 //!
-//! The Provider serves the guest-local SPIRE Agent over a Unix domain socket.
-//! It binds the configured SPIRE Agent identity, Server challenge, and proof
-//! key into TDX REPORTDATA, then returns the raw Quote produced by Linux TSM.
-//! Quote appraisal remains in the Server-side Trustee path, and SPIRE remains
-//! responsible for issuing the SVID for the SPIRE Agent. The optional workload
-//! endpoint separately binds a registered service instance to TDX evidence.
+//! The Node endpoint binds the configured Agent identity, Server challenge and
+//! proof key into TDX REPORTDATA. The optional Workload endpoint instead binds
+//! observed instance claims and the WorkloadAttestor nonce. Both return raw
+//! Linux TSM Quotes over a local UDS; neither appraises evidence or issues SVIDs.
+//! Node/Workload plugins call Trustee and verify its EAR in their respective
+//! admission paths. SPIRE Server's CA signs the resulting Agent/target SVIDs.
 
 use anyhow::{anyhow, bail, Context, Result};
 use axum::{
@@ -320,6 +320,8 @@ async fn workload_evidence_handler(
         if before["agent_id"] != state.agent_id {bail!("registered target differs from configured SPIRE Agent");}
         if before["pid"] != request.pid.to_string() {bail!("PID is not the registered target");}
         let data = workload::runtime_data(&before, &request.nonce)?;
+        // The Quote binds trusted guest observations. Rechecking detects a
+        // changed observation; it does not freeze or measure process memory.
         let quote = state.quote_source.generate_quote(&workload::report_data(&data)?)?;
         if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
         tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], nonce=%request.nonce, "fresh workload TDX Quote generated");
@@ -337,7 +339,9 @@ async fn workload_evidence_handler(
     }
 }
 
-/// Removes only the socket created by this Provider when the listener exits.
+/// Removes a socket at the configured path on shutdown; non-sockets are left.
+/// This path-based cleanup assumes a single Provider and a protected parent
+/// directory supplied by deployment; it does not compare socket inode identity.
 #[cfg(unix)]
 struct SocketGuard(PathBuf);
 
@@ -362,7 +366,9 @@ impl Drop for SocketGuard {
     }
 }
 
-/// Bind the protected guest-local socket, replacing a stale socket only.
+/// Replaces an existing socket path and binds a mode-0660 local listener.
+/// Deployment must protect the parent and exclude another live owner; this
+/// function checks the existing file type, not whether a listener is active.
 #[cfg(unix)]
 fn bind_socket(path: &Path) -> Result<(tokio::net::UnixListener, SocketGuard)> {
     use std::io;

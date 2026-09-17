@@ -55,6 +55,10 @@ func New(e EvidenceCollector, t TrusteeVerifier) *Plugin {
 func (p *Plugin) Attest(context.Context, *workloadattestorv1.AttestRequest) (*workloadattestorv1.AttestResponse, error) {
 	return &workloadattestorv1.AttestResponse{}, nil
 }
+
+// AttestReference appraises one registered PID instance for a Broker request.
+// Local instance checks bracket appraisal; they do not lock the process or
+// establish continuous integrity after this call returns.
 func (p *Plugin) AttestReference(ctx context.Context, r *workloadattestorv1.AttestReferenceRequest) (*workloadattestorv1.AttestReferenceResponse, error) {
 	p.clientsMu.RLock()
 	ec, tc, c := p.evidence, p.trustee, p.config
@@ -101,7 +105,9 @@ func (p *Plugin) AttestReference(ctx context.Context, r *workloadattestorv1.Atte
 	if err = p.check(t); err != nil {
 		return nil, status.Errorf(codes.PermissionDenied, "target changed during appraisal: %v", err)
 	}
-	// All values originate in the locally approved, Quote-bound target. SPIRE CA issues the SVID.
+	// These values come from the approved target matched to the Quote-bound
+	// runtime data and signed EAR. SPIRE adds the plugin selector type; its
+	// Server CA issues the SVID after registration matching.
 	return &workloadattestorv1.AttestReferenceResponse{SelectorValues: []string{
 		"verified:true", "workload_id:" + t.WorkloadID, "policy:" + t.PolicyID,
 		"image_config_digest:" + t.ImageConfigDigest, "config_digest:" + t.ConfigDigest,

@@ -3,27 +3,34 @@
 The current implementation includes Node Attestation and OpenViking Workload
 Attestation with SPIRE Server/Agent and both Attestor SDKs pinned to v1.15.3:
 
-```text
-SPIRE Server -> argus_tdx Server NodeAttestor -> Trustee /attestation
-SPIRE Agent  -> argus_tdx Agent NodeAttestor  -> TDX Evidence Provider UDS
-TDX Evidence Provider -> Guest TSM -> QEMU/QGS -> real TDX Quote
-
-TC API -> OpenViking service process -> protected target registration
-SPIFFE Helper -> local SPIRE Broker API -> argus_tdx WorkloadAttestor
-WorkloadAttestor -> TDX Evidence Provider UDS -> instance-bound TDX Quote
-WorkloadAttestor -> Trustee /attestation -> verified EAR
-Verified selectors -> static Entry -> target SVID -> Helper -> NGINX mTLS/AuthZ
+```mermaid
+flowchart TB
+    Node["Node admission<br/>NodeAttestors + Provider + Trustee"]
+    AgentID["Agent SVID"]
+    Workload["Workload admission<br/>Registered instance + Quote + verified EAR"]
+    Target["Target SVID"]
+    Helper["Helper: local credential delivery"]
+    Ingress["NGINX mTLS + exact-ID AuthZ"]
+    Service["OpenViking service"]
+    Node -->|"SPIRE Server CA signs"| AgentID
+    AgentID -.->|"Prerequisite"| Workload
+    Workload -->|"Entry match; Server CA signs"| Target
+    Target --> Helper
+    Helper -.->|"Publish credential"| Ingress
+    Client["Client"] ==>|"mTLS business request"| Ingress
+    Ingress ==>|"Authorized HTTP"| Service
 ```
 
-The [Workload runbook](workload/README.md) is the build, installation, Node
-configuration, launch, registration, and lifecycle entry point. The target environment
-supplies approved image/configuration/platform baselines, existing Node
-configuration and proof key, Trustee trust material and policy, and the SPIRE
-bundle. [Validation records](workload/VALIDATION.md) distinguish completed local
-tests from pending company TDVM acceptance.
+Thick arrows carry business requests; admission runs before credential use.
+Helper/NGINX hold the target private key outside the business container.
 
-Architecture: [Node Attestation](../../documents_ly/Argus-TDX-Node-Attestation-CN.md)
-and [Workload Attestation](../../documents_ly/Argus-OpenViking-NGINX-SPIFFE-Helper-Workload-Attestation-Workflow-CN.md).
+| Read next | Purpose |
+|---|---|
+| [Architecture](workload/ARCHITECTURE.md) | Components, admission sequence, lifecycle and trust boundaries. |
+| [Runbook](workload/README.md) | Approved inputs, build, installation and Linux TDX acceptance. |
+| [Plugin contract](plugins/argus-tdx-workloadattestor/README.md) | PID-reference checks, selectors and configuration. |
+| [Node configuration](../argus/docs/configuration.md#spire-node-attestation) | Existing Node identity, proof key and trust setup. |
+| [Validation](workload/VALIDATION.md) | Executed software tests and pending hardware checks. |
 
 ## Directory map
 
@@ -46,20 +53,10 @@ unversioned route aliases. These handlers use separate binding contracts and
 share the real TSM Quote source. Workload SVID rotation does not generate a new
 Quote; Helper reconnection triggers a new subscription and attestation.
 
-The Provider's required `--agent-id` and the Server NodeAttestor's `agent_id`
-must match, and the identity's trust domain must match SPIRE's core
-`trust_domain`. The Node configuration supports one pinned Agent slot. The
-combined OpenViking deployment takes identities, ports and directories from
-[one deployment configuration](workload/config/environment.example.json).
-The configured Agent ID is checked by Provider, WorkloadAttestor, Helper,
-registration entries and policy; no workload-specific Agent ID is built in. See the
-[identity configuration contract](../argus/docs/configuration.md#spire-node-attestation).
-
-The Provider generates the raw Quote inside the attested TD; Trustee appraises
-it, the Server NodeAttestor verifies the signed EAR and proof of possession,
-and the SPIRE Server CA issues the Agent SVID. That SVID authenticates the
-infrastructure Agent. The separate Workload flow above establishes a service
-identity and its SVID.
+The [deployment configuration](workload/config/environment.example.json) supplies
+identities, paths and ports. Agent ID must agree across Provider, Node/Workload
+plugins, Helper, Entry and policy, with the same SPIRE trust domain. Current scope:
+one pinned Agent slot, one registered OpenViking listener and experimental Broker.
 
 ## Node Attestation operator script
 

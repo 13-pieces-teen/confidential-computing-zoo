@@ -112,6 +112,9 @@ func configDigest(pid, path string) (string, error) {
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
+// Check rechecks process incarnation, namespace/cgroup/executable path,
+// configuration bytes and listener ownership. Docker image/mount inspection
+// occurs during registration/Provider collection, not in this polling check.
 func Check(t protocol.Target) error {
 	if err := t.Validate(); err != nil {
 		return err
@@ -281,6 +284,9 @@ func Register(ctx context.Context, containerID, agentID, workloadID, policyID, c
 	return result, Check(result)
 }
 
+// StartWatch combines a pidfd exit notification with repeated local Check calls.
+// The 500 ms poll wait excludes check/scheduling time and is not a shutdown SLA;
+// this watcher does not generate Quotes or re-run Trustee appraisal.
 func StartWatch(ctx context.Context, t protocol.Target) (<-chan error, error) {
 	pid, err := strconv.Atoi(t.PID)
 	if err != nil {

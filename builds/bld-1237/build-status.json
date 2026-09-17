@@ -1,0 +1,16 @@
+{
+  "user_id": "alice",
+  "status": "building",
+  "log_id": null,
+  "transparencyLog_verify": null,
+  "error_message": null,
+  "created_at": "2026-09-17T12:02:08.737427",
+  "updated_at": "2026-09-17T12:02:08.747397",
+  "build_id": "bld-1237",
+  "current_step": "Building container image",
+  "image_id": null,
+  "sbom_url": null,
+  "image_url": null,
+  "cert_url": null,
+  "luks_path": ""
+}

@@ -11,9 +11,10 @@ import (
 	"time"
 )
 
-// Publisher owns its entire private directory. Each generation contains all
-// three files before the current symlink switches. NGINX reload opens one
-// generation; the hook validates the config before starting/reloading it.
+// Publisher requires serialized use of its private directory. Each generation
+// contains all three PEM files before current switches. The deployment hook
+// validates NGINX configuration and loaded certificate before ready is published;
+// it does not perform business authorization or an application-level request.
 type Publisher struct {
 	Dir     string
 	Hook    func(context.Context, string) error
@@ -40,6 +41,8 @@ func (p *Publisher) Prepare() error {
 	}
 	return p.Clear()
 }
+// Clear removes this publisher's local files. The caller must also stop NGINX;
+// deleting PEM does not erase in-memory keys or revoke issued certificates.
 func (p *Publisher) Clear() error {
 	entries, err := os.ReadDir(p.Dir)
 	if err != nil {

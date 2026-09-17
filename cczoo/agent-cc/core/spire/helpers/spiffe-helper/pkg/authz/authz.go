@@ -1,5 +1,7 @@
-// Package authz authorizes the TLS peer observed by NGINX. The only listener
-// is a protected UDS; NGINX overwrites both headers from its TLS connection.
+// Package authz checks the TLS peer identity reported by trusted NGINX.
+// Deployment must expose the handler only through the protected local UDS and
+// overwrite both input headers from NGINX's TLS connection. NGINX verifies the
+// chain; this package checks the reported result, SVID profile and exact peer ID.
 package authz
 
 import (

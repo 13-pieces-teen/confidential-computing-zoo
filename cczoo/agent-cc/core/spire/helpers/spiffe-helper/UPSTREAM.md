@@ -24,6 +24,17 @@ X.509-SVIDs, daemon operation, and the supplied systemd lifecycle. It does not
 support upstream cmd/PID/JWT/HTTP-health options; readiness is the protected
 `ready` file plus the NGINX service state.
 
+The complete local flow and trust assumptions are documented in the
+[Workload architecture](../../workload/ARCHITECTURE.md). Helper uses its own
+infrastructure identity to request a separate target identity; NGINX holds that
+target's TLS credential. Successful publication checks certificate loading,
+while the operator's `verify` command checks the business request. Clearing
+published files does not revoke copies of an already issued SVID.
+
+The additional `spiffe-client-credentials` command and `pkg/clientcredentials`
+serve the separate OpenClaw client integration. They are not the server-side
+NGINX publication path described by `pkg/broker`.
+
 Run upstream tests and Argus tests with `go test ./...` on Linux. The upstream
 signal-configuration tests include POSIX expectations and fail on Windows;
 Broker filesystem/lifecycle tests also require Linux. Keep this file and the

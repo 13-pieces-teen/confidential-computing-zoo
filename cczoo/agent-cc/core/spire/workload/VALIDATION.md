@@ -1,10 +1,26 @@
-# Workload Attestation 首轮验证记录
+# Workload Attestation 验证记录
+
+## 当前状态与记录范围
+
+截至 2026-09-17，统一部署配置及提交前复审已有本地/隔离 Linux 软件验证；当前实现的完整 Linux 构建、真实 TDX 全链路和 systemd 故障验收仍为 **NOT_RUN**。本文件保留按日期记录的历史结果，每项 PASS 只适用于其注明的源码、工具链、配置和替身边界。
+
+| 范围 | 最新记录与边界 |
+|---|---|
+| 配置及本地组件 | 见“2026-09-17 方案 A：统一部署配置”。包括 Go、Windows Rust 替身测试、Linux Helper、实际 NGINX 及官方 SPIRE 配置/Entry 检查；不包含硬件 Node 加入或目标 SVID 签发。 |
+| 提交前新增 Python 修复 | 见“2026-09-17 提交前复审”：部署/运行合同 **22 passed**，普通用户 TC API 范围 **9 passed**；本轮官方 SPIRE 两项和 Linux Provider 一项跳过。 |
+| TC API 扩展检查 | **11 passed / 16 failed**；16 项失败在修改前基线复现，不能列为通过项。 |
+| 完整构建与真实环境 | 当前实现的 Linux Provider UDS/完整构建、真实 Quote/Trustee/SVID/业务及完整 systemd 故障验收待执行。历史版本结果不替代这些项目。 |
+| 本次文档和注释整理 | 更新机制、部署和验证边界；未执行远程部署、硬件验收或重新运行上述功能测试。 |
+
+当前部署步骤见 [README.md](README.md)，组件职责及信任边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。下文中的旧二进制名称和当时命令仅用于追溯历史，不是当前部署入口。
+
+## 2026-09-05 至 2026-09-06 首轮验证
 
 执行日期：2026-09-05 至 2026-09-06（Asia/Shanghai）。实现和 review 的基线为分支 `feat/argus-spiffe-v2-val`、提交 `9ced0e3`；本轮按模块分开提交，没有部署到公司环境。开始时已 fetch，远端与本地基线无差异。
 
-本文保留首轮测试及当时的待验清单。后续公司执行结果见 [2026-09-09 Workload 状态报告](../../../../../documents_ly/argus-openviking-workload-attestation-status-20260909.md)和 [OpenClaw 客户端验收报告](../../../../../documents_ly/argus-openclaw-ip1-tdvm-client-acceptance-20260909.md)；各记录仅对应其注明的提交、环境与时间。
+本节保留首轮测试及当时的待验清单。2026-09-09 的公司 Workload 与 OpenClaw 客户端验收属于其他版本的独立历史记录，不构成本次统一配置代码的真实环境验收证据。
 
-## 本地已执行
+### 本地已执行
 
 本机为 Windows；涉及 UDS、pidfd、POSIX signal 和 NGINX 的测试在 Docker Linux 容器执行。Go 使用 1.26.5，Rust 使用 1.88，TC API 测试使用 Python 3.12 与仓库 requirements。下表中的 PASS 不代表真实硬件证明已验收。
 
@@ -23,7 +39,7 @@
 
 完整 Linux 构建与复跑入口为 [scripts/build.sh](scripts/build.sh)。此轮按组件构建和测试，没有把完整安装脚本执行到宿主机或公司主机。
 
-## 提交前 review 与修复
+### 提交前 review 与修复
 
 检查范围包括 Node 合同保留、Quote/运行实例绑定、Trustee EAR 校验、静态 Entry 授权、Helper 自身/目标身份隔离、NGINX/AuthZ、TC API 启动及部署交付。
 
@@ -198,18 +214,16 @@ Agent HCL、Entry、Rego 及 TC API 最小配置。Agent 身份从协议中的�
 
 复审开始时逐文件 SHA-256 核对，原 A 方案 50 个文件与上一轮验证快照全部一致。Go/Rust、真实 NGINX及官方 SPIRE 的先前结果以上表为准，本轮针对新增 Python 修复执行回归。TC API 已知基线失败、完整 Linux 构建和真实 TDX/systemd 验收边界保持不变。
 
-## 公司环境待执行
+## 当前版本真实 TDX 环境待执行
 
-按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及 OpenClaw 客户端 SVID，执行：
+按 [运行手册](README.md) 提供批准的镜像/配置/平台基线、现有 Node 配置、Trustee TLS/EAR 信任材料及符合 `identity.client_id` 的客户端 SVID，执行：
 
 1. 使用官方 SPIRE v1.15.3 重新验证原 Node 加入；保留原 proof key、Node policy 与信任合同。
 2. 从 TDVM 直接 HTTPS 访问 Trustee `/attestation`，核对实际固定 workload policy；完成真实 TSM Quote、DCAP、签名 EAR、目标 SVID 和 OpenViking 业务 2xx。
 3. 执行真实错误镜像/配置/平台、Quote/binding 和 policy 拒绝用例，确认取不到目标身份。
-4. 使用 `verify-lifecycle.py` 验证正常轮换、错误客户端、目标退出及 Helper SIGKILL；确认 readiness/PEM 清理、NGINX 停服与现有连接清理时限。
+4. 使用 `verify-lifecycle.py` 验证正常轮换、错误客户端、目标退出及 Helper SIGKILL，记录 readiness/PEM 清理和 NGINX unit 停服观测值。该脚本不测量已有连接的数据交付；另用客户端探针测量连接关闭和停止交付时间。
 5. 在 systemd 环境补验 Agent/Broker 断连、完整快照身份移除、凭据过期和 reload 故障。该部分的逻辑测试已通过，实际 systemd/网络故障验收尚待执行。
 
-公司执行记录由工具保存到 `/var/log/argus-workload/`，关联版本、boot/PID/start time、launch/container、nonce、policy、EAR 摘要、SVID 序列号和业务结果。未取得这些记录前，真实 TDX 全链路状态为 **待验收**。
+执行记录保存到 `paths.records_dir`（示例为 `/var/log/argus-workload/`）。工具记录实例、nonce、policy、EAR 摘要、SVID 序列号和业务结果；验收人还须关联源码提交、实际二进制摘要、部署配置版本和实际策略内容摘要。`verify` 的日志关联及 `evidence_kind` 标签不能替代硬件来源、策略和业务链路证据。未取得这些记录前，当前实现的真实 TDX 全链路状态为 **待验收**。
 
 本轮不依赖 Rekor 验证门禁；TC API 原日志提交链保持。普通 SVID 轮换不计为重新证明；Agent 侧独立周期重新证明未实现。
-
-开发机清理说明：自动审批审核以 `blocked by policy` 拒绝删除本轮临时构建目录和 Helper 的 Windows 编译产物。这些文件暂留在开发机，已由 Git ignore 排除，不属于源码交付。

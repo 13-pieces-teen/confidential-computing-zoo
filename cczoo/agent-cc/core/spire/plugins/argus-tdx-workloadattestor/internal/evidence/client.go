@@ -47,9 +47,9 @@ func NewClient(endpoint *url.URL, timeout time.Duration, maxBytes int64) (*Clien
 	}, nil
 }
 
-// Collect obtains PID-bound evidence for one nonce. The plugin deliberately
-// checks only transport, size, and JSON syntax here; evidence interpretation
-// belongs to the Trustee.
+// Collect bounds the transport/response and decodes the evidence envelope.
+// The caller must match its nonce and target fields to the registered instance;
+// Trustee appraises the Quote and policy, and the caller verifies the signed EAR.
 func (client *Client) Collect(ctx context.Context, input protocol.EvidenceRequest) (protocol.Evidence, error) {
 	body, err := json.Marshal(input)
 	if err != nil {

@@ -4,6 +4,13 @@
 
 # SPIFFE Helper
 
+This embedded copy adds Argus Broker credential delivery and local authorization
+tools. See [UPSTREAM.md](UPSTREAM.md) for its v0.11.0 provenance and local changes,
+and the [Workload architecture](../../workload/ARCHITECTURE.md) and
+[deployment runbook](../../workload/README.md) for the `broker {}` mode. The usage
+and examples below describe the upstream Workload API sidecar mode; its command,
+PID, JWT and HTTP-health options are not supported by the Argus Broker mode.
+
 The SPIFFE Helper is a simple utility for fetching X.509 SVID certificates from the SPIFFE Workload API, launch a process that makes use of the certificates and continuously get new certificates before they expire. The launched process is signaled to reload the certificates when is needed.
 
 ## Usage

@@ -56,6 +56,8 @@ def main():
             workload.run(["systemctl", "kill", "--kill-who=main", "--signal=SIGKILL", "argus-helper"])
         else:
             workload.run(["docker", "kill", target["container_id"]])
+        # Observe unit/readiness/PEM cleanup. External command time contributes
+        # to elapsed; this loop does not measure traffic on existing connections.
         while time.monotonic() - start < 6:
             state = workload.run(["systemctl", "is-active", "argus-nginx"], check=False)
             if state in ("inactive", "failed") and not (d.credentials / "ready").exists():

@@ -1,6 +1,6 @@
 # Argus：论文 Story 与 Introduction
 
-日期：2026-09-16。本文依据 Agent-CC v0.8 的整体部署架构与可信服务组合定位，结合当前 Argus 实现、Related Work 和实验方案修订。Introduction 按任务与目标、已有方法与技术问题、核心架构、关键机制与应用价值、实验安排五部分组织。中英文正文均为讨论稿；评价保留计划语态，低侵入与跨框架复用作为待验证的设计目标。
+修订日期：2026-09-17。本文依据 Agent-CC v0.8 的整体部署架构与可信服务组合定位，结合当前 Argus 实现、已确定的目标架构、Related Work 和实验方案修订。Introduction 按任务与目标、已有方法与技术问题、核心架构、关键机制与应用价值、实验安排五部分组织。当前仅维护中文讨论稿；评价保留计划语态，低侵入与跨框架复用作为待验证的设计目标。
 
 文档定位（2026-09-16 整理）：当前 Story 与引言的写作入口。章节、方法 pipeline 和候选贡献维护在[论文框架](./Argus-AAMAS2027-EMAS-论文框架.md)，实验细节维护在[评价方案](./Argus-EMAS-Agent场景实验设计与论文借鉴-2026-09-14.md)。其他材料的分工见[论文导航](./README.md)。
 
@@ -10,17 +10,21 @@ Agent 完成任务时，敏感上下文会随着模型调用、记忆读写和�
 
 Agent-CC 从整体部署架构回应这一需求，将数据全生命周期保护、构建到运行时完整性和可信服务组合联系起来。Argus 聚焦其中的可信服务组合：在敏感数据交给目标服务前，根据其身份、执行环境和工作负载证据，判断该服务是否满足参与处理的条件。这里的服务可以属于同一组织，也可以由其他组织运营；需要衔接的是数据流经的不同执行边界上的信任要求。
 
-远程证明为这种判断提供了证据，而实际的数据交付还需要将核验结果与运行中的服务对应起来：经过核验的是哪个业务实例，该实例使用什么身份，以及请求通过哪个入口到达它。服务重启、实例替换或身份失效后，这些对应关系还可能发生变化，系统需要判断原有准入依据是否仍然有效，并据此约束后续交付。因此，可信服务组合既涉及交付前的准入，也涉及运行变化后的失效处理与重新准入。
+这项准入判断需要可核验、可追溯的启动依据。论文架构因此将受控启动与透明日志纳入证据形成过程：结构化记录说明服务以什么镜像、配置和实例启动，透明日志提供记录收录与历史追加的一致性核验依据，远程证明用于核验相应执行环境及其与记录的关联。Rekor 是当前采用的透明日志实现，架构职责按透明日志的验证能力定义。
 
-要让不同的 Agent 和服务采用这套机制，还需要将取证、验证和准入实现为可复用的运行时能力，减少应用在业务逻辑和接口上的改动。由此，Argus 的研究问题是：**如何以低侵入方式，将执行环境与工作负载的证明结果转化为已有 Agent 系统可用的服务准入能力，使敏感数据交付受接收方身份和运行条件约束，并在相关条件变化后更新准入状态？**
+OpenViking 通过 TC API 启动，正是为了在受控流程中形成这些依据。TC API 按批准的条件启动服务，保留镜像、配置、启动标识和结果；后续受信取证再核对实际业务进程，使启动历史能够与当前实例对应。透明日志中的启动记录需要经过验证，并与本次证明和实际实例共同用于身份准入。这是已确定的架构要求，当前日志核验与 SPIRE 准入的联动仍待完成。
 
-围绕这一问题，Argus 以部署与身份层承接证明和准入职责，将获准的业务实例、通信身份与实际接收入口关联起来，并设计相应的失效处理和恢复机制。论文计划通过真实 Agent 任务与系统负载，检验这些约束能否落实到实际交付，以及它们带来的接入改动、运行开销和停止恢复成本，从而评价可信服务组合在现有 Agent 系统中的可用性。
+在这些依据之上，实际的数据交付还需要将核验结果与运行中的服务对应起来：经过核验的是哪个业务实例，该实例使用什么身份，以及请求通过哪个入口到达它。服务重启、实例替换或身份失效后，这些对应关系还可能发生变化，系统需要判断原有准入依据是否仍然有效，并据此约束后续交付。因此，可信服务组合既涉及交付前的准入，也涉及运行变化后的失效处理与重新准入。
+
+要让不同的 Agent 和服务采用这套机制，还需要将取证、验证和准入实现为可复用的运行时能力，减少应用在业务逻辑和接口上的改动。由此，Argus 的研究问题是：**如何以低侵入方式，将可审计的启动证据与执行环境、工作负载的证明结果转化为已有 Agent 系统可用的服务准入能力，使敏感数据交付受接收方身份和运行条件约束，并在相关条件变化后更新准入状态？**
+
+围绕这一问题，Argus 以部署层形成受控启动记录，通过透明日志维护可审计的历史，以证明与身份组件核验准入依据，并将获准的业务实例、通信身份与实际接收入口关联起来。相应的失效处理和恢复机制维护这些关系。论文计划通过真实 Agent 任务与系统负载，检验这些约束能否落实到实际交付，以及它们带来的接入改动、运行开销和停止恢复成本，从而评价可信服务组合在现有 Agent 系统中的可用性。
 
 围绕可信服务组合，论文需要依次回答**服务凭什么获准、准入如何约束实际交付，以及运行变化后如何维护这些约束**三个研究问题：
 
 | 研究问题 | 需要解决的关系 | 预期研究产出 |
 |---|---|---|
-| 准入依据：哪些服务可以接收敏感数据？ | 平台证据、工作负载属性与目标实例共同支持什么准入判断；结论依赖哪些受信组件、策略和有效性条件。 | 明确服务准入条件与证据要求，比较不同取证和证明组合能够支持的声明。 |
+| 准入依据：哪些服务可以接收敏感数据？ | 透明日志中的启动记录如何与平台证据、工作负载属性及当前实例对应；结论依赖哪些受信组件、策略和有效性条件。 | 明确可审计启动依据与身份准入的关联，比较不同日志核验、取证和证明组合能够支持的声明。 |
 | 交付落实：准入如何约束真正的数据接收方？ | 低侵入部署中，业务进程、身份使用者与 TLS 入口可能分离；获准实例需要与实际接收路径对应。 | 建立实例、身份和入口的关联及执行机制，说明可复用的接入方式和受信边界。 |
 | 运行维护：条件变化后如何处理后续交付？ | 进程实例、身份凭据和连接具有不同生命周期，原准入结果可能不再适用于后续交互。 | 定义可观测变化下的失效、停止与重新准入规则，分析停止窗口、恢复成本和可用性。 |
 
@@ -28,7 +32,7 @@ Agent-CC 从整体部署架构回应这一需求，将数据全生命周期保�
 
 低侵入与复用贯穿这三个问题。将证明和准入职责交给部署与身份层，有助于减少业务改造，也要求明确这些受信组件如何约束实际接收方。评价将记录业务逻辑、适配器、核心代码、配置及部署步骤的改动，说明接入需要多少调整、哪些部分可以复用，以及哪些部分仍需针对应用适配。
 
-比较实验按研究问题组织。在准入依据方面，B3b 基线保留同等的实例取证、策略检查、凭据发布和失效处理能力，但不额外生成 Workload Quote，用于检验这份额外证明的作用和开销。交付落实与运行维护则结合实例和入口错配、运行变化等受控情形及单项消融，检查实际接收、停止窗口和恢复过程。机制设计与实验发现还需与最接近的相关工作比较。
+比较实验按研究问题组织。在准入依据方面，B3b 基线保留同等的透明日志核验、实例取证、策略检查、凭据发布和失效处理能力，但不额外生成 Workload Quote，用于检验这份额外证明的作用和开销。交付落实与运行维护则结合实例和入口错配、运行变化等受控情形及单项消融，检查实际接收、停止窗口和恢复过程。机制设计与实验发现还需与最接近的相关工作比较。
 
 跨企业研发与银行核验用于说明框架的潜在应用场景。当前评测计划聚焦 Agent 对上下文服务的访问，采用 OpenViking 的 τ²-bench 适配、LoCoMo/OpenClaw 和 Server 混合负载：前两者用于观察框架对 Agent 任务执行的影响，后者用于分析服务性能和并发负载下的系统开销。
 
@@ -36,75 +40,63 @@ Agent-CC 从整体部署架构回应这一需求，将数据全生命周期保�
 
 ### 1. 任务、应用与评价目标
 
-Agent 通过模型调用、记忆读写和工具执行完成任务，敏感上下文也随之在多个组件之间流动。以服务化记忆为例，企业助手将私有对话、项目约束和任务结果写入独立的记忆服务，再在后续任务中检索和复用。记忆服务因此成为直接处理私有数据的一方。即使 Agent 自身运行在可信执行环境中，数据交付后的保护仍取决于接收方的软件和运行条件。本文沿 Agent-CC 的可信服务组合定位，研究如何将本地机密执行的信任要求落实到跨服务的数据处理路径。[Agent-CC](../../../../output/pdf/Agent-CC.zh-CN.md#5-可信服务组合)
+Agent 通过模型调用、记忆读写和工具执行完成任务，敏感上下文也随之在多个组件之间流动。以服务化记忆为例，企业助手将私有对话、项目约束和任务结果写入独立的记忆服务，再在后续任务中检索和复用。即使 Agent 自身运行在可信执行环境中，交付给记忆服务的数据仍依赖接收方的软件和运行条件获得保护。本文沿 Agent-CC 的可信服务组合定位，研究如何将本地机密执行的信任要求落实到跨服务的数据处理路径。[Agent-CC](../../../../output/pdf/Agent-CC.zh-CN.md#5-可信服务组合)
 
-这一任务需要同时考虑交付约束、任务可用性与工程成本。系统应依据批准的身份和执行条件决定目标实例能否接收敏感数据，并在相关条件失效后约束后续交付；满足这些条件的任务应能够正常完成，并在适用故障处理后恢复服务。相应地，评价需要观察实际接收者、停止与恢复过程、任务质量和完成情况，以及首次可信就绪、稳态访问和应用接入的额外成本。这些目标共同决定可信服务组合能否被已有 Agent 系统实际采用。
+约束敏感数据的接收方是这一任务的基本要求；在此基础上，任务可用性与工程成本决定该要求能否被实际采用。本文研究如何在已有 Agent 系统中，根据远端服务的运行证据实施准入，并在实例变化后维护对后续敏感数据交付的约束，同时控制应用接入与正常交互的额外成本。
 
 ### 2. 已有方法与技术问题
 
-已有工作从运行证据、服务身份和 Agent 平台等层面建立了技术基础。SPIFFE/SPIRE 将节点与工作负载条件纳入身份签发；Full Trust Alchemist 研究动态工作负载属性的证明，dstack-capsule 将平台证据与 Pod 身份分层关联；aDNS 将证明结果关联到服务身份与 TLS 密钥，Grimlock 提出了证明与具体通信通道绑定的设计；Omega 则从整体平台出发，研究可信 Agent 执行及外部交互管控。这些工作为跨服务信任提供了不同的实现路径。[SPIRE](https://spiffe.io/docs/latest/spire-about/spire-concepts/)、[Full Trust Alchemist](https://www.comsys.rwth-aachen.de/publication/2025/2025_galanou_trust-alchemist/)、[dstack-capsule](https://arxiv.org/html/2606.03323v2)、[aDNS](https://www.usenix.org/conference/usenixsecurity25/presentation/delignat-lavaud)、[Grimlock](https://arxiv.org/html/2605.27488v2)、[Omega](https://arxiv.org/abs/2512.05951v2)
+一个需要分析的情形是：记忆服务实例通过准入后被替换，但服务地址、代理持有的凭据或既有连接继续使用。此时，调用方仍可能认证到同一个服务身份，却需要进一步判断原有准入依据是否适用于新的实际接收方：保留的启动记录是否属于当前实例，记录是否与本次证明对应，以及变化后的交付是否仍被允许。难点在于，应用依赖稳定的接口持续访问服务，而支撑准入结论的具体实例及其运行状态可能已经变化。
 
-在已有应用中采用这些能力，需要协调服务调用方式与可信执行条件之间的差异。应用通过稳定的接口和逻辑身份持续访问服务，而准入证据对应的是具体平台、软件、配置与运行实例。为了减少业务改造，取证、身份管理和 TLS 处理可以由公共组件承担；采用代理接入时，被核验的业务进程与凭据持有者、TLS 终止入口可能分属不同组件。框架需要说明这些主体如何保持对应，以及调用方通过服务身份所依赖的准入条件如何落实到实际数据路径。
+最接近的工作已经提供了将证明用于服务访问的不同路径。aDNS 核验服务 TEE 的代码、配置和密钥，将结果关联到域名及 TLS 密钥；其 DANE 接入路径由受证明的 DNS 服务执行注册策略，客户端核对实际 TLS 密钥，并通过注册更新和 DNS 记录的有效期管理服务信息，使用透明账本保留注册与配置变更。这说明服务身份能够承载经过核验的执行条件，也明确了注册服务和客户端各自承担的信任职责。[aDNS](https://arxiv.org/html/2503.14611v1)
 
-这种对应关系还受运行变化影响。服务实例、身份凭据和通信连接具有不同的生命周期：正常证书轮换未必改变实例的准入资格，实例替换却可能使仍在使用的身份或连接失去原有依据。多轮 Agent 任务需要复用有效身份和连接来控制开销，也需要在相关条件失效时停止继续交付。本文据此研究：**如何以较少的业务改动，将运行证据形成的准入判断落实到实际接收实例，并在运行变化后维护交付约束？** 与已有方案的比较将围绕相同交付要求下的实例关联、变化处理和接入成本展开，以识别各项设计的作用及取舍。
+Grimlock 则提出在受证明的内核与 Guard 层强制管理通信，将执行环境证据、授权范围与已建立的 TLS 通道关联，并由接收端检查身份、通道和短期令牌的有效性后释放明文。它把授权落实到具体通道，同时依赖受信 Guard 对数据路径的管理。[Grimlock](https://arxiv.org/html/2605.27488v2)
+
+对上述实例替换情形，需要沿这些方案各自的信任链继续分析：替换是否改变其核验对象，哪一组件能观察到变化，变化后已发布的身份或授权状态如何处理，以及已有连接上的后续请求何时停止。仅从建立连接时的核验结果，无法推导这些部署行为。本文据此关注的技术问题是：**当服务实例与身份、连接具有不同生命周期时，如何以有限的应用改动，维护从准入证据到后续数据接收方的对应关系？** 对这一问题的回答，需要在相同交付要求下比较具体的变化处理规则及其接入和运行成本。
 
 ### 3. Argus 的核心架构
 
-我们提出 Argus，一个基于 Intel TDX 远程证明与工作负载身份的 Agent 可信服务组合框架。Argus 将证明和准入职责置于部署与身份层，使应用通过身份认证和通信适配使用准入结果。在服务准入阶段，框架依据受控启动记录和受信组件的实例取证，将平台证据、实际业务实例及其软件和配置纳入策略核验。通过核验的结果参与 SPIRE 身份准入；调用方核对预期服务身份，并依赖所认可签发域执行的准入规则。凭据交付与受保护的通信入口进一步将获准身份关联到实际业务进程。
+我们提出 Argus，一个结合 Intel TDX 远程证明、透明日志与 SPIFFE/SPIRE 工作负载身份体系的 Agent 可信服务组合框架。SPIFFE 定义统一的工作负载标识、身份凭据及获取接口，SPIRE 提供节点与工作负载核验、依据条件签发身份，以及凭据分发和轮换能力。采用这套基础，能够将运行证据的核验与应用的身份使用分开：公共基础设施处理取证与准入，应用和通信组件通过标准身份凭据完成对端认证。[SPIFFE](https://spiffe.io/docs/latest/spiffe-about/spiffe-concepts/)、[SPIRE](https://spiffe.io/docs/latest/spire-about/spire-concepts/)
 
-Argus 将证明准入与稳态业务交互分开。正常业务请求复用有效身份和连接，无须逐次生成 Quote 或调用证明验证服务。当前服务端原型由 Helper 交付凭据、NGINX 终止 TLS，并经受保护的本地路径访问业务进程；实例检查、凭据状态和连接管理共同约束身份与连接的复用。这一组织方式保留服务的业务接口，将信任职责集中在部署和通信组件中，使准入开销与稳态访问成本可以分别分析。
+为使准入依据可核验、可追溯，架构以受控启动和透明日志维护启动证据。OpenViking 通过 TC API 按批准条件启动，产生镜像、配置、启动标识及结果记录，供后续日志核验和实例取证使用。透明日志提供记录收录与历史追加的一致性核验依据，当前以 Rekor 实现；记录描述的实例是否符合准入条件，仍由证据核验与策略判断。[透明日志与 Rekor](https://docs.sigstore.dev/logging/overview/)
+
+身份准入在架构上要求同时核验启动记录的来源、记录与本次证明的关联，以及实际实例与批准条件的一致性。Argus 利用 SPIRE 的可扩展认证机制承接这些核验结论；调用方核对预期服务身份，并依赖所认可签发域执行的规则使用准入结果。这一组织方式旨在减少应用重复实现证明验证和身份管理的工作。当前原型已具备 TC API 启动、日志提交及独立实例取证路径，透明日志核验与 SPIRE 准入的联动仍待完成。
+
+为使身份认证能够约束实际交付，Argus 进一步将凭据发布和受保护的服务入口关联到获准实例，并限制入口到业务进程的本地转发路径。这样，外置的身份与通信组件需要同时维护“谁获准”以及“数据转发给谁”的关系。对于可观测的实例失效，框架将失效处理与凭据、入口和连接管理联系起来，阻止旧准入依据被继续沿用；满足有效性条件时，正常交互则复用身份和连接，无须逐请求生成 Quote 或调用证明验证服务，从而将准入成本与稳态访问成本分开处理。
+
+这一保证依赖受信的 Guest OS、取证与身份组件、受控通信入口，以及客户端检查和受保护的数据路径；Quote 或身份凭据本身不构成每次请求由某个业务进程处理的密码学证明。在这些假设下，Argus 通过运行时执行规则约束实际接收方，并保留已有服务的业务接口。
 
 ### 4. 关键机制与应用价值
 
-支撑这一架构的技术内容包括实例关联与生命周期处理。实例关联机制将取证目标、身份请求和服务入口对应到同一业务实例，并在核验过程的关键阶段复查目标状态，处理 PID 复用、监听者变化和实例错配等情形。生命周期机制区分正常凭据轮换与准入依据失效：前者通过完整凭据发布和连接切换支持持续访问，后者针对可观测的失效，通过实例监测、凭据清理及入口与连接管理停止使用旧依据。目标实例完成必要的登记与重新准入后恢复访问。两类机制共同支撑证明和身份职责外置后的可信服务访问，其效果由实际交付与停止恢复实验检验。
+实例关联机制处理核验过程中对象发生变化的问题。如果登记时检查的实例在取证或准入期间被替换，仅沿用服务名称或进程编号就可能将旧检查结果用于新对象。该机制要求将透明日志中经验证的启动记录与当前实例关联，拒绝用另一节点或历史实例的记录支持本次准入。Argus 已使用能够区分不同启动实例的登记信息，并在取证和核验的关键阶段复查目标；后续日志核验需接入同一关联检查，再以获准实例限定服务入口的转发目标。其作用是拒绝失去实例依据的身份申请，具体效果由实例替换和入口错配实验检验。
 
-本文同时考察这种架构的应用价值。将证明、身份和通信职责实现为公共能力，有望减少不同应用重复实现信任逻辑的工作；分离准入和稳态访问，使一次准入的成本能够由后续交互分摊；明确失效与恢复职责，则有助于组织服务更新和故障处理。上述价值需要结合实际代价判断：低侵入会将部分复杂度从业务实现转移到公共基础设施，因此评价同时统计业务代码、适配器和核心组件的改动，以及新增的配置、部署和运维步骤。论文将据此分析哪些能力能够复用、哪些仍需业务适配，以及框架在何种条件下具有工程价值。
+生命周期机制处理准入之后的变化。仅等待凭据自然到期，不能让已经发现的实例失效及时影响后续交付；将正常凭据轮换视为实例失效，又会造成不必要的中断。Argus 因此区分正常轮换、准入失效与重新准入：正常轮换更新可用凭据，检测到相关失效后联动清理凭据、停止入口和旧连接，新实例完成登记与重新准入后恢复访问。停止窗口与恢复成本需要实测确定。
+
+这两项机制建立在 SPIFFE/SPIRE 已有的身份管理能力之上，其应用价值需要结合复用收益与新增成本判断。评价将同时记录业务代码、适配器和公共组件的修改，以及配置、部署与运维步骤，分析减少业务改造是否以可接受的基础设施成本实现。更换调用方或服务后的实际接入结果，将用于界定可复用能力和仍需应用适配的部分。
 
 ### 5. 实验问题与评价安排
 
-计划中的评价在真实 Intel TDX 环境中围绕五个问题展开：准入是否约束实际接收者；运行条件变化后，停止与恢复是否符合声明规则；各项机制是否必要；框架如何影响 Agent 任务与服务性能；更换调用方或服务后，哪些能力能够复用。正常访问、身份与实例错配、运行变化等受控情形用于检查实际交付和生命周期行为，强基线与单项消融用于解释机制作用。其中，B3b 在已证明节点上保留同等的实例取证、策略检查、凭据发布和失效处理，但不额外生成 Workload Quote，用于单独检验这份证明的作用与成本；与最近邻方案的机制比较则说明整体架构的差异。
+计划中的评价在真实 Intel TDX 环境中回答五个问题：准入是否约束实际接收者；实例变化后停止与恢复是否符合声明规则；各项机制是否必要；框架如何影响 Agent 任务与服务性能；更换调用方或服务后哪些能力能够复用。评价将结合真实 Agent 记忆任务与并发服务负载，在接收端检查敏感内容的实际交付，并测量任务影响、停止恢复和总体接入成本。启动记录缺失、历史记录与当前实例错配纳入准入检查，日志确认与核验成本计入首次可信就绪。
 
-任务与性能评价采用 OpenViking 的 τ²-bench 适配、LoCoMo/OpenClaw 和 Server 混合负载，在固定模型、任务、数据、策略与资源条件下，分别检查任务结果、敏感内容的实际接收、首次可信就绪、稳态延迟、成功吞吐及停止恢复成本。合法可完成、需要重新准入后恢复和应当拒绝的任务分别统计。复用评价将记录不同接入的业务适配、通信适配和核心修改；不同调用端的结果用于说明调用侧复用范围，跨服务复用则由另一类服务的实际接入支撑。这些实验将为交付约束、任务可用性和总体工程成本提供相互对应的证据。[τ²-bench 适配](https://github.com/volcengine/OpenViking/blob/192b813e7e3106680a5534e2d4c9bcf6d2390abd/benchmark/tau2/llm/README.md)、[LoCoMo/OpenClaw](https://github.com/volcengine/OpenViking/blob/192b813e7e3106680a5534e2d4c9bcf6d2390abd/benchmark/locomo/README.md)
-
-## Introduction: English Draft
-
-### 1. Task, Applications, and Evaluation Objectives
-
-Agents complete tasks through model calls, memory access, and tool execution, moving sensitive context among multiple components. With memory provided as a service, for example, an enterprise assistant stores private conversations, project constraints, and task results in a separate service for subsequent retrieval and reuse. This service directly handles private data. Even if the agent runs in a trusted execution environment, protection after delivery still depends on the recipient's software and operating conditions. Following Agent-CC's trusted service composition model, this work examines how trust requirements for local confidential execution can extend to data processing across services. [Agent-CC](../../../../output/pdf/Agent-CC.zh-CN.md#5-可信服务组合)
-
-This requires considering delivery constraints, task availability, and engineering cost together. Approved identities and execution conditions should determine whether an instance may receive sensitive data and constrain further delivery when those conditions cease to hold. Eligible tasks should complete normally, with service restored following appropriate fault handling. Evaluation must therefore examine actual recipients, stopping and recovery behavior, task quality and completion, and the additional costs of initial trusted readiness, steady-state access, and application integration. Together, these objectives determine whether trusted service composition is practical for existing agent systems.
-
-### 2. Prior Approaches and Technical Challenges
-
-Prior work establishes foundations in runtime evidence, service identity, and agent platforms. SPIFFE/SPIRE incorporates node and workload conditions into identity issuance. Full Trust Alchemist investigates attestation of dynamic workload properties, while dstack-capsule links platform evidence and Pod identity through layered attestation. aDNS associates attestation results with service identities and TLS keys, and Grimlock proposes binding attestation to specific communication channels. Omega takes a platform approach to trusted agent execution and controlled external interactions. These systems provide different paths to trust across services. [SPIRE](https://spiffe.io/docs/latest/spire-about/spire-concepts/), [Full Trust Alchemist](https://www.comsys.rwth-aachen.de/publication/2025/2025_galanou_trust-alchemist/), [dstack-capsule](https://arxiv.org/html/2606.03323v2), [aDNS](https://www.usenix.org/conference/usenixsecurity25/presentation/delignat-lavaud), [Grimlock](https://arxiv.org/html/2605.27488v2), [Omega](https://arxiv.org/abs/2512.05951v2)
-
-Applying these capabilities to existing applications requires reconciling service invocation with trusted execution conditions. Applications access services through stable interfaces and logical identities, whereas admission evidence concerns particular platforms, software, configurations, and running instances. Shared components can handle evidence collection, identity management, and TLS to reduce application changes. In a proxy-based integration, the verified business process, credential holder, and TLS termination endpoint may belong to different components. A framework must explain how they remain associated and how the admission conditions relied upon through a service identity govern the actual data path.
-
-Runtime changes complicate this association. Instances, credentials, and connections have different lifecycles: routine certificate rotation need not alter an instance's eligibility, whereas instance replacement may invalidate the basis for an identity or connection still in use. Multi-step agent tasks need to reuse valid identities and connections to control cost, while stopping further delivery when relevant conditions fail. We therefore ask: **How can admission decisions derived from runtime evidence govern delivery to the actual receiving instance, with limited application changes, and remain effective as runtime conditions change?** Comparisons will examine instance association, change handling, and integration cost under equivalent delivery requirements to identify the effects and trade-offs of individual design choices.
-
-### 3. Core Architecture of Argus
-
-We present Argus, a framework for trusted service composition in agent systems based on Intel TDX remote attestation and workload identity. Argus places attestation and admission responsibilities in the deployment and identity layers; applications use admission results through authentication and communication adapters. During service admission, controlled launch records and instance evidence collected by trusted components bring platform evidence, the actual business instance, its software, and its configuration under policy evaluation. Successful evaluation contributes to SPIRE identity admission. Callers verify the expected service identity and rely on admission rules enforced by an accepted issuing domain. Credential delivery and a protected communication endpoint associate the admitted identity with the business process.
-
-Argus separates attestation-based admission from steady-state interaction. Normal requests reuse valid identities and connections without generating a Quote or invoking an attestation verifier for each request. The current server prototype uses a Helper to deliver credentials and NGINX to terminate TLS, reaching the business process over a protected local path. Instance checks, credential state, and connection management jointly constrain identity and connection reuse. This organization preserves the service's business interface while placing trust responsibilities in deployment and communication components, allowing admission overhead and steady-state access cost to be analyzed separately.
-
-### 4. Key Mechanisms and Application Value
-
-Instance association and lifecycle handling support this architecture. The association mechanism connects the evidence target, identity request, and service endpoint to the same business instance. It rechecks target state at key verification stages to address PID reuse, listener changes, and instance mismatches. Lifecycle handling distinguishes routine credential rotation from invalidation of the admission basis. Rotation uses complete credential publication and connection transitions to support continued access. For observable invalidation, instance monitoring, credential cleanup, and endpoint and connection management stop reliance on the previous admission decision. Access resumes after the target completes the necessary registration and readmission. Delivery and stopping-and-recovery experiments will evaluate how these mechanisms support trusted service access when attestation and identity responsibilities are placed outside the business process.
-
-We also examine the architecture's application value. Shared attestation, identity, and communication capabilities may reduce repeated implementation of trust logic across applications. Separating admission from steady-state access allows admission cost to be amortized over subsequent interactions, while explicit invalidation and recovery responsibilities can support service updates and fault handling. These benefits must be assessed alongside their costs. Limited application changes can shift complexity into shared infrastructure. Evaluation will therefore account for changes to business code, adapters, and core components, together with additional configuration, deployment, and operational steps, to determine what is reusable, what requires application-specific adaptation, and when the framework offers engineering value.
-
-### 5. Research Questions and Evaluation Plan
-
-The planned evaluation uses real Intel TDX environments to address five questions: whether admission constrains the actual recipient; whether stopping and recovery follow the declared rules after runtime changes; whether individual mechanisms are necessary; how the framework affects agent tasks and service performance; and what remains reusable when the caller or service changes. Controlled normal access, identity and instance mismatches, and runtime changes will test delivery and lifecycle behavior. Strong baselines and individual ablations will examine mechanism effects. In particular, B3b retains equivalent instance evidence collection, policy checks, credential publication, and invalidation handling on an attested node, but omits an additional Workload Quote, isolating that evidence's role and cost. Comparisons with the closest related systems will characterize broader architectural differences.
-
-Task and performance evaluation will use OpenViking's τ²-bench adaptation, LoCoMo/OpenClaw, and mixed server workloads. With models, tasks, data, policies, and resources held fixed, we will examine task outcomes, actual receipt of sensitive content, initial trusted readiness, steady-state latency, successful-request throughput, and stopping and recovery costs. Authorized tasks eligible for completion, tasks requiring readmission before recovery, and tasks that should be rejected will be reported separately. Reuse evaluation will record business, communication-adapter, and core changes across integrations. Results from different callers will establish the scope of caller-side reuse; cross-service reuse will require an actual integration with another service type. Together, these experiments will provide corresponding evidence for delivery constraints, task availability, and overall engineering cost. [τ²-bench adaptation](https://github.com/volcengine/OpenViking/blob/192b813e7e3106680a5534e2d4c9bcf6d2390abd/benchmark/tau2/llm/README.md), [LoCoMo/OpenClaw](https://github.com/volcengine/OpenViking/blob/192b813e7e3106680a5534e2d4c9bcf6d2390abd/benchmark/locomo/README.md)
+最近邻方案的机制与实现比较用于考察整体架构的保证及代价，单项消融用于解释具体机制的作用。此外，在节点已通过证明的前提下，评价将设置保留同等日志核验、实例检查、策略、凭据发布和失效处理，但去掉额外 Workload Quote 的对照，单独检验这份工作负载证明的必要性与成本。这些比较将共同回答：哪些设计改变了实际交付行为，以及获得相应保证需要付出多少代价。
 
 ## 作者备注与依据
 
+2026-09-17 架构确认：透明日志是论文中形成可审计准入依据的组成部分，Rekor 是当前选用的实现。OpenViking 经 TC API 启动承担批准条件落实、启动记录形成及后续实例关联的职责。日志验证参与身份准入已纳入目标架构，当前实现仍保留 `rekor_gate=DEFERRED`；不能将已有日志提交写成已完成的准入门禁。章节与架构图见[论文框架 §3](./Argus-AAMAS2027-EMAS-论文框架.md#3-argus-design-from-tdx-evidence-to-trusted-interactions)。
+
+透明日志的包含证明、测量事件与 RTMR 的重放核验、当前实例检查分别承担不同职责。受信启动/取证路径保障记录来源，日志验证保障收录及历史一致性；日志存在本身不证明事件真实、所有执行均已记录或实例仍有效。当前架构要求需由这些机制共同落实，Rekor 的 Merkle 树根与 RTMR 不混用。普通签名审计记录和透明日志方案的差异，以及 aDNS 等已有透明机制，应在近邻比较中明确。
+
 本稿从 Agent-CC 的整体系统模型引出 Argus 的可信服务组合定位，以服务化记忆贯穿动机与当前评测。数据全生命周期保护、构建到运行时完整性属于 Agent-CC 的整体架构范围；Argus 聚焦跨服务准入与交互，不能将整个架构的全部保护能力归为当前 Argus 实现。
 
-Introduction 保留五部分小标题，便于讨论各段职责。第二部分提出既有应用接入可信服务时需要协调的技术问题，不将未复现的行为写成近邻缺陷；第三部分组织当前架构的主要选择；第四部分连接关键机制与待评价的应用价值；第五部分以五个核心问题覆盖机制、任务和工程成本。正式结果形成后，再凝练贡献和结果表述。
+Introduction 保留五部分小标题，便于讨论各段职责。第一部分区分接收方约束、任务可用性和工程成本的主次；第二部分以记忆实例替换为分析情形，集中比较 aDNS 与 Grimlock 的核验对象、关联对象、受信组件及有效性处理；第三部分先说明设计理由与信任假设；第四部分说明两项机制缺失时的问题和加入后的行为；第五部分保留五个核心问题。
+
+实例替换是用于比较的情形，当前没有证据证明上述近邻在相同威胁模型与接入条件下违反交付要求。正文因此保留研究问题，不将组件生命周期不同直接写成已有系统的漏洞。aDNS 的注册与记录更新、Grimlock 的通道绑定与令牌有效性已有一手来源；它们在目标部署中如何处理替换后的既有连接，仍需按具体实现和策略核对。提交前应形成至少一项有来源或实测支持的差异：交付性质、停止与恢复行为，或满足同等保证所需的接入、运行和运维成本。
+
+不逐请求生成 Quote 用于解释准入与稳态成本的分工，本身不作为新颖性主张。Helper、NGINX、PID、监听者与凭据发布等实现细节由下列通信和 Workload 文档维护。
+
+SPIFFE/SPIRE 是 Argus 复用的身份基础。节点与工作负载核验、标准身份接口、凭据签发和轮换属于已有能力；本文讨论的增量是具体的 TDX 准入条件、实际实例与入口关联及失效处理机制，其研究价值仍需比较支持。标准接口提供复用基础，不等于当前原型已支持任意应用：同等 TDX 条件的原生 SDK 接入仍需适配，具体边界见[当前代码架构](../Argus-SPIFFE-Current-Code-Architecture-CN.md#4-当前实现的边界)。
+
+实验细节由[评价方案](./Argus-EMAS-Agent场景实验设计与论文借鉴-2026-09-14.md)维护：包括 OpenViking 的 τ²-bench 适配、LoCoMo/OpenClaw、Server 混合负载，固定模型、任务、数据、策略与资源，以及任务分类和具体指标。B3b 是保留同等日志核验、实例检查与失效处理、去掉额外 Workload Quote 的机制对照，不能替代最近邻系统的整体比较；无法复现的方案应将机制分析与运行结果明确区分。正式投稿时需用主要发现替换计划性结尾，报告机制改变的实际行为、停止与恢复时间，以及同等保证下的代价。
 
 跨企业研发与银行核验继续保留在原场景文档，作为这一框架的应用例子。实际执行条件、身份和接收入口的关联，以及生命周期处理，是将可信服务组合落实为运行机制的问题。低侵入属于设计目标，不能提前写成零改动、已量化的成本下降或对任意 Agent 框架的支持。
 
@@ -116,6 +108,8 @@ Introduction 保留五部分小标题，便于讨论各段职责。第二部分�
 
 项目依据：
 
+- [TC API / TruCon 架构](../../core/tc_api/docs/architecture.md)：受控启动、结构化事件、统一度量链与透明日志职责；[当前 Workload 工具](../../core/spire/workload/scripts/workload.py)明确保留日志门禁待实现状态。
+- [透明日志与 Rekor](https://docs.sigstore.dev/logging/overview/)、[Intel TDX 事件日志接口](https://docs.trustauthority.intel.com/main/articles/articles/ita/integrate-tdx-adapter-api.html)：日志包含与追加一致性、测量事件重放的职责依据。
 - [Agent-CC v0.8 原文](../archive/pre-asymmetric-architecture/Agent-CC.pdf)及[中文转写](../../../../output/pdf/Agent-CC.zh-CN.md)：§1 的系统模型、§3 的服务化记忆、§4 的可信绑定、§5 的可信服务组合与低侵入接入。上一轮已核对原 PDF 第 1、11、15–19 页及相关架构图，本轮重新对照相关章节。
 - [当前 Agent-CC 介绍](../../README_CN.md)：整体三支柱与 Argus 组件定位。
 - [原论文框架](./Argus-AAMAS2027-EMAS-论文框架.md)：研究问题、C1–C3、对象与信任假设。

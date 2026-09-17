@@ -141,7 +141,9 @@ fn bounded(path: impl AsRef<Path>, max: u64) -> Result<Vec<u8>> {
     }
     Ok(v)
 }
-// Keep configuration and executable content outside every writable mount.
+// Restrict Docker mount destinations and keep declared configuration/executable
+// paths outside the writable data and /tmp paths. Guest root and Docker metadata
+// remain trusted; these checks do not measure writable data or process memory.
 fn validate_mounts(c: &Value, t: &Target, data_path: &Path) -> Result<()> {
     for key in ["config_path", "executable"] {
         let path = Path::new(&t[key]);
@@ -187,7 +189,8 @@ pub fn load_and_check(path: &Path, data_path: &Path) -> Result<Target> {
     }
     let t: Target = serde_json::from_slice(&bounded(path, 32768)?)?;
     validate(&t)?;
-    // Inspect independently. TC API/Helper cannot substitute an image-name hash.
+    // Re-observe Docker's content ID instead of accepting the registration's
+    // image digest alone. Docker and the guest root collecting it remain trusted.
     let out = Command::new("timeout")
         .args(["10s", "docker", "inspect", &t["container_id"]])
         .output()?;
