@@ -2,17 +2,42 @@
 
 ## 当前状态与记录范围
 
-截至 2026-09-17，统一部署配置及提交前复审已有本地/隔离 Linux 软件验证；当前实现的完整 Linux 构建、真实 TDX 全链路和 systemd 故障验收仍为 **NOT_RUN**。本文件保留按日期记录的历史结果，每项 PASS 只适用于其注明的源码、工具链、配置和替身边界。
+截至 2026-09-18，统一部署配置及提交前复审已有本地/隔离 Linux 软件验证。IP1 反馈 `f7b87d4` 的完整构建被 SPIRE 集成测试夹具阻断；下方记录本机复现和修复验证。修复后的完整 Linux 构建仍待重跑，真实 TDX 全链路和 systemd 故障验收仍为 **NOT_RUN**。本文件保留按日期记录的历史结果，每项 PASS 只适用于其注明的源码、工具链、配置和替身边界。
 
 | 范围 | 最新记录与边界 |
 |---|---|
 | 配置及本地组件 | 见“2026-09-17 方案 A：统一部署配置”。包括 Go、Windows Rust 替身测试、Linux Helper、实际 NGINX 及官方 SPIRE 配置/Entry 检查；不包含硬件 Node 加入或目标 SVID 签发。 |
 | 提交前新增 Python 修复 | 见“2026-09-17 提交前复审”：部署/运行合同 **22 passed**，普通用户 TC API 范围 **9 passed**；本轮官方 SPIRE 两项和 Linux Provider 一项跳过。 |
+| SPIRE 测试夹具修复 | 见“2026-09-18 SPIRE 构建测试夹具修复”：本机 Linux 实际 SPIRE 集成及部署/运行合同 **19 passed / 0 skipped**，测试期间保持 8081 被独立监听器占用。 |
 | TC API 扩展检查 | **11 passed / 16 failed**；16 项失败在修改前基线复现，不能列为通过项。 |
 | 完整构建与真实环境 | 当前实现的 Linux Provider UDS/完整构建、真实 Quote/Trustee/SVID/业务及完整 systemd 故障验收待执行。历史版本结果不替代这些项目。 |
-| 本次文档和注释整理 | 更新机制、部署和验证边界；未执行远程部署、硬件验收或重新运行上述功能测试。 |
+| 2026-09-17 文档和注释整理 | 更新机制、部署和验证边界；该轮未执行远程部署、硬件验收或重新运行上述功能测试。 |
 
 当前部署步骤见 [README.md](README.md)，组件职责及信任边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。下文中的旧二进制名称和当时命令仅用于追溯历史，不是当前部署入口。
+
+## 2026-09-18 SPIRE 构建测试夹具修复
+
+基于 `f7b87d4`，本机复现 IP1 报告的两个构建阻断。`build.sh` 将 SPIRE 放在构建输出的子目录，原测试又把同一构建输出作为 `install_dir`，触发 `deployment directories must not overlap`。另外，官方 SPIRE v1.15.3 将 `bind_port=0` 解释为默认 8081，而非操作系统分配端口；8081 已占用时，两项实际 Server 测试都会失败。
+
+[test_spire_cli.py](tests/test_spire_cli.py) 改为在独立临时安装目录复制所需工具，保留生产目录隔离检查，并避免渲染 hook 写入构建产物目录。两个临时 Server 使用显式选择的空闲 loopback 端口，Agent 测试配置同步使用该端口。构建不再需要为这些测试停止现有的 8081 服务。
+
+验证环境为本机 WSL Ubuntu 20.04、Linux x86_64、Python 3.11.16、普通用户。四个 Go 工具从本次源码交叉构建；官方 SPIRE v1.15.3 Agent/Server 使用已缓存并核对二进制摘要的官方产物。
+
+| 检查 | 结果 |
+|---|---|
+| 修复前，使用 `build.sh` 的嵌套产物目录布局 | 复现相同的目录重叠异常。 |
+| 修复前，独立监听器持续占用 127.0.0.1:8081 | 两项 SPIRE 集成测试均复现 `address already in use`。 |
+| 修复后，同样的产物布局且 8081 持续被占用 | 官方 SPIRE 集成 2 项、部署合同 6 项、运行合同 11 项，合计 **19 passed / 0 skipped**；原 8081 监听器在测试后仍可连接。 |
+
+对应回归入口如下；`OUT` 指已有本次构建工具和官方 SPIRE 的完整路径：
+
+```bash
+cd cczoo/agent-cc/core/spire/workload/tests
+SPIRE_BIN_DIR="$OUT/spire-1.15.3/bin" ARGUS_WORKLOAD_TOOLS_DIR="$OUT/bin" \
+  python3 -m unittest -v test_spire_cli.OfficialSPIRETests test_deployment test_runtime
+```
+
+本轮本机验证未执行 Rust Provider UDS 测试、完整 `build.sh`、真实 TDX、Node join、Trustee 或 systemd 故障验收。IP1 的构建状态来自用户反馈，未在本机读取远端日志。IP1/IP2 必须改用包含此修复的同一提交，由 IP1 重新完成完整构建；只有构建成功发布新的 `SHA256SUMS` 后，才安装和交付产物。生产目录隔离、严格 policy 和构建清单发布条件均未放宽。
 
 ## 2026-09-05 至 2026-09-06 首轮验证
 

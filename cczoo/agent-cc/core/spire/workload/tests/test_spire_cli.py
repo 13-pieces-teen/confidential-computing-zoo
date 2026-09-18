@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -19,6 +20,13 @@ from test_deployment import alternative
 runtime = contracts.runtime
 EXAMPLE = contracts.RuntimeContractTests().config()
 AGENT_ID = EXAMPLE["identity"]["agent_id"]
+
+
+def unused_loopback_port():
+    # SPIRE treats bind_port=0 as its default 8081, not an ephemeral port.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return listener.getsockname()[1]
 
 
 @unittest.skipUnless(sys.platform == "linux" and os.environ.get("ARGUS_WORKLOAD_TOOLS_DIR") and (Path(os.environ["ARGUS_WORKLOAD_TOOLS_DIR"]) / "argus-spire-evidence-provider").is_file(),
@@ -116,7 +124,7 @@ class OfficialSPIRETests(unittest.TestCase):
                     plugin_data = "\n".join(f"  {key} = {json.dumps(value)}" for key, value in settings.items())
                     config = case_root / "server.conf"
                     config.write_text('''server {
- bind_address="127.0.0.1" bind_port=0 trust_domain="argus.local"
+ bind_address="127.0.0.1" bind_port=%d trust_domain="argus.local"
  socket_path="%s" data_dir="%s"
  ca_subject { country=["CN"] organization=["Local contract test"] common_name="SPIRE test" }
 }
@@ -130,7 +138,7 @@ plugins {
   }
  }
 }
-''' % (server_socket, case_root / "data", case_root / "db.sqlite",
+''' % (unused_loopback_port(), server_socket, case_root / "data", case_root / "db.sqlite",
                        json.dumps(str(plugin)), json.dumps(checksum), plugin_data))
                     with (case_root / "server.log").open("w+") as log:
                         server = subprocess.Popen([str(spire / "spire-server"), "run", "-config", str(config)],
@@ -167,8 +175,9 @@ plugins {
             root = Path(directory)
             conf = root / "server.conf"
             socket = root / "server.sock"
+            server_port = unused_loopback_port()
             conf.write_text('''server {
- bind_address="127.0.0.1" bind_port=0 trust_domain="example.org"
+ bind_address="127.0.0.1" bind_port=%d trust_domain="example.org"
  socket_path="%s" data_dir="%s"
  ca_subject { country=["CN"] organization=["Local contract test"] common_name="SPIRE test" }
 }
@@ -177,7 +186,7 @@ plugins {
  KeyManager "memory" {}
  NodeAttestor "join_token" {}
 }
-''' % (socket, root / "data", root / "db.sqlite"))
+''' % (server_port, socket, root / "data", root / "db.sqlite"))
             for name in ("spire-server", "spire-agent"):
                 self.assertEqual(runtime.binary_version(spire / name), "1.15.3")
             runtime.run([spire / "spire-server", "validate", "-config", conf])
@@ -191,13 +200,20 @@ plugins {
                             self.fail("local SPIRE Server failed: " + log.read())
                         time.sleep(0.05)
                     c = alternative()
-                    c["paths"].update(install_dir=str(tools.parent), config_dir=str(root / "rendered"),
+                    # build.sh nests SPIRE under the build output. Stage an
+                    # independent installation so deployment roots stay disjoint
+                    # and rendering cannot write hooks into the build artifacts.
+                    install = root / "install"
+                    (install / "bin").mkdir(parents=True)
+                    for name in ("argus-agent-config", "argus-tdx-nodeattestor-agent", "argus-tdx-workloadattestor"):
+                        shutil.copy2(tools / name, install / "bin" / name)
+                    c["paths"].update(install_dir=str(install), config_dir=str(root / "rendered"),
                                       records_dir=str(root / "records"), spire_bin_dir=str(spire))
                     d = runtime.Deployment(c)
                     c["server_socket"] = str(socket)
                     node = root / "node.conf"
                     node.write_text('''agent {
- trust_domain="example.org" server_address="127.0.0.1" server_port=8081
+ trust_domain="example.org" server_address="127.0.0.1" server_port=%d
  data_dir="%s" insecure_bootstrap=true
 }
 plugins {
@@ -206,7 +222,7 @@ plugins {
   proof_key_path="/existing/proof.key" evidence_socket_path="/existing/provider.sock"
  } }
 }
-''' % (root / "agent-data", tools / "argus-tdx-nodeattestor-agent"))
+''' % (server_port, root / "agent-data", d.bin / "argus-tdx-nodeattestor-agent"))
                     c["node_agent_config"] = str(node)
                     # This fixture belongs to the test runner, which may be an
                     # unprivileged CI user. Root-file checks are tested separately.
