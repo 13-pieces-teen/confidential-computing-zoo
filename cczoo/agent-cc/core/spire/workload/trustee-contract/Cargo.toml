@@ -6,6 +6,9 @@ publish = false
 
 # Same canonicalizer and Rego engine used by Trustee v0.21.0.
 [dev-dependencies]
+anyhow = "1"
+kbs-types = { version = "=0.15.0", default-features = false, features = ["alloc"] }
+tokio = { version = "1", features = ["process", "io-util", "time", "sync", "macros", "rt"] }
 serde_json = "1.0.150"
 serde_json_canonicalizer = "0.3"
 sha2 = "0.11"

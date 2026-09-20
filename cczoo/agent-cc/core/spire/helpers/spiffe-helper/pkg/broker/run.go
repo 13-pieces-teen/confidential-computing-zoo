@@ -49,7 +49,11 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 	if err != nil {
 		return err
 	}
-	return supervise(ctx, watchErr, 60*time.Second, func(ctx context.Context, published func()) error {
+	startupTimeout, err := c.startupTimeout()
+	if err != nil {
+		return err
+	}
+	return supervise(ctx, watchErr, startupTimeout, func(ctx context.Context, published func()) error {
 		return subscribe(ctx, agentAddress, c, t, p, published)
 	})
 }

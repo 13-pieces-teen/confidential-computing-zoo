@@ -12,3 +12,4 @@ type Evidence = shared.Evidence
 
 var Decode = shared.Decode
 var ValidateAgentID = shared.ValidateAgentID
+var ValidateRekorReferences = shared.ValidateRekorReferences

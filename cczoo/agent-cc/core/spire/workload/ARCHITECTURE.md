@@ -76,10 +76,11 @@ sequenceDiagram
     A->>W: AttestReference(PID)
     W->>W: Check approved target and process; generate nonce
     W->>P: POST /ra/v1/workload-evidence: protocol, nonce, PID
-    P->>P: Observe target; create Quote; repeat observation
-    P-->>W: Quote + runtime_data
+    P->>P: Observe target and TruCon snapshot; create Quote; recheck both
+    P-->>W: Quote + runtime_data + rekor_entry_uuids
     W->>W: Match nonce and all target fields
-    W->>T: HTTPS /attestation: Quote, runtime_data, policy ID
+    W->>T: HTTPS /attestation: Quote, runtime_data, UUIDs, policy ID
+    T->>T: Verify Quote/REPORTDATA; fetch and verify Rekor logs; replay RTMR2; match current container
     T-->>W: Signed EAR appraisal
     W->>W: Verify EAR; recheck process instance
     W-->>A: Six argus_tdx selector values
@@ -93,6 +94,7 @@ sequenceDiagram
 |---|---|
 | Reference | `type.googleapis.com/spiffe.broker.WorkloadPIDReference`; ordinary `Attest` returns no trusted selectors. |
 | Evidence | Fresh 32-byte random nonce; exact registered target; observation checks before/after Quote generation. |
+| Trusted logs | Complete uploaded history; pinned Rekor and signer trust; replay equals authenticated RTMR2; explicit successful launch matches the current instance. |
 | EAR | P-256/ES256 signature, issuer/profile, current validity, `cpu0=affirming`, policy ID and REPORTDATA. |
 | Entry | Approved parent Agent, [all six selectors](../plugins/argus-tdx-workloadattestor/README.md#selectors), target SVID prefetch disabled. |
 
@@ -126,7 +128,7 @@ path, not a separate executable-content hash.
 | Approval layer | What it checks |
 |---|---|
 | Plugin configuration | Agent/workload/policy IDs and image/config digests. |
-| Default Rego | `mr_td`, RTMR0/1/2, non-debug TD, unexpired collateral, `UpToDate`, executable/config paths, port and runtime-field formats. RTMR3 is not pinned. |
+| Default Rego | `mr_td`, RTMR0/1, server-generated `tdx.trucon.verified`, approved `rtmr2_baseline`, non-debug TD, unexpired collateral, `UpToDate`, executable/config paths, port and runtime-field formats. RTMR3 is not pinned. |
 | Explicit policy artifact | Operator-approved replacement; preflight pins its hash and exact Trustee readback. No name-based relaxation. |
 | Signed EAR | Expected policy ID and binding; no policy-content digest check. Policy administration remains trusted. |
 

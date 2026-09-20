@@ -16,7 +16,7 @@ EXISTING_KEYS = {"node_agent_config", "trustee_url", "trustee_ca_path", "trustee
                  "ear_public_key_path", "ear_expected_issuer", "ear_expected_profile", "approved",
                  "server_ssh", "server_script", "server_config", "server_unit", "server_socket",
                  "tc_api_url", "tc_api_user_id", "image_id", "image_url", "client_cert", "client_key",
-                 "client_bundle", "business_url"}
+                 "client_bundle", "business_url", "trucon_socket_path"}
 
 
 def object_keys(value, required, optional=()):
@@ -43,13 +43,21 @@ def protected_file(value):
 
 class Deployment:
     def __init__(self, c):
-        object_keys(c, EXISTING_KEYS | {"schema_version", "identity", "paths", "workload"}, {"approved_policy_artifact"})
+        object_keys(c, EXISTING_KEYS | {"schema_version", "identity", "paths", "workload"},
+                    {"approved_policy_artifact", "request_timeout_seconds"})
         if type(c["schema_version"]) is not int or c["schema_version"] != 1:
             raise ValueError("unsupported deployment schema_version")
         for key in EXISTING_KEYS - {"approved"}:
             if not isinstance(c[key], str) or (not c[key] and key != "server_ssh"):
                 raise ValueError(f"deployment {key} must be a string")
-        object_keys(c["approved"], {"policy_id", "image_config_digest", "config_digest", "executable", "mr_td", "rtmr_0", "rtmr_1", "rtmr_2"})
+        object_keys(c["approved"], {"policy_id", "image_config_digest", "config_digest", "executable", "mr_td", "rtmr_0", "rtmr_1", "rtmr2_baseline"})
+        linux_path(c["trucon_socket_path"])
+        self.request_timeout_seconds = c.get("request_timeout_seconds", 55)
+        if type(self.request_timeout_seconds) is not int or not 51 <= self.request_timeout_seconds <= 60:
+            raise ValueError("request_timeout_seconds must be an integer in [51,60], above the Trustee 50s budget")
+        # Evidence collection and Trustee appraisal are sequential requests.
+        # Leave time for the initial local identity and SVID publication too.
+        self.startup_timeout_seconds = 2 * self.request_timeout_seconds + 10
         i, p, w = c["identity"], c["paths"], c["workload"]
         object_keys(i, IDENTITY_KEYS)
         object_keys(p, PATH_KEYS)
@@ -128,6 +136,8 @@ class Deployment:
                 "CREDENTIALS": self.credentials.as_posix(), "NGINX_RUN": self.nginx.as_posix(),
                 "AUTHZ_SOCKET": (self.authz / "authz.sock").as_posix(),
                 "PROVIDER_SOCKET": self.provider_socket.as_posix(), "AGENT_SOCKET": (self.agent / "agent.sock").as_posix(),
+                "TRUCON_SOCKET": self.c["trucon_socket_path"],
+                "STARTUP_TIMEOUT": str(self.startup_timeout_seconds) + "s",
                 "BROKER_SOCKET": (self.broker / "broker.sock").as_posix(),
                 "AGENT_ID": self.identity["agent_id"], "HELPER_ID": self.identity["helper_id"],
                 "TARGET_ID": self.identity["target_id"], "CLIENT_ID": self.identity["client_id"],

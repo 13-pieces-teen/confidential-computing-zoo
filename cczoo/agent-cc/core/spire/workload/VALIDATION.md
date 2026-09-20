@@ -2,6 +2,34 @@
 
 ## 当前状态与记录范围
 
+2026-09-20 已加入基于 Rekor UUID 的 Workload 准入实现，并修复 review 发现的 Fulcio/intoto 不兼容、短 ID/名称生命周期记录无法使旧 launch 失效，以及客户端与服务端超时预算不一致。新结果见下表；后文的旧实现测试仅作历史记录，不能替代新的真实环境验收。
+
+| 本次检查 | 结果与范围 |
+|---|---|
+| Python 修复后聚焦回归 | **282 passed / 9 skipped**。覆盖完整证书链/有效 SCT/固定身份/签名时间/DSSE 的 Fulcio 正向与拒绝测试、Rekor 证明及完整链重放、停止后重启复用旧 launch 的拒绝、Docktap 名称/短 ID/完整 ID 的统一解析与请求固定、查询失败阻断，以及 SQLite 快照、UUID 迁移、部署超时合同和现有 Docktap 回归。9 项依赖 Linux、实际 SPIRE 或完整构建产物而跳过。 |
+| Go Workload 插件 | 修复后 `argus-tdx-workloadattestor` 的 `go test ./...` 通过，覆盖默认/自定义超时、非法旧超时拒绝及既有 EAR 校验。`core/spire/workload` 模块在初次实现时通过，本轮未修改该模块 Go 源码。 |
+| Go Helper | 修复后的 Broker 单元测试通过；在本机 WSL Ubuntu 20.04 执行当前源码交叉编译的 Broker 与 Helper 配置测试二进制，两套均通过。覆盖初始化超时、目标退出、首次发布后停止启动计时及 HCL 配置。Windows 的上游配置测试有两项 POSIX signal 用例失败，相同用例已在 Linux 通过。 |
+| Rust / Rego / AS 接入模块 | `trustee-contract` **4 passed**，使用实际 Regorus 与 `kbs-types` 编译真实 `argus_trucon.rs`；验证 REPORTDATA 合同、policy 的动态 RTMR2 准入和缺少验证结果时拒绝。不是完整 AS 构建。 |
+| Provider Rust 源文件 | 隔离依赖入口直接引用真实 Provider、workload 和 `tdx-quote` 源文件，**18 passed**；包括日志快照不可用、持续并发 extend 的有界拒绝，以及现有身份和 Quote 请求测试。运行平台 Windows，不包含 Linux UDS/TSM 执行。 |
+| Trustee 补丁 | 在下载的上游固定版本 AS 源文件上应用成功；检查源文件 SHA-256，并确认接入点在硬件验证之后、policy 之前。shell 语法与改动空白检查通过。 |
+| 待执行 | **NOT_RUN**：完整 Linux Provider/Trustee/DCAP 构建与 UDS 验收；真实 Rekor 按 UUID 提供正文及 Fulcio 正向验证；真实 Quote → Trustee EAR → SPIRE SVID → 业务通路。未远程部署。 |
+
+本地测试环境为 Windows、Python 3.12 / Sigstore 3.6.7、Go 与临时 Rust 1.94 工具链；Helper 另在 WSL Ubuntu 20.04 运行。密码学夹具使用本地测试 CA、CT 密钥、真实签名和有效 SCT，替换远端查询边界。Docktap 单元测试使用假 socket；没有用这些结果冒充硬件证明、真实 Docker 运行或在线 Rekor 结果。Rust 项为初次实现的记录，本次修复未改动 Rust 源码。当前部署入口见 [Trustee 接入说明](trustee/README.md)。
+
+本次 Python 回归入口（从 `cczoo/agent-cc` 运行）：
+
+```bash
+PYTHONPATH=core/tlog:core/tc_api python3 -m pytest \
+  core/spire/workload/trustee core/spire/workload/tests \
+  core/tc_api/tests/test_attestation_snapshot.py \
+  core/tc_api/tests/test_backfill_attestation_uuids.py \
+  core/tc_api/tests/test_tlog_impl.py \
+  core/tc_api/tests/docktap/test_proxy_response_handling.py \
+  core/tc_api/tests/docktap/test_trucon_client.py \
+  core/tc_api/tests/docktap/test_workload_chain_routing.py \
+  core/tc_api/tests/docktap/test_lifecycle_classification.py -q
+```
+
 截至 2026-09-18，统一部署配置及提交前复审已有本地/隔离 Linux 软件验证。IP1 反馈 `f7b87d4` 的完整构建被 SPIRE 集成测试夹具阻断；下方记录本机复现和修复验证。修复后的完整 Linux 构建仍待重跑，真实 TDX 全链路和 systemd 故障验收仍为 **NOT_RUN**。本文件保留按日期记录的历史结果，每项 PASS 只适用于其注明的源码、工具链、配置和替身边界。
 
 | 范围 | 最新记录与边界 |
@@ -251,4 +279,4 @@ Agent HCL、Entry、Rego 及 TC API 最小配置。Agent 身份从协议中的�
 
 执行记录保存到 `paths.records_dir`（示例为 `/var/log/argus-workload/`）。工具记录实例、nonce、policy、EAR 摘要、SVID 序列号和业务结果；验收人还须关联源码提交、实际二进制摘要、部署配置版本和实际策略内容摘要。`verify` 的日志关联及 `evidence_kind` 标签不能替代硬件来源、策略和业务链路证据。未取得这些记录前，当前实现的真实 TDX 全链路状态为 **待验收**。
 
-本轮不依赖 Rekor 验证门禁；TC API 原日志提交链保持。普通 SVID 轮换不计为重新证明；Agent 侧独立周期重新证明未实现。
+上述历史验证当时不依赖 Rekor 验证门禁；2026-09-20 新增的日志准入实现及待验项目见本文开头。普通 SVID 轮换不计为重新证明；Agent 侧独立周期重新证明未实现。

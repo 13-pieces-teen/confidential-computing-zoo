@@ -689,6 +689,21 @@ def set_status_submitting(record_id: str, db_path: str = DB_PATH):
         ''', (datetime.utcnow().isoformat(), record_id))
         conn.commit()
 
+def get_attestation_records(chain_id: str, limit: int, db_path: str = DB_PATH) -> List[sqlite3.Row]:
+    """Read one bounded SQLite snapshot, including records not yet uploaded.
+
+    Filtering to CONFIRMED here would hide extends waiting for Rekor. The
+    caller must reject such a snapshot, rather than attest an older prefix.
+    """
+    with get_db_connection(db_path) as conn:
+        return conn.execute(
+            '''SELECT sequence_num, status, log_id, mr_value
+               FROM commit_queue WHERE chain_id = ?
+               ORDER BY sequence_num ASC LIMIT ?''',
+            (chain_id, limit + 1),
+        ).fetchall()
+
+
 def get_chain_records(chain_id: str, db_path: str = DB_PATH) -> List[sqlite3.Row]:
     """Get all records for a chain, ordered by sequence_num ascending."""
     with get_db_connection(db_path) as conn:

@@ -30,6 +30,7 @@ from .operation_log import (
     is_streaming_endpoint,
 )
 from .runtime_adapter import DEFAULT_RUNTIME_ENGINE, DockerRuntimeAdapter
+from .container_identity import bind_container_target
 from .. import config as _cfg
 from ..trucon_client import SUBMITTABLE_OPERATIONS, has_reusable_identity_token, has_active_delegation
 
@@ -531,6 +532,14 @@ class DockerProxyServer:
                         response = self._create_auth_required_response(operation, session_id)
                         client_socket.sendall(response)
                         logger.info("Blocked docker %s until required Docktap authorization becomes available", operation)
+                        break
+
+                if self._trucon_committer is not None and operation in {"start", "stop", "rm"}:
+                    try:
+                        request_data = bind_container_target(request_data, op_record, self.docker_socket_path)
+                    except Exception as exc:
+                        logger.warning("Blocked docker %s: container identity unavailable: %s", operation, exc)
+                        client_socket.sendall(self._create_error_response("Full container identity is required for trusted logging"))
                         break
 
                 docker_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

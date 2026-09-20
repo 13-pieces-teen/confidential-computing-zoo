@@ -17,6 +17,11 @@ python3 -m unittest discover -s "$WORKLOAD_ROOT/tests" -v
 PYTHONPATH="$SPIRE_ROOT/../tc_api:$SPIRE_ROOT/../tlog${PYTHONPATH:+:$PYTHONPATH}" \
     python3 -m pytest "$SPIRE_ROOT/../tc_api/tests/test_workload_profile.py" \
     "$SPIRE_ROOT/../tc_api/tests/test_workload_launch_flow.py" -q
+PYTHONPATH="$SPIRE_ROOT/../tc_api:$SPIRE_ROOT/../tlog${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 -m pytest "$SPIRE_ROOT/../tc_api/tests/test_attestation_snapshot.py" \
+    "$SPIRE_ROOT/../tc_api/tests/test_backfill_attestation_uuids.py" \
+    "$SPIRE_ROOT/../tc_api/tests/docktap/test_proxy_response_handling.py" \
+    "$WORKLOAD_ROOT/trustee" -q
 (cd "$SPIRE_ROOT/plugins/argus-tdx-nodeattestor" && go build -trimpath -o "$OUT/bin/argus-tdx-nodeattestor-agent" ./cmd/agent && go build -trimpath -o "$OUT/bin/argus-tdx-nodeattestor-server" ./cmd/server)
 (cd "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" && go build -trimpath -o "$OUT/bin/argus-tdx-workloadattestor" ./cmd/argus-tdx-workloadattestor)
 (cd "$WORKLOAD_ROOT" && go build -trimpath -o "$OUT/bin/argus-workload" ./cmd/argus-workload)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func validConfig(t *testing.T) string {
@@ -23,6 +24,26 @@ func validConfig(t *testing.T) string {
  image_config_digest=%q
  config_digest=%q
  `, d.AgentID, d.WorkloadID, d.PolicyID, d.ImageConfigDigest, d.ConfigDigest)
+}
+
+func TestRequestTimeoutAllowsServerVerificationToFinish(t *testing.T) {
+	valid := validConfig(t)
+	config, notes := parseConfig(valid)
+	if len(notes) > 0 || config.RequestTimeout != 55*time.Second {
+		t.Fatalf("unexpected default: %v, %v", config, notes)
+	}
+	for _, timeout := range []string{"51s", "55s", "60s"} {
+		config, notes := parseConfig(valid + fmt.Sprintf("\nrequest_timeout=%q\n", timeout))
+		want, _ := time.ParseDuration(timeout)
+		if len(notes) > 0 || config.RequestTimeout != want {
+			t.Errorf("timeout %s: %v, %v", timeout, config, notes)
+		}
+	}
+	for _, timeout := range []string{"20s", "50s", "61s", "invalid"} {
+		if _, notes := parseConfig(valid + fmt.Sprintf("\nrequest_timeout=%q\n", timeout)); len(notes) == 0 {
+			t.Errorf("accepted unsafe timeout %s", timeout)
+		}
+	}
 }
 func TestConfigRequiresFixedTrustAndLocalEvidence(t *testing.T) {
 	valid := validConfig(t)

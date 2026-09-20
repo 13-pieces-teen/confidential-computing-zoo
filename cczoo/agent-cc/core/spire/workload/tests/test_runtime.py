@@ -59,6 +59,25 @@ class RuntimeContractTests(unittest.TestCase):
                 self.assertFalse(any(call.args[0][0] == "systemctl"
                                      for call in commands.call_args_list))
 
+    def test_start_waits_for_sequential_evidence_and_trustee_requests(self):
+        # Readiness after the old 65s deadline must still succeed, without sleep.
+        with patch.object(runtime, "preflight", return_value={}), \
+                patch.object(runtime, "render"), \
+                patch.object(runtime, "run", return_value="") as commands, \
+                patch.object(runtime.time, "monotonic", side_effect=[0, 110]), \
+                patch.object(runtime, "status", return_value={"ready": True}):
+            self.assertTrue(runtime.start(self.config())["ready"])
+        self.assertFalse(any(call.args[0][:2] == ["systemctl", "stop"] for call in commands.call_args_list))
+
+    def test_start_still_stops_after_the_configured_budget(self):
+        with patch.object(runtime, "preflight", return_value={}), \
+                patch.object(runtime, "render"), \
+                patch.object(runtime, "run", return_value="") as commands, \
+                patch.object(runtime.time, "monotonic", side_effect=[0, 126]), \
+                self.assertRaises(TimeoutError):
+            runtime.start(self.config())
+        commands.assert_called_with(["systemctl", "stop", "argus-helper.service"])
+
     def test_tc_api_does_not_forward_credentials_on_redirect(self):
         received = []
         class Destination(BaseHTTPRequestHandler):
@@ -202,7 +221,7 @@ class RuntimeContractTests(unittest.TestCase):
     def approved(self):
         vector = json.loads((ROOT / "testdata/runtime-data.json").read_text())["runtime_data"]
         return {k: vector[k] for k in ("policy_id", "image_config_digest", "config_digest", "executable")} | {
-            "mr_td": "1" * 96, "rtmr_0": "2" * 96, "rtmr_1": "3" * 96, "rtmr_2": "4" * 96}
+            "mr_td": "1" * 96, "rtmr_0": "2" * 96, "rtmr_1": "3" * 96, "rtmr2_baseline": "4" * 96}
 
     def test_no_implicit_baseline(self):
         c = json.loads((ROOT / "config/environment.example.json").read_text())

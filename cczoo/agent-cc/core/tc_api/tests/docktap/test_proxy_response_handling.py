@@ -13,15 +13,100 @@
 # limitations under the License.
 
 import json
+import io
 import os
 import socket
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
+import pytest
 
 from tc_api.docktap.proxy.docker_proxy import DockerProxyServer
 from tc_api.docktap.proxy.operation_log import OperationRecord
+from tc_api.docktap.trucon_client import TruConCommitter, _build_entries
 
 
 DEFAULT_CHAIN_ID = "default"
+
+
+@pytest.fixture(autouse=True)
+def fake_socket_family():
+    # All sockets in this module are fakes. Windows Python may omit AF_UNIX;
+    # supplying the family argument does not exercise a real Unix socket.
+    with patch.object(socket, "AF_UNIX", getattr(socket, "AF_UNIX", 1), create=True):
+        yield
+
+
+@pytest.mark.parametrize("operation", ["start", "stop", "rm"])
+@pytest.mark.parametrize("reference", ["a" * 64, "a" * 12, "demo", "%64emo"])
+@pytest.mark.parametrize("prefix", ["", "/v1.41"])
+def test_lifecycle_request_and_trusted_log_use_same_full_container_id(operation, reference, prefix):
+    container_id = "a" * 64
+    method = "DELETE" if operation == "rm" else "POST"
+    suffix = "?force=1" if operation == "rm" else "/" + operation + "?t=2"
+    path = prefix + "/containers/" + reference + suffix
+    headers = b"\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n"
+    request = f"{method} {path} HTTP/1.1".encode() + headers
+    response = b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n"
+    client, docker = FakeClientSocket(), FakeDockerSocket()
+    connection = Mock()
+    connection.getresponse.return_value.status = 200
+    connection.getresponse.return_value.read.side_effect = io.BytesIO(json.dumps({"Id": container_id}).encode()).read
+    committer = Mock()
+    proxy = DockerProxyServer("/tmp/test-proxy.sock", "/var/run/docker.sock", trucon_committer=committer)
+
+    def mutating_socket(*_):
+        # Lookup must finish before rm, and before the name can target another ID.
+        connection.close.assert_called_once()
+        return docker
+
+    with patch("tc_api.docktap.proxy.container_identity.UnixSocketHTTPConnection", return_value=connection), \
+            patch("tc_api.docktap.proxy.docker_proxy.socket.socket", side_effect=mutating_socket), \
+            patch.object(proxy, "_attestation_gate_enabled", return_value=False), \
+            patch.object(proxy, "_read_client_request", side_effect=[(request, None), (None, "empty")]), \
+            patch.object(proxy, "_read_docker_response", return_value=response), \
+            patch("tc_api.docktap.proxy.docker_proxy.log_operation_json"):
+        proxy.handle_client(client)
+
+    from urllib.parse import unquote
+    connection.request.assert_called_once_with("GET", "/containers/" + unquote(reference) + "/json", headers={"Connection": "close"})
+    expected = f"{method} {prefix}/containers/{container_id}{suffix} HTTP/1.1".encode() + headers
+    assert docker.sent == [expected]
+    assert client.sent == [response]
+    record, recorded_operation = committer.enqueue_operation.call_args.args
+    assert recorded_operation == operation
+    assert record.container["id"] == container_id
+    # Exercise the real context/entry builders used before signing the event.
+    builder = object.__new__(TruConCommitter)
+    builder._workload_store = None
+    _, workload_id, launch_id, instance_id = builder._resolve_submission_context(record, operation, None, None)
+    entries = {entry.key: entry.value for entry in _build_entries(
+        record, operation, workload_id=workload_id, launch_id=launch_id, instance_id=instance_id)}
+    assert entries["container_id"] == entries["instance_id"] == container_id
+    assert entries["operation_result"] == "success"
+
+
+@pytest.mark.parametrize("failure", ["not_found", "short_id", "missing_id", "malformed", "oversized", "timeout"])
+def test_failed_identity_lookup_blocks_lifecycle_mutation_and_log(failure):
+    client, committer, connection = FakeClientSocket(), Mock(), Mock()
+    proxy = DockerProxyServer("/tmp/test-proxy.sock", "/var/run/docker.sock", trucon_committer=committer)
+    response = connection.getresponse.return_value
+    response.status = 404 if failure == "not_found" else 200
+    body = json.dumps({"Id": "a" * 12} if failure == "short_id" else {}).encode()
+    if failure == "malformed": body = b"not json"
+    if failure == "oversized": body = b" " * (1024 * 1024 + 1)
+    response.read.side_effect = TimeoutError() if failure == "timeout" else io.BytesIO(body).read
+    request = b"DELETE /v1.41/containers/demo?force=1 HTTP/1.1\r\nHost: localhost\r\n\r\n"
+    with patch("tc_api.docktap.proxy.container_identity.UnixSocketHTTPConnection", return_value=connection), \
+            patch("tc_api.docktap.proxy.docker_proxy.socket.socket") as mutating_socket, \
+            patch.object(proxy, "_attestation_gate_enabled", return_value=False), \
+            patch.object(proxy, "_read_client_request", side_effect=[(request, None), (None, "empty")]):
+        proxy.handle_client(client)
+    connection.close.assert_called_once()
+    mutating_socket.assert_not_called()
+    committer.enqueue_operation.assert_not_called()
+    committer.submit_operation.assert_not_called()
+    assert len(client.sent) == 1
+    assert b"Full container identity is required" in client.sent[0]
 
 
 class FakeClientSocket:

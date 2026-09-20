@@ -25,6 +25,8 @@
     "published_port": 1943
   },
   "node_agent_config": "/etc/spire/argus-poc/agent.conf",
+  "trucon_socket_path": "/var/run/trucon/trucon.sock",
+  "request_timeout_seconds": 55,
   "trustee_url": "https://trustee.example.internal",
   "trustee_ca_path": "/etc/argus-workload/trustee-ca.pem",
   "trustee_server_name": "trustee.example.internal",
@@ -39,7 +41,7 @@
     "mr_td": "REQUIRED_96_LOWERCASE_HEX",
     "rtmr_0": "REQUIRED_96_LOWERCASE_HEX",
     "rtmr_1": "REQUIRED_96_LOWERCASE_HEX",
-    "rtmr_2": "REQUIRED_96_LOWERCASE_HEX"
+    "rtmr2_baseline": "REQUIRED_96_LOWERCASE_HEX"
   },
   "server_ssh": "spire-server-company",
   "server_script": "/opt/argus-workload/scripts/workload.py",

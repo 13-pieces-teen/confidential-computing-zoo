@@ -25,6 +25,12 @@ listener. See the [full sequence and trust boundaries](../../workload/ARCHITECTU
 The plugin does not measure process memory or writable data; SVID rotation does
 not trigger a fresh attestation.
 
+Provider evidence includes `rekor_entry_uuids`, an ordered list for the complete
+measured chain. The plugin preserves it in Trustee's TDX evidence envelope.
+[The Trustee hook](../../workload/trustee/README.md) verifies the original Rekor
+entries, signer authorization, RTMR2 replay and current container association
+before policy evaluation. Missing references or verification failure reject admission.
+
 ## Selectors
 
 After successful EAR verification and the final target check, the plugin returns
@@ -62,7 +68,7 @@ The full deployment configuration is validated separately by the deployment tool
 | `trustee_endpoint` | Direct HTTPS origin. |
 | `trustee_ca_path`, `trustee_server_name` | Explicit TLS trust anchor and peer name. |
 | `ear_public_key_path`, `ear_expected_issuer`, `ear_expected_profile` | Explicit EAR verification key and expected claims. |
-| `request_timeout` | Default `20s`; greater than zero and at most `60s`. |
+| `request_timeout` | Default `55s`; greater than `50s` (Trustee log verification budget) and at most `60s`. Applies separately to evidence collection and Trustee requests. Regenerate old `20s` configurations before use. |
 | `max_response_bytes` | Default 2 MiB; greater than zero and at most 4 MiB. |
 
 No example Agent ID is a built-in authorization. A different syntactically valid

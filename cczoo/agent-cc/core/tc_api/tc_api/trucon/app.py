@@ -771,7 +771,7 @@ async def service_auth_middleware(request: Request, call_next):
     proxy_secret = request.headers.get(INTERNAL_PROXY_SECRET_HEADER)
     if proxy_secret and hmac.compare_digest(proxy_secret, _INTERNAL_PROXY_SECRET):
         caller_service = request.headers.get(CALLER_SERVICE_HEADER)
-        if caller_service not in {"tc_api", "docktap"}:
+        if caller_service not in {"tc_api", "docktap", "argus_provider"}:
             return JSONResponse(status_code=401, content={"detail": "Invalid or missing caller service"})
 
         request.state.caller_service = caller_service

@@ -36,7 +36,7 @@ from .internal_transport import (
 logger = logging.getLogger("trucon.uds_gateway")
 
 _PEERCRED_STRUCT = struct.Struct("3i")
-_ALLOWED_CALLER_SERVICES = {"tc_api", "docktap"}
+_ALLOWED_CALLER_SERVICES = {"tc_api", "docktap", "argus_provider"}
 
 
 def get_peer_credentials(connection: socket.socket) -> Tuple[int, int, int]:

@@ -3,8 +3,20 @@ package protocol
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
+
+func TestRekorReferencesMustBeCompleteUUIDs(t *testing.T) {
+	if err := ValidateRekorReferences([]string{strings.Repeat("a", 64), strings.Repeat("b", 80)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, refs := range [][]string{nil, {strings.Repeat("a", 64)}, {"123", strings.Repeat("b", 64)}, {strings.Repeat("A", 64), strings.Repeat("b", 64)}, {strings.Repeat("a", 64), strings.Repeat("a", 64)}} {
+		if ValidateRekorReferences(refs) == nil {
+			t.Fatalf("accepted %v", refs)
+		}
+	}
+}
 
 func TestSharedRustTrusteeVector(t *testing.T) {
 	for _, name := range []string{"runtime-data.json", "runtime-data-alternative.json"} {

@@ -2,7 +2,7 @@
 
 本目录提供取证、身份交付、业务入口和验收工具。SPIRE Server/Agent 与两个 Attestor SDK 使用 **v1.15.3**；Helper 基于官方 **v0.11.0**，定制构建版本为 **0.11.0-argus.1**；Trustee 接口基线为 **v0.21.0**。部署依赖 SPIRE Agent 的 experimental Broker API。
 
-先阅读 [机制与信任边界](ARCHITECTURE.md) 和 [插件配置及 selectors](../plugins/argus-tdx-workloadattestor/README.md)，再按本手册操作。[验证记录](VALIDATION.md) 区分当前版本待验项与历史测试结果；本手册中的命令不表示已完成真实 TDX 验收。TC API 保留原日志上传，但本流程不以 Rekor 验证作为身份准入条件。
+先阅读 [机制与信任边界](ARCHITECTURE.md) 和 [插件配置及 selectors](../plugins/argus-tdx-workloadattestor/README.md)，再按本手册操作。[验证记录](VALIDATION.md) 区分当前实现待验项与历史测试结果；本手册中的命令不表示已完成真实 TDX 验收。Workload 准入要求 Trustee 按 Rekor UUID 验证完整日志链、重放 RTMR2 并关联当前容器；必须先部署 [Trustee 日志验证接入](trustee/README.md)。
 
 ```mermaid
 flowchart TB
@@ -33,6 +33,7 @@ flowchart TB
 | `paths` | 安装、配置、记录、SPIRE 二进制目录与 `run_name`；渲染全部 unit、socket、凭据、NGINX 日志/临时目录和清理 hook。 |
 | `workload` | workload ID、宿主机/容器内配置与数据路径、内部监听端口、TLS 端口、宿主发布端口；贯通 TC API、登记、Provider、Rego 和 NGINX。 |
 | `approved` 与信任字段 | 显式批准的镜像/配置/平台摘要、policy 及 TLS/EAR 材料；不会从当前观察值自动批准。 |
+| `request_timeout_seconds` | 可选，默认 55，范围 51—60；生成插件请求超时，并派生 Helper 启动预算为两倍请求超时加 10 秒。 |
 
 ```mermaid
 flowchart LR
@@ -55,7 +56,7 @@ flowchart LR
 同时提供：
 
 - 已批准的 OpenViking 实际 image config digest（Docker `.Image` / image inspect `.Id`，格式为 `sha256:...`）、实际配置文件 SHA-256、服务进程 executable 路径。
-- 已批准 TDVM 的 `mr_td`、`rtmr_0/1/2`，均为 96 位小写十六进制；运行时日志可改变 RTMR3，本 policy 不固定 RTMR3。
+- 已批准 TDVM 的 `mr_td`、`rtmr_0/1` 和 TruCon 初始化前的 `rtmr2_baseline`，均为 96 位小写十六进制。TruCon 继续 extend RTMR2，Trustee 从批准基准重放日志后与 Quote.RTMR2 核对。
 - OpenClaw 客户端的有效 SVID、私钥、bundle，以及可返回 2xx 的 OpenViking 业务 URL。业务 API key 如需要，通过 `OPENVIKING_API_KEY` 环境变量提供。
 - TDVM 上可以直连 Trustee 的 HTTPS 地址；可通过已配置 SSH alias 查询 SPIRE Server。SSH 必须使用已有 host key 校验，目标账号需能读取 Server socket 和运行中进程信息。
 
@@ -84,7 +85,7 @@ sudo bash scripts/install.sh --config /root/workload-environment.json
 
 Evidence Provider 的 UDS 路由为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。Provider 与 NodeAttestor 插件来自同一次完整构建；`workload.py render` 将插件路径与 SHA-256 写入 Agent 配置，`workload.py start` 自动执行 `render`。配置只指定 UDS socket，无需填写 HTTP 路径。
 
-Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，其 `ExecStart` 指向该二进制，并从统一配置显式传入 Agent ID、socket、登记文件及 `--workload-data-path`。
+Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，显式传入 Agent ID、socket、登记文件、`--workload-data-path` 和 `--trucon-socket-path`。TruCon 的 root-only UDS 必须可访问，所有已度量记录必须已上传并获得 Rekor UUID；否则本次认证拒绝。
 
 参考 `config/environment.example.json` 准备两台主机各自的输入配置，安装后保存至 `paths.config_dir/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的 Agent/Helper/目标身份、批准基线及 Helper 二进制必须一致；`paths.install_dir` 也须相同，因为 Server 使用本地同路径的 Helper 副本生成目标主机的 `unix:path` 与 `unix:sha256` selectors。TDVM 预检会逐项比较 Server 返回的 Entry 合同和本地预期，任一不一致直接拒绝。
 
@@ -204,7 +205,7 @@ sudo python3 /opt/argus-workload/scripts/workload.py stop --config /etc/argus-wo
 |---|---|
 | 凭据目录 | root 所有的 0700 tmpfs；每代证书、PKCS#8 私钥及 bundle，PEM 为 0600。 |
 | TLS 会话 | session cache、tickets、early data 关闭。 |
-| 初始化 60 秒 | 覆盖 Helper 自身 SVID、订阅及首次发布；成功后停止启动计时。目标退出可取消初始化。 |
+| 初始化默认 120 秒 | 由 `2 × request_timeout_seconds + 10` 派生，覆盖取证、Trustee 验证及首次发布；成功后停止启动计时，目标退出可取消初始化。启动脚本额外等待 5 秒。升级需重新渲染 Agent/Helper 配置。 |
 | 监测等待 500 ms | pidfd 与本地实例检查；检查/调度耗时另计，不产生新 Quote。 |
 | 停服配置 5 秒 | worker/service timeout，实际检测、断流和连接关闭仍需测量。 |
 | 轮换与重证明 | 普通 SVID 轮换不重证明；新 Helper 订阅会重证明，独立周期重证明未实现。 |

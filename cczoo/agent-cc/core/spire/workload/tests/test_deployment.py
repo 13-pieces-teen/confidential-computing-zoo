@@ -30,6 +30,31 @@ def alternative():
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_request_budget_reaches_plugin_and_helper(self):
+        for configured, timeout in ((None, 55), (51, 51), (60, 60)):
+            c = alternative()
+            c.pop("request_timeout_seconds", None)
+            if configured is not None:
+                c["request_timeout_seconds"] = configured
+            d = Deployment(c)
+            with self.subTest(timeout=timeout), tempfile.TemporaryDirectory() as directory:
+                d.etc = Path(directory)
+                with patch.object(runtime, "Deployment", return_value=d), \
+                        patch.object(runtime, "run", return_value=""), \
+                        patch.object(runtime, "protected_file"), \
+                        patch.object(runtime, "render_services"):
+                    runtime.render(c)
+                self.assertIn(f'request_timeout = "{timeout}s"', (d.etc / "agent-overlay.conf").read_text())
+                helper = d.render((ROOT / "config/helper.conf").read_text())
+                self.assertIn(f'startup_timeout = "{2 * timeout + 10}s"', helper)
+
+    def test_request_budget_cannot_end_before_server_verification(self):
+        for value in (20, 50, 61, 0, True, "55", 55.5):
+            c = alternative()
+            c["request_timeout_seconds"] = value
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "request_timeout_seconds"):
+                Deployment(c)
+
     def test_persistent_paths_cannot_overlap_runtime_cleanup_directories(self):
         for key in ("install_dir", "config_dir", "records_dir", "spire_bin_dir"):
             for value in ("/run/memory-credentials", "/run/memory-credentials/config",

@@ -38,7 +38,7 @@ func fixture(t *testing.T) protocol.Evidence {
 	if err = json.Unmarshal(b, &v); err != nil {
 		t.Fatal(err)
 	}
-	return protocol.Evidence{EvidenceType: "tdx_quote", Quote: "AQIDBA", RuntimeData: v.RuntimeData}
+	return protocol.Evidence{EvidenceType: "tdx_quote", RekorEntryUUIDs: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, Quote: "AQIDBA", RuntimeData: v.RuntimeData}
 }
 func TestStructuredTrusteeRequest(t *testing.T) {
 	ev := fixture(t)
@@ -66,6 +66,9 @@ func TestStructuredTrusteeRequest(t *testing.T) {
 		var quote tdxEvidence
 		if err := json.Unmarshal(inner, &quote); err != nil || quote.Quote != "AQIDBA==" || quote.CCEventLog != nil {
 			t.Errorf("invalid inner evidence %s", inner)
+		}
+		if strings.Join(quote.RekorEntryUUIDs, ",") != strings.Join(ev.RekorEntryUUIDs, ",") {
+			t.Error("Rekor UUIDs were not preserved in TDX evidence")
 		}
 		_, _ = w.Write([]byte(signEAR(t, key, validClaims(now, canonical))))
 	}))

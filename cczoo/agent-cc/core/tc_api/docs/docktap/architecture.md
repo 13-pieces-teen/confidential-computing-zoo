@@ -390,6 +390,14 @@ Notes:
 
 ### Parent Linking Expectations
 
+With the TruCon committer enabled, Docktap resolves each start/stop/rm reference
+through the raw Docker socket before forwarding the operation. Both the forwarded
+request and the signed `container_id` / `instance_id` use that full 64-character
+ID. This also works when the caller supplies a short ID or a name, and avoids
+looking up a container after removal. Failed or ambiguous inspection blocks the
+operation. Pinning the forwarded request to the inspected ID prevents a concurrent
+rename from changing its target.
+
 Relationship linking in the tracker follows these rules:
 
 - `create` links to the most recent matching `pull` for the image.

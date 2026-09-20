@@ -53,6 +53,7 @@ struct Config {
     tsm_report_root: PathBuf,
     workload_registration_path: Option<PathBuf>,
     workload_data_path: Option<PathBuf>,
+    trucon_socket_path: PathBuf,
 }
 
 impl Config {
@@ -60,6 +61,7 @@ impl Config {
         let mut agent_id = None;
         let mut workload_registration_path = None;
         let mut workload_data_path = None;
+        let mut trucon_socket_path = PathBuf::from(workload::trucon::DEFAULT_SOCKET);
         let mut socket_path = PathBuf::from(DEFAULT_SOCKET_PATH);
         let mut tsm_report_root = PathBuf::from(DEFAULT_TSM_REPORT_ROOT);
         let mut args = args.into_iter();
@@ -79,6 +81,15 @@ impl Config {
                         args.next()
                             .ok_or_else(|| anyhow!("--socket-path requires a value"))?,
                     );
+                }
+                value if value == OsStr::new("--trucon-socket-path") => {
+                    trucon_socket_path = PathBuf::from(
+                        args.next()
+                            .context("--trucon-socket-path requires a value")?,
+                    );
+                    if !trucon_socket_path.is_absolute() {
+                        bail!("TruCon socket path must be absolute");
+                    }
                 }
                 value if value == OsStr::new("--tsm-report-root") => {
                     tsm_report_root = PathBuf::from(
@@ -125,6 +136,7 @@ impl Config {
             tsm_report_root,
             workload_registration_path,
             workload_data_path,
+            trucon_socket_path,
         })
     }
 }
@@ -188,6 +200,8 @@ struct AppState {
     workload_registration_path: Option<PathBuf>,
     workload_data_path: Option<PathBuf>,
     observe: fn(&Path, &Path) -> Result<workload::Target>,
+    trucon_socket_path: PathBuf,
+    snapshot: fn(&Path) -> Result<workload::trucon::Snapshot>,
 }
 
 #[derive(Debug)]
@@ -284,6 +298,8 @@ fn router(agent_id: String, quote_source: Arc<dyn QuoteSource>) -> Router {
         workload_registration_path: None,
         workload_data_path: None,
         observe: workload::load_and_check,
+        trucon_socket_path: PathBuf::from(workload::trucon::DEFAULT_SOCKET),
+        snapshot: workload::trucon::snapshot,
     })
 }
 fn provider_router(state: AppState) -> Router {
@@ -320,12 +336,26 @@ async fn workload_evidence_handler(
         if before["agent_id"] != state.agent_id {bail!("registered target differs from configured SPIRE Agent");}
         if before["pid"] != request.pid.to_string() {bail!("PID is not the registered target");}
         let data = workload::runtime_data(&before, &request.nonce)?;
-        // The Quote binds trusted guest observations. Rechecking detects a
-        // changed observation; it does not freeze or measure process memory.
-        let quote = state.quote_source.generate_quote(&workload::report_data(&data)?)?;
-        if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
-        tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], nonce=%request.nonce, "fresh workload TDX Quote generated");
-        Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data}))
+        // Snapshot on both sides detects concurrent commits. Trustee still
+        // verifies the complete history against the authenticated Quote RTMR2.
+        for attempt in 0..3 {
+            let snapshot = match (state.snapshot)(&state.trucon_socket_path) {
+                Ok(value) => value,
+                Err(error) => {
+                    if attempt == 2 { return Err(error); }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    continue;
+                }
+            };
+            let quote = state.quote_source.generate_quote(&workload::report_data(&data)?)?;
+            if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
+            if (state.snapshot)(&state.trucon_socket_path).is_ok_and(|after| after == snapshot) {
+                tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], "fresh workload TDX Quote generated");
+                return Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data, "rekor_entry_uuids":snapshot.rekor_entry_uuids}));
+            }
+            if attempt < 2 { std::thread::sleep(std::time::Duration::from_millis(100)); }
+        }
+        bail!("TruCon history changed during all Quote attempts")
     }).await;
     match result {
         Ok(Ok(value)) => Ok(Json(value)),
@@ -413,6 +443,8 @@ async fn serve(config: Config) -> Result<()> {
         workload_registration_path: config.workload_registration_path,
         workload_data_path: config.workload_data_path,
         observe: workload::load_and_check,
+        trucon_socket_path: config.trucon_socket_path,
+        snapshot: workload::trucon::snapshot,
     });
     let (listener, _socket_guard) = bind_socket(&config.socket_path)?;
     tracing::info!(socket = %config.socket_path.display(), "TDX Evidence Provider listening");
@@ -637,6 +669,7 @@ mod tests {
                 tsm_report_root: PathBuf::from(DEFAULT_TSM_REPORT_ROOT),
                 workload_registration_path: None,
                 workload_data_path: None,
+                trucon_socket_path: PathBuf::from(workload::trucon::DEFAULT_SOCKET),
             }
         );
     }
@@ -765,7 +798,72 @@ mod tests {
             workload_registration_path: Some(registration.0.clone()),
             workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
             observe: observe_fixture,
+            trucon_socket_path: PathBuf::from("/unused-test-socket"),
+            snapshot: snapshot_fixture,
         })
+    }
+    fn snapshot_fixture(_: &Path) -> Result<workload::trucon::Snapshot> {
+        Ok(workload::trucon::Snapshot {
+            chain_id: "default".into(),
+            sequence_num: 2,
+            rtmr: "0".repeat(96),
+            rekor_entry_uuids: vec!["a".repeat(64), "b".repeat(64)],
+        })
+    }
+    fn unavailable_snapshot(_: &Path) -> Result<workload::trucon::Snapshot> {
+        bail!("pending Rekor upload")
+    }
+    fn snapshot_from_file(path: &Path) -> Result<workload::trucon::Snapshot> {
+        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
+    }
+    struct ExtendingQuoteSource(PathBuf, std::sync::atomic::AtomicUsize);
+    impl QuoteSource for ExtendingQuoteSource {
+        fn generate_quote(&self, _: &ReportData) -> Result<Vec<u8>, QuoteError> {
+            let count = self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&self.0).unwrap()).unwrap();
+            value["rtmr"] = serde_json::json!(format!("{count:096x}"));
+            std::fs::write(&self.0, serde_json::to_vec(&value).unwrap()).unwrap();
+            Ok(vec![1])
+        }
+    }
+    #[tokio::test]
+    async fn workload_rejects_unuploaded_or_continuously_changing_history() {
+        let registration = TestRegistration::new();
+        let history = TestRegistration::new();
+        std::fs::write(
+            &history.0,
+            serde_json::json!({"chain_id":"default","sequence_num":2,
+            "rtmr":"0".repeat(96),"rekor_entry_uuids":["a".repeat(64),"b".repeat(64)]})
+            .to_string(),
+        )
+        .unwrap();
+        let source = Arc::new(ExtendingQuoteSource(
+            history.0.clone(),
+            std::sync::atomic::AtomicUsize::new(0),
+        ));
+        let mut state = AppState {
+            agent_id: workload::TEST_AGENT.into(),
+            quote_source: source.clone(),
+            workload_registration_path: Some(registration.0.clone()),
+            workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
+            observe: observe_fixture,
+            trucon_socket_path: history.0.clone(),
+            snapshot: unavailable_snapshot,
+        };
+        let response = provider_router(state.clone())
+            .oneshot(workload_request(valid_workload_request()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(source.1.load(std::sync::atomic::Ordering::SeqCst), 0);
+        state.snapshot = snapshot_from_file;
+        let response = provider_router(state)
+            .oneshot(workload_request(valid_workload_request()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(source.1.load(std::sync::atomic::Ordering::SeqCst), 3);
     }
     fn workload_request(body: serde_json::Value) -> Request<Body> {
         let mut r = request(body);
@@ -792,6 +890,10 @@ mod tests {
                 .unwrap();
         assert_eq!(body["runtime_data"], vector()["runtime_data"]);
         assert_eq!(body["quote"], "3q0");
+        assert_eq!(
+            body["rekor_entry_uuids"],
+            serde_json::json!(["a".repeat(64), "b".repeat(64)])
+        );
         assert_eq!(
             hex::encode(source.report_data.lock().unwrap().unwrap()),
             vector()["report_data_hex"].as_str().unwrap()
@@ -842,6 +944,8 @@ mod tests {
             workload_registration_path: Some(registration.0.clone()),
             workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
             observe: observe_fixture,
+            trucon_socket_path: PathBuf::from("/unused-test-socket"),
+            snapshot: snapshot_fixture,
         };
         let response = provider_router(state.clone())
             .oneshot(workload_request(valid_workload_request()))

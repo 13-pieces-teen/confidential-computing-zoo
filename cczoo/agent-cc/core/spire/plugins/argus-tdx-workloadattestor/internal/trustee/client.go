@@ -25,8 +25,9 @@ import (
 )
 
 type tdxEvidence struct {
-	CCEventLog any    `json:"cc_eventlog"`
-	Quote      string `json:"quote"`
+	CCEventLog      any      `json:"cc_eventlog"`
+	Quote           string   `json:"quote"`
+	RekorEntryUUIDs []string `json:"rekor_entry_uuids"`
 }
 
 type runtimeData struct {
@@ -170,6 +171,9 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) error
 // Trustee v0.21 JCS-canonicalizes structured runtime data before SHA-384 hashing.
 // TDX pads that 48-byte digest with sixteen zero bytes for REPORTDATA.
 func buildRequest(input protocol.Evidence, policyID string) ([]byte, error) {
+	if err := protocol.ValidateRekorReferences(input.RekorEntryUUIDs); err != nil {
+		return nil, err
+	}
 	if _, err := input.RuntimeData.Canonical(); err != nil {
 		return nil, err
 	}
@@ -177,7 +181,7 @@ func buildRequest(input protocol.Evidence, policyID string) ([]byte, error) {
 	if err != nil || len(quote) == 0 {
 		return nil, fmt.Errorf("invalid TDX Quote")
 	}
-	inner, err := json.Marshal(tdxEvidence{CCEventLog: nil, Quote: base64.StdEncoding.EncodeToString(quote)})
+	inner, err := json.Marshal(tdxEvidence{CCEventLog: nil, Quote: base64.StdEncoding.EncodeToString(quote), RekorEntryUUIDs: input.RekorEntryUUIDs})
 	if err != nil {
 		return nil, err
 	}

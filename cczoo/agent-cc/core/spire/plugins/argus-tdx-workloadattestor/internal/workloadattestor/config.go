@@ -41,7 +41,7 @@ type hclConfig struct {
 }
 
 func parseConfig(input string) (*Config, []string) {
-	raw := hclConfig{RequestTimeout: "20s", MaxResponseBytes: 2 << 20}
+	raw := hclConfig{RequestTimeout: "55s", MaxResponseBytes: 2 << 20}
 	if err := hcl.Decode(&raw, input); err != nil {
 		return nil, []string{err.Error()}
 	}
@@ -84,8 +84,8 @@ func parseConfig(input string) (*Config, []string) {
 		}
 	}
 	timeout, err := time.ParseDuration(raw.RequestTimeout)
-	if err != nil || timeout <= 0 || timeout > 60*time.Second {
-		notes = append(notes, "request_timeout must be in (0,60s]")
+	if err != nil || timeout <= 50*time.Second || timeout > 60*time.Second {
+		notes = append(notes, "request_timeout must be in (50s,60s], above the Trustee verifier budget")
 	}
 	if raw.MaxResponseBytes <= 0 || raw.MaxResponseBytes > 4<<20 {
 		notes = append(notes, "max_response_bytes must be in (0,4194304]")

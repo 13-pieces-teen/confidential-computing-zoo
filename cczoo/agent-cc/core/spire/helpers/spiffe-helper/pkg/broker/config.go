@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 type Config struct {
@@ -18,10 +19,14 @@ type Config struct {
 	TargetSPIFFEID         string                 `hcl:"target_spiffe_id"`
 	TargetRegistrationPath string                 `hcl:"target_registration_path"`
 	PublishHook            string                 `hcl:"publish_hook"`
+	StartupTimeout         string                 `hcl:"startup_timeout"`
 	UnusedKeyPositions     map[string][]token.Pos `hcl:",unusedKeyPositions"`
 }
 
 func (c Config) Validate(certDir string) error {
+	if _, err := c.startupTimeout(); err != nil {
+		return err
+	}
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("Broker mode requires Linux pidfd")
 	}
@@ -49,4 +54,15 @@ func (c Config) Validate(certDir string) error {
 		return fmt.Errorf("unknown broker configuration")
 	}
 	return nil
+}
+
+func (c Config) startupTimeout() (time.Duration, error) {
+	if c.StartupTimeout == "" {
+		return 2 * time.Minute, nil
+	}
+	timeout, err := time.ParseDuration(c.StartupTimeout)
+	if err != nil || timeout <= 0 || timeout > 5*time.Minute {
+		return 0, fmt.Errorf("startup_timeout must be in (0,5m]")
+	}
+	return timeout, nil
 }

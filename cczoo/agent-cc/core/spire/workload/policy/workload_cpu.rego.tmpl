@@ -2,7 +2,8 @@ package policy
 import rego.v1
 
 # Trustee v0.21 supplies these fields only after authenticating the TDX Quote
-# and matching SHA-384(JCS(runtime_data)) to REPORTDATA. No Rekor gate in v1.
+# and matching SHA-384(JCS(runtime_data)) to REPORTDATA. The AS TruCon hook
+# verifies Rekor material before generating the reserved tdx.trucon claims.
 default hardware := 97
 default executables := 33
 default configuration := 36
@@ -18,7 +19,8 @@ hardware := 2 if {
 executables := 3 if {
  input.tdx.quote.body.rtmr_0 == @RTMR_0@
  input.tdx.quote.body.rtmr_1 == @RTMR_1@
- input.tdx.quote.body.rtmr_2 == @RTMR_2@
+ input.tdx.trucon.verified == true
+ input.tdx.trucon.baseline_rtmr == @RTMR2_BASELINE@
  input.runtime_data_claims.image_config_digest == @IMAGE_CONFIG_DIGEST@
 }
 configuration := 2 if {

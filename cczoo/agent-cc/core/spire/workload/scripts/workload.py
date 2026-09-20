@@ -57,7 +57,7 @@ def baseline(c):
     for f in ("image_config_digest", "config_digest"):
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", a.get(f, "")):
             raise ValueError(f"missing approved.{f}; use an approved content digest")
-    for f in ("mr_td", "rtmr_0", "rtmr_1", "rtmr_2"):
+    for f in ("mr_td", "rtmr_0", "rtmr_1", "rtmr2_baseline"):
         if not re.fullmatch(r"[0-9a-f]{96}", a.get(f, "")):
             raise ValueError(f"missing approved.{f}")
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", a.get("policy_id", "")):
@@ -114,7 +114,7 @@ def render(c):
         **{k: c[k] for k in ("trustee_ca_path", "trustee_server_name", "ear_public_key_path", "ear_expected_issuer", "ear_expected_profile")},
         "workload_id": d.workload["id"],
         **{k: a[k] for k in ("policy_id", "image_config_digest", "config_digest")},
-        "request_timeout": "20s",
+        "request_timeout": f"{d.request_timeout_seconds}s",
     }
     hcl = "\n".join(f"            {k} = {json.dumps(v)}" for k, v in plugin.items())
     overlay = '''agent {
@@ -388,7 +388,7 @@ def start(c):
             raise ValueError(f"{name} is still running with PID(s) {running}; stop it before start")
     render(c)
     run(["systemctl", "start", "argus-helper.service"])
-    deadline = time.monotonic() + 65
+    deadline = time.monotonic() + Deployment(c).startup_timeout_seconds + 5
     while time.monotonic() < deadline:
         s = status(c)
         if s["ready"]:

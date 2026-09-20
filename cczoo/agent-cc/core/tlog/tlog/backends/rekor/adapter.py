@@ -88,7 +88,7 @@ class SigstoreLogAdapter(ImmutableLogAdapter):
 
     @staticmethod
     def _parse_log_reference(log_id: str) -> dict[str, Any]:
-        if log_id.isdigit():
+        if log_id.isdigit() and len(log_id) < 64:
             return {"log_index": int(log_id)}
         return {"uuid": log_id}
 
@@ -876,6 +876,15 @@ class SigstoreLogAdapter(ImmutableLogAdapter):
                 or existing_kind == self.rekor_entry_type
             )
             if reuse_existing_entry:
+                # Sigstore bundles preserve a log index but may omit its UUID.
+                # Persist the canonical UUID so an independent verifier can
+                # retrieve this entry without trusting our local bundle cache.
+                if existing_ref.isdigit() and len(existing_ref) < 64:
+                    raw_entry = self._fetch_raw_rekor_entry(existing_ref)
+                    canonical_uuid = raw_entry.get("uuid")
+                    if not isinstance(canonical_uuid, str) or len(canonical_uuid) not in (64, 80) or any(c not in "0123456789abcdef" for c in canonical_uuid):
+                        raise ValueError("Rekor did not return a canonical UUID for the confirmed entry")
+                    existing_ref = canonical_uuid
                 entry_dict = self._entry_to_dict(log_entry)
                 alternate_ids = []
                 if getattr(log_entry, "uuid", None):
@@ -898,7 +907,10 @@ class SigstoreLogAdapter(ImmutableLogAdapter):
                 self._cache_bundle_entry(self.rekor_url, log_id, bundle_obj, entry, alternate_ids)
                 return log_id, "confirmed", self._entry_to_dict(entry)
             if getattr(entry, "log_index", None) is not None:
-                log_id = str(entry.log_index)
+                raw_entry = self._fetch_raw_rekor_entry(str(entry.log_index))
+                log_id = raw_entry.get("uuid")
+                if not isinstance(log_id, str) or len(log_id) not in (64, 80) or any(c not in "0123456789abcdef" for c in log_id):
+                    raise ValueError("Rekor did not return a canonical UUID for the confirmed entry")
                 alternate_ids = [str(entry.uuid)] if getattr(entry, "uuid", None) else []
                 self._cache_bundle_entry(self.rekor_url, log_id, bundle_obj, entry, alternate_ids)
                 return log_id, "confirmed", self._entry_to_dict(entry)

@@ -47,9 +47,10 @@ def test_sigstore_adapter_submit_bundle(mock_rekor):
         json.dumps({"kind": "intoto", "spec": {}}).encode("utf-8")
     ).decode("utf-8")
 
-    log_id, status, receipt = adapter.submit_bundle(mock_bundle)
-
-    assert log_id == "123"
+    with patch.object(adapter, "_fetch_raw_rekor_entry", return_value={"uuid": "a" * 64}) as fetch:
+        log_id, status, receipt = adapter.submit_bundle(mock_bundle)
+    fetch.assert_called_once_with("123")
+    assert log_id == "a" * 64
     assert status == "confirmed"
     assert receipt is mock_bundle.log_entry
     mock_rekor.return_value.log.entries.post.assert_not_called()
@@ -195,12 +196,13 @@ def test_sigstore_adapter_reuses_cached_bundle_entry_across_instances(mock_rekor
     mock_bundle._dsse_envelope.to_json.return_value = json.dumps(envelope)
     mock_bundle.signing_certificate.public_bytes.return_value = b"pem-cert"
 
-    log_id, status, _receipt = adapter_submit.submit_bundle(mock_bundle)
+    with patch.object(adapter_submit, "_fetch_raw_rekor_entry", return_value={"uuid": "a" * 64}):
+        log_id, status, _receipt = adapter_submit.submit_bundle(mock_bundle)
     mock_rekor.return_value.log.entries.get.side_effect = RuntimeError("public fetch unavailable")
     cached_entry = adapter_verify.get_entry(log_id)
 
     assert status == "confirmed"
-    assert log_id == "123"
+    assert log_id == "a" * 64
     assert cached_entry["body"]["spec"]["payload"] == envelope["payload"]
     assert cached_entry["_tc_replay_provenance"] == "cache-assisted"
     mock_rekor.return_value.log.entries.get.assert_called_once()

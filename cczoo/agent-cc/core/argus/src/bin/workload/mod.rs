@@ -5,6 +5,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256, Sha384};
 use std::{collections::BTreeMap, fs, io::Read, path::Path};
 use tdx_quote::ReportData;
+pub mod trucon;
 
 pub type Target = BTreeMap<String, String>;
 pub const PROTOCOL: &str = "argus.workload.tdx.v1";

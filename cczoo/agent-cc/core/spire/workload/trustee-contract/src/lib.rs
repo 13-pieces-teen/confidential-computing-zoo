@@ -1,8 +1,62 @@
 //! Contract-only tests using Trustee v0.21 dependencies; no Quote verifier substitute.
 #[cfg(test)]
+pub use kbs_types::{HashAlgorithm, Tee};
+#[cfg(test)]
+#[path = "../../trustee/argus_trucon.rs"]
+mod argus_trucon;
+#[cfg(test)]
 mod tests {
     use serde_json::{json, Value};
     use sha2::{Digest, Sha384};
+    #[test]
+    fn server_hook_requires_references_and_bound_runtime() {
+        let algorithm = serde_json::from_value(serde_json::json!("sha384")).unwrap();
+        let runtime = vector()["runtime_data"].clone();
+        let evidence = json!({"rekor_entry_uuids":["a".repeat(64), "b".repeat(64)]});
+        assert!(
+            crate::argus_trucon::prepare(&crate::Tee::Tdx, &evidence, &runtime, &algorithm)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            crate::argus_trucon::prepare(&crate::Tee::Tdx, &json!({}), &runtime, &algorithm)
+                .is_err()
+        );
+        assert!(crate::argus_trucon::prepare(
+            &crate::Tee::Tdx,
+            &evidence,
+            &Value::Null,
+            &algorithm
+        )
+        .is_err());
+        let wrong = serde_json::from_value(serde_json::json!("sha256")).unwrap();
+        assert!(
+            crate::argus_trucon::prepare(&crate::Tee::Tdx, &evidence, &runtime, &wrong).is_err()
+        );
+        let duplicate = json!({"rekor_entry_uuids":["a".repeat(64), "a".repeat(64)]});
+        assert!(
+            crate::argus_trucon::prepare(&crate::Tee::Tdx, &duplicate, &runtime, &algorithm)
+                .is_err()
+        );
+    }
+    #[tokio::test]
+    async fn server_hook_never_preserves_a_preexisting_verdict() {
+        let mut claims = json!({"trucon":{"verified":true}});
+        crate::argus_trucon::appraise(None, &mut claims, "cpu")
+            .await
+            .unwrap();
+        assert!(claims.get("trucon").is_none());
+        assert!(
+            crate::argus_trucon::appraise(Some(&json!({})), &mut claims, "gpu")
+                .await
+                .is_err()
+        );
+        assert!(
+            crate::argus_trucon::appraise(Some(&json!({})), &mut claims, "cpu")
+                .await
+                .is_err()
+        );
+    }
     fn vector() -> Value {
         serde_json::from_str(include_str!("../../testdata/runtime-data.json")).unwrap()
     }
@@ -28,7 +82,7 @@ mod tests {
             ("MR_TD", "1"),
             ("RTMR_0", "2"),
             ("RTMR_1", "3"),
-            ("RTMR_2", "4"),
+            ("RTMR2_BASELINE", "4"),
         ] {
             p = p.replace(&format!("@{k}@"), &json!(n.repeat(96)).to_string());
         }
@@ -38,6 +92,7 @@ mod tests {
         json!({"runtime_data_claims":vector()["runtime_data"],
     "tdx":{"quote":{"header":{"tee_type":"81000000","vendor_id":"939a7233f79c4ca9940a0db3957f0607"},
     "body":{"mr_td":"1".repeat(96),"rtmr_0":"2".repeat(96),"rtmr_1":"3".repeat(96),"rtmr_2":"4".repeat(96)}},
+    "trucon":{"verified":true,"baseline_rtmr":"4".repeat(96)},
     "tcb_status":"UpToDate","collateral_expiration_status":"0","td_attributes":{"debug":false}}})
     }
     fn claims(i: &Value) -> Value {
@@ -89,6 +144,17 @@ mod tests {
                 json!({"hardware":2,"executables":3,"configuration":2}),
                 "accepted {pointer}"
             );
+        }
+        let mut i = input();
+        i["tdx"]["quote"]["body"]["rtmr_2"] = json!("a".repeat(96));
+        assert_eq!(claims(&i)["executables"], json!(3));
+        for verdict in [
+            json!(null),
+            json!({"verified":false,"baseline_rtmr":"4".repeat(96)}),
+            json!({"verified":true,"baseline_rtmr":"5".repeat(96)}),
+        ] {
+            i["tdx"]["trucon"] = verdict;
+            assert_ne!(claims(&i)["executables"], json!(3));
         }
         let mut i = input();
         i["tdx"]["td_attributes"]["debug"] = json!(true);
