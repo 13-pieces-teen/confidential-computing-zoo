@@ -114,6 +114,15 @@ class LogVerifier:
         require(url.scheme == "https" and url.hostname and not url.username and not url.password
                 and not url.query and not url.fragment and url.path in ("", "/"), "invalid configured Rekor URL")
         self.url = config["rekor_url"].rstrip("/")
+        proxy = config.get("https_proxy")
+        proxies = {}
+        if proxy is not None:
+            proxy_url = urlsplit(proxy)
+            require(proxy_url.scheme == "http" and proxy_url.hostname and proxy_url.port
+                    and not proxy_url.username and not proxy_url.password
+                    and not proxy_url.query and not proxy_url.fragment and proxy_url.path in ("", "/"),
+                    "invalid configured HTTPS proxy")
+            proxies["https"] = proxy
         self.keyring = rekor_keyring(Path(config["rekor_public_key_path"]).read_bytes())
         baselines = config["allowed_baseline_rtmr"]
         require(isinstance(baselines, list) and baselines and all(isinstance(x, str) and RTMR.fullmatch(x) for x in baselines),
@@ -124,7 +133,7 @@ class LogVerifier:
             require(config.get("signer_identity") and config.get("signer_issuer"), "pin the initialization signer identity and issuer")
             self.sigstore = Verifier(rekor=RekorClient(self.url), trusted_root=TrustedRoot.from_file(config["sigstore_trusted_root_path"]))
         require(self.init_keys or self.sigstore, "initialization signer trust is not configured")
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies), NoRedirect())
         self.deadline = time.monotonic() + 45
 
     def fetch(self, reference):

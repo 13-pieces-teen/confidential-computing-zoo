@@ -26,6 +26,7 @@ Environment=ARGUS_TRUCON_CONFIG=/etc/argus-trucon/config.json
 按 [config.example.json](config.example.json) 填写真正的信任材料。配置、验证器、Python 环境及其父目录由管理员控制；配置和启动文件要求 root 所有且组/其他用户不可写。
 
 - `rekor_url` 固定 HTTPS origin；禁止重定向和从请求选择日志服务。
+- `https_proxy` 可选，仅接受管理员配置的无凭据 `http://host:port` CONNECT 代理；Rekor 仍使用端到端 HTTPS、系统 CA 和固定 hostname 校验。未配置时禁止继承进程代理环境。
 - `rekor_public_key_path` 来自预先批准的 Rekor 信任材料，不能把本次查询返回的任意公钥自动设为受信。
 - `sigstore_trusted_root_path` 使用批准的 Sigstore trust root；明确设置 TC-API 的 OIDC subject 和 issuer。验证包含 Fulcio 证书链、CT、有效期和签名时间。
 - `allowed_baseline_rtmr` 是批准的启动基准，必须与 workload policy 的 `rtmr2_baseline` 对齐。

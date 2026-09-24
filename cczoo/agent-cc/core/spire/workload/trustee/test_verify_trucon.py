@@ -119,6 +119,20 @@ def fixture(tmp_path, *, launch_result="success", wrong_owner=False, baseline="0
     return verifier, request, raw
 
 
+def test_explicit_https_proxy_is_validated(tmp_path):
+    verifier, _, _ = fixture(tmp_path)
+    config = copy.deepcopy(verifier.config)
+    config["https_proxy"] = "http://proxy.example:3128"
+    configured = LogVerifier(config)
+    assert configured.opener.handlers[0].proxies == {"https": "http://proxy.example:3128"}
+
+    for proxy in ("https://proxy.example:3128", "http://user:secret@proxy.example:3128",
+                  "http://proxy.example/path", "http://proxy.example"):
+        config["https_proxy"] = proxy
+        with pytest.raises(ValueError, match="invalid configured HTTPS proxy"):
+            LogVerifier(config)
+
+
 def test_target_remains_valid_after_other_workload_extends(tmp_path):
     verifier, request, _ = fixture(tmp_path, unicode_label=True)
     assert verifier.verify(request) == {"verified": True, "baseline_rtmr": "0" * 96,
