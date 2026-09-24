@@ -1,6 +1,22 @@
 # Workload Attestation 验证记录
 
-## 当前状态与记录范围
+## 2026-09-24：复用链查询并兼容 Rekor 引用
+
+撤销上传时强制转换 UUID 的要求，复用 Rekor adapter 的索引／UUID 解析；迁移工具仅供可选的运维规范化。Provider 改用 `GET /chain-state?include_history=true`，复用 `ChainStateResponse` 和有界元数据查询，移除独立快照路由及模型。历史模式从同一条记录取得链头、序号和度量值，拒绝任何未确认或不连续的历史。普通链状态查询保持原有响应。
+
+Provider、Workload 插件和 Trustee 统一传递 `rekor_entry_ids`，允许 UUID、数字索引及混合列表。索引查询仍验证返回引用、UUID 对应的原始 leaf、SET、收录证明、DSSE／Fulcio、owner 授权、前驱链接和 RTMR2；不同引用解析到同一条目也拒绝。更新时需一起重新构建这些组件。
+
+| 检查 | 当前源码结果与边界 |
+|---|---|
+| Python | Trustee 密码学夹具、TC API 链查询／状态、Rekor adapter、可选迁移工具、Docktap 与 Workload 合同：**289 passed / 9 skipped / 67 subtests passed**。扩展运行还包含控制平面集成的 **9 failed**（HTTP 401）；在未修改的 `9aa4d62` 归档上单独运行同一模块，复现相同 9 项失败。 |
+| Go | `core/spire/workload` 和 WorkloadAttestor 两个模块的 `go test ./...` 通过。 |
+| Rust | Windows 源文件测试入口直接引用当前 Provider／Workload／TDX Quote 源码：**19 passed**；实际 Trustee 接入模块及 Regorus policy 合同：**4 passed**。 |
+| 静态检查 | `git diff --check` 通过；移除的路由、模型和旧引用字段没有残留代码调用。 |
+| 未完成的环境验证 | Windows 无法收集依赖 `fcntl`／`UnixStreamServer` 的 `test_init_chain.py`、`test_trucon_internal_transport.py`，未计入通过数。Linux UDS／TSM、完整 AS／DCAP、在线 Rekor、真实 Quote → EAR → SVID 仍为 **NOT_RUN**。 |
+
+新增回归覆盖数字索引／UUID 混合历史、全局索引与分片内证明索引不同、篡改索引、错误 UUID、重复别名、未确认状态和混合链头缓存。本次未迁移现有数据库；密码学夹具只替换远端查询，没有替换验证结果。
+
+## 2026-09-20：历史实现验证
 
 2026-09-20 已加入基于 Rekor UUID 的 Workload 准入实现，并修复 review 发现的 Fulcio/intoto 不兼容、短 ID/名称生命周期记录无法使旧 launch 失效，以及客户端与服务端超时预算不一致。新结果见下表；后文的旧实现测试仅作历史记录，不能替代新的真实环境验收。
 

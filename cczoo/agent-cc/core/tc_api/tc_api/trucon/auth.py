@@ -23,11 +23,11 @@ def authorize_caller(caller_service: str, request: Request) -> Optional[JSONResp
         return None
 
     if caller_service == "argus_provider":
-        if (request.method == "GET" and request.url.path == "/attestation-snapshot"
+        if (request.method == "GET" and request.url.path == "/chain-state"
                 and getattr(request.state, "auth_transport", None) == "uds"
                 and getattr(request.state, "peer_uid", None) == "0"):
             return None
-        return JSONResponse(status_code=403, content={"detail": "Provider requires root UDS peer and read-only snapshot access"})
+        return JSONResponse(status_code=403, content={"detail": "Provider requires root UDS peer and read-only chain-state access"})
 
     if caller_service == "docktap":
         if request.method == "POST" and request.url.path in {"/commit", "/commit-intents/reserve", "/init-chain"}:

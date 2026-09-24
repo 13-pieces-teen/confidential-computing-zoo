@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Resolve legacy numeric Rekor indexes without changing any measured payload.
 
+Optional operator normalization; workload admission accepts numeric indexes.
 Run against a backup first. All network queries finish before one transaction
-updates references; concurrent changes cause rollback. Trustee still verifies
-the fetched entry cryptographically during admission.
+updates references. Roll back if a record being migrated disappears or no longer
+has its original log_id and CONFIRMED status. Trustee verifies the fetched entry
+cryptographically during admission.
 """
 import argparse
 import json

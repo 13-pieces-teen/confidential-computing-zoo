@@ -17,13 +17,6 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class AttestationSnapshotResponse(BaseModel):
-    chain_id: Literal["default"]
-    sequence_num: int
-    rtmr: str
-    rekor_entry_uuids: List[str]
-
-
 class CommitRequest(BaseModel):
     bundle: str
     chain_id: str
@@ -50,6 +43,8 @@ class ChainStateResponse(BaseModel):
     sequence_num: int = 0
     mr_value: Optional[str] = None
     updated_at: Optional[str] = None
+    # Present only when the caller requests complete, confirmed history.
+    log_ids: Optional[List[str]] = None
 
 
 class CommitQueueStatusResponse(BaseModel):

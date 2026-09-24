@@ -53,21 +53,23 @@ type EvidenceRequest struct {
 }
 
 type Evidence struct {
-	EvidenceType    string      `json:"evidence_type"`
-	Quote           string      `json:"quote"`
-	RuntimeData     RuntimeData `json:"runtime_data"`
-	RekorEntryUUIDs []string    `json:"rekor_entry_uuids"`
+	EvidenceType  string      `json:"evidence_type"`
+	Quote         string      `json:"quote"`
+	RuntimeData   RuntimeData `json:"runtime_data"`
+	RekorEntryIDs []string    `json:"rekor_entry_ids"`
 }
 
-// These are retrieval references, never trusted appraisal results.
+// UUIDs and decimal log indexes are retrieval references, never appraisal results.
 func ValidateRekorReferences(references []string) error {
 	if len(references) < 2 || len(references) > 4096 {
 		return fmt.Errorf("complete bounded Rekor history is required")
 	}
 	seen := make(map[string]bool, len(references))
 	for _, reference := range references {
-		if (len(reference) != 64 && len(reference) != 80) || strings.Trim(reference, "0123456789abcdef") != "" || seen[reference] {
-			return fmt.Errorf("invalid or duplicate Rekor entry UUID")
+		index := len(reference) > 0 && len(reference) < 64 && strings.Trim(reference, "0123456789") == ""
+		uuid := (len(reference) == 64 || len(reference) == 80) && strings.Trim(reference, "0123456789abcdef") == ""
+		if !(index || uuid) || seen[reference] {
+			return fmt.Errorf("invalid or duplicate Rekor entry reference")
 		}
 		seen[reference] = true
 	}
@@ -192,7 +194,7 @@ func (d RuntimeData) ReportData() ([64]byte, error) {
 // Validate checks envelope shape and exact request/target binding. It does not
 // authenticate the Quote or appraise its platform; that requires Trustee/EAR.
 func (e Evidence) Validate(request EvidenceRequest, target Target) error {
-	if err := ValidateRekorReferences(e.RekorEntryUUIDs); err != nil {
+	if err := ValidateRekorReferences(e.RekorEntryIDs); err != nil {
 		return err
 	}
 	if request.Protocol != Version || e.EvidenceType != "tdx_quote" || e.RuntimeData.Protocol != Version || e.RuntimeData.Nonce != request.Nonce || e.RuntimeData.Target != target || target.PID != strconv.FormatInt(int64(request.PID), 10) {

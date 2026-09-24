@@ -12,7 +12,7 @@ mod tests {
     fn server_hook_requires_references_and_bound_runtime() {
         let algorithm = serde_json::from_value(serde_json::json!("sha384")).unwrap();
         let runtime = vector()["runtime_data"].clone();
-        let evidence = json!({"rekor_entry_uuids":["a".repeat(64), "b".repeat(64)]});
+        let evidence = json!({"rekor_entry_ids":["a".repeat(64), "b".repeat(64)]});
         assert!(
             crate::argus_trucon::prepare(&crate::Tee::Tdx, &evidence, &runtime, &algorithm)
                 .unwrap()
@@ -33,11 +33,25 @@ mod tests {
         assert!(
             crate::argus_trucon::prepare(&crate::Tee::Tdx, &evidence, &runtime, &wrong).is_err()
         );
-        let duplicate = json!({"rekor_entry_uuids":["a".repeat(64), "a".repeat(64)]});
+        let duplicate = json!({"rekor_entry_ids":["a".repeat(64), "a".repeat(64)]});
         assert!(
             crate::argus_trucon::prepare(&crate::Tee::Tdx, &duplicate, &runtime, &algorithm)
                 .is_err()
         );
+        let mixed = json!({"rekor_entry_ids":["0", "1".repeat(64)]});
+        assert!(
+            crate::argus_trucon::prepare(&crate::Tee::Tdx, &mixed, &runtime, &algorithm).is_ok()
+        );
+        for invalid in ["", "-1", "1?x=y", "١٢٣"] {
+            let evidence = json!({"rekor_entry_ids":[invalid, "b".repeat(64)]});
+            assert!(crate::argus_trucon::prepare(
+                &crate::Tee::Tdx,
+                &evidence,
+                &runtime,
+                &algorithm
+            )
+            .is_err());
+        }
     }
     #[tokio::test]
     async fn server_hook_never_preserves_a_preexisting_verdict() {

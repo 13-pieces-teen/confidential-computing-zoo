@@ -25,8 +25,8 @@ listener. See the [full sequence and trust boundaries](../../workload/ARCHITECTU
 The plugin does not measure process memory or writable data; SVID rotation does
 not trigger a fresh attestation.
 
-Provider evidence includes `rekor_entry_uuids`, an ordered list for the complete
-measured chain. The plugin preserves it in Trustee's TDX evidence envelope.
+Provider evidence includes `rekor_entry_ids`, an ordered list of UUIDs or decimal
+log indexes for the complete measured chain. The plugin preserves it in Trustee's TDX evidence envelope.
 [The Trustee hook](../../workload/trustee/README.md) verifies the original Rekor
 entries, signer authorization, RTMR2 replay and current container association
 before policy evaluation. Missing references or verification failure reject admission.

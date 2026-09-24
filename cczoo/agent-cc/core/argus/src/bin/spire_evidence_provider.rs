@@ -351,7 +351,7 @@ async fn workload_evidence_handler(
             if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
             if (state.snapshot)(&state.trucon_socket_path).is_ok_and(|after| after == snapshot) {
                 tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], "fresh workload TDX Quote generated");
-                return Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data, "rekor_entry_uuids":snapshot.rekor_entry_uuids}));
+                return Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data, "rekor_entry_ids":snapshot.log_ids}));
             }
             if attempt < 2 { std::thread::sleep(std::time::Duration::from_millis(100)); }
         }
@@ -806,8 +806,9 @@ mod tests {
         Ok(workload::trucon::Snapshot {
             chain_id: "default".into(),
             sequence_num: 2,
-            rtmr: "0".repeat(96),
-            rekor_entry_uuids: vec!["a".repeat(64), "b".repeat(64)],
+            mr_value: "0".repeat(96),
+            head_log_id: "b".repeat(64),
+            log_ids: vec!["0".into(), "b".repeat(64)],
         })
     }
     fn unavailable_snapshot(_: &Path) -> Result<workload::trucon::Snapshot> {
@@ -822,7 +823,7 @@ mod tests {
             let count = self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
             let mut value: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&self.0).unwrap()).unwrap();
-            value["rtmr"] = serde_json::json!(format!("{count:096x}"));
+            value["mr_value"] = serde_json::json!(format!("{count:096x}"));
             std::fs::write(&self.0, serde_json::to_vec(&value).unwrap()).unwrap();
             Ok(vec![1])
         }
@@ -834,7 +835,7 @@ mod tests {
         std::fs::write(
             &history.0,
             serde_json::json!({"chain_id":"default","sequence_num":2,
-            "rtmr":"0".repeat(96),"rekor_entry_uuids":["a".repeat(64),"b".repeat(64)]})
+            "mr_value":"0".repeat(96),"head_log_id":"b".repeat(64),"log_ids":["0","b".repeat(64)]})
             .to_string(),
         )
         .unwrap();
@@ -891,8 +892,8 @@ mod tests {
         assert_eq!(body["runtime_data"], vector()["runtime_data"]);
         assert_eq!(body["quote"], "3q0");
         assert_eq!(
-            body["rekor_entry_uuids"],
-            serde_json::json!(["a".repeat(64), "b".repeat(64)])
+            body["rekor_entry_ids"],
+            serde_json::json!(["0", "b".repeat(64)])
         );
         assert_eq!(
             hex::encode(source.report_data.lock().unwrap().unwrap()),

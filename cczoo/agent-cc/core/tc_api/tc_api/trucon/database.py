@@ -689,30 +689,23 @@ def set_status_submitting(record_id: str, db_path: str = DB_PATH):
         ''', (datetime.utcnow().isoformat(), record_id))
         conn.commit()
 
-def get_attestation_records(chain_id: str, limit: int, db_path: str = DB_PATH) -> List[sqlite3.Row]:
-    """Read one bounded SQLite snapshot, including records not yet uploaded.
+def get_chain_records(chain_id: str, db_path: str = DB_PATH, *,
+                      limit: Optional[int] = None, metadata_only: bool = False) -> List[sqlite3.Row]:
+    """Read ordered records in one SQLite statement, including unconfirmed rows.
 
-    Filtering to CONFIRMED here would hide extends waiting for Rekor. The
-    caller must reject such a snapshot, rather than attest an older prefix.
+    Metadata queries avoid loading signed bundles just to obtain references.
+    A caller checking a size limit can request one extra row to detect overflow.
     """
+    columns = "record_id, sequence_num, status, log_id, mr_value, updated_at" if metadata_only else "*"
+    query = f"SELECT {columns} FROM commit_queue WHERE chain_id = ? ORDER BY sequence_num ASC"
+    params: tuple = (chain_id,)
+    if limit is not None:
+        if limit <= 0:
+            raise ValueError("chain record limit must be positive")
+        query += " LIMIT ?"
+        params += (limit,)
     with get_db_connection(db_path) as conn:
-        return conn.execute(
-            '''SELECT sequence_num, status, log_id, mr_value
-               FROM commit_queue WHERE chain_id = ?
-               ORDER BY sequence_num ASC LIMIT ?''',
-            (chain_id, limit + 1),
-        ).fetchall()
-
-
-def get_chain_records(chain_id: str, db_path: str = DB_PATH) -> List[sqlite3.Row]:
-    """Get all records for a chain, ordered by sequence_num ascending."""
-    with get_db_connection(db_path) as conn:
-        cursor = conn.execute('''
-            SELECT * FROM commit_queue
-            WHERE chain_id = ?
-            ORDER BY sequence_num ASC
-        ''', (chain_id,))
-        return cursor.fetchall()
+        return conn.execute(query, params).fetchall()
 
 
 def get_instances_for_workload(chain_id: str, db_path: str = DB_PATH) -> List[Dict[str, Any]]:

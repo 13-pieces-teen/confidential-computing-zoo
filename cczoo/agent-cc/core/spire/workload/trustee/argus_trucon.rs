@@ -1,4 +1,8 @@
-//! Runs only after the TDX verifier has authenticated Quote and REPORTDATA.
+//! Trustee integration for TruCon workload history verification.
+//!
+//! `prepare` checks untrusted request fields before TDX verification.
+//! After the TDX verifier authenticates the Quote and its REPORTDATA binding,
+//! `appraise` verifies the referenced history and adds server-owned TruCon claims.
 use crate::{HashAlgorithm, Tee};
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
@@ -16,7 +20,7 @@ pub fn prepare(
     runtime: &Value,
     algorithm: &HashAlgorithm,
 ) -> Result<Option<Value>> {
-    let references = evidence.get("rekor_entry_uuids");
+    let references = evidence.get("rekor_entry_ids");
     let workload = runtime.get("protocol").and_then(Value::as_str) == Some("argus.workload.tdx.v1");
     if !workload && references.is_none() {
         return Ok(None);
@@ -26,24 +30,25 @@ pub fn prepare(
     }
     let refs = references
         .and_then(Value::as_array)
-        .context("missing Rekor UUID list")?;
+        .context("missing Rekor reference list")?;
     if !(2..=4096).contains(&refs.len()) {
         bail!("invalid Rekor reference count");
     }
     let mut seen = std::collections::HashSet::new();
     for reference in refs {
-        let s = reference.as_str().context("Rekor UUID must be a string")?;
-        if !matches!(s.len(), 64 | 80)
-            || !s
-                .bytes()
-                .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
-            || !seen.insert(s)
-        {
-            bail!("invalid or duplicate Rekor UUID");
+        let s = reference
+            .as_str()
+            .context("Rekor reference must be a string")?;
+        let index = (1..64).contains(&s.len()) && s.bytes().all(|c| c.is_ascii_digit());
+        let uuid = matches!(s.len(), 64 | 80)
+            && s.bytes()
+                .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c));
+        if !(index || uuid) || !seen.insert(s) {
+            bail!("invalid or duplicate Rekor reference");
         }
     }
     Ok(Some(
-        json!({"rekor_entry_uuids": refs, "runtime_data": runtime}),
+        json!({"rekor_entry_ids": refs, "runtime_data": runtime}),
     ))
 }
 

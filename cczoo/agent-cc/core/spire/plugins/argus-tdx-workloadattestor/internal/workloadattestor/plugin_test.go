@@ -39,7 +39,7 @@ func configured(t *testing.T) *Plugin {
 	d := fixture(t)
 	p := New(collector(func(_ context.Context, r protocol.EvidenceRequest) (protocol.Evidence, error) {
 		d.Nonce = r.Nonce
-		return protocol.Evidence{EvidenceType: "tdx_quote", RekorEntryUUIDs: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, Quote: "AQID", RuntimeData: d}, nil
+		return protocol.Evidence{EvidenceType: "tdx_quote", RekorEntryIDs: []string{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, Quote: "AQID", RuntimeData: d}, nil
 	}), verifier(func(context.Context, protocol.Evidence) error { return nil }))
 	p.config = &Config{AgentID: d.AgentID, TargetRegistrationPath: "/target.json", WorkloadID: d.WorkloadID, PolicyID: d.PolicyID, ImageConfigDigest: d.ImageConfigDigest, ConfigDigest: d.ConfigDigest}
 	p.load = func(string) (protocol.Target, error) { return d.Target, nil }

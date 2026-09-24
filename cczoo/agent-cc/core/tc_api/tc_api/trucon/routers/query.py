@@ -14,15 +14,13 @@
 
 """Read-only query endpoints for TruCon."""
 
-import re
 from typing import List
 
 from fastapi import APIRouter, HTTPException
 
-from ..chain_verification import verify_chain_records
+from ..chain_verification import confirmed_chain_state, verify_chain_records
 from .. import database as _db
 from ..schemas import (
-    AttestationSnapshotResponse,
     ChainStateResponse,
     ChainVerificationResponse,
     CommitQueueStatusResponse,
@@ -34,39 +32,22 @@ from ..schemas import (
 router = APIRouter()
 
 DEFAULT_CHAIN_ID = "default"
-MAX_ATTESTATION_ENTRIES = 4096
+MAX_HISTORY_ENTRIES = 4096
 
 
-@router.get("/attestation-snapshot", response_model=AttestationSnapshotResponse)
-def get_attestation_snapshot():
-    """References only. Trustee independently verifies the fetched material."""
-    rows = _db.get_attestation_records(DEFAULT_CHAIN_ID, MAX_ATTESTATION_ENTRIES)
-    if not rows:
-        raise HTTPException(status_code=409, detail="Measured chain is not initialized")
-    if len(rows) > MAX_ATTESTATION_ENTRIES:
-        raise HTTPException(status_code=409, detail="Measured history exceeds attestation limit")
-    references = []
-    for sequence, row in enumerate(rows, 1):
-        if row["sequence_num"] != sequence:
-            raise HTTPException(status_code=409, detail="Measured history is not contiguous")
-        reference = row["log_id"]
-        if row["status"] != "CONFIRMED":
-            raise HTTPException(status_code=409, detail="Measured events are awaiting Rekor confirmation")
-        if not isinstance(reference, str) or not re.fullmatch(r"(?:[0-9a-f]{64}|[0-9a-f]{80})", reference):
-            raise HTTPException(status_code=409, detail="Confirmed Rekor UUID is required for every event")
-        references.append(reference)
-    rtmr = rows[-1]["mr_value"]
-    if not isinstance(rtmr, str) or not re.fullmatch(r"[0-9a-f]{96}", rtmr):
-        raise HTTPException(status_code=409, detail="Measured history has no valid RTMR2 state")
-    if len(set(references)) != len(references):
-        raise HTTPException(status_code=409, detail="Duplicate Rekor UUID in measured history")
-    return {"chain_id": DEFAULT_CHAIN_ID, "sequence_num": len(rows),
-            "rtmr": rtmr, "rekor_entry_uuids": references}
+@router.get("/chain-state", response_model=ChainStateResponse, response_model_exclude_unset=True)
+def get_chain_state_endpoint(include_history: bool = False):
+    """Return chain state, optionally requiring complete confirmed history.
 
-
-@router.get("/chain-state", response_model=ChainStateResponse)
-def get_chain_state_endpoint():
-    """Return current chain state for the default measured chain."""
+    History mode returns a consistent head and its ordered log references, or
+    409 while any record is unconfirmed. References retain the backend's format.
+    """
+    if include_history:
+        rows = _db.get_chain_records(DEFAULT_CHAIN_ID, limit=MAX_HISTORY_ENTRIES + 1, metadata_only=True)
+        try:
+            return confirmed_chain_state(DEFAULT_CHAIN_ID, rows, MAX_HISTORY_ENTRIES)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     state = _db.get_chain_state(DEFAULT_CHAIN_ID)
     if not state:
         raise HTTPException(status_code=404, detail=f"No chain state for '{DEFAULT_CHAIN_ID}'")

@@ -114,20 +114,97 @@ def fixture(tmp_path, *, launch_result="success", wrong_owner=False, baseline="0
                 "hashes": [leaves[index ^ 1].hex(), (right if index < 2 else left).hex()], "checkpoint": checkpoint}}
         raw[leaves[index].hex()] = entry
     verifier = LogVerifier(config)
-    verifier.fetch = lambda uuid: copy.deepcopy(raw[uuid])
-    request = {"rekor_entry_uuids": list(raw), "runtime_data": runtime, "rtmr2": rtmr.hex()}
+    verifier.fetch = lambda uuid: (uuid, copy.deepcopy(raw[uuid]))
+    request = {"rekor_entry_ids": list(raw), "runtime_data": runtime, "rtmr2": rtmr.hex()}
     return verifier, request, raw
 
 
 def test_target_remains_valid_after_other_workload_extends(tmp_path):
     verifier, request, _ = fixture(tmp_path, unicode_label=True)
     assert verifier.verify(request) == {"verified": True, "baseline_rtmr": "0" * 96,
-                                      "launch_entry_uuid": request["rekor_entry_uuids"][2]}
+                                      "launch_entry_uuid": request["rekor_entry_ids"][2]}
 
 
 def test_rekor_shard_local_proof_and_global_set_indices(tmp_path):
     verifier, request, _ = fixture(tmp_path, virtual_index=True)
     assert verifier.verify(request)["verified"] is True
+
+
+def serve_entries(verifier, raw, transform=lambda value: value):
+    """Replace HTTP only; exercise real reference resolution and cryptography."""
+    import io
+    from types import SimpleNamespace
+    responses = {}
+    for uuid, entry in raw.items():
+        responses["/" + uuid] = {uuid: entry}
+        responses["?logIndex=" + str(entry["logIndex"])] = {uuid: entry}
+    requests = []
+
+    def open_response(request, timeout):
+        prefix = verifier.url + "/api/v1/log/entries"
+        assert request.full_url.startswith(prefix) and 0 < timeout <= 5
+        suffix = request.full_url[len(prefix):]
+        requests.append(suffix)
+        body = transform(copy.deepcopy(responses[suffix]))
+        response = io.BytesIO(json.dumps(body).encode())
+        response.status = 200
+        return response
+
+    del verifier.fetch  # Restore the class's real fetch implementation.
+    verifier.opener = SimpleNamespace(open=open_response)
+    return requests
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+@pytest.mark.parametrize("virtual_index", [False, True])
+def test_numeric_and_mixed_history_need_no_database_migration(tmp_path, mixed, virtual_index):
+    verifier, request, raw = fixture(tmp_path, virtual_index=virtual_index, fulcio=True)
+    original = request["rekor_entry_ids"][:]
+    request["rekor_entry_ids"] = [uuid if mixed and i % 2 else str(entry["logIndex"])
+                                  for i, (uuid, entry) in enumerate(raw.items())]
+    calls = serve_entries(verifier, raw)
+    result = verifier.verify(request)
+    assert result["verified"] is True and result["launch_entry_uuid"] == original[2]
+    assert calls[0] == "?logIndex=" + str(next(iter(raw.values()))["logIndex"])
+
+
+@pytest.mark.parametrize("change", ["wrong_index", "boolean_index", "wrong_uuid", "extra_entry", "unsigned_index"])
+def test_numeric_lookup_still_requires_matching_authenticated_entry(tmp_path, change):
+    verifier, request, raw = fixture(tmp_path)
+    request["rekor_entry_ids"][0] = "0"
+    if change == "unsigned_index":
+        # A matching HTTP response cannot change the index signed by Rekor.
+        next(iter(raw.values()))["logIndex"] = 99
+        request["rekor_entry_ids"][0] = "99"
+
+    def corrupt(result):
+        uuid, entry = next(iter(result.items()))
+        if change == "wrong_index": entry["logIndex"] = 99
+        if change == "boolean_index": entry["logIndex"] = False
+        if change == "wrong_uuid": return {"0" * 64: entry}
+        if change == "extra_entry": result["0" * 64] = entry
+        return result
+
+    serve_entries(verifier, raw, corrupt)
+    with pytest.raises(Exception):
+        verifier.verify(request)
+
+
+def test_uuid_and_index_alias_cannot_repeat_an_entry(tmp_path):
+    verifier, request, raw = fixture(tmp_path)
+    request["rekor_entry_ids"][1] = "0"
+    serve_entries(verifier, raw)
+    with pytest.raises(ValueError, match="duplicate resolved"):
+        verifier.verify(request)
+
+
+@pytest.mark.parametrize("reference", ["", "-1", "1/../2", "1?x=y", "١٢٣", "a" * 63])
+def test_invalid_reference_never_reaches_http(tmp_path, reference):
+    verifier, _, raw = fixture(tmp_path)
+    calls = serve_entries(verifier, raw)
+    with pytest.raises(ValueError, match="invalid Rekor reference"):
+        verifier.fetch(reference)
+    assert calls == []
 
 
 def test_intoto_fulcio_certificate_and_owner_key_history(tmp_path):
@@ -209,13 +286,13 @@ def test_current_instance_binding(tmp_path, field):
 @pytest.mark.parametrize("change", ["omit_build", "omit_other_launch", "reorder", "duplicate", "wrong_rtmr", "empty", "client_verdict"])
 def test_history_and_request_rejections(tmp_path, change):
     verifier, request, _ = fixture(tmp_path)
-    refs = request["rekor_entry_uuids"]
+    refs = request["rekor_entry_ids"]
     if change == "omit_build": del refs[1]
     if change == "omit_other_launch": refs.pop()
     if change == "reorder": refs[1], refs[2] = refs[2], refs[1]
     if change == "duplicate": refs.append(refs[0])
     if change == "wrong_rtmr": request["rtmr2"] = "0" * 96
-    if change == "empty": request["rekor_entry_uuids"] = []
+    if change == "empty": request["rekor_entry_ids"] = []
     if change == "client_verdict": request["verified"] = True
     with pytest.raises(ValueError):
         verifier.verify(request)
@@ -225,7 +302,7 @@ def test_history_and_request_rejections(tmp_path, change):
 @pytest.mark.parametrize("fulcio", [False, True])
 def test_remote_crypto_material_must_verify(tmp_path, change, fulcio):
     verifier, request, raw = fixture(tmp_path, fulcio=fulcio)
-    entry = raw[request["rekor_entry_uuids"][2]]
+    entry = raw[request["rekor_entry_ids"][2]]
     if change == "payload": entry["attestation"]["data"] = b64(b"{}")
     if change == "missing_payload": del entry["attestation"]
     if change == "body": entry["body"] = b64(b"{}")
@@ -233,7 +310,7 @@ def test_remote_crypto_material_must_verify(tmp_path, change, fulcio):
     if change == "checkpoint": entry["verification"]["inclusionProof"]["checkpoint"] = entry["verification"]["inclusionProof"]["checkpoint"].replace("rekor.example", "other.example")
     if change == "unsigned_checkpoint": entry["verification"]["inclusionProof"]["checkpoint"] = entry["verification"]["inclusionProof"]["checkpoint"].split("\n\n")[0] + "\n\nnot-a-signature\n"
     if change == "timestamp": entry["integratedTime"] += 1
-    if change == "missing_entry": del raw[request["rekor_entry_uuids"][2]]
+    if change == "missing_entry": del raw[request["rekor_entry_ids"][2]]
     with pytest.raises(Exception):
         verifier.verify(request)
 

@@ -7,11 +7,13 @@ import (
 	"testing"
 )
 
-func TestRekorReferencesMustBeCompleteUUIDs(t *testing.T) {
-	if err := ValidateRekorReferences([]string{strings.Repeat("a", 64), strings.Repeat("b", 80)}); err != nil {
-		t.Fatal(err)
+func TestRekorReferencesAcceptUUIDsAndIndexes(t *testing.T) {
+	for _, refs := range [][]string{{strings.Repeat("a", 64), strings.Repeat("b", 80)}, {"0", "123"}, {"123", strings.Repeat("1", 64)}} {
+		if err := ValidateRekorReferences(refs); err != nil {
+			t.Fatal(err)
+		}
 	}
-	for _, refs := range [][]string{nil, {strings.Repeat("a", 64)}, {"123", strings.Repeat("b", 64)}, {strings.Repeat("A", 64), strings.Repeat("b", 64)}, {strings.Repeat("a", 64), strings.Repeat("a", 64)}} {
+	for _, refs := range [][]string{nil, {strings.Repeat("a", 64)}, {"", "123"}, {"-1", "123"}, {"1?x=y", "123"}, {"١٢٣", "123"}, {strings.Repeat("A", 64), strings.Repeat("b", 64)}, {strings.Repeat("a", 64), strings.Repeat("a", 64)}} {
 		if ValidateRekorReferences(refs) == nil {
 			t.Fatalf("accepted %v", refs)
 		}

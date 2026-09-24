@@ -6,12 +6,12 @@ use std::{collections::HashSet, path::Path};
 pub const DEFAULT_SOCKET: &str = "/var/run/trucon/trucon.sock";
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 pub struct Snapshot {
     pub chain_id: String,
     pub sequence_num: usize,
-    pub rtmr: String,
-    pub rekor_entry_uuids: Vec<String>,
+    pub mr_value: String,
+    pub head_log_id: String,
+    pub log_ids: Vec<String>,
 }
 
 impl Snapshot {
@@ -22,14 +22,16 @@ impl Snapshot {
         };
         if self.chain_id != "default"
             || !(2..=4096).contains(&self.sequence_num)
-            || self.sequence_num != self.rekor_entry_uuids.len()
-            || self.rtmr.len() != 96
-            || !hex(&self.rtmr)
-            || self
-                .rekor_entry_uuids
-                .iter()
-                .any(|id| !matches!(id.len(), 64 | 80) || !hex(id))
-            || self.rekor_entry_uuids.iter().collect::<HashSet<_>>().len() != self.sequence_num
+            || self.sequence_num != self.log_ids.len()
+            || self.mr_value.len() != 96
+            || !hex(&self.mr_value)
+            || self.log_ids.last() != Some(&self.head_log_id)
+            || self.log_ids.iter().any(|id| {
+                let index = (1..64).contains(&id.len()) && id.bytes().all(|c| c.is_ascii_digit());
+                let uuid = matches!(id.len(), 64 | 80) && hex(id);
+                !(index || uuid)
+            })
+            || self.log_ids.iter().collect::<HashSet<_>>().len() != self.sequence_num
         {
             bail!("invalid TruCon measurement snapshot");
         }
@@ -52,7 +54,7 @@ pub fn snapshot(path: &Path) -> Result<Snapshot> {
     let mut stream = UnixStream::connect(path).context("connect TruCon")?;
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    stream.write_all(b"GET /attestation-snapshot HTTP/1.1\r\nHost: localhost\r\nX-TruCon-Caller-Service: argus_provider\r\nConnection: close\r\n\r\n")?;
+    stream.write_all(b"GET /chain-state?include_history=true HTTP/1.1\r\nHost: localhost\r\nX-TruCon-Caller-Service: argus_provider\r\nConnection: close\r\n\r\n")?;
     let mut bytes = Vec::new();
     (&mut stream).take(524289).read_to_end(&mut bytes)?;
     decode_response(&bytes)
@@ -105,15 +107,36 @@ fn decode_response(bytes: &[u8]) -> Result<Snapshot> {
 mod tests {
     use super::*;
     #[test]
+    fn reads_existing_chain_state_with_mixed_references() {
+        let body = serde_json::json!({
+            "chain_id": "default", "sequence_num": 2, "mr_value": "0".repeat(96),
+            "head_record_id": "record-2", "head_log_id": "b".repeat(64),
+            "updated_at": "2026-09-24T00:00:00", "log_ids": ["0", "b".repeat(64)]
+        })
+        .to_string();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let mut value = decode_response(response.as_bytes()).unwrap();
+        assert_eq!(value.log_ids[0], "0");
+        value.head_log_id = "other-head".into();
+        assert!(value.validate().is_err());
+    }
+
+    #[test]
     fn snapshot_requires_complete_distinct_history() {
         let mut value = Snapshot {
             chain_id: "default".into(),
             sequence_num: 2,
-            rtmr: "0".repeat(96),
-            rekor_entry_uuids: vec!["a".repeat(64), "b".repeat(80)],
+            mr_value: "0".repeat(96),
+            head_log_id: "b".repeat(80),
+            log_ids: vec!["0".into(), "b".repeat(80)],
         };
         assert!(value.validate().is_ok());
-        value.rekor_entry_uuids[1] = value.rekor_entry_uuids[0].clone();
+        value.log_ids[1] = value.log_ids[0].clone();
+        value.head_log_id = value.log_ids[1].clone();
         assert!(value.validate().is_err());
         assert!(decode_response(b"HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\n\r\n").is_err());
         assert!(decode_response(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\n{}").is_err());

@@ -261,6 +261,7 @@ For TruCon internal architecture details (lock model, SQLite schema, crash recov
 
 **Currently implemented:**
 - Exposes REST endpoints: `POST /commit`, `POST /init-chain`, `GET /init-chain/{chain_id}/baseline`, `GET /chain-state`, `GET /evidence`, `GET /verify-chain`, and `GET /status`.
+- `GET /chain-state?include_history=true` returns a bounded, complete confirmed history as `log_ids` plus the matching head, sequence and measurement. It reads all queue states in one statement and returns 409 for missing or unconfirmed records. UUIDs and numeric indexes retain their stored form; remote verifiers resolve and authenticate them. The ordinary `/chain-state` diagnostic response is unchanged.
 - Exposes the reservation endpoint `POST /commit-intents/reserve` so callers can allocate a durable predecessor contract before signing.
 - Serializes commit operations (RTMR[2] extend + SQLite INSERT + chain state update) behind a single-process lock.
 - Maintains node-wide measured-chain state for `default` (sequence number, head record, measurement value).

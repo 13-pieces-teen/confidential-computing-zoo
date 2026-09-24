@@ -77,9 +77,9 @@ sequenceDiagram
     W->>W: Check approved target and process; generate nonce
     W->>P: POST /ra/v1/workload-evidence: protocol, nonce, PID
     P->>P: Observe target and TruCon snapshot; create Quote; recheck both
-    P-->>W: Quote + runtime_data + rekor_entry_uuids
+    P-->>W: Quote + runtime_data + rekor_entry_ids
     W->>W: Match nonce and all target fields
-    W->>T: HTTPS /attestation: Quote, runtime_data, UUIDs, policy ID
+    W->>T: HTTPS /attestation: Quote, runtime_data, Rekor references, policy ID
     T->>T: Verify Quote/REPORTDATA; fetch and verify Rekor logs; replay RTMR2; match current container
     T-->>W: Signed EAR appraisal
     W->>W: Verify EAR; recheck process instance

@@ -27,8 +27,10 @@ from sigstore.verify.policy import Identity
 from sigstore_protobuf_specs.dev.sigstore.common.v1 import PublicKey, PublicKeyDetails
 from sigstore_protobuf_specs.dev.sigstore.bundle.v1 import VerificationMaterial as RawVerificationMaterial
 from tlog.digest import canonical_json, compute_entry_digest, compute_event_digest
+from tlog.backends.rekor.adapter import parse_log_reference
 
 UUID = re.compile(r"(?:[0-9a-f]{64}|[0-9a-f]{80})\Z")
+REFERENCE = re.compile(r"(?:[0-9]{1,63}|[0-9a-f]{64}|[0-9a-f]{80})\Z")
 RTMR = re.compile(r"[0-9a-f]{96}\Z")
 CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
 AUTH_FIELDS = ["chain_id", "sequence_num", "prev_event_digest", "prev_lookup_hash", "event_digest"]
@@ -125,20 +127,32 @@ class LogVerifier:
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
         self.deadline = time.monotonic() + 45
 
-    def fetch(self, uuid):
+    def fetch(self, reference):
+        require(isinstance(reference, str) and REFERENCE.fullmatch(reference), "invalid Rekor reference")
+        lookup = parse_log_reference(reference)
+        suffix = "?logIndex=" + str(lookup["log_index"]) if "log_index" in lookup else "/" + reference
         remaining = self.deadline - time.monotonic()
         require(remaining > 0, "Rekor verification deadline exceeded")
-        request = urllib.request.Request(self.url + "/api/v1/log/entries/" + uuid, headers={"Accept": "application/json"})
+        request = urllib.request.Request(self.url + "/api/v1/log/entries" + suffix, headers={"Accept": "application/json"})
         with self.opener.open(request, timeout=min(5, remaining)) as response:
             require(response.status == 200, "Rekor entry unavailable")
             body = response.read(MAX_ENTRY_BYTES + 1)
         require(len(body) <= MAX_ENTRY_BYTES, "Rekor entry exceeds size limit")
         result = strict_json(body)
-        require(isinstance(result, dict) and list(result) == [uuid], "Rekor returned a different UUID")
-        return result[uuid]
+        require(isinstance(result, dict) and len(result) == 1, "Rekor must return exactly one entry")
+        uuid, raw = next(iter(result.items()))
+        require(UUID.fullmatch(uuid) and isinstance(raw, dict), "invalid Rekor entry response")
+        if "log_index" in lookup:
+            # The global index is authenticated by the SET in entry(), not by
+            # comparing it with the shard-local Merkle proof index.
+            require(type(raw.get("logIndex")) is int and raw["logIndex"] == lookup["log_index"],
+                    "Rekor returned a different log index")
+        else:
+            require(uuid == reference, "Rekor returned a different UUID")
+        return uuid, raw
 
-    def entry(self, uuid, owner):
-        raw = self.fetch(uuid)
+    def entry(self, reference, owner):
+        uuid, raw = self.fetch(reference)
         # Verify the original body, before materializing the detached payload.
         entry = LogEntry._from_response({uuid: raw})
         require(uuid[-64:] == hashlib.sha256(b"\x00" + b64(raw["body"])).hexdigest(), "UUID does not identify this leaf")
@@ -195,21 +209,24 @@ class LogVerifier:
         digest = compute_event_digest(predicate["event_id"], predicate["event_type"], predicate["created"], digests)
         require(predicate["digest"] == digest, "event digest mismatch")
         require(statement["subject"] == [{"name": "trusted-log-chain_" + predicate["chain_id"], "digest": {"sha384": digest[7:]}}], "statement subject mismatch")
-        return predicate, "sha256:" + hashlib.sha256(payload).hexdigest()
+        return predicate, "sha256:" + hashlib.sha256(payload).hexdigest(), uuid
 
     def verify(self, request):
-        require(set(request) == {"rekor_entry_uuids", "runtime_data", "rtmr2"}, "unexpected verifier input")
-        refs, runtime, quoted = request["rekor_entry_uuids"], request["runtime_data"], request["rtmr2"]
-        require(isinstance(refs, list) and 2 <= len(refs) <= 4096 and all(isinstance(x, str) and UUID.fullmatch(x) for x in refs), "invalid Rekor UUID list")
-        require(len(set(refs)) == len(refs), "duplicate Rekor UUID")
+        require(set(request) == {"rekor_entry_ids", "runtime_data", "rtmr2"}, "unexpected verifier input")
+        refs, runtime, quoted = request["rekor_entry_ids"], request["runtime_data"], request["rtmr2"]
+        require(isinstance(refs, list) and 2 <= len(refs) <= 4096 and all(isinstance(x, str) and REFERENCE.fullmatch(x) for x in refs), "invalid Rekor reference list")
+        require(len(set(refs)) == len(refs), "duplicate Rekor reference")
         require(isinstance(quoted, str) and RTMR.fullmatch(quoted), "invalid authenticated RTMR2")
         require(isinstance(runtime, dict) and runtime.get("protocol") == "argus.workload.tdx.v1", "bound workload runtime_data is required")
         fields = ("workload_id", "launch_id", "container_id", "image_config_digest")
         require(all(isinstance(runtime.get(k), str) and runtime[k] for k in fields), "missing current instance fields")
         owner, previous_digest, previous_lookup, current, baseline = None, None, None, None, None
         matched = []
-        for sequence, uuid in enumerate(refs, 1):
-            p, lookup = self.entry(uuid, owner)
+        resolved = set()
+        for sequence, reference in enumerate(refs, 1):
+            p, lookup, uuid = self.entry(reference, owner)
+            require(uuid not in resolved, "duplicate resolved Rekor entry")
+            resolved.add(uuid)
             require(p["chain_id"] == "default" and type(p["sequence_num"]) is int and p["sequence_num"] == sequence, "chain or sequence mismatch")
             require(p["prev_event_digest"] == previous_digest and p["prev_lookup_hash"] == previous_lookup, "broken signed predecessor link")
             values = {}
@@ -232,6 +249,8 @@ class LogVerifier:
                 auth_values = [p["chain_id"], sequence, previous_digest, previous_lookup, p["digest"]]
                 message = canonical_json(list(map(list, zip(AUTH_FIELDS, auth_values)))).encode("utf-8")
                 owner.verify(b64(authorization["signature"]), message, ec.ECDSA(hashes.SHA384()))
+                # Match TruCon's extend rules: build events preserve RTMR2, but
+                # remain in the signed predecessor chain and must be verified.
                 build = p["event_type"] == "build" or p["event_type"].endswith("_build") or values.get("operation_type") == "build"
                 if not build:
                     current = hashlib.sha384(current + bytes.fromhex(p["digest"][7:])).digest()

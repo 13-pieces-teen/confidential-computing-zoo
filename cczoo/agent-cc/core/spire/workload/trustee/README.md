@@ -1,6 +1,6 @@
 # Trustee 的 TruCon 日志验证接入
 
-`argus_trucon.rs` 接入真实 Attestation Service：先完成 TDX Quote 与 REPORTDATA 校验，再把同一请求的 runtime_data、已认证的 RTMR2 和 UUID 列表交给服务端本地验证器，最后才执行 Rego、签发 EAR。客户端不能传入验证结果或 Rekor 地址。
+`argus_trucon.rs` 接入真实 Attestation Service：先完成 TDX Quote 与 REPORTDATA 校验，再把同一请求的 runtime_data、已认证的 RTMR2 和 Rekor 引用列表交给服务端本地验证器，最后才执行 Rego、签发 EAR。引用可以是 UUID 或数字索引；客户端不能传入验证结果或 Rekor 地址。
 
 `verify_trucon.py` 使用项目原有 `tlog.digest` 算法和固定的 Sigstore 依赖。验证器属于 Trustee 的受信部署，按请求启动本地进程，没有新增网络服务。失败、超时、缺配置或缺材料直接拒绝。
 
@@ -35,7 +35,9 @@ Environment=ARGUS_TRUCON_CONFIG=/etc/argus-trucon/config.json
 
 ## 日志材料要求
 
-TC-API 使用 `intoto` 上传，Rekor 必须启用 attestation storage，并能按 UUID 返回 `attestation.data`。仅有 payload hash、数字索引、本地缓存或待上传状态都不能准入。验证器核对原始 Merkle leaf、收录路径、签名 checkpoint、签名时间戳、payload hash、DSSE 签名、事件摘要及完整前驱链。
+TC-API 使用 `intoto` 上传，Rekor 必须启用 attestation storage，并能按 UUID 或数字索引返回包含 `attestation.data` 的条目。引用只用于定位材料，验证器核对返回 UUID、索引与原始 Merkle leaf、收录路径、签名 checkpoint、签名时间戳、payload hash、DSSE 签名、事件摘要及完整前驱链。仅有 payload hash、本地缓存或待上传状态不能准入。
+
+Provider 复用 `GET /chain-state?include_history=true`：TruCon 在一次有界数据库读取中取得所有状态的记录，拒绝缺项或尚未确认的历史，从同一条末尾记录返回链头、序号和度量值，并保留原始 `log_ids`。Provider、Workload 插件与 Trustee 使用 `rekor_entry_ids` 传递这些引用。更新时需一起重新构建这些组件；runtime_data 与 REPORTDATA 的绑定格式未改变。
 
 初始化记录只提供批准基准，不执行 extend；build 记录按 TruCon 的现有规则不 extend，但仍须在完整签名链中。其余事件依次重放。只有重放结果等于 Quote.RTMR2，且目标成功启动记录与 runtime_data 的 workload、launch、container、实际镜像对应，才生成 `tdx.trucon.verified=true`。目标启动后的已知成功 stop/rm 记录使该启动失效，随后重新 start 或登记不能恢复旧启动记录的效力。
 
@@ -43,7 +45,7 @@ Docktap 在转发 start/stop/rm 前通过原始 Docker socket 查询完整容器
 
 Fulcio 路径使用固定 Sigstore 版本的证书验证器，直接提供原始 `intoto` 条目、证书和签名，不经过不支持 `intoto` 的 `Bundle.from_parts` 转换。证书链、CT、固定 subject/issuer、Rekor 签名时间和 DSSE 校验均保留。
 
-新上传路径保存 UUID。旧队列若只保存数字索引，先备份 SQLite，再运行迁移工具检查差异：
+新上传与旧队列均可保留 UUID 或数字索引，无需迁移数据库即可认证。若运维需要统一引用格式，下面的工具是可选的：先备份 SQLite，再检查差异。
 
 ```bash
 python3 core/tc_api/scripts/backfill_attestation_uuids.py --db /dev/shm/commit_queue.db --rekor-url https://rekor.sigstore.dev

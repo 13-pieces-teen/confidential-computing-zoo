@@ -47,10 +47,10 @@ def test_sigstore_adapter_submit_bundle(mock_rekor):
         json.dumps({"kind": "intoto", "spec": {}}).encode("utf-8")
     ).decode("utf-8")
 
-    with patch.object(adapter, "_fetch_raw_rekor_entry", return_value={"uuid": "a" * 64}) as fetch:
+    with patch.object(adapter, "_fetch_raw_rekor_entry", side_effect=AssertionError("unexpected reference lookup")) as fetch:
         log_id, status, receipt = adapter.submit_bundle(mock_bundle)
-    fetch.assert_called_once_with("123")
-    assert log_id == "a" * 64
+    fetch.assert_not_called()
+    assert log_id == "123"
     assert status == "confirmed"
     assert receipt is mock_bundle.log_entry
     mock_rekor.return_value.log.entries.post.assert_not_called()
@@ -106,7 +106,8 @@ def test_sigstore_adapter_submit_bundle_posts_dsse_when_bundle_has_no_log_refere
     mock_rekor.return_value.log.entries.post.assert_called_once()
 
 
-def test_sigstore_adapter_submit_bundle_posts_intoto_by_default(mock_rekor):
+@pytest.mark.parametrize("uuid", ["log-id-456", None])
+def test_sigstore_adapter_submit_bundle_posts_intoto_by_default(mock_rekor, uuid):
     adapter = SigstoreLogAdapter()
     mock_bundle = MagicMock(spec=Bundle)
     mock_bundle.log_entry.log_index = None
@@ -121,12 +122,14 @@ def test_sigstore_adapter_submit_bundle_posts_intoto_by_default(mock_rekor):
     mock_bundle.signing_certificate.public_bytes.return_value = b"pem-cert"
 
     mock_entry = MagicMock()
-    mock_entry.uuid = "log-id-456"
+    mock_entry.uuid = uuid
+    mock_entry.log_index = 456
     mock_rekor.return_value.log.entries.post.return_value = mock_entry
 
-    log_id, status, receipt = adapter.submit_bundle(mock_bundle)
+    with patch.object(adapter, "_fetch_raw_rekor_entry", side_effect=AssertionError("unexpected reference lookup")):
+        log_id, status, receipt = adapter.submit_bundle(mock_bundle)
 
-    assert log_id == "log-id-456"
+    assert log_id == (uuid or "456")
     assert status == "confirmed"
     assert receipt is mock_entry
 
@@ -177,6 +180,16 @@ def test_sigstore_adapter_get_entry_by_log_index(mock_rekor):
     mock_instance.log.entries.get.assert_called_with(log_index=123)
 
 
+@pytest.mark.parametrize("reference,suffix", [("123", "?logIndex=123"), ("0", "?logIndex=0"), ("1" * 64, "/" + "1" * 64)])
+def test_raw_entry_lookup_distinguishes_indexes_from_numeric_uuids(reference, suffix):
+    adapter = SigstoreLogAdapter()
+    with patch("urllib.request.urlopen") as open_response:
+        open_response.return_value.__enter__.return_value.read.return_value = json.dumps({reference: {"body": "test"}}).encode()
+        adapter._fetch_raw_rekor_entry(reference)
+    request = open_response.call_args.args[0]
+    assert request.full_url == adapter.rekor_url + "/api/v1/log/entries" + suffix
+
+
 def test_sigstore_adapter_reuses_cached_bundle_entry_across_instances(mock_rekor):
     adapter_submit = SigstoreLogAdapter()
     adapter_verify = SigstoreLogAdapter()
@@ -196,13 +209,12 @@ def test_sigstore_adapter_reuses_cached_bundle_entry_across_instances(mock_rekor
     mock_bundle._dsse_envelope.to_json.return_value = json.dumps(envelope)
     mock_bundle.signing_certificate.public_bytes.return_value = b"pem-cert"
 
-    with patch.object(adapter_submit, "_fetch_raw_rekor_entry", return_value={"uuid": "a" * 64}):
-        log_id, status, _receipt = adapter_submit.submit_bundle(mock_bundle)
+    log_id, status, _receipt = adapter_submit.submit_bundle(mock_bundle)
     mock_rekor.return_value.log.entries.get.side_effect = RuntimeError("public fetch unavailable")
     cached_entry = adapter_verify.get_entry(log_id)
 
     assert status == "confirmed"
-    assert log_id == "a" * 64
+    assert log_id == "123"
     assert cached_entry["body"]["spec"]["payload"] == envelope["payload"]
     assert cached_entry["_tc_replay_provenance"] == "cache-assisted"
     mock_rekor.return_value.log.entries.get.assert_called_once()

@@ -2,7 +2,7 @@
 
 本目录提供取证、身份交付、业务入口和验收工具。SPIRE Server/Agent 与两个 Attestor SDK 使用 **v1.15.3**；Helper 基于官方 **v0.11.0**，定制构建版本为 **0.11.0-argus.1**；Trustee 接口基线为 **v0.21.0**。部署依赖 SPIRE Agent 的 experimental Broker API。
 
-先阅读 [机制与信任边界](ARCHITECTURE.md) 和 [插件配置及 selectors](../plugins/argus-tdx-workloadattestor/README.md)，再按本手册操作。[验证记录](VALIDATION.md) 区分当前实现待验项与历史测试结果；本手册中的命令不表示已完成真实 TDX 验收。Workload 准入要求 Trustee 按 Rekor UUID 验证完整日志链、重放 RTMR2 并关联当前容器；必须先部署 [Trustee 日志验证接入](trustee/README.md)。
+先阅读 [机制与信任边界](ARCHITECTURE.md) 和 [插件配置及 selectors](../plugins/argus-tdx-workloadattestor/README.md)，再按本手册操作。[验证记录](VALIDATION.md) 区分当前实现待验项与历史测试结果；本手册中的命令不表示已完成真实 TDX 验收。Workload 准入要求 Trustee 按 Rekor 引用（UUID 或数字索引）获取并验证完整日志链、重放 RTMR2 并关联当前容器；必须先部署 [Trustee 日志验证接入](trustee/README.md)。
 
 ```mermaid
 flowchart TB
@@ -85,7 +85,7 @@ sudo bash scripts/install.sh --config /root/workload-environment.json
 
 Evidence Provider 的 UDS 路由为 `POST /ra/v1/node-evidence` 和 `POST /ra/v1/workload-evidence`（后者需配置 workload 登记文件）。Provider 与 NodeAttestor 插件来自同一次完整构建；`workload.py render` 将插件路径与 SHA-256 写入 Agent 配置，`workload.py start` 自动执行 `render`。配置只指定 UDS socket，无需填写 HTTP 路径。
 
-Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，显式传入 Agent ID、socket、登记文件、`--workload-data-path` 和 `--trucon-socket-path`。TruCon 的 root-only UDS 必须可访问，所有已度量记录必须已上传并获得 Rekor UUID；否则本次认证拒绝。
+Provider 二进制为 `argus-spire-evidence-provider`，源码为 `core/argus/src/bin/spire_evidence_provider.rs`。安装脚本提供 `argus-tdx-provider.service`，显式传入 Agent ID、socket、登记文件、`--workload-data-path` 和 `--trucon-socket-path`。TruCon 的 root-only UDS 必须可访问，所有已度量记录必须已上传确认并保留可查询的 Rekor UUID 或数字索引；否则本次认证拒绝。Provider 通过现有 `GET /chain-state?include_history=true` 读取完整历史，旧数字索引无需迁移。更新时需一起重新构建 Provider、Workload 插件和 Trustee，以统一使用 `rekor_entry_ids` 字段。
 
 参考 `config/environment.example.json` 准备两台主机各自的输入配置，安装后保存至 `paths.config_dir/environment.json`，设为 root 所有、0600。填写真实路径和批准基线；示例占位值会被拒绝。两台机器的 Agent/Helper/目标身份、批准基线及 Helper 二进制必须一致；`paths.install_dir` 也须相同，因为 Server 使用本地同路径的 Helper 副本生成目标主机的 `unix:path` 与 `unix:sha256` selectors。TDVM 预检会逐项比较 Server 返回的 Entry 合同和本地预期，任一不一致直接拒绝。
 
