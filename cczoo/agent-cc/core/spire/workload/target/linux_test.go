@@ -5,6 +5,7 @@ package target
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
 	"golang.org/x/sys/unix"
 	"os"
@@ -13,6 +14,42 @@ import (
 	"testing"
 	"time"
 )
+
+func TestCheckProgressOnlyAfterSuccessfulCompletion(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	progress := make(chan time.Time, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- observedCheck(protocol.Target{}, func(protocol.Target) error {
+			close(entered)
+			<-release
+			return nil
+		}, func(at time.Time) { progress <- at })
+	}()
+	<-entered
+	select {
+	case <-progress:
+		t.Fatal("blocked check reported progress")
+	default:
+	}
+	released := time.Now()
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if at := <-progress; at.Before(released) {
+		t.Fatal("progress timestamp predates check completion")
+	}
+	want := errors.New("listener changed")
+	if err := observedCheck(protocol.Target{}, func(protocol.Target) error { return want }, func(at time.Time) { progress <- at }); !errors.Is(err, want) {
+		t.Fatal(err)
+	}
+	select {
+	case <-progress:
+		t.Fatal("failed check reported progress")
+	default:
+	}
+}
 
 func TestPidfdObservesRealProcessExit(t *testing.T) {
 	cmd := exec.Command("sleep", "30")

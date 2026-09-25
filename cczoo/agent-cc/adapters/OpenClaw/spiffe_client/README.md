@@ -19,11 +19,11 @@ OpenClaw 本机 SPIRE Agent / Broker
 ## 版本与源码
 
 - SPIRE Agent/Server 继续使用官方 **v1.15.3**；新增命令位于现有 SPIFFE Helper **v0.11.0** 定制源码中，复用其 `go-spiffe/v2 v2.8.1` 与快照验证。
-- 插件基于 npm 正式发布包 `@openviking/openclaw-plugin@2026.6.18`，定制标识为 `argus.2`。`upstream.lock.json` 固定上游 SHA-512、运行依赖和版本要求。
+- 插件基于 npm 正式发布包 `@openviking/openclaw-plugin@2026.6.18`，定制标识为 `argus.3`。`upstream.lock.json` 固定上游 SHA-512、运行依赖和版本要求。
 - 当前仓库 Dockerfile 原为 `openclaw:latest`，连接脚本原为未锁版本的 ClawHub 安装；不能由此确定公司当前版本。历史报告记录 OpenClaw `2026.6.11`、OpenViking `v0.4.8`，均满足该发布包声明的最低要求（OpenClaw `2026.4.8`、OpenViking `0.4.1`），但这不代替本次实际部署验证。原镜像内容摘要和历史报告没有被改写。
 - Node.js 最低 **22.17.0**。安装前实际检查 Gateway 的 Node/OpenClaw 版本。
 
-`build_plugin.py` 校验上游包后，修改发布包的 `HttpTransport`、独立的 `setup` 请求和对应 TypeScript 源码。`argus.2` 还记录 ContextEngine 的召回输入/输出与 mTLS 请求关联，仅输出合成验收事实的摘要，不修改模型输入。增加的源文件全部位于 `lib/`，不修改全局 `fetch`。输出包保留上游版本号以兼容其版本解析器，通过 `package.json.argusSpiffe`、`ARGUS-UPSTREAM.json` 和整个包的 SHA-256 区分定制版本。保留上游包及其声明的许可信息。
+`build_plugin.py` 校验上游包后，修改发布包的 `HttpTransport`、独立的 `setup` 请求和对应 TypeScript 源码。`argus.3` 还记录 ContextEngine 的召回输入/输出与 mTLS 请求关联，仅输出合成验收事实的摘要，不修改模型输入。增加的源文件全部位于 `lib/`，不修改全局 `fetch`。输出包保留上游版本号以兼容其版本解析器，通过 `package.json.argusSpiffe`、`ARGUS-UPSTREAM.json` 和整个包的 SHA-256 区分定制版本。保留上游包及其声明的许可信息。
 
 ```bash
 python3 build_plugin.py
@@ -31,7 +31,7 @@ python3 build_plugin.py
 python3 build_plugin.py --upstream /path/to/openclaw-plugin-2026.6.18.tgz
 ```
 
-输出 `dist/openviking-openclaw-plugin-2026.6.18-argus.2.tgz` 及同名 `.json` 摘要记录。相同输入产生相同字节的安装包。公司环境部署包与记录一起传递。
+输出 `dist/openviking-openclaw-plugin-2026.6.18-argus.3.tgz` 及同名 `.json` 摘要记录。相同输入产生相同字节的安装包。公司环境部署包与记录一起传递。
 
 ## 公司环境前提
 
@@ -100,7 +100,7 @@ journalctl -u argus-openclaw-credentials -n 30 --no-pager
 
 4. 执行 `bash ../scripts/connect_openclaw_openviking.sh connect`。它检查只读挂载、持久环境、版本、安装包标识，使用包内客户端探测 `/health`，然后配置并检查插件。`TARGET_URI` 从受控客户端配置推导，不再使用旧 egress 默认值。必要时可显式设置 `OPENCLAW_PLUGIN_DIR` 为容器内实际插件安装目录。
 5. 如果 setup 引发 Gateway 进程替换，或还需重启以应用配置，先停止交付 unit、删除旧的 `/run/argus-openclaw/target.json`，核对新 PID 后重新登记、启动。不得保留旧 PID 登记冒充新实例。连接脚本不再自动 `docker restart` 后声称身份仍有效。
-6. 执行 `bash ../scripts/verify_openclaw_plugin_e2e.sh`。它发起带唯一标识的真实 OpenClaw 会话，在 OpenViking 中找到内容，用安装包中的真实 `OpenVikingClient` 读回，完成 commit/archive，并从 **Gateway 容器日志** 找到该 session 的原生 mTLS POST 记录。独立探针或 `docker exec` CLI 的成功不能替代 Gateway 写入记录。
+6. 执行 `bash ../scripts/verify_openclaw_plugin_e2e.sh`。它发起带唯一标识的真实 OpenClaw 会话，分开验证 Gateway 写入、archive、异步 memory extraction、新会话召回与 ContextEngine 输入，并核对 **Gateway 容器日志** 中的原生 mTLS 关联。超时可用 `--resume EVIDENCE_DIR` 续查同一 task，POST 不自动重发。配置、阶段结果和边界见 [业务闭环验收](BUSINESS-ACCEPTANCE.md)。独立探针成功不能替代 Gateway 写入记录。
 
 可用 `OPENCLAW_CONTAINER`、`OPENCLAW_USER`、`OPENCLAW_CONFIG_PATH` 选择实际容器；`OPENVIKING_REQUIRE_READY=1` 额外通过 mTLS 检查 `/ready`。两个阶段都要求非 root 用户 API key。该 key 仍由上游 setup 保存；调用方式沿用现有 CLI，不把它写入 TLS 审计记录。
 

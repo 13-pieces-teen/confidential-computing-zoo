@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
 )
 
 // Publisher requires serialized use of its private directory. Each generation
@@ -16,16 +19,32 @@ import (
 // validates NGINX configuration and loaded certificate before ready is published;
 // it does not perform business authorization or an application-level request.
 type Publisher struct {
-	Dir     string
-	Hook    func(context.Context, string) error
-	checkFS func(string) error
+	Dir          string
+	Hook         func(context.Context, string) error
+	checkFS      func(string) error
+	InvocationID string
+	Target       protocol.Target
+}
+
+// Readiness is an atomic snapshot for the current Helper invocation and target.
+// It is local operational state, not a replacement for attestation evidence.
+type Readiness struct {
+	SchemaVersion int             `json:"schema_version"`
+	InvocationID  string          `json:"invocation_id"`
+	Serial        string          `json:"serial"`
+	ExpiresAt     time.Time       `json:"expires_at"`
+	Target        protocol.Target `json:"target"`
 }
 
 func NewPublisher(dir, hook string) *Publisher {
 	return &Publisher{Dir: dir, checkFS: checkTmpfs, Hook: func(ctx context.Context, action string) error {
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, hookTimeout)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, hook, action).CombinedOutput()
+		command := exec.CommandContext(ctx, hook, action)
+		// A terminated hook may leave descendants holding its output pipes.
+		// Bound pipe draining as well as the lifetime of the direct child.
+		command.WaitDelay = hookWaitDelay
+		out, err := command.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("NGINX %s hook: %w: %s", action, err, out)
 		}
@@ -41,6 +60,7 @@ func (p *Publisher) Prepare() error {
 	}
 	return p.Clear()
 }
+
 // Clear removes this publisher's local files. The caller must also stop NGINX;
 // deleting PEM does not erase in-memory keys or revoke issued certificates.
 func (p *Publisher) Clear() error {
@@ -95,7 +115,12 @@ func (p *Publisher) Publish(ctx context.Context, c *Credentials) error {
 		return fmt.Errorf("credentials expired or publication canceled: %w", err)
 	}
 	readyNext := filepath.Join(p.Dir, ".ready-next")
-	if err = os.WriteFile(readyNext, []byte(c.Serial+"\n"), 0600); err != nil {
+	ready, err := json.Marshal(Readiness{SchemaVersion: 1, InvocationID: p.InvocationID, Serial: c.Serial, ExpiresAt: c.Expires.UTC(), Target: p.Target})
+	if err != nil {
+		_ = p.Clear()
+		return err
+	}
+	if err = os.WriteFile(readyNext, append(ready, '\n'), 0600); err != nil {
 		_ = p.Clear()
 		return err
 	}

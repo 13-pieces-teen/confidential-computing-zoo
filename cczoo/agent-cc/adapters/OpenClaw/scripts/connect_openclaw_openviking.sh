@@ -19,7 +19,7 @@ source "$SCRIPT_DIR/openclaw_spiffe_common.sh"
 PHASE="${1:-connect}"
 OPENCLAW_RESTART_GATEWAY="${OPENCLAW_RESTART_GATEWAY:-0}"
 OPENVIKING_REQUIRE_READY="${OPENVIKING_REQUIRE_READY:-0}"
-OPENCLAW_PLUGIN_ARCHIVE="${OPENCLAW_PLUGIN_ARCHIVE:-$SCRIPT_DIR/../spiffe_client/dist/openviking-openclaw-plugin-2026.6.18-argus.2.tgz}"
+OPENCLAW_PLUGIN_ARCHIVE="${OPENCLAW_PLUGIN_ARCHIVE:-$SCRIPT_DIR/../spiffe_client/dist/openviking-openclaw-plugin-2026.6.18-argus.3.tgz}"
 WAIT_ATTEMPTS="${WAIT_ATTEMPTS:-60}"
 WAIT_INTERVAL="${WAIT_INTERVAL:-2}"
 # Restart changes the attested process instance; it needs a new PID registration.
@@ -33,7 +33,7 @@ import hashlib, json, pathlib, sys
 p = pathlib.Path(sys.argv[1])
 receipt = json.loads(p.with_suffix('.json').read_text())
 digest = hashlib.sha256(p.read_bytes()).hexdigest()
-if digest != receipt['sha256'] or receipt['customization'] != 'argus.2':
+if digest != receipt['sha256'] or receipt['customization'] != 'argus.3':
     raise SystemExit('Plugin artifact digest/revision mismatch; rebuild with build_plugin.py')
 print(digest)
 PY

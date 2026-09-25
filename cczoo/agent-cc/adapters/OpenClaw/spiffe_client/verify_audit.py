@@ -3,6 +3,7 @@
 import json
 import hashlib
 import sys
+import argparse
 from urllib.parse import quote
 
 
@@ -16,7 +17,8 @@ def records(lines):
                 pass
 
 
-def find_recall(lines, session_key, fact):
+def find_recall(lines, session_key, fact, client_id='spiffe://argus.local/agent/openclaw',
+                server_id='spiffe://argus.local/service/openviking-cmem'):
     values = list(records(lines))
     digest = hashlib.sha256(fact.encode()).hexdigest()
     for value in values:
@@ -28,10 +30,9 @@ def find_recall(lines, session_key, fact):
         related = [r for r in values if r.get('component') == 'argus-openclaw-spiffe'
                    and r.get('context_span_id') == value.get('context_span_id')
                    and r.get('request_id') in value.get('request_ids', [])
-                   and r.get('path', '').startswith('/api/v1/')
-                   and r.get('path') not in ('/api/v1/sessions',)
-                   and r.get('client_spiffe_id') == 'spiffe://argus.local/agent/openclaw'
-                   and r.get('server_spiffe_id') == 'spiffe://argus.local/service/openviking-cmem'
+                   and r.get('path') in ('/api/v1/search/find', '/api/v1/content/read')
+                   and r.get('client_spiffe_id') == client_id
+                   and r.get('server_spiffe_id') == server_id
                    and r.get('client_serial') and r.get('server_serial') and r.get('generation')
                    and 200 <= r.get('http_status', 0) < 300]
         if related:
@@ -39,7 +40,8 @@ def find_recall(lines, session_key, fact):
     raise ValueError('No fresh-session recall-to-model-input evidence linked to Gateway mTLS')
 
 
-def find_write(lines, session):
+def find_write(lines, session, client_id='spiffe://argus.local/agent/openclaw',
+               server_id='spiffe://argus.local/service/openviking-cmem'):
     expected = '/api/v1/sessions/' + quote(session, safe='') + '/messages'
     for line in lines:
         start = line.find('{"component":"argus-openclaw-spiffe"')
@@ -50,8 +52,8 @@ def find_write(lines, session):
         except ValueError:
             continue
         if (value.get('path') == expected and value.get('method') == 'POST'
-                and value.get('client_spiffe_id') == 'spiffe://argus.local/agent/openclaw'
-                and value.get('server_spiffe_id') == 'spiffe://argus.local/service/openviking-cmem'
+                and value.get('client_spiffe_id') == client_id
+                and value.get('server_spiffe_id') == server_id
                 and isinstance(value.get('http_status'), int) and 200 <= value['http_status'] < 300
                 and all(value.get(key) for key in ('request_id', 'client_serial', 'server_serial', 'generation'))):
             return value
@@ -61,4 +63,9 @@ def find_write(lines, session):
 if __name__ == '__main__':
     # Consume all input before returning, so docker logs does not fail with
     # SIGPIPE under set -o pipefail when the matching receipt occurs early.
-    print(json.dumps(find_write(sys.stdin.readlines(), sys.argv[1])))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('session')
+    parser.add_argument('--client-id', default='spiffe://argus.local/agent/openclaw')
+    parser.add_argument('--server-id', default='spiffe://argus.local/service/openviking-cmem')
+    args = parser.parse_args()
+    print(json.dumps(find_write(sys.stdin.readlines(), args.session, args.client_id, args.server_id)))

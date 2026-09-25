@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in destructive company checks; records observed stop/rotation outcomes."""
+"""Opt-in fault checks. Cleanup alone never proves that business traffic stopped."""
 import argparse
 import json
 from pathlib import Path
@@ -11,11 +11,17 @@ import workload
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("event", choices=["helper-crash", "target-exit", "rotation", "wrong-client"])
+    p.add_argument("event", choices=["helper-crash", "helper-freeze", "target-exit", "rotation", "wrong-client"])
     p.add_argument("--config", required=True)
     p.add_argument("--wrong-client-cert")
     p.add_argument("--wrong-client-key")
+    p.add_argument("--execute-fault", action="store_true", help="explicitly execute the selected disruptive fault")
+    p.add_argument("--stop-timeout", type=float, default=15, help="cleanup observation budget, not a security bound")
     args = p.parse_args()
+    if args.event in ("helper-crash", "helper-freeze", "target-exit") and not args.execute_fault:
+        p.error("disruptive events require --execute-fault; use remote_acceptance.py for independent traffic evidence")
+    if not 1 <= args.stop_timeout <= 120:
+        p.error("--stop-timeout must be in [1,120]")
     c = json.loads(workload.protected_file(args.config).read_text())
     d = workload.Deployment(c)
     before = workload.verify(c)
@@ -53,28 +59,36 @@ def main():
         # returns would under-report the observed shutdown interval.
         start = time.monotonic()
         if args.event == "helper-crash":
-            workload.run(["systemctl", "kill", "--kill-who=main", "--signal=SIGKILL", "argus-helper"])
+            workload.run(["systemctl", "kill", "--kill-who=main", "--signal=SIGKILL", d.unit("helper")])
+        elif args.event == "helper-freeze":
+            workload.run(["systemctl", "kill", "--kill-who=main", "--signal=SIGSTOP", d.unit("helper")])
         else:
             workload.run(["docker", "kill", target["container_id"]])
         # Observe unit/readiness/PEM cleanup. External command time contributes
         # to elapsed; this loop does not measure traffic on existing connections.
-        while time.monotonic() - start < 6:
-            state = workload.run(["systemctl", "is-active", "argus-nginx"], check=False)
+        while time.monotonic() - start < args.stop_timeout:
+            state = workload.run(["systemctl", "is-active", d.unit("nginx")], check=False)
             if state in ("inactive", "failed") and not (d.credentials / "ready").exists():
                 if any(d.credentials.rglob("*.pem")):
                     time.sleep(0.05)
                     continue
                 elapsed = time.monotonic() - start
-                result = {"event": args.event, "result": "PASS", "stop_observed_seconds": round(elapsed, 3),
+                result = {"event": args.event, "result": "NOT_RUN", "cleanup_result": "PASS",
+                          "new_tls_traffic": "NOT_RUN", "existing_tls_traffic": "NOT_RUN", "receiver_delivery": "NOT_RUN",
+                          "stop_observed_seconds": round(elapsed, 3),
                           "readiness_removed": True, "target_pem_removed": True, "nginx_state": state}
                 break
             time.sleep(0.05)
         else:
-            raise TimeoutError("NGINX/readiness not removed within stop timeout plus observation allowance")
+            result = {"event": args.event, "result": "FAIL", "cleanup_result": "FAIL",
+                      "new_tls_traffic": "NOT_RUN", "existing_tls_traffic": "NOT_RUN", "receiver_delivery": "NOT_RUN",
+                      "reason": "cleanup not observed within the configured observation budget"}
         # Leave the deliberately disrupted test stopped for explicit re-registration.
         workload.stop(c)
     workload.write_json(d.records / ("lifecycle-" + args.event + ".json"), result)
     print(json.dumps(result, indent=2))
+    if result["result"] == "FAIL":
+        sys.exit(1)
 
 
 if __name__ == "__main__":

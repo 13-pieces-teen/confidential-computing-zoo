@@ -29,7 +29,7 @@ class DeliveryTests(unittest.TestCase):
         first, receipt = builder.build(source)
         second, _ = builder.build(source)
         self.assertEqual(first, second)
-        self.assertEqual(receipt['customization'], 'argus.2')
+        self.assertEqual(receipt['customization'], 'argus.3')
         with tarfile.open(fileobj=io.BytesIO(first), mode='r:gz') as archive:
             for path in ('adapters/http-transport.ts', 'dist/adapters/http-transport.js',
                          'commands/setup.ts', 'dist/commands/setup.js', 'services/setup/probe-service.ts'):
@@ -67,7 +67,8 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn('recall',verifier.find_recall(lines(recall,request),'fresh',fact))
         for changes in ({'input_fact_hashes':[digest]},{'output_fact_hashes':[]},{'session_key':'old'}):
             with self.assertRaises(ValueError): verifier.find_recall(lines(dict(recall,**changes),request),'fresh',fact)
-        for changes in ({'context_span_id':'other'},{'http_status':403},{'path':'/health'},{'client_serial':''}):
+        for changes in ({'context_span_id':'other'},{'http_status':403},{'path':'/health'},
+                        {'path':'/api/v1/sessions/old/context'},{'client_serial':''}):
             with self.assertRaises(ValueError): verifier.find_recall(lines(recall,dict(request,**changes)),'fresh',fact)
 
 

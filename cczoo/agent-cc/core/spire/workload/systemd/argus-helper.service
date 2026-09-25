@@ -8,6 +8,11 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
+NotifyAccess=main
+Environment=ARGUS_REQUIRE_SYSTEMD_WATCHDOG=1
+WatchdogSec=5s
+WatchdogSignal=SIGKILL
+TimeoutStartSec=15s
 User=root
 UMask=0077
 RuntimeDirectory=@RUN_NAME@-credentials

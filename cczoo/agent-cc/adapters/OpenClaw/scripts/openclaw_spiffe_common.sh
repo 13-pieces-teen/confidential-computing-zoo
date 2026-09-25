@@ -54,7 +54,7 @@ if (!candidates.length) {
 }
 const matches = candidates.filter(directory => {
   try { const pkg = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
-    return pkg.name === '@openviking/openclaw-plugin' && pkg.version === '2026.6.18' && pkg.argusSpiffe?.revision === 'argus.2';
+    return pkg.name === '@openviking/openclaw-plugin' && pkg.version === '2026.6.18' && pkg.argusSpiffe?.revision === 'argus.3';
   } catch { return false; }
 });
 if (matches.length !== 1) throw new Error('Expected one installed Argus plugin; set OPENCLAW_PLUGIN_DIR to its container directory');

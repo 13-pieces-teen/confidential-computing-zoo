@@ -6,7 +6,7 @@
 
 ## 交付内容与工具
 
-`dist/openclaw-ip1-tdvm-stage2.tar.gz` 包含源码、Linux amd64 `spiffe-client-credentials`、`argus.2` 插件包、操作文档和 SHA-256 清单。可选附带官方 SPIRE 1.15.3 归档。解压到一个新目录，先执行 `sha256sum -c SHA256SUMS`，不要直接覆盖当前 IP2 实例。
+`dist/openclaw-ip1-tdvm-stage2.tar.gz` 包含源码、Linux amd64 `spiffe-client-credentials`、`argus.3` 插件包、操作文档和 SHA-256 清单。可选附带官方 SPIRE 1.15.3 归档。解压到一个新目录，先执行 `sha256sum -c SHA256SUMS`，不要直接覆盖当前 IP2 实例。
 
 从工作区重建（Python >= 3.10、Go >= 1.25.3、已校验的 npm 上游包）：
 
@@ -162,7 +162,9 @@ bash "$SCRIPTS/verify_openclaw_plugin_e2e.sh"
 
 `guest-stop` 只停止凭据交付、清理凭据和登记，不停止业务容器、Agent 或 VM。Guest 重启后 `/run` 需要重建：先 `install -d -o root -g argus-openclaw -m 0750 /run/argus-openclaw /run/argus-openclaw/credentials`，再启动 Agent/Gateway，并登记新 PID。首次联调期间 Compose 的 restart 为 `no`，避免进程自动替换后误用旧登记。
 
-验收脚本创建独立证据目录：真实 Gateway 写入随机项目校验码 → 原生客户端读回 → commit/archive 并等待提取结束 → 新会话只给项目名检索校验码 → 随机不存在项目回答 `UNKNOWN`。`argus.2` 在 ContextEngine assemble 返回处记录合成校验码的摘要，关联同一次 assemble 的 Gateway mTLS 请求 ID；不把预期答案放入第二次问题，也不修改模型输入。缺少召回、模型回答、Gateway 写入或 mTLS 证据时返回 FAIL。该证据证明插件将召回内容交给 ContextEngine，LLM 网络请求的完整抓包不属于本轮记录。
+验收脚本创建独立证据目录：真实 Gateway 写入随机项目校验码 → 原生客户端读回 → commit/archive 并等待提取结束 → 新会话只给项目名检索校验码 → 随机不存在项目回答 `UNKNOWN`。`argus.3` 在 ContextEngine assemble 返回处记录合成校验码的摘要，关联同一次 assemble 的 Gateway mTLS 请求 ID；不把预期答案放入第二次问题，也不修改模型输入。缺少召回、模型回答、Gateway 写入或 mTLS 证据时返回 FAIL。该证据证明插件将召回内容交给 ContextEngine，LLM 网络请求的完整抓包不属于本轮记录。
+
+`argus.3` 分开记录归档完成、提取计数、检索候选及输入边界，空提取明确返回 `EXTRACTION_EMPTY`。异步任务超时后用 `verify_openclaw_plugin_e2e.sh --resume EVIDENCE_DIR` 续查同一 task，不重发 POST；新旧身份作用域不一致时拒绝恢复。完整阶段码、参数和受保护证据说明见 [业务闭环验收](BUSINESS-ACCEPTANCE.md)。
 
 保留 `evidence/<run>/result.json`、`SHA256SUMS`、两个会话/负例响应、写入及召回 mTLS 记录、Gateway 日志。它们含测试对话，目录默认仅操作者可读。
 

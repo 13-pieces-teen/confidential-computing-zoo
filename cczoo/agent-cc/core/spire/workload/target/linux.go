@@ -288,6 +288,13 @@ func Register(ctx context.Context, containerID, agentID, workloadID, policyID, c
 // The 500 ms poll wait excludes check/scheduling time and is not a shutdown SLA;
 // this watcher does not generate Quotes or re-run Trustee appraisal.
 func StartWatch(ctx context.Context, t protocol.Target) (<-chan error, error) {
+	return StartWatchWithProgress(ctx, t, nil)
+}
+
+// StartWatchWithProgress reports only completed successful local checks. The
+// callback must not block; callers can use this progress to supervise a stuck
+// check independently from the watcher. It does not re-attest the workload.
+func StartWatchWithProgress(ctx context.Context, t protocol.Target, checked func(time.Time)) (<-chan error, error) {
 	pid, err := strconv.Atoi(t.PID)
 	if err != nil {
 		return nil, err
@@ -296,13 +303,28 @@ func StartWatch(ctx context.Context, t protocol.Target) (<-chan error, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open target pidfd: %w", err)
 	}
-	if err = Check(t); err != nil {
+	if err = observedCheck(t, Check, checked); err != nil {
 		_ = unix.Close(fd)
 		return nil, err
 	}
 	result := make(chan error, 1)
-	go func() { defer unix.Close(fd); result <- watchFD(ctx, t, fd, Check) }()
+	go func() {
+		defer unix.Close(fd)
+		result <- watchFD(ctx, t, fd, func(t protocol.Target) error {
+			return observedCheck(t, Check, checked)
+		})
+	}()
 	return result, nil
+}
+
+func observedCheck(t protocol.Target, check func(protocol.Target) error, checked func(time.Time)) error {
+	if err := check(t); err != nil {
+		return err
+	}
+	if checked != nil {
+		checked(time.Now())
+	}
+	return nil
 }
 func Watch(ctx context.Context, t protocol.Target) error {
 	result, err := StartWatch(ctx, t)

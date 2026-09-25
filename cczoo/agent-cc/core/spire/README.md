@@ -53,6 +53,12 @@ unversioned route aliases. These handlers use separate binding contracts and
 share the real TSM Quote source. Workload SVID rotation does not generate a new
 Quote; Helper reconnection triggers a new subscription and attestation.
 
+Node enrollment requires a fresh Quote and Trustee appraisal, then returns
+`CanReattest=false`. SPIRE renews a valid Agent SVID using the established Agent
+identity without generating another Node Quote. Missing or expired Agent
+credentials require fresh enrollment. This establishes initial node trust and
+credential continuity, not continuously refreshed TDX/TCB assurance.
+
 The [deployment configuration](workload/config/environment.example.json) supplies
 identities, paths and ports. Agent ID must agree across Provider, Node/Workload
 plugins, Helper, Entry and policy, with the same SPIRE trust domain. Current scope:

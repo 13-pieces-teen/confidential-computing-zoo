@@ -17,9 +17,9 @@ def hook(c, action):
     if action == "publish":
         d.nginx.mkdir(parents=True, exist_ok=True, mode=0o755)
         run([*nginx, "-t"])
-        active = run(["systemctl", "is-active", "argus-nginx.service"], check=False) == "active"
-        run(["systemctl", "reload" if active else "start", "argus-nginx.service"])
-        run(["systemctl", "is-active", "--quiet", "argus-nginx.service"])
+        active = run(["systemctl", "is-active", d.unit("nginx")], check=False) == "active"
+        run(["systemctl", "reload" if active else "start", d.unit("nginx")])
+        run(["systemctl", "is-active", "--quiet", d.unit("nginx")])
         run([*namespace, d.bin / "spiffe-mtls-probe", "-tls-only", "-url", f"https://127.0.0.1:{d.workload['tls_port']}",
              "-server-id", d.identity["target_id"], "-cert", d.credentials / "current/svid.pem",
              "-key", d.credentials / "current/key.pem", "-bundle", d.credentials / "current/bundle.pem"])
@@ -30,7 +30,7 @@ def hook(c, action):
         argv = [str(v) for v in [*namespace, *nginx, "-g", "daemon off;"]]
         os.execvp(argv[0], argv)
     elif action == "stop":
-        run(["systemctl", "stop", "argus-nginx.service"])
+        run(["systemctl", "stop", d.unit("nginx")])
     elif action == "clear":
         if d.credentials.is_symlink():
             raise ValueError("credential directory must not be a symlink")

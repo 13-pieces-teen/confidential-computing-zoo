@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
@@ -79,7 +80,7 @@ func testPublisher(t *testing.T) *Publisher {
 	if runtime.GOOS != "linux" {
 		t.Skip("Broker filesystem lifecycle is Linux-only")
 	}
-	p := &Publisher{Dir: t.TempDir(), checkFS: func(string) error { return nil }, Hook: func(context.Context, string) error { return nil }}
+	p := &Publisher{Dir: t.TempDir(), InvocationID: strings.Repeat("a", 32), Target: protocol.Target{LaunchID: "launch-test", PID: "123", StartTime: "456"}, checkFS: func(string) error { return nil }, Hook: func(context.Context, string) error { return nil }}
 	if err := p.Prepare(); err != nil {
 		t.Fatal(err)
 	}
@@ -155,12 +156,14 @@ func TestReadinessReadersSeeCompleteGeneration(t *testing.T) {
 			t.Fatal(err)
 		}
 		current, err := os.ReadFile(filepath.Join(p.Dir, "ready"))
-		if err != nil || string(current) != serial+"\n" {
+		var currentReady Readiness
+		if err != nil || json.Unmarshal(current, &currentReady) != nil || currentReady.Serial != serial || currentReady.SchemaVersion != 1 || currentReady.InvocationID != p.InvocationID || currentReady.Target != p.Target || !currentReady.ExpiresAt.After(time.Now()) {
 			t.Fatalf("new readiness snapshot: %q, %v", current, err)
 		}
 		if previous != nil {
 			old, err := io.ReadAll(previous)
-			if err != nil || string(old) != "10\n" {
+			var oldReady Readiness
+			if err != nil || json.Unmarshal(old, &oldReady) != nil || oldReady.Serial != "10" || oldReady.InvocationID != p.InvocationID {
 				t.Fatalf("reader of previous generation observed a mutation: %q, %v", old, err)
 			}
 		}

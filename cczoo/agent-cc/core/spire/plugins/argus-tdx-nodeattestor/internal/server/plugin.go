@@ -184,8 +184,9 @@ func (plugin *Plugin) Attest(stream nodeattestorapi.NodeAttestor_AttestServer) e
 		Response: &nodeattestorapi.AttestResponse_AgentAttributes{AgentAttributes: &nodeattestorapi.AgentAttributes{
 			SpiffeId:       state.config.AgentID,
 			SelectorValues: nil,
-			// Re-attestation repeats the full fresh-nonce Quote and Trustee flow.
-			CanReattest: true,
+			// Initial enrollment requires the full Quote and Trustee flow.
+			// Rotate valid Agent SVIDs by renewal without repeating attestation.
+			CanReattest: false,
 		}},
 	}); err != nil {
 		return status.Errorf(codes.Unavailable, "send AgentAttributes: %v", err)

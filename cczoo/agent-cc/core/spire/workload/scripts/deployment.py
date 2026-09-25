@@ -7,6 +7,10 @@ import stat
 
 
 PROFILE = "nginx-spiffe-helper-v1"
+# Static v1 deployment. All callers resolve names here so later instance
+# templates do not require changing lifecycle decisions or proof protocols.
+SERVICE_UNITS = {"helper": "argus-helper", "nginx": "argus-nginx", "authz": "argus-authz",
+                 "agent": "argus-workload-agent", "provider": "argus-tdx-provider"}
 PACKAGE = Path(__file__).resolve().parents[1]
 IDENTITY_KEYS = {"trust_domain", "agent_id", "helper_id", "target_id", "client_id"}
 PATH_KEYS = {"install_dir", "config_dir", "records_dir", "spire_bin_dir", "run_name"}
@@ -125,6 +129,10 @@ class Deployment:
         self.provider_socket = Path("/run") / self.run_name / "evidence-provider.sock"
         self.target = self.run / "target.json"
         self.environment = self.etc / "environment.json"
+        self.units = dict(SERVICE_UNITS)
+
+    def unit(self, role):
+        return self.units[role] + ".service"
 
     def policy_values(self):
         return {**self.c["approved"], "agent_id": self.identity["agent_id"], "workload_id": self.workload["id"],
@@ -180,7 +188,7 @@ def render_services(c, package=PACKAGE):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("paths", "render-services"))
+    parser.add_argument("action", choices=("paths", "units", "render-services"))
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
     c = json.loads(protected_file(args.config).read_text())
@@ -188,6 +196,8 @@ def main():
     if args.action == "paths":
         for value in (d.install, d.etc, d.records, d.spire, d.run):
             print(value.as_posix())
+    elif args.action == "units":
+        print("\n".join(d.units.values()))
     else:
         render_services(c)
 

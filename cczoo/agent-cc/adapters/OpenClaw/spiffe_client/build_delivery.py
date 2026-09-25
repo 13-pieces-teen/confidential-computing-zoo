@@ -24,7 +24,7 @@ def main():
     dist = ROOT/'dist'
     dist.mkdir(exist_ok=True)
     plugin, receipt = build_plugin.build(a.upstream.read_bytes())
-    plugin_name = 'openviking-openclaw-plugin-2026.6.18-argus.2'
+    plugin_name = 'openviking-openclaw-plugin-2026.6.18-argus.3'
     (dist/(plugin_name+'.tgz')).write_bytes(plugin)
     (dist/(plugin_name+'.json')).write_bytes((json.dumps(receipt,indent=2)+'\n').encode())
     binary = dist/'spiffe-client-credentials'

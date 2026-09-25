@@ -115,13 +115,29 @@ class RuntimeContractTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertIsNone(result["target_serial"])
 
-    def test_status_requires_a_complete_serial(self):
+    def test_status_rejects_legacy_or_incomplete_readiness(self):
         c = self.config()
-        for contents, expected in (("", None), ("invalid", None), ("123\n", "123")):
-            with self.subTest(contents=contents), patch.object(runtime, "run", return_value="active"), patch.object(Path, "read_text", return_value=contents):
+        for contents in ("", "invalid", "123\n", '{}'):
+            with self.subTest(contents=contents), patch.object(runtime, "run", return_value="active"), \
+                    patch.object(runtime, "protected_file", side_effect=Path), patch.object(Path, "read_text", return_value=contents):
                 result = runtime.status(c)
-            self.assertEqual(result["target_serial"], expected)
-            self.assertEqual(result["ready"], expected is not None)
+            self.assertIsNone(result["target_serial"])
+            self.assertFalse(result["ready"])
+
+    def test_readiness_binds_current_invocation_target_and_unexpired_certificate(self):
+        c = self.config()
+        target = {"agent_id": c["identity"]["agent_id"], "workload_id": c["workload"]["id"], "pid": "123"}
+        good = {"schema_version": 1, "invocation_id": "1" * 32, "serial": "123",
+                "expires_at": "2099-01-01T00:00:00.123456789Z", "target": target}
+        cases = [(good, True), (dict(good, invocation_id="2" * 32), False),
+                 (dict(good, expires_at="2000-01-01T00:00:00Z"), False),
+                 (dict(good, expires_at="2099-01-01T00:00:00"), False),
+                 (dict(good, target=dict(target, pid="124")), False), (dict(good, serial="123x"), False)]
+        for receipt, expected in cases:
+            with self.subTest(receipt=receipt), patch.object(runtime, "protected_file", side_effect=Path), \
+                    patch.object(Path, "read_text", side_effect=[json.dumps(receipt), json.dumps(target)]), \
+                    patch.object(runtime, "run", side_effect=lambda argv, **kw: "1" * 32 if "show" in argv else "active"):
+                self.assertEqual(runtime.status(c)["ready"], expected)
 
     def verify_records(self):
         target = json.loads((ROOT / "testdata/runtime-data.json").read_text())["runtime_data"]

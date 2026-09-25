@@ -6,7 +6,7 @@ OUT="${ARGUS_WORKLOAD_BUILD_DIR:-$WORKLOAD_ROOT/build}"
 mkdir -p "$OUT/bin"
 OUT="$(cd "$OUT" && pwd)"
 # A failed rebuild must not leave an earlier build marked installable.
-rm -f -- "$OUT/SHA256SUMS" "$OUT/SHA256SUMS.tmp"
+rm -f -- "$OUT/SHA256SUMS" "$OUT/SHA256SUMS.tmp" "$OUT/build-manifest.json"
 source "$WORKLOAD_ROOT/scripts/build-artifacts.sh"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || { echo "TDX build requires Linux x86_64" >&2; exit 1; }
 for module in "$WORKLOAD_ROOT" "$SPIRE_ROOT/plugins/argus-tdx-nodeattestor" "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" "$SPIRE_ROOT/helpers/spiffe-helper"; do
@@ -41,5 +41,6 @@ tar -xzf "$archive" -C "$OUT"
 [[ "$("$OUT/spire-1.15.3/bin/spire-server" -version 2>&1)" == 1.15.3 ]]
 SPIRE_BIN_DIR="$OUT/spire-1.15.3/bin" ARGUS_WORKLOAD_TOOLS_DIR="$OUT/bin" \
     python3 -m unittest discover -s "$WORKLOAD_ROOT/tests" -p test_spire_cli.py -v
+python3 "$WORKLOAD_ROOT/scripts/build_manifest.py" create --root "$WORKLOAD_ROOT" --output "$OUT" "${ARGUS_WORKLOAD_ARTIFACTS[@]}"
 (cd "$OUT" && sha256sum -- "${ARGUS_WORKLOAD_ARTIFACTS[@]}" > SHA256SUMS.tmp && mv -f -- SHA256SUMS.tmp SHA256SUMS)
 printf 'BUILD=PASS\nOUTPUT=%s\n' "$OUT"

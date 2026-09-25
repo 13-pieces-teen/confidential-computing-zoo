@@ -1,5 +1,23 @@
 # Workload Attestation 验证记录
 
+## 2026-09-25—26：业务阶段、watchdog 与启动恢复
+
+本轮实现及远程运行顺序见 [交付说明](IMPLEMENTATION-20260925.md)。未执行远程部署、真实 TDX 或真实 OpenViking 业务闭环。
+
+| 检查 | 本次结果与边界 |
+| --- | --- |
+| Linux Python 部署/恢复/安装/观测 | WSL Ubuntu 20.04、隔离 Python 3.12.14：**67 passed / 3 skipped**。覆盖持久锁、启动/签名恢复、未知 POST 不重发、跨用户/配置关联拒绝、readiness、真实本机 TLS、受控故障证据、半行中断恢复，以及实际安装脚本对假构建产物的拒绝/安装。3 项需要完整 SPIRE/Provider 构建产物。 |
+| Helper Linux Go | Broker **16 passed**；其余 7 个测试包 **36 passed / 1 skipped**。包括 systemd Unix 通知、冻结进度判定、发布期限、子进程输出管道期限、正常轮换和 POSIX signal 配置。1 项 opt-in NGINX 集成未运行。 |
+| 目标/WorkloadAttestor Go | Linux Target **3 passed**；WorkloadAttestor **11 passed**。Linux 测试程序由 Windows Go 1.26.5 交叉编译，在 WSL root 执行。 |
+| NodeAttestor Go | 当前模块 `go test ./...` 通过，包含既有 `CanReattest=false` 断言。运行平台 Windows；不是远程节点续期证明。 |
+| OpenClaw | 固定上游包实际构建与本机 mTLS Node 测试 **27/27 passed**；Python **13 passed / 2 skipped**。详见 [客户端验证记录](../../../adapters/OpenClaw/spiffe_client/VALIDATION.md)。 |
+| 静态检查 | 修改文件的 `git diff --check`、Python/Node/Bash 语法检查通过。 |
+| 尚未运行 | 完整 Linux Rust Provider/Trustee/SPIRE 构建、真实 systemd watchdog 冻结关闭、NGINX 已有连接终止、真实硬件 Quote/EAR/SVID、远程模型提取/召回与独立 OpenViking receiver 审计。均为 **NOT_RUN**。 |
+
+Windows 上 Helper 全模块测试中的两个 POSIX signal 配置子用例不受该平台支持；相应用例在 Linux 全部通过。未修改上游测试来绕过平台限制。Linux 安装测试只使用隔离假二进制和 stub systemd，不安装或操作真实服务。
+
+新回归特别覆盖：`initiated` 状态继续轮询、空提取不等于业务成功、离线汇总缺材料不能 PASS、TLS 拒绝不能被嵌套网络错误覆盖、源码子目录不导致空 Git 摘要、安装后脚本改变使 build integrity 不匹配。源码哈希仅作版本关联，不是硬件证明或实际敏感数据接收凭证。
+
 ## 2026-09-24：复用链查询并兼容 Rekor 引用
 
 撤销上传时强制转换 UUID 的要求，复用 Rekor adapter 的索引／UUID 解析；迁移工具仅供可选的运维规范化。Provider 改用 `GET /chain-state?include_history=true`，复用 `ChainStateResponse` 和有界元数据查询，移除独立快照路由及模型。历史模式从同一条记录取得链头、序号和度量值，拒绝任何未确认或不连续的历史。普通链状态查询保持原有响应。

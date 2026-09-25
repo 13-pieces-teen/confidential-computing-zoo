@@ -3,7 +3,7 @@
   "version": "2026.6.18",
   "url": "https://registry.npmjs.org/@openviking/openclaw-plugin/-/openclaw-plugin-2026.6.18.tgz",
   "integrity": "sha512-tHZXKnA8NdVD6RTKv6v2imcw8cP8RCgbb5e9r0wRnD43Y6IgMm5Leoo7a2m0nob2hJlGK3ynQmdhB1S5akPjcA==",
-  "customization": "argus.2",
+  "customization": "argus.3",
   "runtimeDependencies": { "@sinclair/typebox": "0.34.48", "fflate": "0.8.3" },
   "minimumOpenClaw": "2026.4.8",
   "repositoryObservedOpenClaw": "2026.6.11",

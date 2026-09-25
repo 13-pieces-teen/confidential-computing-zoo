@@ -4,6 +4,8 @@
 
 先阅读 [机制与信任边界](ARCHITECTURE.md) 和 [插件配置及 selectors](../plugins/argus-tdx-workloadattestor/README.md)，再按本手册操作。[验证记录](VALIDATION.md) 区分当前实现待验项与历史测试结果；本手册中的命令不表示已完成真实 TDX 验收。Workload 准入要求 Trustee 按 Rekor 引用（UUID 或数字索引）获取并验证完整日志链、重放 RTMR2 并关联当前容器；必须先部署 [Trustee 日志验证接入](trustee/README.md)。
 
+2026-09-25 的业务诊断、watchdog、启动恢复改动及升级顺序见 [本轮交付说明](IMPLEMENTATION-20260925.md)。故障窗口与 Node 续期的独立观测步骤见 [远程验收](scripts/REMOTE_ACCEPTANCE.md)。
+
 ```mermaid
 flowchart TB
     Inputs["准备批准基线、Node 配置和信任材料"]
@@ -76,7 +78,7 @@ sudo bash scripts/install.sh --config /root/workload-environment.json
 
 `build.sh` 执行 Node、Workload、定制 Helper（含上游测试）、NGINX、TC API 启动和 Trustee 合同测试，并用官方 SPIRE 校验生成配置与真实 Entry JSON，下载官方 SPIRE v1.15.3 二进制并检查固定 SHA-256。它不编译或修改 SPIRE Core。产物默认位于 `build/`，也可由 `ARGUS_WORKLOAD_BUILD_DIR` 指定，包含插件、Helper、Provider、辅助工具及哈希清单。构建测试中的 Quote/运行观察、Docker/registry/日志传输替身不能替代硬件验收。
 
-构建开始时会使旧的 `SHA256SUMS` 失效，全部检查成功后才原子发布新清单。
+构建开始时会使旧的 `SHA256SUMS` 和 `build-manifest.json` 失效，全部检查成功后才原子发布新清单。后者记录源码提交、工作区修改摘要、二进制及实际安装脚本/模板哈希；安装会拒绝构建后被修改的源码或安装输入。
 安装前检查 [完整可执行产物列表](scripts/build-artifacts.sh) 中的 12 个文件及其哈希，
 包括 Provider 和官方 SPIRE Agent/Server；只安装这些文件。
 部署使用完整构建产物，缺失清单、缺失产物或被修改的二进制都会在安装前被拒绝。
@@ -180,6 +182,8 @@ sudo python3 /opt/argus-workload/scripts/workload.py register --config /etc/argu
 
 首次登记不覆盖已有登记。替换实例需要先 `stop`，再启动/登记新实例；不支持原地切换成另一个进程。`stop` 停止认证栈并撤下入口；旧 OpenViking 容器仍由 TC API/Docker 管理，启动替换容器前需按旧 container ID 停止它，释放 `workload.published_port` 指定的端口。业务容器不能修改登记文件。
 
+`launch` 在发送创建请求前持久化操作状态，取得 `launch_id` 后立即保存。已知 ID 的查询超时后执行 `resume-launch --config /etc/argus-workload/environment.json`，继续查询同一操作。若创建请求的响应丢失，先从服务端核对唯一对应的 ID，再显式加 `--launch-id <known-id>`；工具不会重复创建容器。恢复必须使用原配置；服务端结果还需匹配用户、workload、profile 和批准镜像。若服务端要求新签名身份，通过已有 OIDC 流程刷新环境变量后执行 `resume-launch`，只继续既有日志提交。记录位于持久目录的 `launch-state.json`，不要为重试直接删除它。
+
 ## 6. 预检、启动、状态、验证与停止
 
 ```bash
@@ -198,6 +202,8 @@ sudo python3 /opt/argus-workload/scripts/workload.py stop --config /etc/argus-wo
 | 凭据发布 | 校验证书链/身份/密钥，原子切换代次；NGINX `-t` 和 `-tls-only` 加载检查通过后才发布 readiness。 |
 | `verify` | 期望的客户端/服务端 ID、当前证书序列号、业务 2xx 及本次实例的日志关联。 |
 | 失败清理 | 目标/身份失效、断连、过期、发布或 reload 错误触发 PEM/readiness 清理及停服请求；SIGKILL 由 systemd 补充处理。 |
+
+Helper 的 systemd watchdog 默认 5 秒，心跳依赖真实目标检查、消费循环和固定发布期限；远程证明初始化另用默认约 120 秒预算。正常证书轮换使用 reload；失效停止使用 SIGTERM，NGINX 默认 2 秒后强制清理。ready 现在是版本化 JSON，绑定 Helper invocation、完整目标、证书序列与有效期；旧的纯数字文件不再表示就绪。这些配置值不等于实测的数据停止上限。
 
 组件连接与状态转换见 [架构图](ARCHITECTURE.md#components-and-identities) 和 [生命周期图](ARCHITECTURE.md#publication-traffic-and-failure-handling)。NGINX 在目标网络命名空间转发到 loopback；证书链由 NGINX 验证，精确客户端 ID 由受保护 UDS 后的 AuthZ 验证。客户端同时检查 `identity.target_id`。
 
@@ -243,12 +249,12 @@ sudo python3 /opt/argus-workload/scripts/watch-attestation.py \
 sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py rotation --config /etc/argus-workload/environment.json
 sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py wrong-client --config /etc/argus-workload/environment.json \
   --wrong-client-cert /approved-test-client/svid.pem --wrong-client-key /approved-test-client/key.pem
-sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py helper-crash --config /etc/argus-workload/environment.json
+sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py helper-crash --execute-fault --config /etc/argus-workload/environment.json
 # 重新 register/start/verify 后执行目标退出用例：
-sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py target-exit --config /etc/argus-workload/environment.json
+sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verify-lifecycle.py target-exit --execute-fault --config /etc/argus-workload/environment.json
 ```
 
-普通轮换必须保持就绪、证书序列号改变且没有新的 appraisal。崩溃/退出用例从触发操作前开始计时，循环采用 6 秒截止条件，检查 NGINX unit inactive/failed、readiness 消失及 PEM 清理。外部命令耗时计入实际观测值，单次检查可能跨过截止时间，因此应报告 `stop_observed_seconds`，不能把 6 秒写成已证明的上限。该结果只说明服务状态和凭据清理，脚本没有测量已建立连接是否仍交付业务数据，后者需要独立客户端探针。崩溃/退出用例结束后工具停下认证栈，恢复需要重新登记。
+普通轮换必须保持就绪、证书序列号改变且没有新的 appraisal。崩溃/退出/冻结用例从触发操作前计时，默认观察 15 秒，可用 `--stop-timeout` 调整；这不是安全上限。清理结果与新旧连接、实际接收端结果分别记录，清理成功不会把整体标为 PASS。独立流量和接收端验收使用 `remote_acceptance.py`，见远程验收文档。清理用例结束后工具停下认证栈，恢复需要重新登记。
 
 完整验收记录至少关联源码提交、实际运行二进制摘要、部署配置版本、批准基线、实际 policy 内容摘要，以及 launch/container/PID/start time、nonce、EAR 摘要、SVID 序列号和业务结果。`verify` 保存的是受信任本机日志的运行关联，不会独立重新验证原始 Quote/EAR；其 `evidence_kind` 标签不能单独证明硬件验收通过。
 

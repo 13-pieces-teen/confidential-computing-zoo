@@ -57,9 +57,13 @@ def build(archive: bytes) -> tuple[bytes, dict]:
         replace(engine, "return assembleOpenVikingSession({", "return auditAssembly(assembleOpenVikingSession, {", 1)
         files[engine] = b'import { auditAssembly } from "./argus-spiffe/recall-audit.mjs";\n' + files[engine]
         lifecycle = prefix + "services/context-lifecycle-service." + extension
-        replace(lifecycle, "return { messages: withRecall, estimatedTokens };",
-                "auditRecallSource(recall.block);\n            return { messages: withRecall, estimatedTokens };", 1)
+        replace(lifecycle, "if (!recall.block) {",
+                "auditRecallSource(recall.block, recall.memoryCount);\n      if (!recall.block) {", 1)
         files[lifecycle] = b'import { auditRecallSource } from "../argus-spiffe/recall-audit.mjs";\n' + files[lifecycle]
+        recall = prefix + "auto-recall." + extension
+        replace(recall, "const uniqueMemories = allMemories.filter(",
+                "auditRecallSearch(allMemories, autoRecallSettled);\n      const uniqueMemories = allMemories.filter(", 1)
+        files[recall] = b'import { auditRecallSearch } from "./argus-spiffe/recall-audit.mjs";\n' + files[recall]
     probe = "package/services/setup/probe-service.ts"
     replace(probe, "(url, init) => fetch(url, init)", "(url, init) => spiffeFetch(url, init)", 1)
     files[probe] = b'import { spiffeFetch } from "../../argus-spiffe/transport.mjs";\n' + files[probe]
@@ -95,7 +99,7 @@ def build(archive: bytes) -> tuple[bytes, dict]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--upstream", type=Path, help="offline upstream tgz, still integrity checked")
-    parser.add_argument("--output", type=Path, default=ROOT / "dist" / "openviking-openclaw-plugin-2026.6.18-argus.2.tgz")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist" / "openviking-openclaw-plugin-2026.6.18-argus.3.tgz")
     args = parser.parse_args()
     if args.upstream:
         archive = args.upstream.read_bytes()

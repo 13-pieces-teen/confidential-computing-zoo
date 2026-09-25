@@ -16,7 +16,9 @@ test('execute the actual patched upstream client and setup over real mTLS', {ski
   const cert = name => readFileSync(join(root, name + '.pem'));
   const calls = [];
   const server = createServer({cert:cert('server'), key:cert('server-key'), ca:cert('bundle'), requestCert:true, rejectUnauthorized:true}, (request,response) => {
-    calls.push({path:request.url, method:request.method, cert:request.socket.getPeerCertificate().subjectaltname, key:request.headers['x-api-key']});
+    calls.push({path:request.url, method:request.method, cert:request.socket.getPeerCertificate().subjectaltname,
+      key:request.headers['x-api-key'], account:request.headers['x-openviking-account'],
+      user:request.headers['x-openviking-user'], actor:request.headers['x-openviking-actor-peer']});
     if (request.url === '/health') response.end(JSON.stringify({status:'ok', healthy:true, version:'v0.4.8'}));
     else if (request.method === 'GET' && request.url.startsWith('/api/v1/sessions')) response.end(JSON.stringify({status:'ok', result:[]}));
     else { request.resume(); request.on('end', () => response.end(JSON.stringify({status:'ok', result:{session_id:'test-session'}}))); }
@@ -36,12 +38,14 @@ test('execute the actual patched upstream client and setup over real mTLS', {ski
   process.env.OPENVIKING_SPIFFE_CONFIG=config;
   const directory=process.env.ARGUS_TEST_PLUGIN_DIR;
   const pkg=JSON.parse(readFileSync(join(directory,'package.json')));
-  assert.equal(pkg.argusSpiffe.revision,'argus.2');
+  assert.equal(pkg.argusSpiffe.revision,'argus.3');
   const {OpenVikingClient}=await import(pathToFileURL(join(directory,'dist/client.js')));
   const {__test__:setup}=await import(pathToFileURL(join(directory,'dist/commands/setup.js')));
-  const client=new OpenVikingClient(origin,'user-test-key','main',5000);
+  const client=new OpenVikingClient(origin,'user-test-key','main',5000,'account-a','user-a');
   await client.healthCheck();
   await client.addSessionMessage('test-session','user',[{type:'text',text:'marker'}]);
+  await client.getSessionContext('test-session',128000,'test_worker');
+  assert.ok(calls.some(call=>call.path.includes('/context?') && call.account==='account-a' && call.user==='user-a' && call.actor==='test_worker'));
   const probe=await setup.probeApiKeyType(origin,'user-test-key');
   assert.ok(probe);
   assert.ok(calls.some(call=>call.path==='/api/v1/sessions/test-session/messages' && call.method==='POST' && call.key==='user-test-key'));

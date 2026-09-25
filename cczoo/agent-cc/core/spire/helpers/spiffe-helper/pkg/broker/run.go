@@ -26,18 +26,23 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 	if err := c.Validate(certDir); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	p := NewPublisher(certDir, c.PublishHook)
 	if err := p.Prepare(); err != nil {
 		return err
 	}
 	defer func() {
+		cancel(nil)
 		clearErr := p.Clear()
 		stopCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
 		defer stop()
 		result = errors.Join(result, clearErr, p.Hook(stopCtx, "stop"))
 	}()
+	w, err := watchdogFromEnvironment()
+	if err != nil {
+		return err
+	}
 	t, err := target.Load(c.TargetRegistrationPath)
 	if err != nil {
 		return err
@@ -45,17 +50,23 @@ func Run(ctx context.Context, agentAddress, certDir string, c Config) (result er
 	if t.AgentID != c.AgentSPIFFEID || t.WorkloadID != c.WorkloadID {
 		return fmt.Errorf("registered target identity mismatch")
 	}
-	watchErr, err := target.StartWatch(ctx, t)
-	if err != nil {
-		return err
-	}
 	startupTimeout, err := c.startupTimeout()
 	if err != nil {
 		return err
 	}
-	return supervise(ctx, watchErr, startupTimeout, func(ctx context.Context, published func()) error {
-		return subscribe(ctx, agentAddress, c, t, p, published)
+	p.InvocationID, p.Target = w.invocationID, t
+	h := newHealth(time.Now(), startupTimeout)
+	watchErr, err := target.StartWatchWithProgress(ctx, t, h.targetChecked)
+	if err != nil {
+		return err
+	}
+	// With Type=simple, the first completed local check starts heartbeats before
+	// potentially slow attestation. A stuck local initialization never feeds it.
+	go runHealth(ctx, h, w.interval, w.notify, cancel)
+	err = supervise(ctx, watchErr, startupTimeout, func(ctx context.Context, published func()) error {
+		return subscribe(ctx, agentAddress, c, t, p, published, h)
 	})
+	return errors.Join(err, context.Cause(ctx))
 }
 
 // Monitor the target while the Workload API and Broker are initializing as well
@@ -81,7 +92,7 @@ func supervise(parent context.Context, targetErrors <-chan error, timeout time.D
 	return errors.Join(context.Cause(ctx), err)
 }
 
-func subscribe(ctx context.Context, agentAddress string, c Config, t protocol.Target, p *Publisher, published func()) error {
+func subscribe(ctx context.Context, agentAddress string, c Config, t protocol.Target, p *Publisher, published func(), h *health) error {
 	helperID, _ := spiffeid.FromString(c.HelperSPIFFEID)
 	agentID, _ := spiffeid.FromString(c.AgentSPIFFEID)
 	targetID, _ := spiffeid.FromString(c.TargetSPIFFEID)
@@ -132,13 +143,17 @@ func subscribe(ctx context.Context, agentAddress string, c Config, t protocol.Ta
 			return fmt.Errorf("Helper identity removed or expired")
 		}
 		return nil
-	})
+	}, h)
 }
 
 // A disconnect returns to Run's credential cleanup and NGINX stop hook. systemd
 // may start a new process, which performs a new PID-reference subscription and
 // attestation. SVID updates on this stream alone do not request a fresh Quote.
-func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse, error), p *Publisher, id spiffeid.ID, t protocol.Target, published func(), checkSelf func() error) error {
+func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse, error), p *Publisher, id spiffeid.ID, t protocol.Target, published func(), checkSelf func() error, monitors ...*health) error {
+	var h *health
+	if len(monitors) > 0 {
+		h = monitors[0]
+	}
 	type message struct {
 		snapshot *api.SubscribeToX509SVIDResponse
 		err      error
@@ -171,6 +186,9 @@ func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse,
 			if err := checkSelf(); err != nil {
 				return err
 			}
+			if h != nil {
+				h.loopProgress(time.Now())
+			}
 		case m := <-updates:
 			if m.err != nil {
 				return fmt.Errorf("Broker subscription ended: %w", m.err)
@@ -179,8 +197,14 @@ func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse,
 			if err != nil {
 				return err
 			}
+			if h != nil {
+				h.publishing(time.Now(), c.Expires)
+			}
 			if err = p.Publish(ctx, c); err != nil {
 				return err
+			}
+			if h != nil {
+				h.published(time.Now(), c.Expires)
 			}
 			published()
 			if err := ctx.Err(); err != nil {

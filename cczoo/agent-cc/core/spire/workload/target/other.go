@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/workload/protocol"
 	"os"
+	"time"
 )
 
 func checkOwner(os.FileInfo) error { return nil }
@@ -15,6 +16,9 @@ func Register(context.Context, string, string, string, string, string, int) (pro
 	return protocol.Target{}, fmt.Errorf("target registration requires Linux")
 }
 func StartWatch(context.Context, protocol.Target) (<-chan error, error) {
+	return nil, fmt.Errorf("target watching requires Linux")
+}
+func StartWatchWithProgress(context.Context, protocol.Target, func(time.Time)) (<-chan error, error) {
 	return nil, fmt.Errorf("target watching requires Linux")
 }
 func Watch(context.Context, protocol.Target) error {

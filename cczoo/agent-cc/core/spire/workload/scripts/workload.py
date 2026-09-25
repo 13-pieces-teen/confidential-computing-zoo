@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Company-host lifecycle. No mock evidence, automatic policy approval, or Rekor gate."""
 import argparse
-from deployment import Deployment, PROFILE, render_services
+from deployment import Deployment, PROFILE, SERVICE_UNITS, render_services
 import calendar
+from datetime import datetime, timezone
 import hashlib
 import http.client
 import json
@@ -17,11 +18,13 @@ import stat
 import subprocess
 import sys
 import time
+import tempfile
+from launch_state import execute as execute_launch, operation_lock, digest
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, ProxyHandler
 
 PACKAGE = Path(__file__).resolve().parents[1]
-UNITS = ["argus-helper", "argus-nginx", "argus-authz", "argus-workload-agent", "argus-tdx-provider"]
+UNITS = list(SERVICE_UNITS.values())  # compatibility for existing diagnostic tools
 
 
 def run(argv, timeout=30, check=True):
@@ -33,13 +36,21 @@ def run(argv, timeout=30, check=True):
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    tmp = path.with_suffix(".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd, name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    tmp = Path(name)
     try:
         with os.fdopen(fd, "w") as stream:
             json.dump(value, stream, indent=2)
             stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(tmp, path)
+        if sys.platform == "linux":
+            directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -341,31 +352,63 @@ def tc_request(c, route, data=None):
 
 def launch(c):
     d = Deployment(c)
-    if not os.environ.get("TC_API_IDENTITY_TOKEN"):
-        raise ValueError("missing TC_API_IDENTITY_TOKEN for existing transparency-log upload")
-    payload = {"image_id": c["image_id"], "image_url": c["image_url"], "user_id": c["tc_api_user_id"],
-               "identity_token": os.environ["TC_API_IDENTITY_TOKEN"], "attestation_required": False,
-               "metadata": {"workload_id": d.workload["id"], "service_name": d.workload["id"], "workload_attestation_profile": PROFILE}}
-    launch_id = tc_request(c, "/api/deploy-launch", payload)["launch_id"]
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", launch_id):
-        raise ValueError("invalid TC API launch ID")
-    deadline = time.monotonic() + 600
-    while time.monotonic() < deadline:
-        result = tc_request(c, "/api/launch-result/" + launch_id)
-        if result["status"] == "failed":
-            raise ValueError(f"TC API launch {launch_id} failed; inspect its protected launch log")
-        if result["status"] == "success":
-            instances = (result.get("evidence") or {}).get("instance_ids") or result.get("instance_ids")
-            if not isinstance(instances, list) or len(instances) != 1:
-                raise ValueError("expected one TC API container")
-            info = instances[0]
-            if info.get("launch_id") != launch_id or info.get("attestation_profile") != PROFILE:
-                raise ValueError("TC API response is missing the required launch/profile association")
-            d.run.mkdir(parents=True, exist_ok=True, mode=0o700)
-            write_json(d.run / "launch.json", {"launch_id": launch_id, "container": info})
-            return {"launch_id": launch_id, "container_id": info["container_ID"]}
-        time.sleep(2)
-    raise TimeoutError(f"TC API launch {launch_id} did not finish in 600s")
+    return execute_launch(d, tc_request, write_json)
+
+
+def resume_launch(c, launch_id=None):
+    return execute_launch(Deployment(c), tc_request, write_json, resume=True, launch_id=launch_id)
+
+
+def runtime_manifest(c):
+    """Content correlation, not a new attestation or a signed security receipt."""
+    d = Deployment(c)
+    result = {"schema_version": 1, "config_sha256": digest(c), "identity": d.identity,
+              "workload_id": d.workload["id"], "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "remote_acceptance": "NOT_RUN", "build_integrity": "NOT_AVAILABLE"}
+    policy = d.etc / (c["approved"]["policy_id"] + "_cpu.rego")
+    if policy.is_file():
+        result["policy_sha256"] = hashlib.sha256(protected_file(policy).read_bytes()).hexdigest()
+    manifest_path = d.install / "build-manifest.json"
+    if manifest_path.is_file():
+        manifest_bytes = protected_file(manifest_path).read_bytes()
+        manifest = json.loads(manifest_bytes)
+        result["build_manifest_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
+        result["source_revision"] = manifest.get("source_revision")
+        result["tracked_patch_sha256"] = manifest.get("tracked_patch_sha256")
+        observed = {}
+        for name in manifest.get("artifacts", {}):
+            relative = Path(name)
+            if len(relative.parts) == 2 and relative.parts[0] == "bin":
+                path = d.bin / relative.name
+            elif len(relative.parts) == 3 and relative.parts[:2] == ("spire-1.15.3", "bin"):
+                path = d.spire / relative.name
+            else:
+                raise ValueError("invalid installed build artifact path")
+            observed[name] = hashlib.sha256(protected_file(path).read_bytes()).hexdigest() if path.exists() else None
+        result["binaries_sha256"] = observed
+        sources = {}
+        for name in manifest.get("installed_sources", {}):
+            relative = Path(name)
+            if len(relative.parts) != 2 or relative.parts[0] not in ("scripts", "config", "policy", "systemd") or relative.name in (".", ".."):
+                raise ValueError("invalid installed source path")
+            path = d.install / relative
+            sources[name] = hashlib.sha256(protected_file(path).read_bytes()).hexdigest() if path.exists() else None
+        result["installed_sources_sha256"] = sources
+        result["binary_integrity"] = "MATCH" if observed and observed == manifest.get("artifacts") else "MISMATCH"
+        result["installed_source_integrity"] = "MATCH" if sources and sources == manifest.get("installed_sources") else "MISMATCH"
+        result["build_integrity"] = "MATCH" if manifest.get("schema_version") == 1 and result["binary_integrity"] == result["installed_source_integrity"] == "MATCH" else "MISMATCH"
+    for name in ("launch-state", "verify"):
+        path = d.records / (name + ".json")
+        if path.is_file():
+            record = json.loads(protected_file(path).read_text())
+            if name == "launch-state":
+                result["launch"] = {k: record.get(k) for k in ("run_id", "launch_id", "container_id", "stage", "config_sha256")}
+            else:
+                result["verification_record_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+                result["verification_checked_at"] = record.get("checked_at")
+    if d.target.is_file():
+        result["registered_target"] = json.loads(protected_file(d.target).read_text())
+    return result
 
 
 def register(c):
@@ -387,7 +430,7 @@ def start(c):
         if running:
             raise ValueError(f"{name} is still running with PID(s) {running}; stop it before start")
     render(c)
-    run(["systemctl", "start", "argus-helper.service"])
+    run(["systemctl", "start", Deployment(c).unit("helper")])
     deadline = time.monotonic() + Deployment(c).startup_timeout_seconds + 5
     while time.monotonic() < deadline:
         s = status(c)
@@ -395,25 +438,42 @@ def start(c):
             record.update(s)
             return record
         time.sleep(1)
-    run(["systemctl", "stop", "argus-helper.service"])
+    run(["systemctl", "stop", Deployment(c).unit("helper")])
     raise TimeoutError("target identity did not become ready; inspect journalctl -u argus-helper -u argus-workload-agent -u argus-tdx-provider")
 
 
 def status(c):
     d = Deployment(c)
-    units = {u: run(["systemctl", "is-active", u], check=False) for u in UNITS}
+    units = {u: run(["systemctl", "is-active", u], check=False) for u in d.units.values()}
+    serial, invocation, reason = None, None, None
     try:
-        serial = (d.credentials / "ready").read_text().strip()
-    except FileNotFoundError:
-        serial = ""
-    serial = serial if re.fullmatch(r"[0-9]+", serial) else None
+        invocation = run(["systemctl", "show", d.unit("helper"), "--property=InvocationID", "--value"])
+        receipt = json.loads(protected_file(d.credentials / "ready").read_text())
+        target = json.loads(protected_file(d.target).read_text())
+        if not isinstance(receipt, dict) or receipt.get("schema_version") != 1:
+            raise ValueError("legacy or unsupported readiness")
+        if not re.fullmatch(r"[0-9a-f]{32}", invocation) or receipt.get("invocation_id") != invocation:
+            raise ValueError("readiness belongs to another Helper invocation")
+        if not isinstance(target, dict) or receipt.get("target") != target or \
+                target.get("agent_id") != d.identity["agent_id"] or target.get("workload_id") != d.workload["id"]:
+            raise ValueError("readiness target differs from registration/deployment")
+        if not isinstance(receipt.get("serial"), str) or not re.fullmatch(r"[1-9][0-9]*", receipt["serial"]):
+            raise ValueError("invalid readiness serial")
+        expiry = datetime.fromisoformat(receipt["expires_at"].replace("Z", "+00:00"))
+        if expiry.tzinfo is None or expiry <= datetime.now(timezone.utc):
+            raise ValueError("readiness credential expired")
+        if invocation != run(["systemctl", "show", d.unit("helper"), "--property=InvocationID", "--value"]):
+            raise ValueError("Helper restarted during readiness check")
+        serial = receipt["serial"]
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        reason = str(error) if isinstance(error, ValueError) and not isinstance(error, json.JSONDecodeError) else type(error).__name__
     return {"units": units, "ready": all(v == "active" for v in units.values()) and serial is not None,
-            "target_serial": serial}
+            "target_serial": serial, "helper_invocation_id": invocation, "readiness_error": reason}
 
 
 def stop(c):
     d = Deployment(c)
-    run(["systemctl", "stop", *UNITS])
+    run(["systemctl", "stop", *d.units.values()])
     (d.run / "target.json").unlink(missing_ok=True)
     if (d.credentials / "ready").exists():
         raise ValueError("readiness was not removed")
@@ -503,20 +563,28 @@ def verify(c):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["render", "preflight", "launch", "register", "start", "status", "stop", "verify", "server-check", "apply-entries"])
+    parser.add_argument("action", choices=["render", "preflight", "launch", "resume-launch", "register", "start", "status", "stop", "verify", "manifest", "server-check", "apply-entries"])
     parser.add_argument("--config", required=True)
+    parser.add_argument("--launch-id", help="known server operation ID; only valid with resume-launch")
     args = parser.parse_args()
     if sys.platform != "linux" or os.geteuid() != 0:
         raise ValueError("run this lifecycle tool as root on the Linux company host")
     c = json.loads(protected_file(args.config).read_text())
     d = Deployment(c)
+    if args.launch_id is not None and args.action != "resume-launch":
+        parser.error("--launch-id requires resume-launch")
     functions = {"render": render, "preflight": preflight, "launch": launch, "register": register, "start": start,
                  "status": status, "stop": stop, "verify": verify, "server-check": server_check,
-                 "apply-entries": lambda c: server_check(c, apply=True)}
-    result = functions[args.action](c)
-    result["checked_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    if args.action not in ("status", "server-check"):
-        write_json(d.records / (args.action + ".json"), result)
+                 "resume-launch": lambda c: resume_launch(c, args.launch_id),
+                 "manifest": runtime_manifest, "apply-entries": lambda c: server_check(c, apply=True)}
+    if args.action in ("status", "server-check", "manifest"):
+        result = functions[args.action](c)
+    else:
+        with operation_lock(d.records):
+            result = functions[args.action](c)
+            result["checked_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            write_json(d.records / (args.action + ".json"), result)
+            write_json(d.records / "runtime-manifest.json", runtime_manifest(c))
     print(json.dumps(result, indent=2))
 
 

@@ -15,6 +15,9 @@ import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import build_manifest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -110,6 +113,15 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
         for name in names:
             executable(self.output / name)
         manifest(self.output, names)
+        # Fake build payload: exercise real installer hash checks without
+        # coupling this fixture to the developer checkout's Git ownership.
+        provenance = {"schema_version": 1, "source_revision": "fixture",
+                      "artifacts": {name: build_manifest.sha(self.output / name) for name in names},
+                      "installed_sources": {p.relative_to(ROOT).as_posix(): build_manifest.sha(p)
+                                            for p in build_manifest.installed_sources(ROOT)},
+                      "build_inputs": {p.relative_to(ROOT).as_posix(): build_manifest.sha(p)
+                                       for p in build_manifest.build_inputs(ROOT)}}
+        (self.output / "build-manifest.json").write_text(json.dumps(provenance))
         return names
 
     def install(self):
@@ -136,6 +148,16 @@ exec "$INSTALL_REAL_INSTALL" "${values[@]}"
         result = self.install()
         self.assert_rejected_before_install(result)
         self.assertIn("stop argus-helper", result.stderr)
+
+    def test_changed_scripts_cannot_install_from_an_older_build(self):
+        self.package()
+        path = self.output / "build-manifest.json"
+        provenance = json.loads(path.read_text())
+        provenance["installed_sources"]["scripts/workload.py"] = "0" * 64
+        path.write_text(json.dumps(provenance))
+        result = self.install()
+        self.assert_rejected_before_install(result)
+        self.assertIn("changed since build", result.stderr)
 
     def test_unlisted_provider_and_modified_spire_are_rejected(self):
         names = self.package()

@@ -125,8 +125,11 @@ func TestAttestPinsKeyVerifiesPoPAndReturnsConfiguredAttributes(t *testing.T) {
 		t.Fatalf("Trustee input = %#v", verifier.input)
 	}
 	attributes := stream.sentResponses[1].GetAgentAttributes()
-	if attributes == nil || attributes.SpiffeId != testAgentID || len(attributes.SelectorValues) != 0 || !attributes.CanReattest {
+	if attributes == nil || attributes.SpiffeId != testAgentID || len(attributes.SelectorValues) != 0 {
 		t.Fatalf("AgentAttributes = %#v", attributes)
+	}
+	if attributes.CanReattest {
+		t.Fatal("Agent SVID rotation must use renewal after initial TDX admission")
 	}
 }
 
