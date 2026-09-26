@@ -1,0 +1,54 @@
+{
+  "schema": "argus.scenario-catalog.v1",
+  "status": "NOT_RUN",
+  "E1": {
+    "scenarios": ["legal-launch", "unrelated-container-activity", "same-image-new-instance", "hidden-later-stop", "config-mismatch", "old-evidence", "instance-mismatch"],
+    "offline_tool": "history_diagnostics.py",
+    "live_tool": "admission_trial.py",
+    "recipe": "E1-REAL-RUNS.md",
+    "runtime_oracle": "production admission result plus received request audit, bound to exact target registration and approved policy",
+    "required_evidence": ["launch_id", "container_id", "runtime_data_digest", "authenticated_rtmr2", "quote_nonce", "ear_digest", "policy_digest", "entry_selectors", "application_receive"],
+    "boundary": "Offline log replay is not fresh TDX/REPORTDATA/nonce/configuration admission. LOCAL_BINDING_REJECTED is not remote DENY. Full raw Quote/request/EAR export is not currently supplied by the deployment CLI; missing outer verification stays NOT_RUN."
+  },
+  "E2": {
+    "scenarios": ["helper-freeze", "helper-crash", "target-exit", "target-replacement", "configuration-change", "listener-change"],
+    "coordinator": "fault_trial.py",
+    "timeline_tool": "timeline.py",
+    "automated_faults": ["helper-freeze", "helper-crash", "target-exit", "config-change", "same-container-restart"],
+    "other_faults": "same-container-restart jointly replaces process/network/listener; not a pure port-change ablation. New-container replacement uses normal launch/register with exact old/new evidence.",
+    "milestone": "named business phase plus at least three successful requests on each existing/new TLS lane",
+    "oracle": "remote_acceptance.check with receiver_audit full coverage, target binding and measured clock uncertainty",
+    "required_evidence": ["readiness_detection_proxy_interval", "systemd_ingress_stop_interval", "fault_time", "existing_connection", "new_connection", "request_read_bytes", "successful_response_chunks", "coverage_gaps"]
+  },
+  "E3": {
+    "scenarios": ["first-enrollment", "agent-svid-renewal", "workload-svid-rotation", "reregister", "independent-admission", "launch-query-resume"],
+    "node_tool": "core/spire/workload/scripts/node_attestation_observe.py",
+    "correlation_tool": "lifecycle_trial.py",
+    "recipe": "examples/E3-LIFECYCLE-RECIPE.md",
+    "deployment_resume": "workload.py resume-launch --config CONFIG --launch-id KNOWN_ID",
+    "required_evidence": ["separate_node_quote_counter", "workload_quote_counter", "process_start", "before_after_svid_serial", "known_launch_id", "container_count", "interruption_window"],
+    "boundary": "Never erase Agent data to manufacture first enrollment. Missing counter series is UNKNOWN, not zero."
+  },
+  "E4": {
+    "tool": "adapters/OpenClaw/spiffe_client/fleet_business.py",
+    "fault_tool": "fleet_fault.py",
+    "workload_tool": "locomo_run.py",
+    "workload_protocol": "LOCOMO.md",
+    "default_clients": 3,
+    "scenarios": ["independent-cross-session-recall", "cross-user-read-search-question", "forged-headers", "allowed-identity-invalid-key", "disallowed-identity-valid-key", "direct-backend-bypass", "client-local-fault", "shared-service-fault", "recovery"],
+    "boundary": "No SPIFFE/key one-to-one binding. Holding another valid user key grants that key's actual application authority. Direct Agent-Agent collaboration remains outside this suite."
+  },
+  "E5": {
+    "tools": ["load_fleet.py", "resources.py", "analysis.py"],
+    "scales": [1, 2, 4, 8],
+    "warmup_seconds": 30,
+    "measurement_seconds": 120,
+    "repeats": 5,
+    "mechanism_seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "layers": ["first-admission-to-ready", "steady-API", "real-Gateway-memory-task"],
+    "connection_modes": ["new", "reuse"],
+    "workload_kinds": ["status_api", "memory_query", "custom_api"],
+    "controls": ["receiver-audit-on", "receiver-audit-off"],
+    "boundary": "API Goodput and Agent task success are distinct. Record capacity stops and tail sample counts."
+  }
+}

@@ -29,9 +29,16 @@ export function auditRecallSource(block, memoryCount) {
   const span = spans.getStore();
   if (span) {
     span.recall = factHashes(block);
+    span.recallBlock = typeof block === 'string' ? block : '';
     span.memoryCount = memoryCount ?? (block ? 1 : 0);
     span.sourceObserved = true;
   }
+}
+function containsBlock(value, block) {
+  if (!block) return false;
+  if (typeof value === 'string') return value.includes(block);
+  if (Array.isArray(value)) return value.some(child => containsBlock(child, block));
+  return !!value && typeof value === 'object' && Object.values(value).some(child => containsBlock(child, block));
 }
 export async function auditAssembly(assemble, params) {
   const span = {id: randomUUID(), requests: [], recall: []};
@@ -44,11 +51,16 @@ export async function auditAssembly(assemble, params) {
     console.error(JSON.stringify({...base, event: 'started', checked_at: new Date().toISOString()}));
     try {
       const result = await assemble(params);
-      // Counts and synthetic E2E hashes only; no ordinary text, URI or error body.
+      // Counts and content-block hashes only; no ordinary text, URI or error body.
+      // Block inclusion observes injection, not semantic support for the answer.
       console.error(JSON.stringify({...base, event: 'completed',
         input_fact_hashes: before, recall_fact_hashes: span.recall,
         output_fact_hashes: factHashes(result.messages), request_ids: span.requests,
         source_observed: !!span.sourceObserved, memory_count: span.memoryCount ?? null,
+        recall_block_sha256: span.recallBlock ? createHash('sha256').update(span.recallBlock).digest('hex') : null,
+        recall_block_chars: span.recallBlock?.length ?? 0,
+        recall_block_in_input: containsBlock(params.messages, span.recallBlock),
+        recall_block_in_output: containsBlock(result.messages, span.recallBlock),
         search: span.search ?? null, checked_at: new Date().toISOString(),
       }));
       return result;

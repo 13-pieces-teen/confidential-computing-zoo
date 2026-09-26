@@ -1,0 +1,35 @@
+{
+  "run_id": "paper01-fault-example",
+  "ssh_host": "argus-service-guest",
+  "server_python": "python3",
+  "server_receiver_package": "/opt/argus-source/cczoo/agent-cc/adapters/OpenViking",
+  "server_remote_acceptance": "/opt/argus-experiments/paper01/full_argus/payload/scripts/remote_acceptance.py",
+  "server_deployment": "/etc/argus-experiments/paper01/full_argus/environment.json",
+  "event": "helper-freeze",
+  "fault_file": "/var/lib/argus-receiver/paper01-fault-example/fault.jsonl",
+  "receiver_file": "/var/lib/argus-receiver/paper01-fault-example/receiver.jsonl",
+  "collector_control": "/run/argus-receiver/paper01-fault-example/control/collector.sock",
+  "milestone_file": "/secure/evidence/paper01-fault-example/milestone.json",
+  "baseline_budget_s": 60,
+  "bound_ms": 10000,
+  "clock_uncertainty_ms": 20,
+  "timeline": {
+    "server_tool": "/opt/argus-source/cczoo/agent-cc/experiments/argus/timeline.py",
+    "output": "/var/lib/argus-receiver/paper01-fault-example/lifecycle.jsonl",
+    "stop_file": "/var/lib/argus-receiver/paper01-fault-example/lifecycle.stop",
+    "interval": 0.25
+  },
+  "probe": {
+    "url": "https://openviking.argus.local:1943/api/v1/search/find",
+    "credentials_dir": "/run/argus-openclaw/instances/full-alice/credentials",
+    "client_id": "spiffe://argus.local/agent/openclaw/alice/experiment/paper01/full",
+    "server_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper01/full",
+    "method": "POST",
+    "inflight": true,
+    "body_file": "/secure/fixtures/synthetic-search.json",
+    "api_key_env": "ARGUS_SYNTHETIC_USER_KEY",
+    "duration": 60,
+    "interval": 0.25,
+    "timeout": 2
+  }
+}

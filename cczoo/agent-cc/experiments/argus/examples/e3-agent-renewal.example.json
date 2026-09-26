@@ -1,0 +1,15 @@
+{
+  "run_id": "e3-agent-renewal-01",
+  "case": "agent-renewal",
+  "target_id": "spiffe://argus.local/service/openviking",
+  "duration_seconds": 600,
+  "node": {
+    "spire_server": "/opt/spire/bin/spire-server",
+    "server_socket": "/run/spire/server/api.sock",
+    "agent_id": "spiffe://argus.local/spire/agent/REPLACE_WITH_ACTUAL_AGENT_ID",
+    "metrics_url": "http://127.0.0.1:9988/metrics",
+    "attempt_metric": "REPLACE_WITH_ACTUAL_NODE_PROTOCOL_ATTEMPTS",
+    "quote_count_metric": "REPLACE_WITH_ACTUAL_NODE_EVIDENCE_SAMPLE_COUNT",
+    "process_start_metric": "REPLACE_WITH_ACTUAL_AGENT_PROCESS_START_SECONDS"
+  }
+}

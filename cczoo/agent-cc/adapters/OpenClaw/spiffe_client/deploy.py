@@ -25,7 +25,21 @@ CLIENT = 'spiffe://argus.local/agent/openclaw'
 HELPER = 'spiffe://argus.local/infra/openclaw-helper'
 SERVER = 'spiffe://argus.local/service/openviking-cmem'
 LABEL = 'org.argus.workload'
+INSTANCE_LABEL = 'org.argus.instance'
 UNIT = 'argus-openclaw-credentials'
+
+
+def paths(c):
+    name = c.get('_instance')
+    return {'etc': ETC / 'instances' / name if name else ETC,
+            'run': RUN / 'instances' / name if name else RUN,
+            'home': Path('/var/lib/argus-openclaw') / 'instances' / name / 'home' if name else Path('/var/lib/argus-openclaw/home'),
+            'unit': f'argus-openclaw-credentials-{name}' if name else UNIT,
+            'group': f'argus-oc-{name}' if name else 'argus-openclaw'}
+
+
+def client_id(c):
+    return c.get('_client_id', CLIENT)
 
 
 def run(argv, timeout=30):
@@ -41,8 +55,15 @@ def validate(c):
                 'image_config_digest', 'helper_sha256', 'openviking_origin', 'container_name',
                 'gateway_uid', 'gateway_gid', 'reader_gid', 'gateway_executable', 'gateway_command',
                 'server_socket', 'server_unit'}
-    if set(c) != required:
+    if set(c) - {'_instance', '_client_id', 'server_spiffe_id'} != required:
         raise ValueError(f'configuration keys differ: {sorted(set(c) ^ required)}')
+    if ('_instance' in c) != ('_client_id' in c):
+        raise ValueError('incomplete instance selection')
+    if '_instance' in c and (not re.fullmatch(r'[a-z][a-z0-9-]{0,22}', c['_instance'])
+                            or not re.fullmatch(r'spiffe://argus\.local/agent/[a-zA-Z0-9/_-]+', c['_client_id'])):
+        raise ValueError('invalid instance identity')
+    if 'server_spiffe_id' in c and not re.fullmatch(r'spiffe://argus\.local/service/[a-zA-Z0-9/_-]+', c['server_spiffe_id']):
+        raise ValueError('invalid server_spiffe_id')
     for key, pattern in [('node_certificate_sha1', r'[0-9a-f]{40}'), ('helper_sha256', r'[0-9a-f]{64}'),
                          ('image_config_digest', r'sha256:[0-9a-f]{64}'),
                          ('openclaw_image', r'[A-Za-z0-9][A-Za-z0-9./:_-]*@sha256:[0-9a-f]{64}'),
@@ -75,8 +96,11 @@ def agent_id(c):
 def selectors(c, identity):
     if identity == HELPER:
         return {'unix:uid:0', 'unix:path:' + BIN.as_posix(), 'unix:sha256:' + c['helper_sha256']}
-    return {'unix:uid:' + str(c['gateway_uid']), 'unix:path:' + c['gateway_executable'],
+    result = {'unix:uid:' + str(c['gateway_uid']), 'unix:path:' + c['gateway_executable'],
             'docker:image_config_digest:' + c['image_config_digest'], 'docker:label:' + LABEL + ':openclaw'}
+    if c.get('_instance'):
+        result.add('docker:label:' + INSTANCE_LABEL + ':' + c['_instance'])
+    return result
 
 
 def render(c, destination):
@@ -87,6 +111,7 @@ def render(c, destination):
     credentials.update(agent_spiffe_id=agent_id(c), reader_gid=c['reader_gid'])
     client = json.loads((ROOT / 'config/client.example.json').read_text())
     client['origin'] = c['openviking_origin'].rstrip('/')
+    client['serverSpiffeId'] = c.get('server_spiffe_id', SERVER)
     agent = f'''agent {{
     data_dir = "/var/lib/argus-openclaw/spire"
     log_level = "INFO"
@@ -161,8 +186,39 @@ WantedBy=multi-user.target
 ''', 'argus-openclaw-credentials.service': (ROOT / 'config/argus-openclaw-credentials.service').read_text()}
     files['argus-openclaw-credentials.service'] = files['argus-openclaw-credentials.service'].replace(
         'After=network.target', 'After=argus-openclaw-agent.service\nRequires=argus-openclaw-agent.service')
+    if c.get('_instance'):
+        layout = paths(c)
+        credentials.update(target_spiffe_id=client_id(c), target_registration_path=(layout['run'] / 'target.json').as_posix(),
+                           credentials_dir=(layout['run'] / 'credentials').as_posix())
+        client['clientSpiffeId'] = client_id(c)
+        gateway = compose['services']['gateway']
+        compose['name'] += '-' + c['_instance']
+        gateway['labels'][INSTANCE_LABEL] = c['_instance']
+        gateway['env_file'] = [(layout['etc'] / 'gateway.env').as_posix()]
+        gateway['volumes'] = [layout['home'].as_posix() + ':/home/node/.openclaw',
+                              (layout['etc'] / 'client.json').as_posix() + ':/etc/argus-openclaw/client.json:ro',
+                              (layout['run'] / 'credentials').as_posix() + ':/run/argus-openclaw/credentials:ro']
+        files.update({'credentials.json': q(credentials, indent=2), 'client.json': q(client, indent=2),
+                      'compose.json': q(compose, indent=2)})
+        files['private-memory.fragment.json'] = q({'plugins': {'entries': {'openviking': {'config': {
+            'mode': 'remote', 'baseUrl': client['origin'], 'apiKey': '${OPENVIKING_API_KEY}',
+            # Pinned upstream resolves apiKey interpolation, but account/user
+            # use environment fallback only when these fields are empty.
+            'accountId': '', 'userId': '',
+            'recallResources': False, 'recallTargetTypes': ['user'], 'autoCapture': True, 'autoRecall': True,
+        }}}}}, indent=2)
+        unit = files.pop('argus-openclaw-credentials.service')
+        unit = unit.replace('/etc/argus-openclaw/credentials.json', (layout['etc'] / 'credentials.json').as_posix())
+        unit = unit.replace('/run/argus-openclaw', layout['run'].as_posix())
+        unit = unit.replace('RuntimeDirectory=argus-openclaw', 'RuntimeDirectory=argus-openclaw/instances/' + c['_instance'])
+        unit = unit.replace('Group=argus-openclaw', 'Group=' + layout['group'])
+        files[layout['unit'] + '.service'] = unit
+        # Shared node lifecycle is deliberately separate from per-instance install.
+        files.pop('agent.conf')
+        files.pop('argus-openclaw-agent.service')
+        files.pop('server-x509pop.fragment.hcl')
     files['entries.json'] = q({'parent_id': agent_id(c), 'tdx_remote_attestation': 'NOT_RUN',
-                              'entries': {sid: sorted(selectors(c, sid)) for sid in (HELPER, CLIENT)}}, indent=2)
+                              'entries': {sid: sorted(selectors(c, sid)) for sid in (HELPER, client_id(c))}}, indent=2)
     for name, data in files.items():
         (destination / name).write_bytes((data.rstrip() + '\n').encode('utf-8'))
     hashes = {name: hashlib.sha256((destination / name).read_bytes()).hexdigest() for name in sorted(files)}
@@ -188,13 +244,18 @@ def version(binary):
 
 
 def guest_install(c, source):
-    if ETC.exists() and (ETC / 'environment.json').exists():
+    layout = paths(c)
+    etc, runtime = layout['etc'], layout['run']
+    if etc.exists() and (etc / 'environment.json').exists():
         raise ValueError('deployment already installed; review changes explicitly before replacing configuration')
     version(SPIRE / 'spire-agent')
     if hashlib.sha256(protected(BIN).read_bytes()).hexdigest() != c['helper_sha256']:
         raise ValueError('Helper binary digest mismatch')
-    for file in ('bootstrap-bundle.pem', 'node/cert.pem', 'node/key.pem', 'gateway.env'):
+    for file in ('bootstrap-bundle.pem', 'node/cert.pem', 'node/key.pem'):
         protected(ETC / file, private=file in ('node/key.pem', 'gateway.env'))
+    protected(etc / 'gateway.env', private=True)
+    if c.get('_instance'):
+        protected(ETC / 'agent.conf')
     fingerprint = run(['openssl', 'x509', '-in', ETC / 'node/cert.pem', '-noout', '-fingerprint', '-sha1']).split('=')[-1].replace(':', '').lower()
     if fingerprint != c['node_certificate_sha1']:
         raise ValueError('node certificate fingerprint mismatch')
@@ -211,24 +272,24 @@ def guest_install(c, source):
         raise ValueError('this profile requires ordinary rootful Docker without user namespace remapping')
     import grp
     try:
-        group = grp.getgrnam('argus-openclaw')
+        group = grp.getgrnam(layout['group'])
         if group.gr_gid != c['reader_gid']:
             raise ValueError('existing argus-openclaw GID differs')
     except KeyError:
         try:
             grp.getgrgid(c['reader_gid'])
         except KeyError:
-            run(['groupadd', '--gid', str(c['reader_gid']), 'argus-openclaw'])
+            run(['groupadd', '--gid', str(c['reader_gid']), layout['group']])
         else:
             raise ValueError('reader GID already belongs to another group')
-    for path, mode, uid, gid in [(RUN, 0o750, 0, c['reader_gid']), (RUN / 'credentials', 0o750, 0, c['reader_gid']),
-                                  (Path('/var/lib/argus-openclaw/home'), 0o700, c['gateway_uid'], c['gateway_gid'])]:
+    for path, mode, uid, gid in [(runtime, 0o750, 0, c['reader_gid']), (runtime / 'credentials', 0o750, 0, c['reader_gid']),
+                                  (layout['home'], 0o700, c['gateway_uid'], c['gateway_gid'])]:
         path.mkdir(parents=True, exist_ok=True)
         if path.is_symlink():
             raise ValueError(f'no symlink allowed: {path}')
         path.chmod(mode)
         os.chown(path, uid, gid)
-    if run(['findmnt', '-n', '-o', 'FSTYPE', '-T', RUN / 'credentials']) != 'tmpfs':
+    if run(['findmnt', '-n', '-o', 'FSTYPE', '-T', runtime / 'credentials']) != 'tmpfs':
         raise ValueError('credentials must be on tmpfs')
     # Re-render from validated inputs and compare every byte before installation.
     import tempfile
@@ -238,19 +299,30 @@ def guest_install(c, source):
         for file in generated.iterdir():
             if not (source / file.name).is_file() or (source / file.name).read_bytes() != file.read_bytes():
                 raise ValueError(f'rendered deployment changed: {file.name}')
-        for name in ('credentials.json', 'client.json', 'agent.conf', 'compose.json', 'environment.json'):
-            shutil.copyfile(generated / name, ETC / name)
-            (ETC / name).chmod(0o644 if name == 'client.json' else 0o600)
-        for name in ('argus-openclaw-agent.service', 'argus-openclaw-credentials.service'):
+        names = ['credentials.json', 'client.json', 'compose.json', 'environment.json']
+        if not c.get('_instance'):
+            names.append('agent.conf')
+        for name in names:
+            shutil.copyfile(generated / name, etc / name)
+            (etc / name).chmod(0o644 if name == 'client.json' else 0o600)
+        units = [layout['unit'] + '.service']
+        if not c.get('_instance'):
+            units.append('argus-openclaw-agent.service')
+        for name in units:
             shutil.copyfile(generated / name, Path('/etc/systemd/system') / name)
     run(['systemctl', 'daemon-reload'])
-    return {'installed': str(ETC), 'started': False, 'tdx_remote_attestation': 'NOT_RUN'}
+    return {'installed': str(etc), 'started': False, 'tdx_remote_attestation': 'NOT_RUN'}
 
 
 def check_gateway(c, pid):
     info = json.loads(run(['docker', 'inspect', c['container_name']]))[0]
     if not info['State']['Running'] or info['Image'] != c['image_config_digest'] or info['Config'].get('Labels', {}).get(LABEL) != 'openclaw':
         raise ValueError('Gateway container is not the pinned running workload')
+    if c.get('_instance'):
+        from fleet import check_mounts
+        if info['Config'].get('Labels', {}).get(INSTANCE_LABEL) != c['_instance']:
+            raise ValueError('Gateway instance label differs from Entry selector')
+        check_mounts(info, c)
     rows = run(['docker', 'top', c['container_name'], '-eo', 'pid,args']).splitlines()[1:]
     line = next((line for line in rows if line.split(None, 1)[0] == str(pid)), '')
     if not line or not re.search(r'openclaw[- ]gateway|openclaw\S*.*\bgateway\b', line):
@@ -260,10 +332,16 @@ def check_gateway(c, pid):
     status = Path(f'/proc/{pid}/status').read_text()
     if int(re.search(r'^Uid:\s+(\d+)', status, re.M)[1]) != c['gateway_uid']:
         raise ValueError('Gateway host UID differs from Entry selector')
+    if c.get('_instance'):
+        groups = {int(v) for v in re.search(r'^Groups:\s*([^\n]*)', status, re.M)[1].split()}
+        if (int(re.search(r'^Gid:\s+(\d+)', status, re.M)[1]) != c['gateway_gid']
+                or c['reader_gid'] not in groups or groups - {c['reader_gid'], c['gateway_gid']}):
+            raise ValueError('Gateway runtime GID/groups differ from isolated deployment')
     return {'container_id': info['Id'], 'gateway_pid': pid, 'image_config_digest': info['Image']}
 
 
 def guest_register(c, pid):
+    layout = paths(c)
     record = check_gateway(c, pid)
     main_pid = run(['systemctl', 'show', 'argus-openclaw-agent', '--property=MainPID', '--value'])
     if not main_pid.isdigit() or int(main_pid) < 1:
@@ -271,22 +349,22 @@ def guest_register(c, pid):
     version(Path('/proc') / main_pid / 'exe')
     if hashlib.sha256(protected(BIN).read_bytes()).hexdigest() != c['helper_sha256']:
         raise ValueError('Helper binary changed; update and audit its Entry')
-    run([BIN, '-config', ETC / 'credentials.json', '-register-pid', str(pid)])
+    run([BIN, '-config', layout['etc'] / 'credentials.json', '-register-pid', str(pid)])
     check_gateway(c, pid)
-    run(['systemctl', 'start', UNIT])
+    run(['systemctl', 'start', layout['unit']])
     deadline = time.monotonic() + 65
     while time.monotonic() < deadline:
         ready = guest_status(c)
         if ready['ready']:
             return {**record, **ready}
         time.sleep(0.5)
-    run(['systemctl', 'stop', UNIT])
+    run(['systemctl', 'stop', layout['unit']])
     raise ValueError('no valid credential lease in 65s; inspect Agent/Helper journals and Entries')
 
 
 def guest_status(c):
     try:
-        lease = json.loads((RUN / 'credentials/ready.json').read_text())
+        lease = json.loads((paths(c)['run'] / 'credentials/ready.json').read_text())
         ready = time.time() * 1000 < lease['lease_until'] <= time.time() * 1000 + 3000
     except (OSError, ValueError, KeyError):
         lease, ready = {}, False
@@ -294,9 +372,10 @@ def guest_status(c):
 
 
 def guest_stop(c):
-    run(['systemctl', 'stop', UNIT])
-    run([BIN, '-config', ETC / 'credentials.json', '-clear'])
-    (RUN / 'target.json').unlink(missing_ok=True)
+    layout = paths(c)
+    run(['systemctl', 'stop', layout['unit']])
+    run([BIN, '-config', layout['etc'] / 'credentials.json', '-clear'])
+    (layout['run'] / 'target.json').unlink(missing_ok=True)
     return {'publisher_stopped': True, 'registration_removed': True, 'container_stopped': False}
 
 
@@ -316,7 +395,7 @@ def audit(entries, c, identity):
                 or id_string(e.get('parent_id', e.get('parentId', {}))) != agent_id(c)
                 or have != selectors(c, identity)
                 or e.get('admin') or e.get('downstream') or e.get('store_svid', e.get('storeSvid'))
-                or (identity == CLIENT and not attr.get('disable_x509_svid_prefetch', attr.get('disableX509SvidPrefetch', False)))):
+                or (identity == client_id(c) and not attr.get('disable_x509_svid_prefetch', attr.get('disableX509SvidPrefetch', False)))):
             raise ValueError(f'conflicting Entry {e.get("id")} for {identity}; review it explicitly')
 
 
@@ -333,7 +412,16 @@ def server_entries(c, apply=False):
         raise ValueError('expected x509pop Agent is not enrolled; verify node ID on the running Server')
     def read(identity):
         return json.loads(run(base + ['entry', 'show', *socket, '-spiffeID', identity, '-output', 'json'])).get('entries', [])
-    current = {sid: read(sid) for sid in (HELPER, CLIENT)}
+    current = {sid: read(sid) for sid in (HELPER, client_id(c))}
+    if c.get('_instance'):
+        all_entries = json.loads(run(base + ['entry', 'show', *socket, '-output', 'json'])).get('entries', [])
+        expected = selectors(c, client_id(c))
+        for entry in all_entries:
+            have = {s['type'] + ':' + s['value'] for s in entry.get('selectors', [])}
+            if (id_string(entry.get('parent_id', entry.get('parentId', {}))) == agent_id(c)
+                    and have and have <= expected
+                    and id_string(entry.get('spiffe_id', entry.get('spiffeId', {}))) != client_id(c)):
+                raise ValueError('another Entry also matches this Gateway; remove overlapping authorization explicitly')
     # Audit all conflicting same-ID Entries before the first mutation.
     for sid, entries in current.items():
         if entries or not apply:
@@ -341,7 +429,7 @@ def server_entries(c, apply=False):
     for sid, entries in current.items():
         if not entries:
             cmd = base + ['entry', 'create', *socket, '-parentID', agent_id(c), '-spiffeID', sid, '-x509SVIDTTL', '300']
-            if sid == CLIENT:
+            if sid == client_id(c):
                 cmd += ['-disableX509SVIDPrefetch']
             for selector in sorted(selectors(c, sid)):
                 cmd += ['-selector', selector]
@@ -353,17 +441,24 @@ def server_entries(c, apply=False):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['render', 'guest-install', 'guest-register', 'guest-status', 'guest-stop', 'server-check', 'apply-entries'])
+    p.add_argument('action', choices=['render', 'render-node', 'guest-install-node', 'guest-install', 'guest-register', 'guest-status', 'guest-stop', 'server-check', 'apply-entries'])
+    p.add_argument('--instance', help='required for an instance action on a fleet configuration')
     p.add_argument('--config', type=Path, default=ETC / 'environment.json')
     p.add_argument('--output', type=Path)
     p.add_argument('--source', type=Path, help='rendered deployment directory for guest-install')
     p.add_argument('--pid', type=int, help='actual Gateway PID in the Guest host namespace')
     args = p.parse_args()
-    if args.action != 'render':
+    if args.action not in ('render', 'render-node'):
         if sys.platform != 'linux' or os.geteuid() != 0:
             raise ValueError('run this action as root on its designated Linux role')
         protected(args.config)
-    c = validate(json.loads(args.config.read_text()))
+    from fleet import select, render_node, install_node
+    raw = json.loads(args.config.read_text())
+    if args.action in ('render-node', 'guest-install-node'):
+        result = render_node(raw, args.output) if args.action == 'render-node' else install_node(raw, args.source)
+        print(json.dumps(result, indent=2))
+        return
+    c = select(raw, args.instance)
     if args.action == 'render':
         if not args.output:
             raise ValueError('--output is required (new directory)')

@@ -12,7 +12,7 @@ PROFILE = "nginx-spiffe-helper-v1"
 SERVICE_UNITS = {"helper": "argus-helper", "nginx": "argus-nginx", "authz": "argus-authz",
                  "agent": "argus-workload-agent", "provider": "argus-tdx-provider"}
 PACKAGE = Path(__file__).resolve().parents[1]
-IDENTITY_KEYS = {"trust_domain", "agent_id", "helper_id", "target_id", "client_id"}
+IDENTITY_KEYS = {"trust_domain", "agent_id", "helper_id", "target_id"}
 PATH_KEYS = {"install_dir", "config_dir", "records_dir", "spire_bin_dir", "run_name"}
 WORKLOAD_KEYS = {"id", "config_host_path", "data_host_path", "config_path", "data_path",
                  "listen_port", "tls_port", "published_port"}
@@ -48,13 +48,23 @@ def protected_file(value):
 class Deployment:
     def __init__(self, c):
         object_keys(c, EXISTING_KEYS | {"schema_version", "identity", "paths", "workload"},
-                    {"approved_policy_artifact", "request_timeout_seconds"})
+                    {"approved_policy_artifact", "request_timeout_seconds", "receiver_audit"})
         if type(c["schema_version"]) is not int or c["schema_version"] != 1:
             raise ValueError("unsupported deployment schema_version")
         for key in EXISTING_KEYS - {"approved"}:
             if not isinstance(c[key], str) or (not c[key] and key != "server_ssh"):
                 raise ValueError(f"deployment {key} must be a string")
         object_keys(c["approved"], {"policy_id", "image_config_digest", "config_digest", "executable", "mr_td", "rtmr_0", "rtmr_1", "rtmr2_baseline"})
+        self.receiver_audit = c.get("receiver_audit")
+        if self.receiver_audit is not None:
+            audit = self.receiver_audit
+            object_keys(audit, {"run_id", "mode", "image_config_digest"})
+            if not isinstance(audit["run_id"], str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", audit["run_id"]):
+                raise ValueError("receiver_audit.run_id must be a short lowercase experiment name")
+            if audit["mode"] not in ("on", "off"):
+                raise ValueError("receiver_audit.mode must be on or explicit overhead-control off")
+            if not isinstance(audit["image_config_digest"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", audit["image_config_digest"]) or audit["image_config_digest"] != c["approved"]["image_config_digest"]:
+                raise ValueError("receiver audit image must equal the explicitly approved image content digest")
         linux_path(c["trucon_socket_path"])
         self.request_timeout_seconds = c.get("request_timeout_seconds", 55)
         if type(self.request_timeout_seconds) is not int or not 51 <= self.request_timeout_seconds <= 60:
@@ -63,13 +73,21 @@ class Deployment:
         # Leave time for the initial local identity and SVID publication too.
         self.startup_timeout_seconds = 2 * self.request_timeout_seconds + 10
         i, p, w = c["identity"], c["paths"], c["workload"]
-        object_keys(i, IDENTITY_KEYS)
+        object_keys(i, IDENTITY_KEYS, {"client_id", "allowed_client_ids"})
+        if ("client_id" in i) == ("allowed_client_ids" in i):
+            raise ValueError("configure exactly one of identity.client_id or identity.allowed_client_ids")
+        clients = [i["client_id"]] if "client_id" in i else i["allowed_client_ids"]
+        if not isinstance(clients, list) or not clients or any(not isinstance(v, str) for v in clients):
+            raise ValueError("allowed_client_ids must be a nonempty list of exact SPIFFE IDs")
+        if len(set(clients)) != len(clients):
+            raise ValueError("allowed_client_ids must not contain duplicate identities")
+        self.allowed_client_ids = tuple(clients)
         object_keys(p, PATH_KEYS)
         object_keys(w, WORKLOAD_KEYS)
         if not isinstance(i["trust_domain"], str) or not re.fullmatch(r"[a-z0-9._-]+", i["trust_domain"]):
             raise ValueError("invalid trust_domain")
         prefix = "spiffe://" + i["trust_domain"]
-        ids = [i[k] for k in ("agent_id", "helper_id", "target_id", "client_id")]
+        ids = [i[k] for k in ("agent_id", "helper_id", "target_id")] + clients
         for value in ids:
             if not isinstance(value, str) or not value.startswith(prefix + "/") or \
                     not re.fullmatch(r"(?:/[A-Za-z0-9_.-]+)+", value[len(prefix):]) or \
@@ -90,6 +108,11 @@ class Deployment:
             raise ValueError("business and TLS listener ports must differ")
         for key in WORKLOAD_KEYS - {"id", "listen_port", "tls_port", "published_port"}:
             linux_path(w[key])
+        if self.receiver_audit is not None:
+            audit_roots = (PurePosixPath("/run/argus-audit"), PurePosixPath("/run/argus-receiver"))
+            if any(PurePosixPath(w[key]).is_relative_to(root) or root.is_relative_to(w[key])
+                   for key in ("config_path", "data_path", "config_host_path", "data_host_path") for root in audit_roots):
+                raise ValueError("receiver audit mounts must be separate from application configuration and data")
         if PurePosixPath(w["config_path"]).is_relative_to(w["data_path"]) or \
                 PurePosixPath(w["config_host_path"]).is_relative_to(w["data_host_path"]):
             raise ValueError("configuration must not be inside the writable data directory")
@@ -148,7 +171,9 @@ class Deployment:
                 "STARTUP_TIMEOUT": str(self.startup_timeout_seconds) + "s",
                 "BROKER_SOCKET": (self.broker / "broker.sock").as_posix(),
                 "AGENT_ID": self.identity["agent_id"], "HELPER_ID": self.identity["helper_id"],
-                "TARGET_ID": self.identity["target_id"], "CLIENT_ID": self.identity["client_id"],
+                "TARGET_ID": self.identity["target_id"],
+                "CLIENT_ID": self.allowed_client_ids[0],
+                "CLIENT_ID_ARGS": " ".join("-client-id " + value for value in self.allowed_client_ids),
                 "WORKLOAD_ID": self.workload["id"], "DATA_PATH": self.workload["data_path"],
                 "TLS_PORT": str(self.workload["tls_port"]), "LISTEN_PORT": str(self.workload["listen_port"])}
 
@@ -182,7 +207,10 @@ def render_services(c, package=PACKAGE):
     write_file(d.bin / "nginx-hook.sh", d.render((package / "scripts/nginx-hook.sh").read_text()), 0o755)
     write_file(d.environment, json.dumps(c, indent=2) + "\n")
     # Only TC API launch settings are exported, never Trustee or client keys.
-    write_file(d.etc / "tc-api-workload.json", json.dumps({"schema_version": 1, "workload": d.workload}, indent=2) + "\n")
+    launch_config = {"schema_version": 1, "workload": d.workload}
+    if d.receiver_audit is not None:
+        launch_config["receiver_audit"] = d.receiver_audit
+    write_file(d.etc / "tc-api-workload.json", json.dumps(launch_config, indent=2) + "\n")
     return d
 
 

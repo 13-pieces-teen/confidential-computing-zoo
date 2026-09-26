@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:https';
 import { once } from 'node:events';
 import { X509Certificate } from 'node:crypto';
-import { createSpiffeTransport, requestIdentity } from '../lib/transport.mjs';
+import { createSpiffeTransport, requestIdentity, requestFailure } from '../lib/transport.mjs';
 import { validateSVID } from '../lib/svid.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'argus-spiffe-test-'));
@@ -83,10 +83,55 @@ test('real URI-only mTLS, request body, API key, and connection reuse', async t 
   assert.equal(requestIdentity(second).client_spiffe_id, clientID);
 });
 
+test('closed listener yields an attributed unavailable request, while missing credentials do not', async t => {
+  const f = await fixture(t);
+  await new Promise(resolve => f.server.close(resolve));
+  await assert.rejects(f.transport(f.config.origin + '/health'), error => {
+    const failure = requestFailure(error);
+    assert.equal(failure.network_error, 'ECONNREFUSED');
+    assert.equal(failure.phase, 'https_request');
+    assert.ok(failure.request_id);
+    return true;
+  });
+  f.remove();
+  await assert.rejects(f.transport(f.config.origin + '/health'), error => {
+    assert.equal(requestFailure(error), undefined);
+    return true;
+  });
+});
+
+test('a reset after response headers is observable without counting it as zero receipt', async t => {
+  const f = await fixture(t, 'server', (_request, response) => {
+    response.writeHead(200); response.write('partial');
+    setTimeout(() => response.destroy(), 20);
+  });
+  const response = await f.transport(f.config.origin + '/stream');
+  await assert.rejects(response.text(), error => {
+    const failure = requestFailure(error, response);
+    assert.equal(failure.network_error, 'ECONNRESET');
+    assert.equal(failure.phase, 'response_body');
+    assert.equal(failure.request_id, requestIdentity(response).request_id);
+    return true;
+  });
+  assert.equal(f.received.length, 1);
+});
+
+test('request timeout remains inconclusive even after the service received it', async t => {
+  const f = await fixture(t, 'server', () => {});
+  await assert.rejects(f.transport(f.config.origin + '/slow', {signal:AbortSignal.timeout(200)}), error => {
+    assert.equal(requestFailure(error), undefined);
+    return true;
+  });
+  assert.equal(f.received.length, 1);
+});
+
 for (const invalid of ['wrong-server', 'multiple-uri', 'bad-ku', 'bad-eku', 'expired', 'spoofed-san']) {
   test(`reject ${invalid} before sending business data`, async t => {
     const f = await fixture(t, invalid);
-    await assert.rejects(f.transport(f.config.origin + '/secret', { headers: { 'X-API-Key': 'never-send' } }));
+    await assert.rejects(f.transport(f.config.origin + '/secret', { headers: { 'X-API-Key': 'never-send' } }), error => {
+      assert.equal(requestFailure(error), undefined);
+      return true;
+    });
     assert.equal(f.received.length, 0);
   });
 }
@@ -159,7 +204,10 @@ test('multipart bodies and abort signals preserve fetch behavior', async t => {
   const body = new FormData(); body.append('file', new Blob(['test-data']), 'test.txt');
   const response = await f.transport(f.config.origin + '/upload', { method: 'POST', body });
   assert.match((await response.json()).result.body, /test-data/);
-  await assert.rejects(f.transport(f.config.origin + '/abort', { signal: AbortSignal.abort() }));
+  await assert.rejects(f.transport(f.config.origin + '/abort', { signal: AbortSignal.abort() }), error => {
+    assert.equal(requestFailure(error), undefined);
+    return true;
+  });
 });
 
 test('a different authenticated client gets the receiving service HTTP denial', async t => {

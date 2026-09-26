@@ -1,0 +1,15 @@
+{
+  "plugins": {
+    "entries": {
+      "openviking": {
+        "config": {
+          "autoCapture": false,
+          "autoRecall": true,
+          "recallResources": false,
+          "recallTargetTypes": ["user"]
+        }
+      }
+    }
+  },
+  "tools": {"deny": ["*"]}
+}

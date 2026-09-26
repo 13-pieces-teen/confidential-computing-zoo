@@ -1,6 +1,7 @@
 """Observer tests use synthetic receipts; they are not real-TDX acceptance."""
 import copy
 import hashlib
+import http.client
 import importlib.util
 import json
 from pathlib import Path
@@ -10,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -32,7 +34,8 @@ node = load("node_attestation_observe")
 class TrafficEvidenceTests(unittest.TestCase):
     def setUp(self):
         self.event = {"run_id": "run", "executed": True, "started_at_ms": 5000,
-                      "recovery_hold": {"verified": True, "restart": "no"}}
+                      "recovery_hold": {"verified": True, "restart": "no"},
+                      "target": {"container_id": "a" * 64, "launch_id": "launch", "pid": 123, "start_time": "42"}}
         self.rows = [{"type": "probe_start", "run_id": "run", "at_ms": 0}]
         self.receiver = [{"type": "receiver_start", "run_id": "run", "at_ms": 0}]
         for lane in ("new", "existing"):
@@ -47,6 +50,28 @@ class TrafficEvidenceTests(unittest.TestCase):
                                           "received_body_bytes": 12})
         self.rows.append({"type": "probe_stop", "run_id": "run", "at_ms": 9000, "complete": True})
         self.receiver.append({"type": "receiver_stop", "run_id": "run", "at_ms": 10000, "complete": True})
+        # Versioned collector protocol; these remain synthetic test receipts.
+        rebuilt = []
+        for row in self.receiver:
+            if row["type"] == "receiver_start":
+                row.update(boundary="asgi_application_read", binding={"instance_id": "a" * 64,
+                           "launch_id": "launch", "process": {"pid": 123, "start_time": "42"}})
+            elif row["type"] == "received":
+                stream, rid = row["request_id"], row["request_id"]
+                rebuilt.extend([
+                    dict(type="received", run_id="run", at_ms=100, stream_id=stream, request_id=rid,
+                         chunk_seq=0, phase="request_enter", received_body_bytes=0),
+                    dict(type="receive_pending", run_id="run", at_ms=100, stream_id=stream, request_id=rid, chunk_seq=1),
+                    dict(type="received", run_id="run", at_ms=100, stream_id=stream, request_id=rid,
+                         chunk_seq=1, phase="body_read", received_body_bytes=12, message_type="http.request", more_body=False),
+                    dict(type="request_end", run_id="run", at_ms=100, stream_id=stream, request_id=rid, complete=True)])
+                continue
+            else:
+                row.update(pending_streams=0, issues=0, requests=8)
+            rebuilt.append(row)
+        self.receiver = rebuilt
+        for seq, row in enumerate(self.receiver, 1):
+            row.update(schema_version=1, record_seq=seq, collector_id="collector", instance_id="a" * 64)
 
     def check(self, receiver=True):
         return remote.assess(self.rows, self.event, self.receiver if receiver else None,
@@ -61,6 +86,33 @@ class TrafficEvidenceTests(unittest.TestCase):
     def test_complete_independent_observation_can_pass(self):
         self.assertEqual(self.check()["result"], "PASS")
 
+    def test_legacy_coverage_cannot_claim_the_new_inflight_scenario(self):
+        self.rows[0]['inflight_required'] = True
+        result = self.check()
+        self.assertEqual(result['result'], 'UNKNOWN')
+        self.assertEqual(result['inflight_delivery'], 'UNKNOWN')
+
+    def test_collector_gap_pending_old_contract_or_wrong_target_never_pass(self):
+        original = copy.deepcopy(self.receiver)
+        for mutate in (lambda logs: logs.pop(2),
+                       lambda logs: logs[-1].update(complete=False),
+                       lambda logs: logs[0].pop("schema_version"),
+                       lambda logs: logs[0]["binding"]["process"].update(start_time="different"),
+                       lambda logs: logs[-1].update(pending_streams=1),
+                       lambda logs: logs[2].update(chunk_seq=100)):
+            self.receiver = copy.deepcopy(original)
+            mutate(self.receiver)
+            self.assertEqual(self.check()["receiver_delivery"], "UNKNOWN")
+
+    def test_truncated_receiver_file_preserves_receipts_but_marks_gap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receiver.jsonl"
+            path.write_text(json.dumps(self.receiver[0]) + '\n{"type":"received"')
+            records = remote.receiver_rows(path, "run")
+            self.assertEqual(records[0], self.receiver[0])
+            self.assertEqual(records[-1]["type"], "receiver_gap")
+            self.assertEqual(remote.receiver_rows(path.with_name("missing"), "run")[0]["type"], "receiver_gap")
+
     def test_empty_or_incomplete_receiver_is_unknown(self):
         for transform in (lambda rows: [], lambda rows: rows[:-1],
                           lambda rows: [r for r in rows if r.get("type") != "received"]):
@@ -70,10 +122,13 @@ class TrafficEvidenceTests(unittest.TestCase):
                 self.assertEqual(value["result"], "UNKNOWN")
 
     def test_receiver_detects_delivery_even_when_client_reports_failure(self):
-        self.receiver.insert(-1, {"type": "received", "run_id": "run", "request_id": "existing6", "received_body_bytes": 19})
+        self.receiver.insert(-1, {"type": "received", "run_id": "run", "request_id": "existing6", "received_body_bytes": 19,
+                                 "schema_version": 1, "collector_id": "collector", "instance_id": "a" * 64})
         value = self.check()
         self.assertEqual(value["result"], "FAIL")
         self.assertEqual(value["received_body_bytes"], 19)
+        self.receiver[0]["binding"]["instance_id"] = "b" * 64
+        self.assertEqual(self.check()["receiver_delivery"], "UNKNOWN")
 
     def test_post_bound_business_success_fails_without_receiver(self):
         next(row for row in self.rows if row.get("request_id") == "new7")["ok"] = True
@@ -254,6 +309,109 @@ class RecoveryHoldTests(unittest.TestCase):
                 remote.json_rows(path)
 
 
+class ResponseReadTests(unittest.TestCase):
+    def connection(self):
+        return types.SimpleNamespace(serial="123", server_id="spiffe://test/service", peer_verified=True,
+                                     peer_sha256="a" * 64, connections=1, close=lambda: None)
+
+    def request(self):
+        return dict(type="request", run_id="run", request_id="r", lane="existing", ok=False)
+
+    def test_split_marker_and_chunk_timestamps_without_body_text(self):
+        response = types.SimpleNamespace(status=200, length=0)
+        chunks = iter([b"private-", b"sentinel", b""])
+        response.read1 = lambda n: next(chunks)
+        row, emitted = self.request(), []
+        remote.read_response(response, row, self.connection(), emitted.append, b"private-sentinel")
+        self.assertTrue(row["ok"])
+        self.assertTrue(row["response_complete"])
+        self.assertTrue(row["sentinel_response"])
+        self.assertEqual(row["response_bytes"], 16)
+        self.assertEqual([r["chunk_seq"] for r in emitted], [1, 2])
+        self.assertTrue(all(r["at_ms"] >= r["read_started_at_ms"] for r in emitted))
+        self.assertNotIn("private", json.dumps(emitted))
+        self.assertNotIn("sentinel", json.dumps(emitted))
+
+    def test_partial_error_bytes_remain_observable(self):
+        response = types.SimpleNamespace(status=200, length=20)
+        def fail(n):
+            raise http.client.IncompleteRead(b"partial", 13)
+        response.read1 = fail
+        row, emitted = self.request(), []
+        with self.assertRaises(http.client.IncompleteRead):
+            remote.read_response(response, row, self.connection(), emitted.append)
+        self.assertEqual(row["response_bytes"], 7)
+        self.assertEqual(emitted[0]["response_bytes"], 7)
+        self.assertFalse(row["ok"])
+        self.assertFalse(row["response_complete"])
+
+    def test_content_length_early_eof_and_observation_limit_do_not_succeed(self):
+        response = types.SimpleNamespace(status=200, length=12, read1=lambda n: b"")
+        with self.assertRaises(http.client.IncompleteRead):
+            remote.read_response(response, self.request(), self.connection(), lambda row: None)
+        response.read1 = lambda n: b"x" * n
+        row = self.request()
+        remote.read_response(response, row, self.connection(), lambda row: None, limit=4)
+        self.assertEqual(row["response_bytes"], 5)
+        self.assertTrue(row["incomplete"])
+
+    def test_late_partial_response_is_failure_even_if_request_started_before_fault(self):
+        fixture = TrafficEvidenceTests(); fixture.setUp()
+        fixture.rows[0].update(response_observation_version=1, server_id="spiffe://test/service")
+        chunk = dict(type="response_chunk", run_id="run", request_id="existing3", lane="existing",
+                     at_ms=6500, monotonic_ns=1, clock_id="other-client", chunk_seq=1, response_bytes=7, http_status=200,
+                     boundary="client_http_body_read", peer_verified=True, server_id="spiffe://test/service",
+                     peer_sha256="a" * 64)
+        fixture.rows.append(chunk)
+        request = next(r for r in fixture.rows if r.get("request_id") == "existing3")
+        request.update(ok=False, error="IncompleteRead", response_bytes=7)
+        result = fixture.check()
+        self.assertEqual(result["result"], "FAIL")
+        self.assertEqual(result["client_response_delivery"], "FAIL")
+        self.assertEqual(result["client_response_post_bound_bytes"], 7)
+        chunk["peer_verified"] = False
+        self.assertNotEqual(fixture.check()["client_response_delivery"], "FAIL")
+
+    def test_cross_host_clock_uncertainty_is_not_bypassed_by_monotonic_values(self):
+        row = dict(type="response_chunk", run_id="run", request_id="r", lane="existing", at_ms=6005,
+                   monotonic_ns=10**15, clock_id="client", chunk_seq=1, response_bytes=7, http_status=200,
+                   boundary="client_http_body_read", peer_verified=True, server_id="spiffe://test/service", peer_sha256="a" * 64)
+        rows = [dict(type="probe_start", run_id="run", server_id="spiffe://test/service", response_observation_version=1),
+                self.request() | dict(response_bytes=7, response_observation_version=1), row,
+                dict(type="probe_stop", run_id="run", complete=True)]
+        event = dict(run_id="run", started_at_ms=5000, started_monotonic_ns=1, clock_id="server",
+                     recovery_hold=dict(verified=True, restart="no"))
+        result = remote.response_observations(rows, event, bound_ms=1000, uncertainty_ms=10)
+        self.assertEqual(result["client_response_delivery"], "UNKNOWN")
+        self.assertEqual(result["client_response_ambiguous_bytes"], 7)
+
+    def test_observed_late_chunk_survives_missing_final_request_row(self):
+        rows = [dict(type="probe_start", run_id="run", server_id="spiffe://test/service", response_observation_version=1),
+                dict(type="response_chunk", run_id="run", request_id="interrupted", lane="existing", at_ms=7000,
+                     chunk_seq=1, response_bytes=4, http_status=200, boundary="client_http_body_read", peer_verified=True,
+                     server_id="spiffe://test/service", peer_sha256="a" * 64)]
+        event = dict(run_id="run", started_at_ms=5000, recovery_hold=dict(verified=True, restart="no"))
+        result = remote.response_observations(rows, event, bound_ms=1000, uncertainty_ms=0)
+        self.assertEqual(result["client_response_delivery"], "FAIL")
+        self.assertEqual(result["client_response_post_bound_bytes"], 4)
+        rows[1]["at_ms"] = 4000
+        self.assertEqual(remote.response_observations(rows, event, bound_ms=1000, uncertainty_ms=0)["client_response_delivery"], "UNKNOWN")
+
+    def test_rejection_body_is_reported_without_being_a_business_delivery_failure(self):
+        rows = [dict(type="probe_start", run_id="run", server_id="spiffe://test/service", response_observation_version=1),
+                dict(type="response_chunk", run_id="run", request_id="r", lane="existing", at_ms=7000,
+                     chunk_seq=1, response_bytes=4, http_status=403, boundary="client_http_body_read", peer_verified=True,
+                     server_id="spiffe://test/service", peer_sha256="a" * 64),
+                self.request() | dict(response_bytes=4, response_observation_version=1),
+                dict(type="probe_stop", run_id="run", complete=True)]
+        event = dict(run_id="run", started_at_ms=5000, recovery_hold=dict(verified=True, restart="no"))
+        result = remote.response_observations(rows, event, bound_ms=1000, uncertainty_ms=0)
+        self.assertEqual(result["client_response_delivery"], "PASS")
+        self.assertEqual(result["client_response_non_success_observed_bytes"], 4)
+        rows[1]["synthetic_marker_seen"] = True
+        self.assertEqual(remote.response_observations(rows, event, bound_ms=1000, uncertainty_ms=0)["client_response_delivery"], "FAIL")
+
+
 @unittest.skipUnless(shutil.which("openssl"), "OpenSSL is required for the local TLS integration test")
 class LiveTLSProbeTests(unittest.TestCase):
     def test_chain_identity_keepalive_and_close_use_real_tls(self):
@@ -270,9 +428,32 @@ class LiveTLSProbeTests(unittest.TestCase):
                     "-keyout", "leaf.key", "-out", "leaf.csr")
             openssl("x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial",
                     "-days", "1", "-extfile", "leaf.ext", "-out", "leaf.pem")
+            chunks = []
             class Receiver(BaseHTTPRequestHandler):
                 protocol_version = "HTTP/1.1"
+                def do_POST(self):
+                    if self.headers.get('Transfer-Encoding') == 'chunked':
+                        while True:
+                            size = int(self.rfile.readline().strip(), 16)
+                            if not size:
+                                self.rfile.readline()
+                                break
+                            data = self.rfile.read(size); self.rfile.read(2)
+                            chunks.append((time.monotonic(), len(data)))
+                    else:
+                        self.rfile.read(int(self.headers.get('Content-Length', '0')))
+                    self.do_GET()
                 def do_GET(self):
+                    if self.path == "/partial-stream":
+                        self.send_response(200)
+                        self.send_header("Content-Length", "6")
+                        self.send_header("Connection", "close")
+                        self.end_headers()
+                        self.wfile.write(b"ab"); self.wfile.flush()
+                        time.sleep(.03)
+                        self.wfile.write(b"cd"); self.wfile.flush()
+                        self.close_connection = True
+                        return
                     self.send_response(200)
                     self.send_header("Content-Length", "2")
                     if self.path == "/close":
@@ -307,6 +488,36 @@ class LiveTLSProbeTests(unittest.TestCase):
                 with self.assertRaises(ssl.SSLCertVerificationError):
                     wrong.request("GET", "/")
                 wrong.close()
+                (root / 'body.json').write_text('{"synthetic":"abcdefghijklmnop"}')
+                remote.probe(types.SimpleNamespace(url=f'https://127.0.0.1:{server.server_port}/',
+                    bundle=str(root/'ca.pem'), cert=str(root/'leaf.pem'), key=str(root/'leaf.key'),
+                    server_id='spiffe://test/service', run_id='chunked', output=str(root/'trace.jsonl'),
+                    body_file=str(root/'body.json'), method='POST', content_type='application/json', response_marker=None,
+                    api_key_env='', timeout=2, duration=1.1, interval=.1, inflight=True))
+                records = remote.json_rows(root/'trace.jsonl')
+                stream = next(r for r in records if r.get('type') == 'request' and r.get('lane') == 'inflight')
+                self.assertTrue(stream['ok'])
+                self.assertEqual(stream['tls_connections'], 1)
+                self.assertGreater(len(chunks), 2)
+                self.assertGreater(chunks[-1][0] - chunks[0][0], .5)
+                self.assertEqual(sum(n for _, n in chunks), len((root/'body.json').read_bytes()))
+                responses = [r for r in records if r.get('type') == 'response_chunk']
+                self.assertTrue(responses)
+                self.assertTrue(all(r['peer_verified'] and r['server_id'] == 'spiffe://test/service' for r in responses))
+                self.assertEqual(sum(r['response_bytes'] for r in responses if r['request_id'] == stream['request_id']), 2)
+                partial = remote.PinnedConnection("127.0.0.1", server.server_port, context=client_context,
+                                                  timeout=2, server_id="spiffe://test/service", once=True)
+                try:
+                    partial.request("GET", "/partial-stream")
+                    row, observations = dict(run_id="run", request_id="partial", lane="existing", ok=False), []
+                    with self.assertRaises(http.client.IncompleteRead):
+                        remote.read_response(partial.getresponse(), row, partial, observations.append)
+                    self.assertEqual(row["response_bytes"], 4)
+                    self.assertEqual(sum(r["response_bytes"] for r in observations), 4)
+                    self.assertFalse(row["response_complete"])
+                    self.assertTrue(all(r["peer_verified"] for r in observations))
+                finally:
+                    partial.close()
             finally:
                 connection.close()
                 server.shutdown()

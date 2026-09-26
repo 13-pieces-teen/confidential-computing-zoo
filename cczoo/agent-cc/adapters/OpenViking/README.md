@@ -16,3 +16,8 @@ authorizes the exact OpenClaw SPIFFE ID, and forwards requests to OpenViking on
 The [OpenClaw client](../OpenClaw/spiffe_client/README.md) uses native HTTPS for
 business requests. Historical designs and validation records remain in the
 [documentation archive](../../documents_ly/archive/pre-workload-implementation/README.md).
+
+An opt-in [application receiver audit](receiver_audit/README.md) derives an
+experiment image from the same pinned base and records durable ASGI reads in
+an independent host collector. The normal image remains unchanged. Receiver
+coverage, connection closure and business correctness are separate results.

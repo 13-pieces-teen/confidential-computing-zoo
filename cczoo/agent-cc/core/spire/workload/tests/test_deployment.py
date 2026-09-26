@@ -30,6 +30,38 @@ def alternative():
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_receiver_audit_requires_explicit_approved_digest_and_isolated_paths(self):
+        c = alternative()
+        c["receiver_audit"] = {"run_id": "trial-a", "mode": "on", "image_config_digest": c["approved"]["image_config_digest"]}
+        self.assertEqual(Deployment(c).receiver_audit["run_id"], "trial-a")
+        for field, value in (("run_id", "../control"), ("mode", "auto"),
+                             ("image_config_digest", "sha256:" + "f" * 64)):
+            bad = copy.deepcopy(c)
+            bad["receiver_audit"][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                Deployment(bad)
+        c["workload"]["data_path"] = "/run/argus-audit"
+        with self.assertRaisesRegex(ValueError, "audit mounts"):
+            Deployment(c)
+
+    def test_exact_multiple_clients_reach_authz_without_aliasing_roles(self):
+        c = alternative()
+        first = c["identity"].pop("client_id")
+        c["identity"]["allowed_client_ids"] = [first, first + "-b"]
+        d = Deployment(c)
+        unit = d.render((ROOT / "systemd/argus-authz.service").read_text())
+        self.assertEqual(d.allowed_client_ids, (first, first + "-b"))
+        self.assertIn("-client-id " + first + " -client-id " + first + "-b", unit)
+        for value in ([], [first, first], [first, c["identity"]["target_id"]],
+                      [first + "/*"], ["spiffe://other.org/client"], first):
+            bad = copy.deepcopy(c)
+            bad["identity"]["allowed_client_ids"] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                Deployment(bad)
+        c["identity"]["client_id"] = first
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            Deployment(c)
+
     def test_request_budget_reaches_plugin_and_helper(self):
         for configured, timeout in ((None, 55), (51, 51), (60, 60)):
             c = alternative()

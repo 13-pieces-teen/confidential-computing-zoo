@@ -1,0 +1,7 @@
+{
+  "run_id": "e3-workload-rotation-01",
+  "case": "workload-rotation",
+  "target_id": "spiffe://argus.local/service/openviking",
+  "duration_seconds": 600,
+  "workload_config": "/etc/argus/workload-experiment.json"
+}

@@ -4,6 +4,9 @@
 
 # Agentic AI System in Confidential Computing (Agent-CC)
 
+For the Argus implementation, start with the [code map](ARGUS.md),
+[SPIRE integration](core/spire/README.md), and [experiment runbook](experiments/argus/README.md).
+
 ---
 
 ## 🎯 Overview

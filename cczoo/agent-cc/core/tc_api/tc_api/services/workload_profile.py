@@ -27,7 +27,7 @@ def profile_settings(metadata, workload_id):
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or info.st_size > 65536:
         raise ValueError("workload configuration must be a protected root-owned file")
     deployment = json.loads(source.read_text(encoding="utf-8"))
-    if set(deployment) != {"schema_version", "workload"} or type(deployment["schema_version"]) is not int or deployment["schema_version"] != 1:
+    if set(deployment) not in ({"schema_version", "workload"}, {"schema_version", "workload", "receiver_audit"}) or type(deployment["schema_version"]) is not int or deployment["schema_version"] != 1:
         raise ValueError("unsupported workload configuration schema")
     settings = deployment["workload"]
     keys = {"id", "config_host_path", "data_host_path", "config_path", "data_path", "listen_port", "tls_port", "published_port"}
@@ -56,16 +56,50 @@ def profile_settings(metadata, workload_id):
         raise ValueError("OpenViking storage.workspace differs from configured data_path")
     if not Path(settings["data_host_path"]).is_dir():
         raise ValueError("OpenViking data directory is missing")
+    if "receiver_audit" in deployment:
+        audit = deployment["receiver_audit"]
+        if not isinstance(audit, dict) or set(audit) != {"run_id", "mode", "image_config_digest"}:
+            raise ValueError("invalid receiver audit settings")
+        if not isinstance(audit["run_id"], str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", audit["run_id"]) or audit["mode"] not in ("on", "off") or not isinstance(audit["image_config_digest"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", audit["image_config_digest"]):
+            raise ValueError("receiver audit requires an explicit run, mode and pinned image digest")
+        audit_roots = (PurePosixPath("/run/argus-audit"), PurePosixPath("/run/argus-receiver"))
+        if any(PurePosixPath(settings[key]).is_relative_to(root) or root.is_relative_to(settings[key])
+               for key in ("config_path", "data_path", "config_host_path", "data_host_path") for root in audit_roots):
+            raise ValueError("receiver audit mounts overlap application configuration/data")
+        directory = Path(audit_directory(audit))
+        for path in [directory] + list(directory.parents):
+            info = path.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+                raise ValueError("receiver audit socket directory chain must be root-owned and non-writable")
+        settings = {**settings, "receiver_audit": audit}
     return settings
 
 
+def audit_directory(audit):
+    return PurePosixPath("/run/argus-receiver") / audit["run_id"] / "data"
+
+
+def assert_audit_image(settings, actual_image_id):
+    audit = settings.get("receiver_audit")
+    if audit and actual_image_id != audit["image_config_digest"]:
+        raise ValueError("refusing to launch unapproved image with receiver audit socket access")
+
+
 def launch_environment(settings):
-    return {"OPENVIKING_CONFIG_FILE": settings["config_path"], "PYTHONDONTWRITEBYTECODE": "1", "OPENVIKING_WITH_BOT": "0"}
+    result = {"OPENVIKING_CONFIG_FILE": settings["config_path"], "PYTHONDONTWRITEBYTECODE": "1", "OPENVIKING_WITH_BOT": "0"}
+    if settings.get("receiver_audit"):
+        audit = settings["receiver_audit"]
+        result.update(ARGUS_AUDIT_MODE=audit["mode"], ARGUS_AUDIT_RUN_ID=audit["run_id"],
+                      ARGUS_AUDIT_SOCKET="/run/argus-audit/receiver.sock")
+    return result
 
 
 def security_projection(settings, launch_id, workload_id):
+    mounts = [f"{settings['config_host_path']}:{settings['config_path']}:ro", f"{settings['data_host_path']}:{settings['data_path']}"]
+    if settings.get("receiver_audit"):
+        mounts.append(f"{audit_directory(settings['receiver_audit'])}:/run/argus-audit:ro")
     return {"launch_id": launch_id, "workload_id": workload_id, "privileged": False,
-            "network_mode": "bridge", "mounts": [f"{settings['config_host_path']}:{settings['config_path']}:ro", f"{settings['data_host_path']}:{settings['data_path']}"],
+            "network_mode": "bridge", "mounts": mounts,
             "devices": [], "capabilities": [], "read_only_rootfs": True,
             "tmpfs": [TMPFS],
             "published_ports": [f"{settings['published_port']}:{settings['tls_port']}"], "attestation_profile": PROFILE,
@@ -73,14 +107,17 @@ def security_projection(settings, launch_id, workload_id):
 
 
 def docker_command(binary, settings):
-    return [
+    command = [
         binary, "run", "-d", "--read-only", "--cap-drop=ALL",
         "--security-opt=no-new-privileges", "--network=bridge",
         f"--publish={settings['published_port']}:{settings['tls_port']}",
         "--mount", f"type=bind,source={settings['config_host_path']},target={settings['config_path']},readonly",
         "--mount", f"type=bind,source={settings['data_host_path']},target={settings['data_path']}",
         "--tmpfs", TMPFS,
-    ] + [arg for key, value in launch_environment(settings).items() for arg in ("--env", f"{key}={value}")]
+    ]
+    if settings.get("receiver_audit"):
+        command += ["--mount", f"type=bind,source={audit_directory(settings['receiver_audit'])},target=/run/argus-audit,readonly"]
+    return command + [arg for key, value in launch_environment(settings).items() for arg in ("--env", f"{key}={value}")]
 
 
 def observed_container(container, launch_id, workload_id):

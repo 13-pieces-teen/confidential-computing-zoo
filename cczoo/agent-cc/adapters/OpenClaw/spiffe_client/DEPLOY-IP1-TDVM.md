@@ -218,4 +218,4 @@ python3 "$OC/lifecycle.py" check --trace /root/pause.jsonl --mode publisher --ev
 
 这段合入已有 environment JSON；`approved.policy_id` 同样必须指向该已发布策略。`preflight` 仍要求 Trustee GET 回读逐字节一致，文件换行变化也会失败。不给这个字段时仍使用要求 `UpToDate` 的严格模板，策略 ID 含 `poc` 不会自动放行。不得从报告摘要猜测原始 Rego 文件。此功能只使既有批准策略可复现，不自动发布策略或触发 IP2 重启。
 
-最后按 `PASS / FAIL / BLOCKED / NOT_RUN` 汇总：TDVM boot、x509pop Agent、workload SVID、mTLS、真实写入/归档/新会话召回、轮换、失效/恢复。OpenClaw Quote/Trustee appraisal 固定记 NOT_RUN；IP2 `tcb_status=OutOfDate` 与 PoC 例外并列保留。
+最后按 `PASS / FAIL / BLOCKED / NOT_RUN` 汇总：TDVM boot、x509pop Agent、workload SVID、mTLS、真实写入/归档/新会话召回、轮换、失效/恢复。OpenClaw Quote/Trustee appraisal 固定记 NOT_RUN；IP2 按实际证据记录 tcb_status 和批准策略摘要，当前批准策略不要求 TCB UpToDate。

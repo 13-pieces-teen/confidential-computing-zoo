@@ -51,3 +51,25 @@ test('empty and failed assemblies are observable without leaking text or error d
     assert.ok(!JSON.stringify(lines).includes(privateText));
   } finally { console.error = original; }
 });
+
+test('natural language source is linked to actual injected output without logging its content', async () => {
+  const lines = []; const original = console.error;
+  console.error = line => lines.push(JSON.parse(line));
+  const block = 'Private memory: Caroline visited the museum.\nThe trip was in May.';
+  try {
+    for (const inject of [true, false]) {
+      await auditAssembly(async () => {
+        auditRecallSource(block, 1);
+        return {messages:[{content:[{type:'text',text:inject ? block+'\nQuestion?' : 'Question?'}]}]};
+      }, {messages:[{content:'Question?'}], sessionKey:String(inject)});
+    }
+    const found = lines.filter(v => v.event === 'completed');
+    assert.equal(found[0].recall_block_sha256.length, 64);
+    assert.equal(found[0].recall_block_chars, block.length);
+    assert.equal(found[0].recall_block_in_input, false);
+    assert.equal(found[0].recall_block_in_output, true);
+    assert.equal(found[1].recall_block_in_output, false);
+    assert.equal(found[0].recall_block_sha256, found[1].recall_block_sha256);
+    assert.ok(!JSON.stringify(lines).includes('museum'));
+  } finally { console.error = original; }
+});

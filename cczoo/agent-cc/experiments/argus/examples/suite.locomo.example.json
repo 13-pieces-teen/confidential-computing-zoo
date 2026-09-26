@@ -1,0 +1,20 @@
+{
+  "experiment_id": "locomo01",
+  "groups": ["full_argus", "native_spire_guarded"],
+  "cases": ["locomo"],
+  "seeds": [0],
+  "locomo_timeout_s": 21600,
+  "fleet_config": "/secure/locomo/fleet-three.json",
+  "variant_outputs": {
+    "full_argus": "/root/argus-arms/locomo01/full_argus",
+    "native_spire_guarded": "/root/argus-arms/locomo01/native_spire_guarded"
+  },
+  "business_configs": {
+    "full_argus": "/secure/locomo/business-full.json",
+    "native_spire_guarded": "/secure/locomo/business-native.json"
+  },
+  "locomo_configs": {
+    "full_argus": "/secure/locomo/locomo-full.json",
+    "native_spire_guarded": "/secure/locomo/locomo-native.json"
+  }
+}

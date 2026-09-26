@@ -542,7 +542,7 @@ def verify(c):
     target = json.loads(run([d.bin / "argus-workload", "-action", "check", "-registration", d.target]))
     proof = json.loads(run([d.bin / "spiffe-mtls-probe", "-url", c["business_url"], "-cert", c["client_cert"],
                            "-key", c["client_key"], "-bundle", c["client_bundle"], "-server-id", d.identity["target_id"]]))
-    if proof["client_spiffe_id"] != d.identity["client_id"] or proof["server_serial"] != s["target_serial"]:
+    if proof["client_spiffe_id"] not in d.allowed_client_ids or proof["server_serial"] != s["target_serial"]:
         raise ValueError("business call did not use the expected client/current target SVID")
     started = json.loads(protected_file(d.records / "start.json").read_text())["started_at"]
     started_epoch = calendar.timegm(time.strptime(started, "%Y-%m-%dT%H:%M:%SZ"))

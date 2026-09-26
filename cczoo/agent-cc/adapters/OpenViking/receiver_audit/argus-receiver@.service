@@ -1,0 +1,21 @@
+[Unit]
+Description=Independent Argus application receiver audit (%i)
+# Deliberately no PartOf/BindsTo/Requires for Helper, NGINX, or target containers.
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment=PYTHONPATH=/opt/argus-audit
+ExecStart=/usr/bin/python3 -m receiver_audit.collector serve --socket /run/argus-receiver/%i/data/receiver.sock --control /run/argus-receiver/%i/control/collector.sock --binding /var/lib/argus-receiver/%i/binding.json --output /var/lib/argus-receiver/%i/receiver.jsonl
+Restart=no
+KillMode=control-group
+UMask=0077
+# Keep outside all target/container/Helper cgroups and fault-injection units.
+Slice=system.slice
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/run/argus-receiver /var/lib/argus-receiver
+
+[Install]
+WantedBy=multi-user.target

@@ -60,6 +60,7 @@ func TestNGINXMTLSAuthzAndRotation(t *testing.T) {
 	}
 	const serverID = "spiffe://example.org/service/memory"
 	const clientID = "spiffe://example.org/agent/assistant"
+	const secondClientID = "spiffe://example.org/agent/assistant-b"
 	write := func(name string, b []byte) {
 		t.Helper()
 		if err := os.WriteFile(filepath.Join(dir, name), b, 0600); err != nil {
@@ -91,7 +92,7 @@ func TestNGINXMTLSAuthzAndRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	authServer := &http.Server{Handler: Handler(spiffeid.RequireFromString(clientID)), ReadHeaderTimeout: time.Second}
+	authServer := &http.Server{Handler: HandlerForIDs([]spiffeid.ID{spiffeid.RequireFromString(clientID), spiffeid.RequireFromString(secondClientID)}), ReadHeaderTimeout: time.Second}
 	go authServer.Serve(listener)
 	defer authServer.Close()
 	free, err := net.Listen("tcp", "127.0.0.1:0")
@@ -170,6 +171,12 @@ func TestNGINXMTLSAuthzAndRotation(t *testing.T) {
 	}
 	if status, _, _, err := fetch(bad); err != nil || status != 403 {
 		t.Fatalf("wrong client identity: HTTP %d %v", status, err)
+	}
+	if status, _, _, err := fetch(clientFor(secondClientID)); err != nil || status != 200 {
+		t.Fatalf("second allowed client identity: HTTP %d %v", status, err)
+	}
+	if status, _, _, err := fetch(clientFor(clientID + "/child")); err != nil || status != 403 {
+		t.Fatalf("identity prefix must not authorize: HTTP %d %v", status, err)
 	}
 	forged, _ := http.NewRequest("GET", endpoint, nil)
 	forged.Header.Set("X-Argus-TLS-Verified", "SUCCESS")

@@ -7,6 +7,7 @@ import { recordRecallRequest } from './recall-audit.mjs';
 import { validateMaterial, validateSVID, spiffeID } from './svid.mjs';
 
 const receipts = new WeakMap();
+const failures = new WeakMap();
 const fail = message => new Error(`OpenViking SPIFFE: ${message}`);
 
 function protectedFile(path, limit) {
@@ -41,6 +42,16 @@ function validateConfig(value) {
 }
 
 export function requestIdentity(response) { return receipts.get(response); }
+// Narrow observation for availability experiments. A failed request is not
+// evidence that the peer received no bytes, and timeouts remain inconclusive.
+export function requestFailure(error, response) {
+  const failure = failures.get(error);
+  if (failure) return failure;
+  const receipt = receipts.get(response);
+  if (receipt && error?.code === 'ECONNRESET') return {
+    request_id: receipt.request_id, network_error: error.code, phase: 'response_body',
+  };
+}
 
 // No global dispatcher or global fetch changes: only this plugin's fixed origin
 // can use the credentials. Every TLS handshake still uses OpenSSL path validation.
@@ -169,7 +180,12 @@ export function createSpiffeTransport(configuration = loadConfig()) {
           if (socket.connecting) socket.once('secureConnect', boundLifetime); else boundLifetime();
         }
       });
-      request.on('error', reject);
+      request.on('error', error => {
+        if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') failures.set(error, {
+          request_id: requestID, network_error: error.code, phase: 'https_request',
+        });
+        reject(error);
+      });
       if (message.body) {
         const body = Readable.fromWeb(message.body);
         body.on('error', error => request.destroy(error));

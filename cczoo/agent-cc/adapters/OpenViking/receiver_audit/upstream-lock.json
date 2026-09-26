@@ -1,0 +1,11 @@
+{
+  "base_image": "ghcr.io/volcengine/openviking@sha256:27d3c97bddbe81f31d2c5af1f31e9d504b5928506c88f559a23faf86358169b7",
+  "amd64_manifest": "sha256:317512536c520148ec59f2214f63052b5cfdeaeeb8b71e2e476b80fb4a3259c0",
+  "source_revision": "07113f81e0edaebaacdd23ab138087b06fe871ab",
+  "version": "0.4.8",
+  "console_entry": "openviking_cli.server_bootstrap:main",
+  "files": {
+    "openviking/server/bootstrap.py": "03edf8fc9a6de83f257263a9981a5a40b285094fc86b2c12fac46154ba3020b7",
+    "openviking_cli/server_bootstrap.py": "99e27e37cd043b0c64b60226477d38ef8634fe573ab3b3b5a66249f5ec2a4bd8"
+  }
+}

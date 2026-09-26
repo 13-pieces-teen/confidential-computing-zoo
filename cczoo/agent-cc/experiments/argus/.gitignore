@@ -1,0 +1,8 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local datasets, evidence and rendered deployments; source examples stay tracked.
+/private/
+/evidence/
+/generated/

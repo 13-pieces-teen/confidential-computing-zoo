@@ -2,7 +2,7 @@
 
 你运行在公司 IP2，请为“IP1 新 TDVM 内的 OpenClaw → IP2 现有 OpenViking”完成服务端接入核对与联调证据收集。
 
-范围：保持当前已通过真实 TDX PoC Node/Workload Attestation 的 OpenViking 实例，tcb_status=OutOfDate 暂时接受于已明确批准的 PoC 策略；严格 UpToDate 策略不改。本轮 OpenClaw 在 IP1 新 TDVM 中运行，先用普通 x509pop/SPIFFE 身份；业务为 OpenClaw 请求、OpenViking 返回结果及双方 mTLS，不新增 OpenViking 主动调用 OpenClaw 的 API。
+范围：沿用实际部署记录中的 OpenViking 实例与批准策略，记录实际 tcb_status；当前批准策略不要求 TCB UpToDate，不将该字段另作准入条件。历史 Node/Workload 验证结果不替代本次代码与实例的验收。本轮 OpenClaw 在 IP1 新 TDVM 中运行，先用普通 x509pop/SPIFFE 身份；业务为 OpenClaw 请求、OpenViking 返回结果及双方 mTLS，不新增 OpenViking 主动调用 OpenClaw 的 API。
 
 先执行并立即返回接入交接信息：
 1. 读取适用 AGENTS.md，检查仓库后 git fetch origin。使用用户指定的本次提交，记录完整 SHA；当前运行目录有改动时用独立 worktree 检查新代码，不覆盖正在运行的程序或配置。

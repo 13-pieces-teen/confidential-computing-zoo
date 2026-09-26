@@ -20,7 +20,7 @@
 | --- | --- |
 | 原生 TLS 与发布包 | **19/19 PASS，0 skipped**；Node v22.17.0，真实 HTTPS/mTLS 测试服务，实际 npm 发布包的 OpenVikingClient/setup，覆盖精确身份、用途/链/过期、轮换、租约失效、活动连接中断、HTTP/跨 origin/重定向拒绝、错误客户端 403；新增并发召回审计关联。测试 CA 不是公司凭据。 |
 | 交付/部署/验收判断 | **9/9 PASS**；Python 3.12.7。固定上游摘要及可重复包、生成配置、宽松或冲突 Entry 拒绝、连续轮换/失效轨迹、第二会话答案泄漏与跨 span 审计拒绝。 |
-| Workload 策略及现有运行工具 | **6/6 PASS**；默认严格 UpToDate，PoC 名称不自动豁免，显式原文件/摘要和换行改动拒绝，现有运行工具的回归。 |
+| Workload 策略及现有运行工具 | **6/6 PASS（历史）**；验证当时内置模板与显式批准原文件/摘要的选择、换行变化拒绝及运行工具。当前部署沿用已批准策略，不由此历史测试新增 TCB UpToDate 条件。 |
 | Go 凭据交付/Broker | Windows `go test -mod=readonly -count=1 ./pkg/clientcredentials ./pkg/broker` 与 `go vet` PASS；Go 1.26.5。新增真实进程内 gRPC 首快照、空身份和 deadline 测试；Broker 不响应时不再无限续租缓存凭据。 |
 | Linux 凭据测试 | Linux amd64 交叉编译后，在 WSL2 内核 6.6.87.2 实际执行全部 clientcredentials 测试 PASS，包括真实 pidfd/实例变更检测、Broker deadline 和清理；不是仅编译通过。 |
 | 官方 SPIRE 集成 | **1/1 PASS**，WSL 中实际运行官方 SPIRE 1.15.3。完整交付 Agent 配置 validate、增量 x509pop Server 片段 validate、真实 x509pop 节点注册、指纹 Agent ID、两个 Entry 创建/JSON 回读与审核均通过。运行阶段不加载 Docker attestor，因此不代表 Docker workload SVID 签发已通过。 |
@@ -50,3 +50,27 @@
 OpenClaw 的 Quote/Trustee 远程证明按约定不实施，记为 **NOT_RUN**。IP2 继续保留已有 `OutOfDate` PoC 策略例外及其真实证据边界。第二会话的审计位置是 ContextEngine assemble 返回边界，不能表述为已抓取模型供应商的完整请求。
 
 按 [IP1 / Guest / IP2 操作手册](DEPLOY-IP1-TDVM.md)执行并返回真实证据；不能把本记录中的测试结果替代公司环境 PASS。
+
+## 2026-09-26 多客户端扩展本地验证
+
+本次增加一个共享节点上的独立 Gateway 部署和私有记忆验收，见
+[多客户端部署与验收](FLEET-ACCEPTANCE.md)。上面的历史数字和远程边界保持原义。
+
+- Linux / WSL Python 3.12.12 客户端全套：27 项，26 PASS、1 项官方 SPIRE 集成未配置而 skip。
+  固定 npm 上游包的完整性与可重复构建检查启用；新增 fleet 12/12 PASS。
+- 新增 fleet 用例含真实 Linux UID/GID 降权读文件：本实例 reader group 可读自身模拟凭据，
+  读取另一实例凭据得到 PermissionError；其余覆盖配置冲突、选择器交叉匹配、独立 mount、
+  单实例停止、共享节点与应用身份区分、实际 key 作用域判定和未知提交不重放。
+- Node 原有发布包/原生 mTLS/业务与召回审计回归：27/27 PASS，未改动上游插件版本。
+- 锁定 OpenViking 0.4.8 源码 revision `07113f81e0edaebaacdd23ab138087b06fe871ab` 的
+  `verify_openviking_contract.py` PASS：运行原始 API key 身份解析和私有 owner 准入判断，
+  明确使用受控 key store、排除 OAuth、使用已规范化 URI owner fixture。
+  此结果不是部署后的 HTTP/存储集成验收。
+- 实验采样器与回执检查 9 项 PASS：实际 loopback mTLS 正常请求、403、错误 peer 在 HTTP 发送前失败、
+  超时与过载、多客户端线上的 request ID 与原始记录一致、重复身份/业务 key 拒绝、
+  容量不足结构化 NOT_RUN、发布代际与过期租约拒绝、持久化失败不能产生完整测量，
+  以及恢复回执必须完成且匹配 operation ID。
+- Bash 与 Node 语法检查、Python 编译、Git whitespace 检查通过。
+
+多 Gateway 的真实模型记忆、远程业务用户隔离、真实节点/服务故障和 TDX 仍需远程执行。
+`CanReattest=false` 和本项目当前批准策略保持，不新增 `TCB UpToDate` 准入条件。

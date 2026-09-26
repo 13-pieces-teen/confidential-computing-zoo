@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "node": {
+    "server_address": "REPLACE_WITH_IP1_REACHABLE_FROM_GUEST",
+    "server_port": 8081,
+    "node_certificate_sha1": "REPLACE_WITH_CERT_DER_SHA1_40_HEX",
+    "helper_sha256": "REPLACE_WITH_DELIVERED_LINUX_BINARY_SHA256",
+    "server_socket": "/run/spire/server/api.sock",
+    "server_unit": "spire-server"
+  },
+  "instances": [
+    {
+      "openclaw_image": "REPLACE_WITH_REGISTRY_IMAGE@sha256:REPLACE_WITH_MANIFEST_DIGEST",
+      "image_config_digest": "sha256:REPLACE_WITH_DOCKER_IMAGE_INSPECT_ID",
+      "openviking_origin": "https://openviking.argus.local:1943",
+      "container_name": "argus-openclaw-alice",
+      "gateway_uid": 21001,
+      "gateway_gid": 21001,
+      "reader_gid": 22001,
+      "gateway_executable": "/usr/local/bin/node",
+      "gateway_command": [
+        "openclaw",
+        "gateway",
+        "--bind",
+        "loopback",
+        "--allow-unconfigured"
+      ],
+      "name": "alice",
+      "client_spiffe_id": "spiffe://argus.local/agent/openclaw/alice"
+    },
+    {
+      "openclaw_image": "REPLACE_WITH_REGISTRY_IMAGE@sha256:REPLACE_WITH_MANIFEST_DIGEST",
+      "image_config_digest": "sha256:REPLACE_WITH_DOCKER_IMAGE_INSPECT_ID",
+      "openviking_origin": "https://openviking.argus.local:1943",
+      "container_name": "argus-openclaw-bob",
+      "gateway_uid": 21002,
+      "gateway_gid": 21002,
+      "reader_gid": 22002,
+      "gateway_executable": "/usr/local/bin/node",
+      "gateway_command": [
+        "openclaw",
+        "gateway",
+        "--bind",
+        "loopback",
+        "--allow-unconfigured"
+      ],
+      "name": "bob",
+      "client_spiffe_id": "spiffe://argus.local/agent/openclaw/bob"
+    },
+    {
+      "openclaw_image": "REPLACE_WITH_REGISTRY_IMAGE@sha256:REPLACE_WITH_MANIFEST_DIGEST",
+      "image_config_digest": "sha256:REPLACE_WITH_DOCKER_IMAGE_INSPECT_ID",
+      "openviking_origin": "https://openviking.argus.local:1943",
+      "container_name": "argus-openclaw-carol",
+      "gateway_uid": 21003,
+      "gateway_gid": 21003,
+      "reader_gid": 22003,
+      "gateway_executable": "/usr/local/bin/node",
+      "gateway_command": [
+        "openclaw",
+        "gateway",
+        "--bind",
+        "loopback",
+        "--allow-unconfigured"
+      ],
+      "name": "carol",
+      "client_spiffe_id": "spiffe://argus.local/agent/openclaw/carol"
+    }
+  ]
+}

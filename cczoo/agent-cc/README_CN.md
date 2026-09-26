@@ -4,6 +4,8 @@
 
 # 机密计算中的 Agentic AI 系统（Agent-CC）
 
+Argus 实现入口：[代码结构](ARGUS.md)、[SPIRE 集成](core/spire/README.md)、[实验工具与运行说明](experiments/argus/README.md)。
+
 ---
 
 ## 🎯 概述

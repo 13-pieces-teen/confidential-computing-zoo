@@ -1,0 +1,19 @@
+{
+  "groups": [
+    "full_argus"
+  ],
+  "experiment_id": "smoke01",
+  "seeds": [
+    0
+  ],
+  "variant_outputs": {
+    "full_argus": "/root/argus-arms/smoke01/full_argus"
+  },
+  "fleet_config": "/secure/fleet.json",
+  "business_configs": {
+    "full_argus": "/secure/business-full.json"
+  },
+  "cases": [
+    "private-memory"
+  ]
+}

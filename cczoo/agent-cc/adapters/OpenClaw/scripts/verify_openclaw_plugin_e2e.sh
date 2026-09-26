@@ -34,10 +34,15 @@ else
     AGENT_ID="${DUAL_E2E_AGENT_ID:-main}"
     started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     python3 - "$EVIDENCE_DIR" "$RUN_ID" "$MARKER" "$SESSION_KEY" "$AGENT_ID" "$started_at" <<'PY'
-import json,pathlib,secrets,sys
+import hashlib,json,os,pathlib,secrets,sys
 p=pathlib.Path(sys.argv[1]); keys=('run_id','marker','session_key','agent_id','started_at')
-(p/'run.json').write_text(json.dumps(dict(zip(keys,sys.argv[2:])),indent=2)+'\n')
-(p/'fact.txt').write_text('ARGUS_FACT_'+secrets.token_hex(16).upper()+'\n')
+seed=os.environ.get('DUAL_E2E_SEED')
+fact=hashlib.sha256(('argus-synthetic-fact-v1:'+seed).encode()).hexdigest()[:32] if seed is not None else secrets.token_hex(16)
+record=dict(zip(keys,sys.argv[2:]))
+record['fact_generation']='paired_seed' if seed is not None else 'random'
+record['fact_seed_sha256']=hashlib.sha256(seed.encode()).hexdigest() if seed is not None else None
+(p/'run.json').write_text(json.dumps(record,indent=2)+'\n')
+(p/'fact.txt').write_text('ARGUS_FACT_'+fact.upper()+'\n')
 (p/'marker.txt').write_text(sys.argv[3]+'\n')
 PY
 fi

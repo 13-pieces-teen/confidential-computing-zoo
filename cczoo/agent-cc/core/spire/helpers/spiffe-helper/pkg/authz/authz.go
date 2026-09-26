@@ -18,6 +18,12 @@ import (
 )
 
 func Authorize(escapedPEM, verifyStatus string, expected spiffeid.ID, now time.Time) error {
+	return AuthorizeAny(escapedPEM, verifyStatus, []spiffeid.ID{expected}, now)
+}
+
+// AuthorizeAny allows only exact members of a nonempty identity set. No prefix
+// matching is used: service identity is independent of business API keys.
+func AuthorizeAny(escapedPEM, verifyStatus string, allowed []spiffeid.ID, now time.Time) error {
 	if verifyStatus != "SUCCESS" {
 		return fmt.Errorf("NGINX did not verify the TLS client chain")
 	}
@@ -40,7 +46,7 @@ func Authorize(escapedPEM, verifyStatus string, expected spiffeid.ID, now time.T
 	if err != nil {
 		return err
 	}
-	if id != expected {
+	if !slices.Contains(allowed, id) {
 		return fmt.Errorf("client SPIFFE ID denied")
 	}
 	if c.IsCA || c.KeyUsage&x509.KeyUsageDigitalSignature == 0 || c.KeyUsage&(x509.KeyUsageCertSign|x509.KeyUsageCRLSign) != 0 {
@@ -55,6 +61,11 @@ func Authorize(escapedPEM, verifyStatus string, expected spiffeid.ID, now time.T
 	return nil
 }
 func Handler(expected spiffeid.ID) http.Handler {
+	return HandlerForIDs([]spiffeid.ID{expected})
+}
+
+func HandlerForIDs(allowed []spiffeid.ID) http.Handler {
+	allowed = slices.Clone(allowed)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/authorize" || r.Method != "GET" {
 			http.NotFound(w, r)
@@ -64,7 +75,7 @@ func Handler(expected spiffeid.ID) http.Handler {
 			http.Error(w, "denied", http.StatusForbidden)
 			return
 		}
-		if err := Authorize(r.Header.Get("X-Argus-TLS-Cert"), r.Header.Get("X-Argus-TLS-Verified"), expected, time.Now()); err != nil {
+		if err := AuthorizeAny(r.Header.Get("X-Argus-TLS-Cert"), r.Header.Get("X-Argus-TLS-Verified"), allowed, time.Now()); err != nil {
 			http.Error(w, "denied", http.StatusForbidden)
 			return
 		}

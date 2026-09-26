@@ -35,6 +35,24 @@ def test_profile_has_private_network_no_quote_device_and_ro_config():
         profile.profile_settings({"workload_attestation_profile": profile.PROFILE}, "other")
 
 
+def test_audit_mount_and_environment_are_in_launch_security_projection():
+    settings = {"config_host_path": "/srv/ov.conf", "data_host_path": "/srv/ov-data",
+                "config_path": "/etc/memory/ov.conf", "data_path": "/var/lib/memory",
+                "published_port": 3943, "tls_port": 2943,
+                "receiver_audit": {"run_id": "trial-a", "mode": "on", "image_config_digest": "sha256:" + "a" * 64}}
+    command = profile.docker_command("docker", settings)
+    projection = profile.security_projection(settings, "launch", "memory")
+    assert "type=bind,source=/run/argus-receiver/trial-a/data,target=/run/argus-audit,readonly" in command
+    assert "/run/argus-receiver/trial-a/data:/run/argus-audit:ro" in projection["mounts"]
+    assert "ARGUS_AUDIT_RUN_ID=trial-a" in command
+    assert "ARGUS_AUDIT_MODE=on" in command
+    assert "ARGUS_AUDIT_SOCKET" in projection["launch_env_keys"]
+    assert not any("/control" in arg for arg in command)
+    profile.assert_audit_image(settings, "sha256:" + "a" * 64)
+    with pytest.raises(ValueError, match="unapproved image"):
+        profile.assert_audit_image(settings, "sha256:" + "b" * 64)
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="root-owned Linux operator configuration")
 def test_configured_ports_paths_and_openviking_constraints(tmp_path, monkeypatch, root_owned_config):
     app = tmp_path / "ov.conf"
@@ -65,6 +83,39 @@ def test_configured_ports_paths_and_openviking_constraints(tmp_path, monkeypatch
     monkeypatch.setenv("ARGUS_OPENVIKING_CONFIG_PATH", str(app))
     with pytest.raises(ValueError, match="ARGUS_WORKLOAD_CONFIG"):
         profile.profile_settings(metadata, "memory-prod")
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux operator paths and ownership")
+def test_protected_audit_settings_reach_real_profile_validation(tmp_path, monkeypatch, root_owned_config):
+    app, data = tmp_path / "ov.conf", tmp_path / "data"
+    data.mkdir()
+    app.write_text(json.dumps({"server": {"host": "127.0.0.1", "port": 1933}, "storage": {"workspace": "/var/lib/memory"}}))
+    settings = {"id": "memory", "config_host_path": str(app), "data_host_path": str(data),
+                "config_path": "/etc/ov.conf", "data_path": "/var/lib/memory", "listen_port": 1933,
+                "tls_port": 1943, "published_port": 1943}
+    audit = {"run_id": "trial-a", "mode": "on", "image_config_digest": "sha256:" + "a" * 64}
+    config = tmp_path / "deployment.json"
+    config.write_text(json.dumps({"schema_version": 1, "workload": settings, "receiver_audit": audit}))
+    root_owned_config(config)
+    monkeypatch.setenv("ARGUS_WORKLOAD_CONFIG", str(config))
+    original = Path.lstat
+    bad_directory = {"enabled": False}
+    def lstat(path):
+        if str(path).startswith("/run/argus-receiver"):
+            return SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | (0o777 if bad_directory["enabled"] else 0o700))
+        return original(path)
+    monkeypatch.setattr(Path, "lstat", lstat)
+    result = profile.profile_settings({"workload_attestation_profile": profile.PROFILE}, "memory")
+    assert result["receiver_audit"] == audit
+    bad_directory["enabled"] = True
+    with pytest.raises(ValueError, match="directory chain"):
+        profile.profile_settings({"workload_attestation_profile": profile.PROFILE}, "memory")
+    bad_directory["enabled"] = False
+    for update in ({"run_id": "../control"}, {"mode": "auto"}, {"image_config_digest": "latest"},
+                   {"socket_directory": "/var/run/docker.sock"}):
+        config.write_text(json.dumps({"schema_version": 1, "workload": settings, "receiver_audit": {**audit, **update}}))
+        with pytest.raises(ValueError):
+            profile.profile_settings({"workload_attestation_profile": profile.PROFILE}, "memory")
 
 
 @pytest.mark.parametrize("uid,mode,size", [

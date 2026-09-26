@@ -14,6 +14,10 @@ configured business URL:
   reconnection prohibited. A server that closes this connection during the
   baseline cannot demonstrate the old-connection case; the result is UNKNOWN.
 - `new`: a fresh TLS connection for each request. No redirect is followed.
+- `inflight` (opt-in): `--inflight` sends one synthetic POST body in paced
+  chunks on a third connection, starting before the fault. The two original
+  lanes remain independent. The coordinator enables this by default and waits
+  for the receiver's first positive-byte read before injecting the fault.
 
 The probe records request IDs, timestamps, peer certificate serials, HTTP status,
 and byte counts. It does not save request/response bodies, API keys, or private
@@ -34,12 +38,16 @@ python3 remote_acceptance.py probe \
   --server-id spiffe://argus.local/service/openviking-cmem \
   --run-id freeze-001 --output freeze-001.trace.jsonl \
   --duration 40 --interval 0.25 --timeout 2 \
-  --method POST --body-file synthetic-request.json \
+  --method POST --body-file synthetic-request.json --inflight \
   --api-key-env OPENVIKING_API_KEY
 ```
 
-On the service host, wait until **each lane has at least three successful
-business requests**, then execute the explicitly selected fault:
+On the service host, wait until **each of the two baseline lanes has at least
+three successful business requests** and the in-flight body has actually been
+read by the application, then execute the explicitly selected fault. The
+`fault_trial.py` coordinator checks this with `collector status --request-id`.
+If normal proxy buffering prevents an ongoing application read, the scenario
+is NOT_RUN; do not silently disable buffering or infer first-read from a send.
 
 ```sh
 python3 remote_acceptance.py fault \
@@ -101,23 +109,26 @@ bound remains a failed old-connection closure observation.
 
 The receiver journal is an **independent application-side observation**, not the
 client trace, NGINX access log, PEM cleanup, or a manually inferred list of
-requests. The real receiver/instrumentation must emit these JSONL records:
+requests. Use the implemented [OpenViking ASGI receiver adapter](../../../../adapters/OpenViking/receiver_audit/README.md)
+and independent Unix collector. Version 2 binds protected deployment records to
+kernel sender credentials and process mappings. The wrapper sends metadata via
+nonblocking datagrams; there is no synchronous acknowledgement and collector
+failure cannot prevent business delivery. The collector batches persistence.
+Source watermarks, sequence and drop counters delimit COMPLETE/UNKNOWN intervals;
+crash tails and unlocatable damage remain UNKNOWN. A pre-bound gap does not
+invalidate later covered intervals. Positive, attributed post-bound reads remain
+FAIL even when other coverage is incomplete. `receiver_stop.complete=false` is
+normal for v2: it makes no blanket lossless-capture claim.
 
-```json
-{"type":"receiver_start","run_id":"freeze-001","at_ms":1000}
-{"type":"received","run_id":"freeze-001","request_id":"UUID-from-X-Argus-Request-ID","received_body_bytes":57}
-{"type":"receiver_stop","run_id":"freeze-001","at_ms":50000,"complete":true}
-```
+Complete legacy v1 journals remain readable for their original two-lane scope;
+they cannot satisfy the new in-flight scenario. Hand-authored three-record
+journals cannot establish absence. Do not manufacture coverage records.
 
-The above numbers are schema examples only, not observations to reuse. Emit
-`received` after the application actually reads the request; `received_body_bytes`
-is measured there. Correlate `X-Argus-Run-ID` and `X-Argus-Request-ID`, and use a
-trusted external collector or durable application audit so receiver termination
-cannot silently discard records. `complete:true` is allowed only when that
-observer can account for the entire interval, including process termination
-and log flushing. Missing, truncated, or lost receiver coverage is UNKNOWN.
-An adapter to OpenViking's actual business audit is still required before using
-this schema as OpenViking receiver evidence; this tool does not fabricate one.
+Build the explicitly approved derived image, launch it through the normal TC API
+profile with the fixed data-socket mount, and run the collector outside all
+Helper/NGINX/business container fault scopes. Audit stops at the ASGI read
+boundary: it does not prove model consumption or plaintext erasure. The image
+build and remote receiver acceptance are separate from local IPC tests.
 
 Copy the actual artifacts to one analysis host, preserving raw journals and
 measured clock synchronization/uncertainty. Check a declared stop bound (the
@@ -136,9 +147,17 @@ bounded observation gaps. PASS requires both blocked post-bound traffic and
 complete independent receiver coverage with all successful baseline request
 IDs represented. Any recorded post-bound delivery fails the isolated test even
 if the client timed out. A receiver file missing or incomplete yields NOT_RUN
-or UNKNOWN rather than PASS. The result covers requests started after the
-bound; already-running response streams, OS memory deletion, storage access,
-and already-delivered plaintext are separate claims.
+or UNKNOWN rather than PASS. The receiver uses actual application read times,
+including body chunks from requests started before the fault. It uses source and
+fault monotonic timestamps on the same service host; cross-host observation ends
+still account for measured clock uncertainty. `inflight_delivery` reports that
+scenario separately. Already-running response streams, OS memory deletion,
+storage access and already-delivered plaintext are separate claims.
+
+Same-container successor processes can be observed through the protected
+deployment and kernel cgroup mapping. A new container requires the collector's
+explicit `add-target` control before its observations can be attributed. This is
+experiment observation only and does not register, attest, or admit the successor.
 
 For target replacement, first complete the isolated `target-exit` trace. Then
 release the experiment control and use the existing deployment workflow to

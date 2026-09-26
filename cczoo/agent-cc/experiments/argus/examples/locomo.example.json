@@ -1,0 +1,20 @@
+{
+  "schema": "argus.locomo-run.v1",
+  "fixture": "../private/locomo-derived.json",
+  "poll_attempts": 120,
+  "poll_seconds": 2,
+  "qa_timeout_seconds": 180,
+  "bindings": [
+    {
+      "source_sample": "conv-26",
+      "container": "openclaw-locomo-a",
+      "docker_user": "10001:10001",
+      "config_path": "/home/node/.openclaw/openclaw.json",
+      "agent_id": "main",
+      "account_id": "argus-eval",
+      "user_id": "locomo-a-run-001",
+      "client_spiffe_id": "spiffe://argus.local/agent/locomo-a",
+      "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem"
+    }
+  ]
+}

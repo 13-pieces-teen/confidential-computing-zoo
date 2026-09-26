@@ -1,0 +1,13 @@
+{
+  "schema": "argus.fleet-fault.v1",
+  "run_id": "e4-client-a-stop-01",
+  "event": "client-stop",
+  "instance": "client-a",
+  "business_config": "/etc/argus/fleet-business.json",
+  "business_evidence": "/var/lib/argus/experiments/private-memory-01",
+  "baseline_rounds": 3,
+  "observation_rounds": 10,
+  "recovery_rounds": 3,
+  "interval_seconds": 1,
+  "settle_seconds": 10
+}

@@ -20,4 +20,4 @@
 
 遇到缺少模型凭据、IP2 origin 或网络资料时，先完成不依赖它们的步骤，再具体列出缺少项。失败可以修复本轮新增配置或代码，但不能用 mock、关闭 mTLS、跳过身份检查或修改成功判据替代验收。代码修复需留下 diff、测试和实际运行 SHA，不自动推送。
 
-输出：按 PASS/FAIL/BLOCKED/NOT_RUN 提交 IP1 Host 与 OpenClaw Guest 分开的报告，包含提交/产物摘要、VM 参数、真实 Agent ID/Entries、容器/进程实例、双方 SVID serial、request/session ID、业务/轮换/失效证据路径和恢复结果。OpenClaw TDX 远程证明固定记 NOT_RUN；IP2 OutOfDate 与 PoC 例外明确保留。把本轮时间范围和 request/session ID 交给操作者，供 IP2 对齐服务端日志。原始证据留在受保护目录，仓库报告仅含脱敏结果。
+输出：按 PASS/FAIL/BLOCKED/NOT_RUN 提交 IP1 Host 与 OpenClaw Guest 分开的报告，包含提交/产物摘要、VM 参数、真实 Agent ID/Entries、容器/进程实例、双方 SVID serial、request/session ID、业务/轮换/失效证据路径和恢复结果。OpenClaw TDX 远程证明固定记 NOT_RUN；IP2 记录实际 tcb_status 和批准策略摘要，当前策略不要求 TCB UpToDate。把本轮时间范围和 request/session ID 交给操作者，供 IP2 对齐服务端日志。原始证据留在受保护目录，仓库报告仅含脱敏结果。

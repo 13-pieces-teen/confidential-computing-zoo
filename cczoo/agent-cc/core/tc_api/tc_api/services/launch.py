@@ -396,6 +396,11 @@ class LaunchServiceMixin:
 
             # run docker image
             if attested_settings is not None:
+                if attested_settings.get("receiver_audit"):
+                    actual_image = subprocess.check_output(
+                        [DOCKER_CMD, "image", "inspect", "--format", "{{.Id}}", loaded_image_ref],
+                        text=True, stderr=subprocess.DEVNULL, timeout=30).strip()
+                    workload_profile.assert_audit_image(attested_settings, actual_image)
                 docker_cmd = workload_profile.docker_command(DOCKER_CMD, attested_settings)
             elif dockercmd:
                 docker_cmd = dockercmd.strip().split(" ")

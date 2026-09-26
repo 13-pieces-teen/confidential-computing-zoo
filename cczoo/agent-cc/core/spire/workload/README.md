@@ -259,3 +259,16 @@ sudo --preserve-env=OPENVIKING_API_KEY python3 /opt/argus-workload/scripts/verif
 完整验收记录至少关联源码提交、实际运行二进制摘要、部署配置版本、批准基线、实际 policy 内容摘要，以及 launch/container/PID/start time、nonce、EAR 摘要、SVID 序列号和业务结果。`verify` 保存的是受信任本机日志的运行关联，不会独立重新验证原始 Quote/EAR；其 `evidence_kind` 标签不能单独证明硬件验收通过。
 
 插件/Provider 合同测试已覆盖 nonce、镜像、配置、policy、伪造/过期 EAR 等负向条件。真实环境仍需验证 Quote/DCAP 和策略拒绝，以及 Agent/Broker 断连、身份移除、过期、reload 故障和已有连接关闭行为。按提交、配置和策略分别记录 PASS、FAIL/BLOCKED、NOT_RUN，见 [验证记录](VALIDATION.md)。
+# Exact client identity sets
+
+The service accepts either the legacy `identity.client_id` string or a nonempty
+`identity.allowed_client_ids` array of distinct exact SPIFFE IDs. Supplying both
+is rejected. IDs must belong to the configured trust domain and cannot alias
+the Node, Helper or target identity; prefixes and wildcard matches are not used.
+The rendered AuthZ unit repeats `-client-id` once per allowed identity, and the
+business verifier accepts a presented client only when it is a set member.
+This transport authorization is independent of the application's user API key.
+
+Isolated experiment baselines and ablations are documented in
+[VARIANTS.md](../../../experiments/argus/VARIANTS.md); the normal installer has no
+weakening flag.

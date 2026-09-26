@@ -1,0 +1,10 @@
+{
+  "repository": "volcengine/OpenViking",
+  "commit": "07113f81e0edaebaacdd23ab138087b06fe871ab",
+  "version": "0.4.8",
+  "files": {
+    "openviking/server/auth/plugins/api_key.py": "10ca9a40ef3b8a346e202624c319fd3fb17fb63cb84f9012efeeecec5763bd00",
+    "openviking/server/identity.py": "4cf15dbfee641a4d5b1fb3665c2cf62d2c41afdad8b36304a04052cc95ebb766",
+    "openviking/core/namespace.py": "cdba6957d07c02cc21cdaf5e1637d559692842c9253ac4a64b784a41c24ea909"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "deployment_config": "fleet.example.json",
+  "instances": [
+    {
+      "name": "alice",
+      "account_id": "argus-experiment",
+      "user_id": "alice",
+      "api_key_file": "/etc/argus-openclaw/instances/alice/api-key",
+      "agent_id": "main"
+    },
+    {
+      "name": "bob",
+      "account_id": "argus-experiment",
+      "user_id": "bob",
+      "api_key_file": "/etc/argus-openclaw/instances/bob/api-key",
+      "agent_id": "main"
+    },
+    {
+      "name": "carol",
+      "account_id": "argus-experiment",
+      "user_id": "carol",
+      "api_key_file": "/etc/argus-openclaw/instances/carol/api-key",
+      "agent_id": "main"
+    }
+  ]
+}
