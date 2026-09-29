@@ -2,6 +2,8 @@
 
 当前主线对应飞书 revision **1373**，见 [PAPER-ALIGNMENT-1373.md](PAPER-ALIGNMENT-1373.md)。E1/E2/E3/E5 评价框架准入、交付停止、复用与分层成本；E4 使用典型 LoCoMo 只读 QA 评价真实 Agent 接入、性能和故障恢复。累计金额/前驱事务的 continuous 工具保留为可选历史负载，不再是默认论文实验。最新 [IP1 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md) 和 [结果模板](RESULTS-FRAMEWORK.template.md) 已同步。下方历史测试数字不代表本轮远程通过。
 
+双机实际执行请先看 [按实验的先后顺序和交接表](TWO-HOST-SEQUENCE.md)。每轮各主机记录 [单轮结果](RESULTS-RUN.template.md)，IP1 汇总后再进入下一项。
+
 目录职责与模块关系见 [STRUCTURE.md](STRUCTURE.md)，完整生产组件索引见 [ARGUS.md](../../ARGUS.md)。配置示例统一位于 [examples/](examples/)，运行配置片段位于 [config/](config/)。
 
 最新整体 review、修复及发布范围见 [REVIEW-20260926.md](REVIEW-20260926.md)。

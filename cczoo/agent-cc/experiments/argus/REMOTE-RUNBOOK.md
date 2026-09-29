@@ -1,6 +1,6 @@
 # 双机交付和验收顺序
 
-**当前对应论文 revision 1373：**先完成 Full 单客户端 smoke，独立跑 E1/E2/E3，再做 E5 分层成本和 E4 LoCoMo 单/三客户端及 Full/native 配对。E2 无需等待模型记忆任务。完整修改和边界见 [核对记录](PAPER-ALIGNMENT-1373.md)；远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)。从 `cczoo/agent-cc` 执行 `bash experiments/argus/remote-software-checks.sh client|server|analysis`，软件检查和真实远程测量分别记录。
+**当前对应论文 revision 1373：**按 [逐实验双机顺序](TWO-HOST-SEQUENCE.md) 执行 P0 → E1 → E2 → E3 → E4 → E5；E5 单客户端 pilot 也可提前到 E3 后。每次只运行一个指定场景/组/轮次，先保存两侧数据和本轮总结，再进入下一项。E2 无需等待模型记忆任务。完整修改和边界见 [核对记录](PAPER-ALIGNMENT-1373.md)；远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)。从 `cczoo/agent-cc` 执行 `bash experiments/argus/remote-software-checks.sh client|server|analysis`，软件检查和真实远程测量分别记录。
 
 本文件是待远程运行的步骤。代码、本地测试、镜像构建、真实准入、真实业务结果分别记录；不能把脚本已生成写成远程 PASS。`IP1` 指原有 SPIRE Server/客户端控制侧及客户端 TDVM，`IP2` 指服务 TDVM/TC API/OpenViking 侧；沿用已有连接配置和信任根。
 

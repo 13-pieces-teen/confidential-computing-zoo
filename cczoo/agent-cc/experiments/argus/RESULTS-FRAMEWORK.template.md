@@ -22,3 +22,11 @@ E2 分列故障、readiness、入口、最后读取及覆盖区间；缺失不�
 配对结果只用完整且协议/模型匹配的独立运行块，保留未配对/失败/UNKNOWN/NOT_RUN。原始 JSONL、运行清单、statistics.csv、analysis.json、report.md 及可重算图表路径：
 
 本轮结论与仍未测试范围：
+
+## 每轮完成后更新的索引
+
+每个子场景/组/重复完成后追加一行，链接按 [RESULTS-RUN.template.md](RESULTS-RUN.template.md) 写好的两侧记录及本轮总结；各实验的原件种类见 [TWO-HOST-SEQUENCE.md](TWO-HOST-SEQUENCE.md)。未配对轮次先记录，待另一半完成再重算汇总，不覆盖已有原始结果。
+
+| run_id | 实验/场景/组/重复 | 原始结果与范围 | IP1 记录 | IP2 记录 | 本轮 SUMMARY / 原件目录 |
+|---|---|---|---|---|---|
+| 待执行 | | NOT_RUN | | | |
