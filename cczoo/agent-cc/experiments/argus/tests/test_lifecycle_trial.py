@@ -132,6 +132,43 @@ def test_capture_invokes_only_existing_read_only_snapshot_commands(tmp_path, mon
     assert all('resume-launch' not in argv and 'renew' not in argv for argv in commands)
 
 
+def external_provider(tmp_path):
+    from test_quote_counters import pair
+    before, after = pair()
+    before.update(run_id='run', agent_id='spiffe://argus.local/agent/node', observation_started_at_ms=700, observation_completed_at_ms=800)
+    after.update(run_id='run', agent_id=before['agent_id'], observation_started_at_ms=2200, observation_completed_at_ms=2300)
+    paths = [tmp_path/'provider-before.json', tmp_path/'provider-after.json']
+    for path, value in zip(paths, (before, after)): atomic(path, value)
+    return paths
+
+
+def test_collect_imports_other_host_provider_counts_without_uds_access(tmp_path, monkeypatch):
+    server, _ = observed(tmp_path)
+    paths = external_provider(tmp_path)
+    monkeypatch.setattr(trial.subprocess, 'run', lambda *a, **k: (_ for _ in ()).throw(AssertionError('no remote command')))
+    result = trial.collect(server, provider_before=paths[0], provider_after=paths[1], clock_uncertainty_ms=100)
+    assert result['result'] == 'PASS'
+    assert result['quote_generated']['result'] == 'OBSERVED'
+    assert result['quote_generated']['node']['generated'] == 0
+    assert result['quote_generated']['before_sha256'] == sha(paths[0])
+
+
+@pytest.mark.parametrize('change', ['run', 'agent', 'restart', 'window', 'uncertainty', 'half_pair'])
+def test_import_mismatch_only_invalidates_quote_evidence(tmp_path, change):
+    server, _ = observed(tmp_path)
+    paths = external_provider(tmp_path)
+    value = json.loads(paths[1].read_text())
+    if change == 'run': value['run_id'] = 'other'
+    if change == 'agent': value['agent_id'] = 'spiffe://other/node'
+    if change == 'restart': value['provider_instance_id'] = 'another-boot'
+    if change == 'window': value['observation_started_at_ms'] = 1950
+    atomic(paths[1], value)
+    result = trial.collect(server, provider_before=paths[0], provider_after=None if change == 'half_pair' else paths[1],
+                           clock_uncertainty_ms=300 if change == 'uncertainty' else 100)
+    assert result['result'] == 'PASS'
+    assert result['quote_generated']['result'] == 'UNKNOWN'
+
+
 def test_real_mtls_memory_trace_can_be_collected_without_self_reported_continuity(tls):
     query = tls.root/'query.json'; query.write_text('{"query":"remember"}')
     options = args(tls,tls.root/'real-probe',workload_kind='memory_query',connection_mode='reuse',

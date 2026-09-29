@@ -39,23 +39,26 @@
   },
   "load": {
     "frozen": false,
-    "connection_mode": "new",
-    "workload_kind": "status_api",
-    "path": "/api/v1/system/status",
+    "connection_mode": "reuse",
+    "workload_kind": "memory_query",
+    "path": "/api/v1/search/find",
     "rate": 1,
     "concurrency_per_client": 8,
     "warmup_seconds": 30,
     "measurement_seconds": 120,
-    "timeout_seconds": 10
+    "timeout_seconds": 10,
+    "body_files": {
+      "alice": "/secure/fixtures/alice-memory-query.json",
+      "bob": "/secure/fixtures/bob-memory-query.json",
+      "carol": "/secure/fixtures/carol-memory-query.json"
+    }
   },
   "cases": [
     "steady-api"
   ],
   "scales": [
     1,
-    2,
-    4,
-    8
+    3
   ],
   "performance_seeds": [
     101,

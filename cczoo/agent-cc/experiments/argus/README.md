@@ -1,6 +1,6 @@
 # Argus 4—7：实现与实验入口
 
-2026-09-29 持续任务实现以 `0d78ed0` 为代码基线，现已按飞书 revision **1329** 核对，见 [PAPER-ALIGNMENT-1329.md](PAPER-ALIGNMENT-1329.md)。运行入口为 [CONTINUOUS.md](CONTINUOUS.md)，包括真实 Agent 两工具、完整事务接收、证明导出/Quote 计数、故障/无故障配对与联合评分。前轮建设见 [IMPLEMENTATION-20260929.md](IMPLEMENTATION-20260929.md)；下方较早测试数字不代表本轮代码已通过测试。
+当前主线对应飞书 revision **1373**，见 [PAPER-ALIGNMENT-1373.md](PAPER-ALIGNMENT-1373.md)。E1/E2/E3/E5 评价框架准入、交付停止、复用与分层成本；E4 使用典型 LoCoMo 只读 QA 评价真实 Agent 接入、性能和故障恢复。累计金额/前驱事务的 continuous 工具保留为可选历史负载，不再是默认论文实验。最新 [IP1 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md) 和 [结果模板](RESULTS-FRAMEWORK.template.md) 已同步。下方历史测试数字不代表本轮远程通过。
 
 目录职责与模块关系见 [STRUCTURE.md](STRUCTURE.md)，完整生产组件索引见 [ARGUS.md](../../ARGUS.md)。配置示例统一位于 [examples/](examples/)，运行配置片段位于 [config/](config/)。
 
@@ -23,7 +23,7 @@
 | 配对运行、恢复与收集 | [suite.py](suite.py)、[runner.py](runner.py)、[step.py](step.py) |
 | 双连接故障、远程收集 | [fault_trial.py](fault_trial.py)、[remote_acceptance.py](../../core/spire/workload/scripts/remote_acceptance.py) |
 | 配置变化与进程/监听实例替换 | [fault_fixture.py](fault_fixture.py)、[受限故障说明](FAULT-FIXTURES.md) |
-| 从实际业务证据派生故障里程碑 | [milestone.py](milestone.py)；手写 reached 标记不能通过门禁 |
+| 可选业务里程碑（E2 默认真实连接就绪） | [milestone.py](milestone.py)；手写 reached 标记不能通过门禁 |
 | 历史规则离线诊断 | [history_diagnostics.py](history_diagnostics.py)、[admission_cases.py](admission_cases.py) |
 | 实时准入的固定配方与证据比较 | [admission_trial.py](admission_trial.py)、[E1-REAL-RUNS.md](E1-REAL-RUNS.md) |
 | 轮换/恢复及连续业务关联 | [lifecycle_trial.py](lifecycle_trial.py)、[E3 双机配方](examples/E3-LIFECYCLE-RECIPE.md)、[lifecycle_evidence.py](lifecycle_evidence.py) |
@@ -75,7 +75,7 @@ python3 experiments/argus/plot.py --output /secure/evidence/paper01
 
 中断的安全 GET 测量可用 `resume --run-id RUN_ID --new-attempt` 显式新开一轮：先前窗口留在 `runs/RUN_ID/attempts/N`，新一轮从预热开始。不能拼接窗口；完整 FAIL/UNKNOWN 不能用此选项反复刷结果，未知 POST/创建/故障也不会重放。统计保留中断次数，新 attempt 沿用原配对块。
 
-默认功能配置是一个种子的 smoke 验证，不是论文统计样本。正式 E4 的种子数按实验设计另行设置；可选 E5 示例为 1/2/4/8 客户端、五轮、预热 30 秒和测量 120 秒。容量不够时保留 `CAPACITY_STOP`。E1/E2/E3 的部署相关检查和里程碑在 [scenarios.json](scenarios.json) 列出，未知环境参数必须填写，不假造硬件动作或业务里程碑。LoCoMo 与图表不在首轮功能验收的必经路径中。
+默认功能配置是一个种子的 smoke 验证，不是论文统计样本。正式 E4 的种子数按实验设计另行设置；E5 示例为 1/3 客户端、五轮、预热 30 秒和测量 120 秒。容量不够时保留 `CAPACITY_STOP`。E1/E2/E3 的部署相关检查和里程碑在 [scenarios.json](scenarios.json) 列出，未知环境参数必须填写，不假造硬件动作或业务里程碑。LoCoMo 与图表不在首轮功能验收的必经路径中。
 
 LoCoMo 使用 `suite.py` 的可选 `locomo` case，或直接运行 `locomo_run.py`。它需要独立的初始空用户及登记前配置好的只读评测 Gateway；不能与 `private-memory` case 共用本批用户。每个新重复使用新用户/部署，一次中断继续原 journal。`step` 的 PASS 只表示 LoCoMo 工作负载 COMPLETE；QA 分数、注入观测、应用读取分别报告。
 

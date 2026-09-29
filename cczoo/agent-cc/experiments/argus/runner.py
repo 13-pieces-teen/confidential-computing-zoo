@@ -37,10 +37,10 @@ def validate(m):
         names.add(case["name"])
         require(case.get("experiment") in ["E1", "E2", "E3", "E4", "E5"], "invalid experiment")
         if "conditions" in case:
-            require(case["name"] == "continuous" and case["conditions"]
+            require(case["name"] in ("continuous", "locomo") and case["conditions"]
                     and len(set(case["conditions"])) == len(case["conditions"])
                     and set(case["conditions"]) <= {"fault", "no_fault"},
-                    "continuous conditions must be distinct fault/no_fault values")
+                    "workload conditions must be distinct fault/no_fault values")
         for field in ("seeds", "scales", "groups"):
             if field not in case:
                 continue
@@ -69,7 +69,9 @@ def validate(m):
                     require(isinstance(op[key], str) and op[key] and not Path(op[key]).is_absolute()
                             and ".." not in Path(op[key]).parts, key + " must be inside run directory")
             if op["kind"] == "fault":
-                require(op.get("baseline_trace") and op.get("milestone_file"), "fault needs independent traffic baseline and business milestone")
+                require(op.get("readiness", "business") in ("business", "transport"), "invalid fault readiness")
+                require(op.get("baseline_trace") and (op.get("readiness") == "transport" or op.get("milestone_file")),
+                        "fault needs traffic baseline and, for business readiness, a verified milestone")
     require(names, "at least one case is required")
     # Distinct namespaces are mandatory even if arms are run sequentially.
     arms = m.get("arms", {})
@@ -98,14 +100,22 @@ def plan(m):
                     row = {"run_id": m["experiment_id"] + "-" + digest(identity)[:32],
                            "block_id": block, "case": case["name"], "experiment": case["experiment"],
                            "scale": scale, "seed": seed, "group": group}
+                    if case["name"] == "locomo" and "planned_tasks" in case:
+                        row["planned_tasks"] = case["planned_tasks"]
                     if condition is not None:
                         row["condition"] = condition
                         row["fault_kind"] = case.get("fault_kind", "unspecified")
                         row["fault_scope"] = case.get("fault_scope", "unspecified")
-                        row["planned_tasks"] = 18 * scale  # continuous v1: three phases, six tasks/client/phase
                         key = f"{group}:{scale}:{seed}:{condition}"
-                        require(key in m.get("continuous_inputs", {}), "missing continuous run configuration: " + key)
-                        row["continuous_config"] = m["continuous_inputs"][key]
+                        if case["name"] == "continuous":
+                            row["planned_tasks"] = 18 * scale  # legacy continuous v1
+                            require(key in m.get("continuous_inputs", {}), "missing continuous run configuration: " + key)
+                            row["continuous_config"] = m["continuous_inputs"][key]
+                        else:
+                            require(key in m.get("locomo_inputs", {}), "missing LoCoMo run configuration: " + key)
+                            row["locomo_config"] = m["locomo_inputs"][key]
+                            row["planned_tasks"] = m["locomo_task_counts"][key]
+                            require(type(row["planned_tasks"]) is int and row["planned_tasks"] > 0, "invalid planned LoCoMo task count")
                     result.append(row)
     return result
 
@@ -171,10 +181,11 @@ def preflight(output, role, only_run=None, case=None, group=None):
             for field in ("business_config", "load_config"):
                 if arm.get(field) and field not in used_fields:
                     unused.add(str(resolve(saved["base"], arm[field])))
-    continuous_paths = {str(resolve(saved["base"], p)) for p in m.get("continuous_inputs", {}).values()}
-    selected_paths = {str(resolve(saved["base"], r["continuous_config"])) for r in runs if r.get("continuous_config")}
+    per_run_paths = {str(resolve(saved["base"], p)) for field in ("continuous_inputs", "locomo_inputs")
+                     for p in m.get(field, {}).values()}
+    selected_paths = {str(resolve(saved["base"], r[field])) for r in runs for field in ("continuous_config", "locomo_config") if r.get(field)}
     for path, expected in saved["artifacts"].items():
-        if path in continuous_paths and path not in selected_paths:
+        if path in per_run_paths and path not in selected_paths:
             continue
         if path in unused or (path in owners and not owners[path] & groups):
             continue
@@ -214,16 +225,19 @@ def field(value, dotted):
     return value
 
 
-def fault_ready(trace, milestone, run_id):
+def fault_ready(trace, milestone, run_id, *, readiness="business"):
+    require(readiness in ("business", "transport"), "invalid fault readiness")
     lanes = {"existing": [], "new": []}
     for line in Path(trace).read_text(encoding="utf-8").splitlines():
         row = __import__("json").loads(line)
         if row.get("type") == "request" and row.get("run_id") == run_id and row.get("lane") in lanes:
             lanes[row["lane"]].append(row)
-    evidence = read(milestone)
-    require(evidence.get("run_id") == run_id and evidence.get("reached") is True and evidence.get("milestone"), "business milestone not reached for this run")
-    from milestone import verify as verify_milestone
-    verify_milestone(evidence, run_id)
+    if readiness == "business":
+        require(milestone is not None, "business readiness requires a verified milestone")
+        evidence = read(milestone)
+        require(evidence.get("run_id") == run_id and evidence.get("reached") is True and evidence.get("milestone"), "business milestone not reached for this run")
+        from milestone import verify as verify_milestone
+        verify_milestone(evidence, run_id)
     for name, rows in lanes.items():
         baseline = rows[-3:]
         require(len(baseline) == 3 and all(row.get("ok") is True for row in baseline),
@@ -315,7 +329,8 @@ def execute(output, role, resume=False, only_run=None, case=None, group=None, ne
                     context["known_operation_id"] = str(known["operation_id"])
                     argv = op["resume_argv"]
                 if op["kind"] == "fault" and not old:
-                    fault_ready(directory / op["baseline_trace"], directory / op["milestone_file"], run["run_id"])
+                    fault_ready(directory / op["baseline_trace"], directory / op["milestone_file"] if op.get("milestone_file") else None,
+                                run["run_id"], readiness=op.get("readiness", "business"))
                 argv = [a.format_map(context) for a in argv]
                 result_path = directory / op["result"]
                 # A stale result must not turn an interrupted invocation into success.

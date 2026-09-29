@@ -32,3 +32,15 @@ def test_restart_inflight_missing_and_counter_reset_are_unknown():
         before, after = pair()
         change(after)
         assert quote_delta(before, after)["result"] == "UNKNOWN"
+
+
+def test_generation_timing_is_separate_from_counts_and_includes_failures():
+    before, after = pair()
+    before['workload']['generation_elapsed_ns'] = 20_000_000
+    after['workload'].update(attempted=5, generated=3, failed=2, generation_elapsed_ns=80_000_000)
+    result = quote_delta(before, after)
+    assert result['workload'] == {'attempted': 3, 'generated': 2, 'failed': 1}
+    timing = result['generation_timing']['workload']
+    assert timing['completed_calls'] == 3 and timing['elapsed_ns'] == 60_000_000 and timing['mean_ms'] == 20
+    assert result['generation_timing']['node']['result'] == 'UNKNOWN'
+    assert result['result'] == 'OBSERVED'  # Older Providers still supply valid counts.

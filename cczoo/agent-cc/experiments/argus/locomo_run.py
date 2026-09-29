@@ -8,7 +8,6 @@ uses the real OpenClaw ContextEngine. Reference answers stay in the grader.
 import argparse
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,6 +20,7 @@ from urllib.parse import quote
 import uuid
 
 from common import atomic, digest, lock, read, require, resolve, sha
+from locomo_execution import application_summary, execute_questions, execution_protocol, validate_execution
 
 ROOT = Path(__file__).resolve().parent
 
@@ -39,7 +39,9 @@ def configuration(path):
     path = Path(path).resolve()
     value = read(path)
     require(value.get('schema') == 'argus.locomo-run.v1', 'invalid LoCoMo configuration schema')
-    require(set(value) <= {'schema', 'fixture', 'bindings', 'poll_attempts', 'poll_seconds', 'qa_timeout_seconds'}, 'unknown LoCoMo configuration field')
+    require(set(value) <= {'schema', 'fixture', 'bindings', 'poll_attempts', 'poll_seconds', 'qa_timeout_seconds',
+                           'concurrent_clients', 'schedule', 'condition', 'controls'}, 'unknown LoCoMo configuration field')
+    validate_execution(value)
     fixture = resolve(path.parent, value['fixture'])
     data = read(fixture)
     require(data.get('schema') == 'argus.locomo-derived.v1' and data.get('tasks'), 'invalid derived fixture')
@@ -81,9 +83,11 @@ class Gateway:
             value = json.loads(result.stdout.splitlines()[-1])
             require(isinstance(value, dict), 'invalid Gateway observation')
             return value
+        except subprocess.TimeoutExpired:
+            return {'result': 'UNKNOWN', 'code': 'GATEWAY_TIMEOUT', 'outcome': 'timeout'}
         except (OSError, subprocess.SubprocessError, ValueError, IndexError):
             # Do not copy process stderr: upstream errors may contain inputs or keys.
-            return {'result': 'UNKNOWN', 'code': 'GATEWAY_PROCESS_UNAVAILABLE'}
+            return {'result': 'UNKNOWN', 'code': 'GATEWAY_PROCESS_UNAVAILABLE', 'outcome': 'unknown'}
 
     def audit(self, binding, since, session_key):
         try:
@@ -108,17 +112,52 @@ class Gateway:
 def injection_evidence(records, session_key, binding):
     spans = [r for r in records if r.get('component') == 'argus-openclaw-recall'
              and r.get('session_key') == session_key and r.get('event') in ('completed', 'failed')]
-    if not spans:
-        return {'result': 'UNKNOWN', 'code': 'RECALL_AUDIT_MISSING'}
-    span = spans[-1]
-    requests = set(span.get('request_ids', []))
-    receipts = [r for r in records if r.get('request_id') in requests and r.get('http_status', 0) in range(200, 300)]
+    span = spans[-1] if spans else {}
+    requests = set(rid for s in spans for rid in s.get('request_ids', []))
+    span_ids = {s.get('context_span_id') for s in spans if s.get('context_span_id')}
+    selected = [r for r in records if r.get('request_id') and (r.get('request_id') in requests
+                or r.get('session_key') == session_key or r.get('context_span_id') in span_ids)]
+    requests.update(r['request_id'] for r in selected)
+    terminal, legacy = {}, {}
+    for record in selected:
+        if record.get('event') in ('response_completed', 'request_failed', 'request_blocked_local'):
+            terminal[record['request_id']] = record
+        elif not record.get('event') and record.get('http_status'):
+            legacy[record['request_id']] = record
+    receipts = [r for r in (terminal | {k: v for k, v in legacy.items() if k not in terminal}).values()
+                if r.get('http_status', 0) in range(200, 300)
+                and r.get('event') not in ('request_failed', 'request_blocked_local')]
     associated = [r for r in receipts if r.get('client_spiffe_id') == binding['client_spiffe_id']
                   and r.get('server_spiffe_id') == binding['server_spiffe_id']]
+    measured = []
+    for request_id in sorted(requests):
+        record = terminal.get(request_id, {})
+        status = record.get('http_status')
+        code = record.get('error_code', '')
+        if record.get('event') == 'response_completed' and status in range(200, 300):
+            result = 'completed'
+        elif status in (401, 403) or record.get('event') == 'request_blocked_local':
+            result = 'rejected'
+        elif 'TIMEOUT' in code.upper() or code in ('ETIMEDOUT', 'ABORT_ERR'):
+            result = 'timeout'
+        elif record:
+            result = 'failed'
+        else:
+            result = 'unknown'
+        at_ms = record.get('at_ms')
+        if at_ms is None and record.get('checked_at'):
+            try:
+                at_ms = round(datetime.fromisoformat(record['checked_at'].replace('Z', '+00:00')).timestamp() * 1000)
+            except (ValueError, TypeError):
+                pass
+        measured.append({'request_id': request_id, 'outcome': result, 'at_ms': at_ms,
+                         **{k: record.get(k) for k in ('started_at_ms', 'duration_ms', 'headers_ms', 'http_status', 'error_code', 'phase')}})
     # These are content-block hashes, not proof of semantic support for an answer.
     observed = {k: span.get(k) for k in ('context_span_id', 'source_observed', 'memory_count',
                                         'recall_block_sha256', 'recall_block_chars', 'recall_block_in_input', 'recall_block_in_output', 'search')}
-    if span.get('event') == 'failed':
+    if not spans:
+        code = 'RECALL_AUDIT_MISSING'
+    elif span.get('event') == 'failed':
         code = 'ASSEMBLY_FAILED'
     elif not associated:
         code = 'RECALL_IDENTITY_UNOBSERVED'
@@ -129,7 +168,8 @@ def injection_evidence(records, session_key, binding):
     else:
         code = 'INJECTION_OBSERVED'
     return {'result': 'OBSERVED' if code == 'INJECTION_OBSERVED' else 'UNKNOWN', 'code': code,
-            'request_ids': sorted(requests), 'associated_requests': len(associated), **observed}
+            'request_ids': sorted(requests), 'associated_requests': len(associated), **observed,
+            'requests': measured, 'request_audit_complete': bool(requests) and requests <= set(terminal)}
 
 
 class Pending(Exception):
@@ -160,11 +200,20 @@ def execute(config_path, output, resume=False, gateway=None, sleep=time.sleep):
             state = {'schema': 'argus.locomo-state.v1', 'run_id': os.environ.get('ARGUS_RUN_ID') or uuid.uuid4().hex,
                      'operation_id': os.environ.get('ARGUS_OPERATION_ID'),
                      'configuration_sha256': fingerprint, 'source_sha256': fixture['source_sha256'],
+                     'execution_protocol': execution_protocol(config),
                      'started_at': now(), 'operations': {}, 'conversations': {}, 'questions': {}, 'preflight': {}}
 
         def save():
             state['updated_at'] = now()
             secure_atomic(path, state)
+
+        # Reconciliation after the QA clock has begun never creates a new time
+        # window, submits another question, or replays a fault/recovery command.
+        if resume and state.get('qa_started_at_ms') is not None:
+            execute_questions(config, fixture, bindings, state, output, gateway, save, resume=True)
+            result = analyze(fixture, state, output)
+            secure_atomic(output / 'result.json', result)
+            return result
 
         def api(binding, method, route, body=None):
             observation = gateway.call(binding, 'api', method=method, route=route, **({'body': body} if body is not None else {}))
@@ -260,36 +309,13 @@ def execute(config_path, output, resume=False, gateway=None, sleep=time.sleep):
                 conversation.update(status='UNKNOWN', reason=str(error)); save()
                 continue
             save()
-            for task in tasks:
-                task_id = task['task_id']
-                previous = state['questions'].get(task_id)
-                if previous:
-                    # Neither an unknown model request nor a completed answer is
-                    # replayed; a new experimental replicate needs a new run/user.
-                    continue
-                qsession = 'argus-locomo-qa-' + digest([state['run_id'], task_id])[:32]
-                date = sessions[-1].get('date_time') or 'unspecified'
-                question = ('Answer the question using your long-term memory. Give only the concise answer; '
-                            'if unsupported, reply UNKNOWN.\nLast source session date: ' + str(date) + '\nQuestion: ' + task['question'])
-                state['questions'][task_id] = {'status': 'submission_unknown', 'session_key': qsession,
-                    'source_sample': sample, 'category': task['category'], 'submitted_at': now(),
-                    'question_sha256': hashlib.sha256(question.encode()).hexdigest()}
-                save()
-                observation = gateway.call(binding, 'qa', question=question, session_key=qsession,
-                                           timeout_seconds=config.get('qa_timeout_seconds', 180))
-                item = state['questions'][task_id]
-                if observation.get('result') == 'OBSERVED':
-                    # The answer artifact is private local evaluation data. It
-                    # contains no reference answer and is never imported to memory.
-                    prediction = 'predictions/' + digest(task_id)[:24] + '.json'
-                    secure_atomic(output / prediction, {'task_id': task_id, 'answer': observation['answer']})
-                    item.update(status='completed', prediction=prediction, answer_sha256=hashlib.sha256(observation['answer'].encode()).hexdigest(),
-                                run_id=observation.get('run_id'), duration_ms=observation.get('duration_ms'), usage=observation.get('usage'),
-                                model=observation.get('model'), provider=observation.get('provider'))
-                else:
-                    item.update(status='UNKNOWN', reason=observation.get('code', 'QA_RESULT_UNKNOWN'))
-                item['injection'] = gateway.audit(binding, item['submitted_at'], qsession)
-                item['completed_at'] = now(); save()
+        # All histories are initialized before timed QA, so extraction/import
+        # latency never silently changes the fault clock or another client's start.
+        try:
+            execute_questions(config, fixture, bindings, state, output, gateway, save, resume=resume)
+        except BaseException:
+            secure_atomic(output / 'result.json', analyze(fixture, state, output))
+            raise
         result = analyze(fixture, state, output)
         secure_atomic(output / 'result.json', result)
         return result
@@ -331,7 +357,9 @@ def analyze(fixture, state, directory):
     for task in fixture['tasks']:
         item = state['questions'].get(task['task_id'], {})
         row = {'task_id': task['task_id'], 'source_sample': str(task['source_sample']), 'category': task['category'],
-               'status': item.get('status', 'NOT_RUN'), 'injection': item.get('injection', {}).get('code', 'NOT_RUN')}
+                'status': item.get('status', 'NOT_RUN'), 'injection': item.get('injection', {}).get('code', 'NOT_RUN')}
+        row.update({k: item.get(k) for k in ('outcome', 'planned_at_ms', 'released_at_ms', 'deadline_at_ms',
+                    'started_at_ms', 'finished_at_ms', 'deadline_missed', 'reason', 'model', 'provider', 'invocation_duration_ms')})
         if item.get('status') == 'completed':
             row.update(score(read(directory / item['prediction'])['answer'], task))
             row['duration_ms'] = item.get('duration_ms')
@@ -353,6 +381,7 @@ def analyze(fixture, state, directory):
     replicates = sorted(sum(rng.choice(means) for _ in means) / len(means) for _ in range(2000)) if len(means) >= 2 else []
     complete = all(v['status'] == 'completed' for v in rows)
     return {'schema': 'argus.locomo-result.v1', 'result': 'COMPLETE' if complete else 'INCOMPLETE',
+            'measurement_complete': state.get('qa_phase') == 'complete',
             'run_id': state['run_id'], 'operation_id': state.get('operation_id'),
             'source_sha256': fixture['source_sha256'], 'selection': fixture.get('selection'),
             'protocol': 'LoCoMo-derived; private per-conversation users; read-only QA; no official-score claim',
@@ -362,6 +391,12 @@ def analyze(fixture, state, directory):
             'conversation_bootstrap_95': [replicates[49], replicates[1949]] if replicates else None,
             'cluster_count': len(means), 'cluster_caution': 'few conversation clusters; QA items are not independent replicates',
             'questions': rows, 'delivery_compliance': 'NOT_ASSESSED_BY_QA',
+            'application': application_summary(fixture, state),
+            'observed_models': sorted({(str(e.get('provider') or 'UNKNOWN'), str(e.get('model') or 'UNKNOWN'))
+                                       for e in state['questions'].values() if e.get('status') == 'completed'}),
+            'execution': {**state.get('execution_protocol', {}), 'controls': state.get('controls', {}),
+                          **{k: state.get(k) for k in ('qa_phase', 'qa_started_at_ms', 'qa_completed_at_ms',
+                             'initialization_completed_at_ms', 'interrupted_at_ms', 'reconciled_at_ms')}},
             'real_tdx_acceptance': 'NOT_ASSESSED_BY_QA'}
 
 
@@ -386,7 +421,7 @@ def main():
     else:
         result = execute(args.config, args.output, resume=args.command == 'resume')
     print(json.dumps({'result': result['result'], 'output': str(Path(args.output).resolve())}))
-    return 0 if result['result'] in ('COMPLETE', 'PASS') else 1
+    return 0 if result['result'] in ('COMPLETE', 'PASS') or result.get('measurement_complete') is True else 1
 
 
 if __name__ == '__main__':

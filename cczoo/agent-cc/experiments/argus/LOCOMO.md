@@ -1,7 +1,8 @@
 # LoCoMo-derived application workload
 
-This workload measures the usefulness and cost of persistent memory through the
-real Argus entry. It does not establish a security result from an answer and does
+This workload measures real Agent integration, application overhead and fault/recovery
+impact through the Argus entry. Memory answer quality is an auxiliary functional
+check, not an Argus contribution. It does not establish a security result from an answer and does
 not implement the official LoCoMo evaluation protocol. Real TDX, model quality,
 and remote execution remain `NOT_RUN` until artifacts are collected remotely.
 
@@ -113,3 +114,91 @@ node --check locomo_gateway.mjs
 
 Tests use a controlled application adapter for state-machine failures and a
 subprocess boundary check. They do not substitute for a remote Gateway/model run.
+
+## Revision 1373: concurrent clients and paired fault trials
+
+`examples/locomo.example.json` enables `concurrent_clients=true` and a pilot QA
+schedule of release interval 60 s / deadline 180 s. Historical initialization
+finishes for every conversation before the shared QA origin is set. Each Gateway
+has one QA worker; independent Gateways may run concurrently. Questions remain
+the selected original LoCoMo questions. Freeze the sample set, model and budgets
+after pilot; record the actual overlap rather than assuming three clients imply
+three simultaneous requests.
+
+For a shared-service fault, add the following to a **separate** per-run config:
+
+```json
+{
+  "condition": "fault",
+  "concurrent_clients": true,
+  "schedule": {"release_interval_s": 60, "deadline_s": 180},
+  "controls": {
+    "fault": {"at_s": 180, "argv": ["/secure/controls/inject-service", "{run_id}"], "timeout_s": 60},
+    "recovery": {"at_s": 360, "argv": ["/secure/controls/recover-service", "{run_id}"], "timeout_s": 120}
+  }
+}
+```
+
+The absolute script paths are operator-created wrappers for the existing isolated
+variant fault/release and normal stop/register/start/verify commands. They must
+save actual server evidence using the passed run ID and preserve persistent data.
+They are not supplied generic remote orchestration. Before a formal trial verify
+both commands once against the actual deployment. Use a fixed SSH alias if the
+commands are remote; secrets stay in protected files. Output is discarded by the
+controller, so wrappers must write receipts directly to their declared evidence
+location. A zero exit status establishes controller completion only; keep the
+server's fault, identity and readiness receipts with the result.
+
+The paired `no_fault` config uses identical times and timeout budgets, condition
+`no_fault`, and `argv: []` for both controls. Use fresh ordinary users for every
+run, including no-fault repeats. An admitted Gateway's configuration is changed
+only through the normal deployment and registration flow before that run.
+Recovery within a run keeps its storage. Choose enough questions per conversation
+to release tasks before the fault, during it and after recovery. The generated
+suite exposes `locomo_phase_counts`; an empty recovery phase cannot measure task
+recovery. Inspect these counts before formal execution; a short smoke run with empty phases is only a functional smoke run. The times above are pilot examples, not a claim that recovery finishes
+within a fixed bound.
+
+Copy `examples/suite.locomo-paired.example.json`: `locomo_configs[group][seed]
+[condition]` references each provisioned run's config. It reuses the normal runner:
+
+```sh
+python3 suite.py --config /secure/locomo-paired.json --output /secure/generated-locomo
+python3 runner.py prepare --config /secure/generated-locomo/suite.json --output /secure/evidence/locomo01
+# Deploy the selected run's declared Gateway/user configuration first.
+python3 runner.py preflight --output /secure/evidence/locomo01 --role client --run-id RUN_ID
+python3 runner.py run --output /secure/evidence/locomo01 --role client --run-id RUN_ID
+python3 runner.py resume --output /secure/evidence/locomo01 --role client --run-id RUN_ID
+python3 runner.py collect --output /secure/evidence/locomo01
+python3 runner.py analyze --output /secure/evidence/locomo01
+python3 plot.py --output /secure/evidence/locomo01
+```
+
+These commands are relative to this experiment directory. Start with one seed
+for pilot; formal blocks are explicitly listed with per-run fresh users/configs.
+No new deployment controller is introduced. Unknown initialization submissions
+are not replayed. Once QA starts, resume only supplements known audit records:
+no question, fault, recovery or missed release is replayed, and the time origin
+is unchanged. `measurement_complete=true` means the scheduled experiment ended;
+`COMPLETE/INCOMPLETE` separately indicates whether every question produced an
+answer. Step PASS may therefore accompany INCOMPLETE QA, preserving every failure.
+
+`application` records all planned/attempted questions, outcome and injection
+counts, controller-to-Gateway and Agent CLI latency separately, request outcomes
+and latency, actual worker overlap, and first successful access/task after the
+recovery command. A valid completion requires an answer, observed injection and
+completion before the deadline; it does not require a particular F1 and does not
+prove delivery safety. Recovery access uses new requests started after recovery;
+no such request leaves the time unknown. Latencies always carry sample counts.
+Request metadata comes from the normal transport, including automatic recall;
+HTTP 200 with an incomplete body is a failure. No audit body, prompt or key is
+exported. Predicted answers remain in the protected evaluation directory.
+
+Analysis retains all planned tasks, including absent native evidence and failed
+runs. Paired estimates require matching protocol and observed models, plus
+completed fault/recovery controls (or the explicit no-fault markers). It reports
+same-arm fault-minus-control and Full-minus-native differences by independent
+run block; missing or ineligible counterparts stay visible. Task/control timelines
+and aggregate plots can be regenerated from the saved records. F1 remains in the
+report as an auxiliary functional check. E2's receiver experiment separately
+answers when an invalidated service stopped reading application data.

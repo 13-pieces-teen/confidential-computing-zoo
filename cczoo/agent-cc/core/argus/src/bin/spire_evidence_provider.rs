@@ -36,7 +36,7 @@ use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 use tdx_quote::{tsm::TsmInstanceQuoteGenerator, QuoteError, ReportData};
 
@@ -211,6 +211,8 @@ struct QuoteCount {
     attempted: u64,
     generated: u64,
     failed: u64,
+    // Sum of monotonic generate_quote durations, including failed attempts.
+    generation_elapsed_ns: u64,
 }
 
 struct QuoteCounters {
@@ -234,9 +236,12 @@ impl AppState {
     // subsequent target/history check changed. No lock covers hardware I/O.
     fn generate(&self, kind: usize, data: &ReportData) -> Result<Vec<u8>, QuoteError> {
         self.counters.counts.lock().unwrap_or_else(|p| p.into_inner())[kind].attempted += 1;
+        let started = Instant::now();
         let result = self.quote_source.generate_quote(data);
+        let elapsed_ns = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let mut counts = self.counters.counts.lock().unwrap_or_else(|p| p.into_inner());
         if result.is_ok() { counts[kind].generated += 1; } else { counts[kind].failed += 1; }
+        counts[kind].generation_elapsed_ns = counts[kind].generation_elapsed_ns.saturating_add(elapsed_ns);
         result
     }
 }
@@ -630,6 +635,8 @@ mod tests {
         assert_eq!(counters["node"]["generated"], 0);
         assert_eq!(counters["node"]["failed"], 1);
         assert_eq!(counters["workload"]["attempted"], 0);
+        assert!(counters["node"]["generation_elapsed_ns"].as_u64().is_some());
+        assert_eq!(counters["workload"]["generation_elapsed_ns"], 0);
         assert!(!counters["provider_instance_id"].as_str().unwrap().is_empty());
     }
 

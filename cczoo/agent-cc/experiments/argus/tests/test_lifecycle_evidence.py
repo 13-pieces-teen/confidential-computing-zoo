@@ -14,6 +14,66 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lifecycle_evidence import rotation, resumed_launch, observe_creates
 
 
+def command_fixture(tmp_path, monkeypatch, *, initially_ready=False):
+    import lifecycle_evidence as module
+    from types import SimpleNamespace
+    states = [{'ready': initially_ready, 'helper_invocation_id': 'old'},
+              {'ready': True, 'helper_invocation_id': 'new', 'target_serial': '2'}]
+    fake = SimpleNamespace(Deployment=lambda c: SimpleNamespace(identity={'target_id': 'spiffe://test/memory', 'agent_id': 'spiffe://test/node'}),
+                           status=lambda c: states.pop(0))
+    monkeypatch.setattr(module, 'runtime', lambda _: (fake, {'target': 'test'}))
+    argv = tmp_path/'argv.json'; argv.write_text(json.dumps(['explicit-command', '--config', '/protected/runtime.json']))
+    return module, argv
+
+
+def test_timing_executes_once_and_measures_new_readiness(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    module, argv = command_fixture(tmp_path, monkeypatch, initially_ready=True)
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    output = tmp_path/'timing.json'
+    result = module.time_ready_command('config', argv, 'run', output)
+    assert result['result'] == 'OBSERVED' and result['helper_invocation_id'] == 'new'
+    assert result['ready_observed_elapsed_ms'] >= result['command_elapsed_ms'] >= 0
+    assert len(calls) == 1 and result['automatic_retries'] == 0
+    with pytest.raises(ValueError, match='already exists'):
+        module.time_ready_command('config', argv, 'run', output)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('timeout', [False, True])
+def test_command_failure_and_unknown_timeout_are_preserved(tmp_path, monkeypatch, timeout):
+    from types import SimpleNamespace
+    module, argv = command_fixture(tmp_path, monkeypatch)
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        if timeout: raise module.subprocess.TimeoutExpired(command, 1)
+        return SimpleNamespace(returncode=7)
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    output = tmp_path/'timing.json'
+    result = module.time_ready_command('config', argv, 'run', output)
+    assert result['result'] == ('UNKNOWN' if timeout else 'FAIL')
+    assert result['command_state'] == ('submitted_outcome_unknown' if timeout else 'completed')
+    assert result['ready_observed_elapsed_ms'] is None and len(calls) == 1
+    assert json.loads(output.read_text()) == result
+
+
+def test_preexisting_readiness_does_not_become_new_admission_timing(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    module, argv = command_fixture(tmp_path, monkeypatch)
+    fake = SimpleNamespace(Deployment=lambda c: SimpleNamespace(identity={'target_id': 'spiffe://test/memory', 'agent_id': 'spiffe://test/node'}),
+                           status=lambda c: {'ready': True, 'helper_invocation_id': 'unchanged', 'target_serial': '1'})
+    monkeypatch.setattr(module, 'runtime', lambda _: (fake, {}))
+    monkeypatch.setattr(module.subprocess, 'run', lambda *a, **k: SimpleNamespace(returncode=0))
+    result = module.time_ready_command('config', argv, 'run', tmp_path/'timing.json', timeout_seconds=.01, poll_interval=.05)
+    assert result['result'] == 'UNKNOWN' and result['command_state'] == 'completed'
+    assert result['ready_observed_elapsed_ms'] is None
+
+
 def snapshots():
     a = {"schema": "argus.lifecycle-snapshot.v1", "started_at_ms": 1000, "completed_at_ms": 1100,
          "config_sha256": "config", "workload_id": "memory", "target_id": "spiffe://test/memory",

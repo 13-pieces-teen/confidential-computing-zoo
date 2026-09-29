@@ -158,3 +158,55 @@ def test_memory_post_body_is_resolved_hashed_and_not_safe_to_replay(tmp_path):
     assert all(item['body_file'] == str(tmp_path / 'query.json') for item in read(arm['load_config'])['instances'])
     prepared = prepare(tmp_path / 'generated/suite.json', tmp_path / 'prepared')
     assert str(tmp_path / 'query.json') in prepared['artifacts']
+
+
+def paired_locomo_sources(tmp_path):
+    cfg = locomo_sources(tmp_path)
+    cfg.update(conditions=['fault', 'no_fault'], seeds=[7], fault_kind='helper-freeze')
+    references = {}
+    for group, source in cfg['locomo_configs'].items():
+        original = read(source)
+        references[group] = {'7': {}}
+        for condition in cfg['conditions']:
+            lc = copy.deepcopy(original)
+            lc.update(condition=condition, concurrent_clients=True,
+                      schedule={'release_interval_s': 1, 'deadline_s': 2},
+                      controls={name: {'at_s': at, 'argv': ['true'] if condition == 'fault' else [], 'timeout_s': 1}
+                                for name, at in [('fault', .5), ('recovery', 1.5)]})
+            for binding in lc['bindings']:
+                binding['user_id'] += '-' + condition
+            path = tmp_path / (group + '-' + condition + '.json')
+            atomic(path, lc); references[group]['7'][condition] = str(path)
+    cfg['locomo_configs'] = references
+    atomic(tmp_path / 'paired.json', cfg)
+    return cfg
+
+
+def test_paired_locomo_uses_real_fixture_count_and_run_specific_inputs(tmp_path):
+    paired_locomo_sources(tmp_path)
+    m = suite.generate(tmp_path / 'paired.json', tmp_path / 'generated')
+    prepared = prepare(tmp_path / 'generated/suite.json', tmp_path / 'prepared')
+    assert len(prepared['runs']) == 4
+    assert {row['condition'] for row in prepared['runs']} == {'fault', 'no_fault'}
+    assert all(row['planned_tasks'] == 3 for row in prepared['runs'])
+    assert len({row['locomo_config'] for row in prepared['runs']}) == 4
+    assert not m.get('continuous_inputs')
+    assert all(v == {'normal': 3, 'fault': 0, 'recovery': 0} for v in m['locomo_phase_counts'].values())
+
+
+@pytest.mark.parametrize('change', ['user_reuse', 'different_schedule', 'different_tasks', 'control_budget'])
+def test_paired_locomo_requires_independent_users_and_comparable_load(tmp_path, change):
+    cfg = paired_locomo_sources(tmp_path)
+    group = 'native_spire_guarded'
+    path = Path(cfg['locomo_configs'][group]['7']['no_fault'])
+    lc = read(path)
+    if change == 'user_reuse':
+        lc['bindings'][0]['user_id'] = read(cfg['locomo_configs'][group]['7']['fault'])['bindings'][0]['user_id']
+    if change == 'different_schedule': lc['schedule']['release_interval_s'] = 2
+    if change == 'control_budget': lc['controls']['fault']['timeout_s'] = 2
+    if change == 'different_tasks':
+        fixture = read(tmp_path / 'fixture.json'); fixture['tasks'][0]['question'] += ' changed'
+        atomic(tmp_path / 'changed-fixture.json', fixture); lc['fixture'] = 'changed-fixture.json'
+    atomic(path, lc)
+    with pytest.raises(ValueError):
+        suite.generate(tmp_path / 'paired.json', tmp_path / 'generated')

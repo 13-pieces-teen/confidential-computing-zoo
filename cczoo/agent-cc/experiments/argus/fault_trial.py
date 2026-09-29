@@ -2,7 +2,7 @@
 """Two-host E2 coordinator. Run on the client; SSH uses an existing host alias.
 
 Receiver runs independently on the server before this trial. Fault is issued once
-after both traffic lanes AND the named application milestone. Resume only collects
+after both traffic lanes, with an optional business milestone. Resume only collects
 existing evidence; it never restarts traffic, injects a second fault or recovers a
 target automatically. Explicit release is separate in remote_acceptance.py.
 """
@@ -220,6 +220,9 @@ def run(config_file, output, resume=False):
     if config["event"] == "config-change":
         require(set(config.get("fixture", {})) == {"original", "replacement", "original_sha256", "replacement_sha256"}, "protected fixture references and hashes required")
     require(config.get("clock_uncertainty_ms", -1) >= 0 and config.get("bound_ms", 0) > 0, "measured clock uncertainty and declared bound required")
+    readiness = config.get("readiness", "business")
+    require(readiness in ("business", "transport"), "invalid fault readiness")
+    require(readiness == "transport" or config.get("milestone_file"), "business readiness requires milestone_file")
     lifecycle_config(config)
     with lock(output):
         state_path = output / "state.json"
@@ -270,7 +273,7 @@ def run(config_file, output, resume=False):
                     if not lifecycle_ready(config, output, observer):
                         time.sleep(.25)
                         continue
-                    fault_ready(output / "trace.jsonl", config["milestone_file"], config["run_id"])
+                    fault_ready(output / "trace.jsonl", config.get("milestone_file"), config["run_id"], readiness=readiness)
                     if inflight:
                         first_read = inflight_first_read(config, output)
                         if first_read is None:

@@ -10,6 +10,7 @@ import { once } from 'node:events';
 import { X509Certificate } from 'node:crypto';
 import { createSpiffeTransport, requestIdentity, requestFailure } from '../lib/transport.mjs';
 import { validateSVID } from '../lib/svid.mjs';
+import { auditAssembly } from '../lib/recall-audit.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'argus-spiffe-test-'));
 execFileSync('go', ['run', fileURLToPath(new URL('certificates.go', import.meta.url)), root], { env: { ...process.env, GO111MODULE: 'off' }, stdio: 'pipe' });
@@ -219,4 +220,131 @@ test('a different authenticated client gets the receiving service HTTP denial', 
   assert.equal(response.status,403);
   assert.equal(response.ok,false);
   await response.text();
+});
+
+async function captureAudit(action) {
+  const lines = []; const original = console.error;
+  console.error = line => lines.push(JSON.parse(line));
+  try { await action(lines); } finally { console.error = original; }
+  return lines;
+}
+
+test('ordinary recall observes headers and full body separately without logging request secrets', async t => {
+  const f = await fixture(t, 'server', (_request, response) => {
+    response.writeHead(200); response.write('private-response-fragment');
+    setTimeout(() => response.end('private-response-tail'), 40);
+  });
+  const lines = await captureAudit(async records => {
+    await auditAssembly(async () => {
+      const response = await f.transport(f.config.origin + '/search?query=private-query', {
+        headers: {'X-API-Key': 'private-api-key'},
+      });
+      assert.equal(requestIdentity(response).event, 'response_headers');
+      assert.equal(records.filter(v => v.event === 'response_completed').length, 0);
+      assert.equal(await response.text(), 'private-response-fragmentprivate-response-tail');
+      return {messages: []};
+    }, {messages: [], sessionId: 'normal-id', sessionKey: 'normal-recall'});
+  });
+  const requests = lines.filter(v => v.component === 'argus-openclaw-spiffe');
+  assert.deepEqual(requests.map(v => v.event), ['request_attempted', 'response_headers', 'response_completed']);
+  const [attempt, headers, completed] = requests;
+  assert.equal(completed.outcome, 'completed');
+  assert.equal(completed.phase, 'response_body');
+  assert.ok(completed.duration_ms >= completed.headers_ms + 15);
+  assert.equal(completed.server_spiffe_id, serverID);
+  assert.equal(completed.client_spiffe_id, clientID);
+  assert.equal(attempt.server_spiffe_id, undefined);
+  assert.equal(headers.duration_ms, undefined);
+  assert.ok(requests.every(v => v.request_id === attempt.request_id && v.context_span_id === attempt.context_span_id
+    && v.session_key === 'normal-recall' && v.session_id === 'normal-id' && Number.isSafeInteger(v.at_ms)));
+  const assembly = lines.find(v => v.component === 'argus-openclaw-recall' && v.event === 'completed');
+  assert.deepEqual(assembly.request_ids, [attempt.request_id]);
+  assert.deepEqual(assembly.successful_request_ids, [attempt.request_id]);
+  assert.doesNotMatch(JSON.stringify(lines), /private-query|private-api-key|private-response/);
+});
+
+test('ordinary recall retains a response body reset as failure after authenticated 200 headers', async t => {
+  const f = await fixture(t, 'server', (_request, response) => {
+    response.writeHead(200); response.write('partial-private-body');
+    setTimeout(() => response.destroy(), 30);
+  });
+  const lines = await captureAudit(async () => {
+    await assert.rejects(auditAssembly(async () => {
+      const response = await f.transport(f.config.origin + '/stream');
+      await response.text();
+      return {messages: []};
+    }, {messages: [], sessionKey: 'broken-body'}));
+  });
+  const requests = lines.filter(v => v.component === 'argus-openclaw-spiffe');
+  assert.deepEqual(requests.map(v => v.event), ['request_attempted', 'response_headers', 'request_failed']);
+  const failed = requests.at(-1);
+  assert.equal(failed.outcome, 'failed');
+  assert.equal(failed.phase, 'response_body');
+  assert.equal(failed.http_status, 200);
+  assert.equal(failed.server_spiffe_id, serverID);
+  assert.ok(failed.duration_ms >= failed.headers_ms);
+  assert.equal(failed.error_code, 'ECONNRESET');
+  const assembly = lines.find(v => v.component === 'argus-openclaw-recall' && v.event === 'failed');
+  assert.deepEqual(assembly.request_ids, [failed.request_id]);
+  assert.deepEqual(assembly.successful_request_ids, []);
+  assert.doesNotMatch(JSON.stringify(lines), /partial-private-body/);
+});
+
+test('without a continuous task, network failure and local block keep separate recall associations', async t => {
+  const f = await fixture(t);
+  await new Promise(resolve => f.server.close(resolve));
+  const lines = await captureAudit(async () => {
+    await assert.rejects(auditAssembly(async () => {
+      await f.transport(f.config.origin + '/unavailable');
+    }, {messages: [], sessionKey: 'network-failure'}));
+    f.remove();
+    await assert.rejects(auditAssembly(async () => {
+      await f.transport(f.config.origin + '/blocked');
+    }, {messages: [], sessionKey: 'local-block'}));
+    await assert.rejects(f.transport('https://private-host.invalid/secret?key=private-key'));
+  });
+  const network = lines.find(v => v.component === 'argus-openclaw-spiffe' && v.event === 'request_failed');
+  assert.equal(network.error_code, 'ECONNREFUSED');
+  assert.equal(network.phase, 'https_request');
+  assert.equal(network.server_spiffe_id, undefined);
+  const blocked = lines.find(v => v.event === 'request_blocked_local' && v.session_key === 'local-block');
+  assert.equal(blocked.outcome, 'blocked_local');
+  assert.equal(blocked.phase, 'local_validation');
+  assert.equal(blocked.reason, 'CREDENTIALS_UNAVAILABLE');
+  assert.equal(blocked.server_spiffe_id, undefined);
+  assert.equal(blocked.client_spiffe_id, undefined);
+  for (const record of [network, blocked]) {
+    const assembly = lines.find(v => v.component === 'argus-openclaw-recall' && v.event === 'failed' && v.session_key === record.session_key);
+    assert.deepEqual(assembly.request_ids, [record.request_id]);
+    assert.deepEqual(assembly.successful_request_ids, []);
+    assert.ok(record.duration_ms >= 0);
+  }
+  assert.notEqual(network.context_span_id, blocked.context_span_id);
+  assert.ok(!lines.some(v => v.event === 'request_attempted' && v.session_key === 'local-block'));
+  assert.ok(lines.some(v => v.event === 'request_blocked_local' && v.reason === 'INVALID_REQUEST_ORIGIN'));
+  assert.doesNotMatch(JSON.stringify(lines), /private-host|private-key/);
+});
+
+test('concurrent ordinary recalls retain request and completion association across reversed response order', async t => {
+  const f = await fixture(t, 'server', (request, response) => {
+    response.writeHead(200); response.write('part');
+    setTimeout(() => response.end('end'), request.url === '/left' ? 40 : 5);
+  });
+  const lines = await captureAudit(async () => {
+    await Promise.all(['left', 'right'].map(name => auditAssembly(async () => {
+      const response = await f.transport(f.config.origin + '/' + name);
+      assert.equal(await response.text(), 'partend');
+      return {messages: []};
+    }, {messages: [], sessionKey: name})));
+  });
+  for (const name of ['left', 'right']) {
+    const requests = lines.filter(v => v.component === 'argus-openclaw-spiffe' && v.session_key === name);
+    assert.deepEqual(requests.map(v => v.event), ['request_attempted', 'response_headers', 'response_completed']);
+    assert.equal(new Set(requests.map(v => v.request_id)).size, 1);
+    assert.ok(requests.every(v => v.path === '/' + name));
+    const assembly = lines.find(v => v.component === 'argus-openclaw-recall' && v.event === 'completed' && v.session_key === name);
+    assert.ok(requests.every(v => v.context_span_id === assembly.context_span_id));
+    assert.deepEqual(assembly.request_ids, [requests[0].request_id]);
+    assert.deepEqual(assembly.successful_request_ids, assembly.request_ids);
+  }
 });

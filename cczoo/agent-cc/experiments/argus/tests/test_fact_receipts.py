@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import atomic, sha
+from common import append, atomic, sha
 from fact_receipts import assess, _recovery_status
 
 
@@ -34,9 +34,13 @@ def fixture(tmp, *, fault=False, at=2000, gap=False, sent=True, recovery=False, 
     context = {"schema": "argus.fact-receipt-context.v1", "run_id": "run", "clock_uncertainty_ms": 0,
                "admissions": [admission("initial", 900, "nonce-initial")]}
     if fault:
-        atomic(tmp / "fault.json", {"type": "fault", "event": "helper-freeze", "run_id": "run", "executed": True, "target": target,
-               "started_at_ms": 5000, "started_monotonic_ns": 5000000000, "clock_id": "boot:server"})
-        context.update(fault_file="fault.json", bound_ms=1000)
+        checkpoint = {"type": "fault", "event": "helper-freeze", "run_id": "run", "executed": False, "target": target,
+                      "started_at_ms": 5000, "started_monotonic_ns": 5000000000, "clock_id": "boot:server"}
+        # remote_acceptance.fault journals one JSON object per line before and
+        # after the command; this is not a pretty-printed atomic JSON document.
+        append(tmp / "fault.jsonl", checkpoint)
+        append(tmp / "fault.jsonl", dict(checkpoint, executed=True))
+        context.update(fault_file="fault.jsonl", bound_ms=1000)
     if recovery:
         context["admissions"].append(admission("recovered", 6500, "nonce-new"))
         value = json.loads((tmp / "result.json").read_text())
@@ -190,9 +194,9 @@ def test_supervision_stop_is_not_unadmitted_replacement(tmp_path):
 
 def test_unspecified_stop_condition_is_not_a_failed_history_check(tmp_path):
     paths = fixture(tmp_path, fault=True, at=7000)
-    checkpoint = json.loads((tmp_path / "fault.json").read_text())
+    checkpoint = json.loads((tmp_path / "fault.jsonl").read_text().splitlines()[-1])
     checkpoint.pop("event")
-    atomic(tmp_path / "fault.json", checkpoint)
+    append(tmp_path / "fault.jsonl", checkpoint)
     value = assess(*paths)
     assert value["facts"][0]["result"] == "UNKNOWN"
     assert value["stop_condition"]["scope"] == "stop_condition_unestablished"

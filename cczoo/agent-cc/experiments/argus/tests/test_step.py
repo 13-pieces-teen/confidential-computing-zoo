@@ -37,6 +37,16 @@ def test_step_wrong_operation_or_failed_child_cannot_reuse_complete_native_resul
         assert read(tmp_path / 'step-result.json')['result'] == 'UNKNOWN'
 
 
+def test_complete_locomo_fault_window_preserves_failed_tasks_without_replay(tmp_path):
+    atomic(tmp_path / 'locomo/result.json', {'run_id': 'run', 'operation_id': 'op', 'result': 'INCOMPLETE',
+                                          'measurement_complete': True, 'overall': {'tasks': 3, 'completed': 1}})
+    with patch.dict(os.environ, ARGUS_RUN_ID='run', ARGUS_OPERATION_ID='op'), patch.object(step, 'run_logged', return_value=subprocess.CompletedProcess([], 0)):
+        assert step.execute(args(tmp_path)) == 0
+    receipt = read(tmp_path / 'step-result.json')
+    assert receipt['measurement_complete'] is True and receipt['native_result'] == 'INCOMPLETE'
+    assert read(tmp_path / 'locomo/result.json')['overall'] == {'tasks': 3, 'completed': 1}
+
+
 def test_real_runner_step_child_resumes_known_locomo_task_without_repeating_writes(tmp_path):
     # The runner and both subprocess layers are real. Only the external Gateway
     # is a controlled adapter; this is a local protocol test, never remote proof.

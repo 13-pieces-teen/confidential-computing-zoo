@@ -82,7 +82,12 @@ func (writer *captureWriter) write(job captureJob) error {
 	return nil
 }
 
-func (writer *captureWriter) appraisal(input protocol.Evidence, request, ear []byte, status int, at time.Time, accepted bool) {
+type requestTiming struct {
+	ElapsedNS            int64 `json:"elapsed_ns"`
+	ResponseBodyComplete bool  `json:"response_body_complete"`
+}
+
+func (writer *captureWriter) appraisal(input protocol.Evidence, request, ear []byte, status int, at time.Time, accepted bool, timing *requestTiming) {
 	evidence, err := json.Marshal(input)
 	if err != nil {
 		return
@@ -106,6 +111,7 @@ func (writer *captureWriter) appraisal(input protocol.Evidence, request, ear []b
 	}
 	metadata, _ := json.Marshal(map[string]any{"schema": "argus.admission-export.v1", "nonce": input.RuntimeData.Nonce,
 		"captured_at_ms": at.UnixMilli(), "http_status": status, "outcome": outcome, "artifacts": hashes,
+		"trustee_request": timing, "trustee_request_scope": "client RTT through response read; includes network, excludes local EAR verification",
 		"boundary": "workload_attestor_trustee_client", "fresh_admission": "NOT_ESTABLISHED_BY_EAR_ALONE"})
 	files["capture.json"] = metadata
 	writer.enqueue(captureJob{input.RuntimeData.Nonce, files})

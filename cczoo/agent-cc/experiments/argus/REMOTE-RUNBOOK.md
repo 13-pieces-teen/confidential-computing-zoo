@@ -1,6 +1,6 @@
 # 双机交付和验收顺序
 
-**当前对应论文 revision 1329：**先并行推进 [E1 可达性审查](E1-REACHABILITY.md) 和 [单客户端持续任务](CONTINUOUS.md)，再做共享故障恢复、三客户端 Full/native 配对。变化及未落实范围见 [核对记录](PAPER-ALIGNMENT-1329.md)。完整远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)。新增测试入口 `bash experiments/argus/remote-software-checks.sh client|server|analysis`；从 `cczoo/agent-cc` 执行。E2/E3/E5 与 LoCoMo 的现有配方仍按下方独立使用。
+**当前对应论文 revision 1373：**先完成 Full 单客户端 smoke，独立跑 E1/E2/E3，再做 E5 分层成本和 E4 LoCoMo 单/三客户端及 Full/native 配对。E2 无需等待模型记忆任务。完整修改和边界见 [核对记录](PAPER-ALIGNMENT-1373.md)；远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)。从 `cczoo/agent-cc` 执行 `bash experiments/argus/remote-software-checks.sh client|server|analysis`，软件检查和真实远程测量分别记录。
 
 本文件是待远程运行的步骤。代码、本地测试、镜像构建、真实准入、真实业务结果分别记录；不能把脚本已生成写成远程 PASS。`IP1` 指原有 SPIRE Server/客户端控制侧及客户端 TDVM，`IP2` 指服务 TDVM/TC API/OpenViking 侧；沿用已有连接配置和信任根。
 
@@ -41,17 +41,9 @@ python3 adapters/OpenClaw/spiffe_client/fleet_business.py resume --config /secur
 
 ## E2：客户端协调双连接，服务端执行故障
 
-配置 SSH host alias 指向服务 TDVM，并保持默认主机密钥校验。从 [fault-trial.example.json](examples/fault-trial.example.json) 创建实际配置。`run_id` 必须与审计部署、collector、业务里程碑一致；`clock_uncertainty_ms` 来自实际同步测量，示例 20 ms 不代表当前环境。`bound_ms` 是待检验参数，示例 10 s 不是已证明的 SLA。
+配置 SSH host alias 指向服务 TDVM，并保持默认主机密钥校验。从 [fault-trial.example.json](examples/fault-trial.example.json) 创建实际配置。`run_id` 必须与审计部署、collector 一致（选择 business 就绪时也绑定其里程碑）；`clock_uncertainty_ms` 来自实际同步测量，示例 20 ms 不代表当前环境。`bound_ms` 是待检验参数，示例 10 s 不是已证明的 SLA。
 
-用 `milestone.py` 从实际业务 journal 派生里程碑，不能手写 `reached:true`。例如另一个终端执行：
-
-```sh
-python3 experiments/argus/milestone.py --business-dir /secure/evidence/three-clients \
-  --instance alice --milestone nonempty-extraction --run-id RUN_ID \
-  --output /secure/evidence/fault-trial/milestone.json --wait-seconds 120
-```
-
-工具核对实际运行、实例、任务、mTLS 写入和阶段原始文件的快照摘要；故障门禁再次验证这些关联。协调器等待两条 TLS lane 各至少三次成功、旧连接未重连，以及派生里程碑。默认另发一个在途分块 POST，并通过 collector `status` 确认应用已读取首块后才注入故障。NGINX 缓冲等原因使该条件不可达时记 `BASELINE_OR_INFLIGHT_READ_UNREACHABLE / NOT_RUN`，不发故障；显式设 `probe.inflight=false` 时只验证原双连接范围。业务里程碑证明阶段已完成，不是模型内部同步断点。
+默认示例使用 `readiness: "transport"`，等两条 TLS lane 各至少三次成功、旧连接未重连。默认在途分块 POST 还需 collector 确认应用已读取首块后才注入。它不依赖提取/模型成功。NGINX 缓冲等原因使条件不可达时记 `BASELINE_OR_INFLIGHT_READ_UNREACHABLE / NOT_RUN`；`probe.inflight=false` 只验证双连接范围。旧配置省略 readiness 时仍按 business 方式要求实际里程碑，使用 `milestone.py` 从真实 journal 派生，不能手填 reached。
 
 ```sh
 python3 experiments/argus/fault_trial.py run --config /secure/fault-trial.json --output /secure/evidence/fault-trial
@@ -92,7 +84,7 @@ python3 /opt/argus-experiments/paper01/full_argus/payload/scripts/workload.py re
 
 未知首次创建不自动再 POST；需要刷新签名身份时只使用既有 commit 接口。记录恢复前后已知操作、target、独立 Docker 创建事件、容器数和中断窗口。
 
-新增 [E3-LIFECYCLE-RECIPE.md](examples/E3-LIFECYCLE-RECIPE.md) 将上述快照与同 run ID 的连续非空记忆 API trace 关联：SPIRE Server API/metrics 所在主机采 Node，OpenViking 主机采 Workload，客户端独立运行 `load.py` 或 `load_fleet.py`。`lifecycle_trial.py observe` 只读等待自然轮换；`collect` 核对时间覆盖、身份和原文件哈希，分开输出身份变化、Quote 计数与业务中断。缺 Workload Quote counter 时输出 UNKNOWN，不把它填成零。
+新增 [E3-LIFECYCLE-RECIPE.md](examples/E3-LIFECYCLE-RECIPE.md) 将上述快照与同 run ID 的连续非空记忆 API trace 关联：SPIRE Server API/metrics 所在主机采 Node，OpenViking 主机采 Workload，客户端独立运行 `load.py` 或 `load_fleet.py`。`lifecycle_trial.py observe` 只读等待自然轮换；`collect` 核对时间覆盖、身份和原文件哈希，分开输出身份变化、Quote 计数与业务中断。Node 在 IP1 而 Provider 在 IP2 时，先后采集相同 run ID 的 Provider 快照，转移原文件，向 collect 传 --provider-before/--provider-after；本机 Workload 观测使用 provider_socket。快照必须覆盖观测窗口并匹配 Agent/Provider 启动，缺失或重启使计数 UNKNOWN。
 
 ## E4：多客户端故障与 LoCoMo
 
@@ -100,7 +92,9 @@ python3 /opt/argus-experiments/paper01/full_argus/payload/scripts/workload.py re
 
 LoCoMo 遵循 [LOCOMO.md](LOCOMO.md)，先从本地锁定数据做固定样本转换。每个对话绑定独立普通用户和已登记的评测 Gateway；登记前设置 `autoCapture=false`、`autoRecall=true`、禁用模型工具写回。原始历史显式导入，QA 每题新会话，答案只留在本地评分器。不同组/重复使用不同初始空用户。可直接运行 `locomo_run.py`，或用 `suite.py` 可选 `locomo` case 纳入 prepare/run/resume/collect/analyze。
 
-LoCoMo 的 COMPLETE 表示题目执行完成，不意味着答对、非空提取或安全通过。报告包括 all-task 与 answered-only F1、按对话/类别分层、UNKNOWN/NOT_RUN、注入观测；category 5 的弃答独立统计。结果采用声明的派生词汇评分，不标作官方 LoCoMo 成绩。
+LoCoMo 先初始化全部会话，再进入 QA；独立 Gateway 并发执行、同一 Gateway 单 worker。固定释放/deadline，故障/恢复命令按 QA 起点独立计时，题目来自固定 fixture。先做单客户端无故障，再三个客户端，最后使用 [suite.locomo-paired.example.json](examples/suite.locomo-paired.example.json) 执行 Full/native × fault/no_fault。每个运行引用独立配置和新业务用户；按生成顺序先部署对应配置，再选择 run ID。详见 [LOCOMO.md](LOCOMO.md)。
+
+E4 主要报告端到端及请求延迟、全部计划任务分母、注入有效完成、失败/超时/未知、实际并发和恢复。F1 仅辅助检查功能一致性，不说明 Argus 改进记忆质量。COMPLETE 不代表答对或安全通过。中断只续查已知操作、收集审计，不补发 QA 或控制命令，也不重置时间窗。
 
 ## 对照与性能
 
@@ -108,7 +102,7 @@ LoCoMo 的 COMPLETE 表示题目执行完成，不意味着答对、非空提取
 
 静态组先 `static_clients.py build --output /secure/static-build`，记录实际 binary SHA，将其安装至配置声明的路径。为每个静态客户端和静态服务器签发专用实验 URI SAN 证书，使用同一专用测试 CA。根据生成 `static-clients.json` 对每实例执行 `install`、`register`，并 `inspect` 核对实际 unit；该组使用静态 register，不能启动普通动态 publisher。结束后按工具 `restore` 恢复原 unit，或停用整个隔离实例。
 
-三客户端功能完成后，运行 1/2/4/8 规模。没有四/八个独立客户端时保留容量停止。先做 pilot 冻结总到达负载，各组采用同样配置，再执行 30 s 预热、120 s 测量、五次独立重复。真实 Agent 任务单独评价，不和普通 API 延迟混合。使用 `resources.py` 同步记录受测进程 CPU/RSS，审计开销采用同镜像 on/off 配对。
+三客户端功能完成后，默认比较 1/3 规模。需要扩展时另行冻结规模配置；没有足够独立客户端时保留容量停止。先做 pilot 冻结总到达负载，各组采用同样配置，再执行 30 s 预热、120 s 测量、五次独立重复。真实 Agent 任务单独评价，不和普通 API 延迟混合。使用 `resources.py` 同步记录受测进程 CPU/RSS，审计开销采用同镜像 on/off 配对。
 
 `new` 与 `reuse`、`status_api` 与 `memory_query` 分别配置和汇总，见 [E5-MEMORY-LOAD.md](E5-MEMORY-LOAD.md)。预实验必须为每个用户准备实际非空记忆，报告实际建连/复用数、TCP/TLS/API 时间、非空 Goodput；不能只测健康检查。固定 POST 搜索的中断测量不自动重放，新实验需保留旧窗口并显式准备。
 

@@ -28,6 +28,9 @@ def generate(config_file, output):
     if c.get("cases") == ["continuous"]:
         from continuous_suite import generate as generate_continuous
         return generate_continuous(source, output)
+    if c.get("cases") == ["locomo"] and "conditions" in c:
+        from locomo_suite import generate as generate_locomo
+        return generate_locomo(source, output)
     selected_cases = c.get("cases", ["private-memory"])
     require(isinstance(selected_cases, list) and selected_cases and len(selected_cases) == len(set(selected_cases))
             and set(selected_cases) <= {"private-memory", "steady-api", "locomo"}, "select private-memory, steady-api or locomo")
@@ -113,7 +116,10 @@ def generate(config_file, output):
                         and binding['agent_id'] == user.get('agent_id', 'main')
                         and (binding['account_id'], binding['user_id']) == (user['account_id'], user['user_id']), 'LoCoMo operational binding differs from generated deployment')
             protocol = digest({'fixture': fixture, 'poll_attempts': lc.get('poll_attempts', 120),
-                               'poll_seconds': lc.get('poll_seconds', 2), 'qa_timeout_seconds': lc.get('qa_timeout_seconds', 180)})
+                               'poll_seconds': lc.get('poll_seconds', 2), 'qa_timeout_seconds': lc.get('qa_timeout_seconds', 180),
+                               'concurrent_clients': lc.get('concurrent_clients', False), 'schedule': lc.get('schedule'),
+                               'condition': lc.get('condition', 'no_fault'),
+                               'control_times': {k: v.get('at_s') for k, v in lc.get('controls', {}).items()}})
             require(locomo_protocol is None or locomo_protocol == protocol, 'LoCoMo arms must use identical selected tasks and execution budgets')
             locomo_protocol = protocol
             lc['fixture'] = str(resolve(locomo_source.parent, lc['fixture']))
@@ -161,7 +167,8 @@ def generate(config_file, output):
     if "private-memory" in selected_cases:
         m["cases"].append({"name": "private-memory", "experiment": "E4", "scales": [len(base_fleet["instances"])], "operations": [business_op]})
     if locomo:
-        m['cases'].append({'name': 'locomo', 'experiment': 'E4', 'scales': [len(base_fleet['instances'])], 'operations': [locomo_op]})
+        m['cases'].append({'name': 'locomo', 'experiment': 'E4', 'scales': [len(base_fleet['instances'])],
+                           'planned_tasks': len(fixture['tasks']), 'operations': [locomo_op]})
     if measure:
         m["load"] = c["load"]
         m["cases"].append({"name": "steady-api", "experiment": "E5", "seeds": c.get("performance_seeds", [101, 102, 103, 104, 105]), "operations": [load_op]})

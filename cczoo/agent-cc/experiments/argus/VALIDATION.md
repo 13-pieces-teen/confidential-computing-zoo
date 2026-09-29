@@ -1,8 +1,17 @@
 # 第 4—7 项交付验证记录（2026-09-26）
 
-**飞书 revision 1329 核对：**最新修改与检查见 [PAPER-ALIGNMENT-1329.md](PAPER-ALIGNMENT-1329.md)，远程测试仍为 NOT_RUN。下方历史 PASS 不覆盖最新统计与接收判据修正。
+**当前交付：飞书 revision 1373。** 修改范围见 [PAPER-ALIGNMENT-1373.md](PAPER-ALIGNMENT-1373.md)，基于 `93b9ed13` 完成代码/配置/双机 prompt 对齐。以下为本轮本地软件检查，均不作为远程论文实验样本：
 
-**2026-09-29 更新：**本轮 continuous / 证明导出 / Quote counter / 完整事实接收新增代码按用户分工仅做本地语法和构建检查，未执行测试。当前交付状态及检查结果统一见 [IMPLEMENTATION-20260929.md](IMPLEMENTATION-20260929.md)。下方数字均为先前版本历史结果，不能当成本轮回归通过。
+- 锁定 Python 虚拟环境的完整实验工具回归：**299 PASS / 20 SKIP**。跳过 17 项 Linux/root 与 3 项 Matplotlib 条件。首次回归发现旧 fact_receipts fixture 将生产 JSONL checkpoint 写成 pretty JSON；仅修复测试 fixture，未放松生产解析。
+- 另在带 Matplotlib 的 Python 环境跑分析、真实 SVG/PDF 作图、suite 与 step 集成：**30 PASS**，覆盖前述 3 项绘图跳过。新增控制预算配对检查后 suite 再跑 **14 PASS**。集合有重叠，不合计。
+- Node 原生 mTLS/普通召回观测：**27 PASS**；LoCoMo Gateway Node 语法检查通过。
+- Go WorkloadAttestor：`go test ./internal/trustee` 通过。
+- 修改的 Python/JSON 语法检查通过；源码 manifest 在最终编辑后生成并 verify。
+- 本机未提供 Cargo，新增 Provider Rust 计时的构建/测试交 IP2 执行。未运行真实 TDX、模型业务、systemd 故障、双机延迟或吞吐，均为 **NOT_RUN**。
+
+全套命令使用 `tmp/argus-extensions-venv/Scripts/python.exe -m pytest cczoo/agent-cc/experiments/argus/tests -q -rs --basetemp tmp/argus-1373-final-regression`；系统 Python 缺 sigstore，不把它的收集错误计为代码验收。Windows 全局 temp 权限不适用，使用各次独立工作区临时目录。远程 Linux 使用 [remote-software-checks.sh](remote-software-checks.sh)，功能/集成验收另按两机 prompt。
+
+下面保留较早交付的历史记录，不作为本轮实测结论。
 
 基线：`8be8afe688ee92956f4f4d036beeb4d4616ee38d`。本记录描述本地代码与软件测试；真实硬件、远程应用和性能数据尚未产生。下方保留多轮验证记录，当前发布状态以 Git 与最新 review 交付为准；原有无关论文及 `sigstore_baseline.py` 修改保留。
 

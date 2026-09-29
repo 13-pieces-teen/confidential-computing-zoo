@@ -1,5 +1,7 @@
 # 持续 Agent 任务与双机交付
 
+> 历史可选负载：revision 1373 的默认框架实验使用 E1/E2/E3/E5 和 LoCoMo E4。本文累计金额/路由/依赖任务保留兼容，不作为默认论文主线。见 [PAPER-ALIGNMENT-1373.md](PAPER-ALIGNMENT-1373.md)。
+
 当前运行口径对应飞书 revision **1329**，实现前代码基线仍是 `0d78ed0`，新增代码以交付 SHA/源码清单为准。变更及未落实内容见 [本轮核对](PAPER-ALIGNMENT-1329.md)，前轮建设见 [交付记录](IMPLEMENTATION-20260929.md)。下面所有真实业务、TDX、故障和性能结论均等待双机运行。
 
 ## 顺序

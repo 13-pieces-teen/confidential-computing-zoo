@@ -147,9 +147,13 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) (veri
 	verifiedAt := client.now()
 	var token []byte
 	var httpStatus int
+	var timing *requestTiming
 	defer func() {
+		if timing != nil {
+			log.Printf("workload Trustee request launch_id=%s nonce=%s trustee_request_elapsed_ns=%d response_body_complete=%t http_status=%d", input.RuntimeData.LaunchID, input.RuntimeData.Nonce, timing.ElapsedNS, timing.ResponseBodyComplete, httpStatus)
+		}
 		if client.capture != nil {
-			client.capture.appraisal(input, requestBody, token, httpStatus, verifiedAt, verificationError == nil)
+			client.capture.appraisal(input, requestBody, token, httpStatus, verifiedAt, verificationError == nil, timing)
 		}
 	}()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.attestationURL, bytes.NewReader(requestBody))
@@ -158,7 +162,11 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) (veri
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/jwt")
+	// Monotonic client-observed request time includes connection/network and
+	// response reading. It excludes local EAR verification and is not server CPU time.
+	requestStarted := time.Now()
 	response, err := client.httpClient.Do(request)
+	timing = &requestTiming{ElapsedNS: time.Since(requestStarted).Nanoseconds()}
 	if err != nil {
 		return fmt.Errorf("call Trustee: %w", err)
 	}
@@ -168,6 +176,8 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) (veri
 		return fmt.Errorf("Trustee returned HTTP %d", response.StatusCode)
 	}
 	token, err = readLimited(response.Body, client.maxResponseBytes)
+	timing.ElapsedNS = time.Since(requestStarted).Nanoseconds()
+	timing.ResponseBodyComplete = err == nil
 	if err != nil {
 		return err
 	}

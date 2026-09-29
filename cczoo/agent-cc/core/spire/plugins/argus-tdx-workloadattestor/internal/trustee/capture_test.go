@@ -54,7 +54,7 @@ func TestCapturePreservesExactRequestEARAndLocalOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writer.appraisal(ev, request, []byte("original.signed.ear"), 200, time.Unix(123, 0), true)
+	writer.appraisal(ev, request, []byte("original.signed.ear"), 200, time.Unix(123, 0), true, &requestTiming{ElapsedNS: 1200, ResponseBodyComplete: true})
 	if err := writer.write(<-writer.jobs); err != nil {
 		t.Fatal(err)
 	}
@@ -76,6 +76,10 @@ func TestCapturePreservesExactRequestEARAndLocalOutcome(t *testing.T) {
 	if metadata["outcome"] != "EAR_ACCEPTED" || metadata["captured_at_ms"] != float64(123000) {
 		t.Fatal(metadata)
 	}
+	timing := metadata["trustee_request"].(map[string]any)
+	if timing["elapsed_ns"] != float64(1200) || timing["response_body_complete"] != true {
+		t.Fatal(timing)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "local-check.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -92,5 +96,45 @@ func TestArchivedEARUsesRecordedWindowNotNewAdmission(t *testing.T) {
 	}
 	if err := VerifyArchivedEAR(token, &key.PublicKey, testIssuer, testProfile, testPolicyID, ev, at.Add(time.Hour)); err == nil {
 		t.Fatal("expired EAR accepted as current")
+	}
+}
+
+func TestRequestTimingIncludesResponseBodyReadAndKeepsFailureSeparate(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			key := newSigningKey(t)
+			now := time.Now()
+			ev := fixture(t)
+			canonical, _ := ev.RuntimeData.Canonical()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+				w.(http.Flusher).Flush()
+				if status == http.StatusOK {
+					time.Sleep(20 * time.Millisecond)
+					_, _ = w.Write([]byte(signEAR(t, key, validClaims(now, canonical))))
+				}
+			}))
+			defer server.Close()
+			client := testClient(server, key, now)
+			writer := &captureWriter{jobs: make(chan captureJob, 1)}
+			client.capture = writer
+			err := client.Verify(context.Background(), ev)
+			if (err == nil) != (status == http.StatusOK) {
+				t.Fatalf("verification outcome changed: %v", err)
+			}
+			var metadata struct {
+				Timing requestTiming `json:"trustee_request"`
+			}
+			job := <-writer.jobs
+			if err := json.Unmarshal(job.files["capture.json"], &metadata); err != nil {
+				t.Fatal(err)
+			}
+			if metadata.Timing.ResponseBodyComplete != (status == http.StatusOK) || metadata.Timing.ElapsedNS < 0 {
+				t.Fatal(metadata)
+			}
+			if status == http.StatusOK && metadata.Timing.ElapsedNS < int64(20*time.Millisecond) {
+				t.Fatal("request timing omitted the body read")
+			}
+		})
 	}
 }

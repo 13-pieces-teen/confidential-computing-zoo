@@ -9,7 +9,7 @@
   "fault_file": "/var/lib/argus-receiver/paper01-fault-example/fault.jsonl",
   "receiver_file": "/var/lib/argus-receiver/paper01-fault-example/receiver.jsonl",
   "collector_control": "/run/argus-receiver/paper01-fault-example/control/collector.sock",
-  "milestone_file": "/secure/evidence/paper01-fault-example/milestone.json",
+  "readiness": "transport",
   "baseline_budget_s": 60,
   "bound_ms": 10000,
   "clock_uncertainty_ms": 20,

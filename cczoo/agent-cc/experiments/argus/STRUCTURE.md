@@ -11,11 +11,11 @@ The executable command paths remain stable. Example inputs are collected in `exa
 | E2 fault and receive timeline | `fault_trial.py`, `timeline.py`, `fault_fixture.py` | Production `remote_acceptance.py`, receiver collector, `milestone.py`; [fault recipes](FAULT-FIXTURES.md) |
 | E3 renewal and recovery | `lifecycle_trial.py`, `lifecycle_evidence.py` | Existing Node snapshots and create-event stream; [recipe](examples/E3-LIFECYCLE-RECIPE.md) |
 | E4 private memory and local/shared faults | Adapter `fleet_business.py`, `fleet_fault.py` | [fleet fault recipe](examples/FLEET-FAULT.md); recovery stays explicit |
-| E4 continuous real Agent tools | `continuous.py`, `continuous_gateway.mjs`, `fact_protocol.py` | [task protocol](CONTINUOUS-TASK.md); fixed releases, fresh sessions, known-operation queries only |
-| E4 paired conditions and joint axes | `continuous_suite.py`, `continuous_analysis.py`, `continuous_plot.py` | Existing suite/runner/step integration; [two-host workflow](CONTINUOUS.md) |
+| Optional legacy continuous real Agent tools | `continuous.py`, `continuous_gateway.mjs`, `fact_protocol.py` | [task protocol](CONTINUOUS-TASK.md); fixed releases, fresh sessions, known-operation queries only |
+| Optional legacy paired conditions and joint axes | `continuous_suite.py`, `continuous_analysis.py`, `continuous_plot.py` | Existing suite/runner/step integration; [two-host workflow](CONTINUOUS.md) |
 | Complete synthetic fact receipts | `fact_receipts.py`, receiver `facts.py` | Passive ASGI matching plus real admission observations; [contract](FACT-RECEIPTS.md) |
 | Captured proof and policy replay | `admission_evidence.py`, production `argus-verify-admission`, `argus-replay-policy` | [archive contract](ADMISSION-ARCHIVE.md); captured hardware verdict, not fresh offline DCAP |
-| E4 LoCoMo-derived workload | `locomo.py`, `locomo_run.py`, `locomo_gateway.mjs` | [protocol](LOCOMO.md); fixture answers remain in the local grader |
+| E4 LoCoMo-derived workload | `locomo.py`, `locomo_run.py`, `locomo_gateway.mjs`, `locomo_execution.py`, `locomo_suite.py` | [protocol](LOCOMO.md); fixture answers remain in the local grader |
 | E5 HTTP/TLS load and process sampling | `load.py`, `load_fleet.py`, `resources.py` | `client_material.py`; [nonempty memory load](E5-MEMORY-LOAD.md) |
 | Collect and summarize | `analysis.py`, `plot.py` (also via runner) | Separate connection/workload strata, QA scores, unknown coverage and independent run intervals |
 | Source delivery | `delivery.py`, `source-manifest.json` | Source content hashes; actual binary/image manifests are created by their build tools |
@@ -41,6 +41,6 @@ Suggested local output directories `private/`, `evidence/` and `generated/` are 
 - Change admission or workload behavior in its production component first. The experiment should invoke or observe that component, not silently implement a different verifier.
 - Keep fixed scenario commands small. Use the existing runner only where its mutation/query/resume contract applies; there is no global multi-host daemon.
 - Preserve unknown submissions and original attempts. QA completion, correct answers, local binding rejection and actual data receipt are distinct results.
-- For this delivery the user runs the owning tests and integration regressions on the two hosts. Local work performs syntax/build checks only. Rebuild the source manifest last; remote hosts build and verify their actual artifacts separately.
+- For this delivery the user runs the owning tests and integration regressions on the two hosts. Local work records focused software tests and build checks separately. Rebuild the source manifest last; remote hosts build and verify their actual artifacts separately.
 
 The examples previously at the experiment root (`suite*.example.json`, `fault-trial.example.json`) and `config/locomo.example.json` now live under `examples/`. Only example file locations changed; CLI flags, supplied configuration semantics and installed runtime paths are unchanged.

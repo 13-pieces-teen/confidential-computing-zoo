@@ -12,7 +12,12 @@ export function recordRecallRequest(receipt) {
   const span = spans.getStore();
   if (!span) return;
   receipt.context_span_id = span.id;
-  if (receipt.http_status >= 200 && receipt.http_status < 300 && span.requests.length < 128) span.requests.push(receipt.request_id);
+  receipt.session_id = span.sessionId;
+  receipt.session_key = span.sessionKey;
+  if (receipt.request_id && !span.requests.includes(receipt.request_id) && span.requests.length < 128) span.requests.push(receipt.request_id);
+  // Headers alone do not establish that the response body was received.
+  if ((!receipt.event || receipt.event === 'response_completed') && receipt.http_status >= 200 && receipt.http_status < 300
+      && !span.successfulRequests.includes(receipt.request_id) && span.successfulRequests.length < 128) span.successfulRequests.push(receipt.request_id);
 }
 export function auditRecallSearch(items, settled) {
   const span = spans.getStore();
@@ -41,7 +46,8 @@ function containsBlock(value, block) {
   return !!value && typeof value === 'object' && Object.values(value).some(child => containsBlock(child, block));
 }
 export async function auditAssembly(assemble, params) {
-  const span = {id: randomUUID(), requests: [], recall: []};
+  const span = {id: randomUUID(), sessionId: params.sessionId, sessionKey: params.sessionKey,
+    requests: [], successfulRequests: [], recall: []};
   return spans.run(span, async () => {
     const before = factHashes(params.messages);
     const base = {
@@ -55,7 +61,7 @@ export async function auditAssembly(assemble, params) {
       // Block inclusion observes injection, not semantic support for the answer.
       console.error(JSON.stringify({...base, event: 'completed',
         input_fact_hashes: before, recall_fact_hashes: span.recall,
-        output_fact_hashes: factHashes(result.messages), request_ids: span.requests,
+        output_fact_hashes: factHashes(result.messages), request_ids: span.requests, successful_request_ids: span.successfulRequests,
         source_observed: !!span.sourceObserved, memory_count: span.memoryCount ?? null,
         recall_block_sha256: span.recallBlock ? createHash('sha256').update(span.recallBlock).digest('hex') : null,
         recall_block_chars: span.recallBlock?.length ?? 0,
@@ -65,7 +71,7 @@ export async function auditAssembly(assemble, params) {
       }));
       return result;
     } catch (error) {
-      console.error(JSON.stringify({...base, event: 'failed', request_ids: span.requests,
+      console.error(JSON.stringify({...base, event: 'failed', request_ids: span.requests, successful_request_ids: span.successfulRequests,
         checked_at: new Date().toISOString()}));
       throw error;
     }

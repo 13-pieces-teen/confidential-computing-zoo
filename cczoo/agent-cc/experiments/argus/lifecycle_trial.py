@@ -52,7 +52,7 @@ def capture_phase(config, directory, phase):
                                      'snapshot', '--config', config['workload_config']]))
     if config.get('provider_socket'):
         commands.append(('provider', [sys.executable, str(Path(__file__).with_name('lifecycle_evidence.py')),
-                                      'quote-snapshot', '--provider-socket', config['provider_socket']]))
+                                      'quote-snapshot', '--provider-socket', config['provider_socket'], '--run-id', config['run_id']]))
     for kind, argv in commands:
         output = directory / (kind+'-'+phase+'.json')
         item = {'result': 'UNKNOWN', 'started_at_ms': now_ms(), 'source': output.name}
@@ -85,6 +85,8 @@ def observe(config_file, output):
               'target_id': config['target_id'], 'config_sha256': digest(config), 'complete': False,
               'started_at_ms': now_ms(), 'duration_seconds': duration, 'automatic_mutations': False,
               'workload_quote_source': 'provider_generation_counters' if config.get('provider_socket') else 'UNAVAILABLE'}
+    if config.get('provider_agent_id'):
+        result['provider_agent_id'] = config['provider_agent_id']
     atomic(directory/'observation.json', result)
     result['before'] = capture_phase(config, directory, 'before')
     result['observation_started_at_ms'] = now_ms()
@@ -192,7 +194,45 @@ def business_continuity(load_result, observation, clock_uncertainty_ms, max_prob
     return result
 
 
-def collect(directory, load_result=None, resume_result=None, creates=None, clock_uncertainty_ms=0, max_probe_gap_ms=2000):
+def imported_quote_pair(before_file, after_file, observation, node, workload, clock_uncertainty_ms):
+    """Associate host-local Provider snapshots with the other host's trial.
+
+    The wider counter window must cover both trial snapshots, allowing for the
+    measured inter-host uncertainty. Counts cover that window, not one request.
+    """
+    result = {'result': 'UNKNOWN', 'node': None, 'workload': None, 'source': 'imported_provider_snapshots'}
+    try:
+        require(before_file and after_file, 'both external Provider snapshots are required')
+        before, after = read(before_file), read(after_file)
+        require(all(s.get('run_id') == observation['run_id'] for s in (before, after)), 'Provider run ID differs')
+        expected = observation.get('provider_agent_id')
+        if node:
+            require(node[0].get('agent_id') == node[1].get('agent_id'), 'Node Agent changed across snapshots')
+            if expected: require(expected == node[0].get('agent_id'), 'configured Provider Agent differs from Node trial')
+            expected = node[0].get('agent_id')
+        if workload:
+            agents = [s.get('target', {}).get('agent_id') for s in workload]
+            if all(agents):
+                require(agents[0] == agents[1] and (not expected or expected == agents[0]), 'workload Provider Agent differs')
+                expected = agents[0]
+        require(expected and all(s.get('agent_id') == expected for s in (before, after)), 'Provider Agent association missing or different')
+        left = before.get('observation_completed_at_ms')
+        right = after.get('observation_started_at_ms')
+        require(type(left) is int and type(right) is int and
+                left <= observation['started_at_ms'] - clock_uncertainty_ms and
+                right >= observation['completed_at_ms'] + clock_uncertainty_ms,
+                'Provider window does not cover the trial and measured clock uncertainty')
+        result.update(quote_delta(before, after), source='imported_provider_snapshots',
+                      before_sha256=sha(before_file), after_sha256=sha(after_file), run_id=observation['run_id'],
+                      counter_window_started_at_ms=left, counter_window_ended_at_ms=right,
+                      clock_uncertainty_ms=clock_uncertainty_ms)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        result.update(reason=str(error) if isinstance(error, ValueError) else type(error).__name__)
+    return result
+
+
+def collect(directory, load_result=None, resume_result=None, creates=None, clock_uncertainty_ms=0, max_probe_gap_ms=2000,
+            provider_before=None, provider_after=None):
     require(type(clock_uncertainty_ms) is int and clock_uncertainty_ms >= 0, 'nonnegative clock uncertainty required')
     require(type(max_probe_gap_ms) is int and max_probe_gap_ms > 0, 'positive probe gap required')
     directory = Path(directory)
@@ -217,7 +257,13 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
         node = snapshot_pair(directory, observation, 'node')
         workload = snapshot_pair(directory, observation, 'workload')
         provider = snapshot_pair(directory, observation, 'provider')
-        if provider:
+        if provider_before or provider_after:
+            if provider:
+                result['quote_generated'] = {'result':'UNKNOWN', 'node':None, 'workload':None,
+                    'reason':'both local and imported Provider snapshots supplied; select one source'}
+            else:
+                result['quote_generated'] = imported_quote_pair(provider_before, provider_after, observation, node, workload, clock_uncertainty_ms)
+        elif provider:
             result['quote_generated'] = quote_delta(*provider)
         if node:
             mode = 'enrollment' if observation['case'] == 'node-enrollment' else 'renewal'
@@ -257,11 +303,13 @@ def main():
     p = sub.add_parser('collect'); p.add_argument('--observation', required=True); p.add_argument('--load-result')
     p.add_argument('--resume-result'); p.add_argument('--creates'); p.add_argument('--output', required=True)
     p.add_argument('--clock-uncertainty-ms', type=int, required=True); p.add_argument('--max-probe-gap-ms', type=int, default=2000)
+    p.add_argument('--provider-before'); p.add_argument('--provider-after')
     args = parser.parse_args()
     if args.action == 'observe':
         value = observe(args.config, args.output)
     else:
-        value = collect(args.observation, args.load_result, args.resume_result, args.creates, args.clock_uncertainty_ms, args.max_probe_gap_ms)
+        value = collect(args.observation, args.load_result, args.resume_result, args.creates, args.clock_uncertainty_ms, args.max_probe_gap_ms,
+                        args.provider_before, args.provider_after)
         atomic(args.output, value)
     print(json.dumps(value, indent=2))
     return 0 if args.action == 'observe' or value['result'] == 'PASS' else 1 if value['result'] == 'FAIL' else 2

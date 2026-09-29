@@ -3,5 +3,6 @@
   "case": "workload-rotation",
   "target_id": "spiffe://argus.local/service/openviking",
   "duration_seconds": 600,
-  "workload_config": "/etc/argus/workload-experiment.json"
+  "workload_config": "/etc/argus/workload-experiment.json",
+  "provider_socket": "/run/argus/evidence-provider.sock"
 }

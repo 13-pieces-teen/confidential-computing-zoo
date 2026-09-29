@@ -7,7 +7,12 @@ role="${1:?usage: bash remote-software-checks.sh client|server|analysis}"
 case "$role" in
   client)
     bash adapters/OpenClaw/spiffe_client/test-client.sh
-    python3 -m pytest experiments/argus/tests/test_continuous.py \
+    python3 -m pytest experiments/argus/tests/test_locomo_run.py \
+      experiments/argus/tests/test_suite.py \
+      experiments/argus/tests/test_locomo_application_analysis.py \
+      experiments/argus/tests/test_plot.py \
+      experiments/argus/tests/test_transport_fault_ready.py \
+      experiments/argus/tests/test_continuous.py \
       experiments/argus/tests/test_continuous_analysis.py \
       experiments/argus/tests/test_continuous_suite.py \
       experiments/argus/tests/test_step.py experiments/argus/tests/test_runner.py \

@@ -3,6 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import { Agent, request as httpsRequest } from 'node:https';
 import { Readable, Transform } from 'node:stream';
 import { randomUUID, createHash } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { recordRecallRequest } from './recall-audit.mjs';
 import { currentTask, taskHeaders, taskEvent, frameReceipts } from './task-audit.mjs';
 import { validateMaterial, validateSVID, spiffeID } from './svid.mjs';
@@ -123,15 +124,54 @@ export function createSpiffeTransport(configuration = loadConfig()) {
   monitor.unref();
 
   const transport = async (input, init = {}) => {
-    const url = new URL(input);
-    if (url.origin !== config.origin || url.protocol !== 'https:' || url.username || url.password || url.hash) throw fail('request is outside the configured HTTPS origin');
     const requestID = randomUUID();
     const task = currentTask() ?? null;
     const emitTask = (event, fields) => taskEvent(event, fields, task);
+    const started = performance.now();
+    const observation = {component: 'argus-openclaw-spiffe', ...task, request_id: requestID, started_at_ms: Date.now()};
+    recordRecallRequest(observation);
+    let terminal = false;
+    let phase = 'local_validation';
+    let signal;
+    const emit = (event, fields = {}) => {
+      const at = Date.now();
+      const value = {...observation, event, phase, ...fields, at_ms: at, checked_at: new Date(at).toISOString()};
+      recordRecallRequest(value);
+      // No key, PEM, API key, body, query string, or raw error message.
+      console.error(JSON.stringify(value));
+      return value;
+    };
+    const finish = (event, fields = {}) => {
+      if (terminal) return;
+      terminal = true;
+      return emit(event, {duration_ms: performance.now() - started, ...fields});
+    };
+    const errorCode = (error, fallback = 'REQUEST_FAILED') => signal?.reason?.name === 'TimeoutError' ? 'ETIMEDOUT'
+      : typeof error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code) ? error.code : fallback;
+    let url;
+    try {
+      url = new URL(input);
+      if (url.origin !== config.origin || url.protocol !== 'https:' || url.username || url.password || url.hash) throw fail('request is outside the configured HTTPS origin');
+      observation.path = url.pathname;
+    } catch (error) {
+      finish('request_blocked_local', {outcome: 'blocked_local', reason: 'INVALID_REQUEST_ORIGIN', error_code: errorCode(error, 'INVALID_REQUEST')});
+      throw error;
+    }
     let current;
     try { current = refresh(); }
-    catch (error) { emitTask('request_blocked_local', {request_id:requestID, path:url.pathname, reason:'CREDENTIALS_UNAVAILABLE'}); throw error; }
-    const message = new Request(url, init);
+    catch (error) {
+      emitTask('request_blocked_local', {request_id:requestID, path:url.pathname, reason:'CREDENTIALS_UNAVAILABLE'});
+      finish('request_blocked_local', {outcome: 'blocked_local', reason: 'CREDENTIALS_UNAVAILABLE', error_code: errorCode(error, 'CREDENTIALS_UNAVAILABLE')});
+      throw error;
+    }
+    Object.assign(observation, {client_spiffe_id: config.clientSpiffeId, client_serial: current.serial, generation: current.generation});
+    let message;
+    try { message = new Request(url, init); }
+    catch (error) {
+      finish('request_blocked_local', {outcome: 'blocked_local', reason: 'INVALID_REQUEST', error_code: errorCode(error, 'INVALID_REQUEST')});
+      throw error;
+    }
+    observation.method = message.method;
     const headers = Object.fromEntries(message.headers);
     // Preserve fetch's body representation while avoiding implicit compression or
     // forwarding host/connection headers supplied by business callers.
@@ -140,38 +180,58 @@ export function createSpiffeTransport(configuration = loadConfig()) {
     headers['accept-encoding'] = 'identity';
     headers['x-argus-request-id'] = requestID;
     Object.assign(headers, taskHeaders(task));
-    const signal = AbortSignal.any([message.signal, AbortSignal.timeout(config.requestTimeoutMs)]);
+    signal = AbortSignal.any([message.signal, AbortSignal.timeout(config.requestTimeoutMs)]);
     return new Promise((resolve, reject) => {
       emitTask('request_attempted', {request_id:requestID, method:message.method, path:url.pathname});
-      const request = httpsRequest(url, { method: message.method, headers, agent: current.agent, signal }, response => {
+      phase = 'https_request';
+      emit('request_attempted');
+      let request;
+      try { request = httpsRequest(url, { method: message.method, headers, agent: current.agent, signal }, response => {
         const status = response.statusCode;
-        if (status >= 300 && status < 400) {
+        phase = 'response_headers';
+        Object.assign(observation, {http_status: status, headers_ms: performance.now() - started});
+        const rejectResponse = (error, fallback) => {
+          finish('request_failed', {outcome: 'failed', error_code: errorCode(error, fallback)});
           response.destroy();
-          reject(fail('HTTP redirects are forbidden'));
+          reject(error);
+        };
+        if (status >= 300 && status < 400) {
+          rejectResponse(fail('HTTP redirects are forbidden'), 'HTTP_REDIRECT_FORBIDDEN');
           return;
         }
         const peer = response.socket.getPeerCertificate();
         let server;
         try { server = validateSVID(peer.raw, config.serverSpiffeId); }
-        catch (error) { response.destroy(); reject(error); return; }
+        catch (error) { rejectResponse(error, 'SERVER_IDENTITY_REJECTED'); return; }
+        Object.assign(observation, {server_spiffe_id: config.serverSpiffeId, server_serial: server.serial});
         const responseHeaders = new Headers();
         for (let index = 0; index < response.rawHeaders.length; index += 2) responseHeaders.append(response.rawHeaders[index], response.rawHeaders[index + 1]);
         if (responseHeaders.has('content-encoding') && responseHeaders.get('content-encoding') !== 'identity') {
-          response.destroy(); reject(fail('unexpected compressed response')); return;
+          rejectResponse(fail('unexpected compressed response'), 'UNEXPECTED_CONTENT_ENCODING'); return;
         }
+        const receipt = emit('response_headers');
+        phase = 'response_body';
+        response.once('end', () => {
+          if (response.complete) finish('response_completed', {outcome: 'completed'});
+          else finish('request_failed', {outcome: 'failed', error_code: 'ERR_STREAM_PREMATURE_CLOSE'});
+        });
+        response.once('error', error => {
+          if (error.code === 'ECONNRESET') failures.set(error, {request_id: requestID, network_error: error.code, phase: 'response_body'});
+          finish('request_failed', {outcome: 'failed', error_code: errorCode(error, 'RESPONSE_BODY_FAILED')});
+        });
+        response.once('close', () => {
+          if (!response.complete) finish('request_failed', {outcome: 'failed', error_code: errorCode(null, 'ERR_STREAM_PREMATURE_CLOSE')});
+        });
         const empty = message.method === 'HEAD' || [204, 205, 304].includes(status);
         const result = new Response(empty ? null : Readable.toWeb(response), { status, statusText: response.statusMessage, headers: responseHeaders });
         if (empty) response.resume();
-        const receipt = { ...task, component: 'argus-openclaw-spiffe', request_id: requestID, method: message.method, path: url.pathname,
-          client_spiffe_id: config.clientSpiffeId, server_spiffe_id: config.serverSpiffeId,
-          client_serial: current.serial, server_serial: server.serial, generation: current.generation,
-          http_status: status, checked_at: new Date().toISOString() };
-        recordRecallRequest(receipt);
         receipts.set(result, receipt);
-        // No key, PEM, API key, request body, query string or response body.
-        console.error(JSON.stringify(receipt));
         resolve(result);
-      });
+      }); } catch (error) {
+        finish('request_failed', {outcome: 'failed', error_code: errorCode(error)});
+        reject(error);
+        return;
+      }
       request.on('socket', socket => {
         if (!current.sockets.has(socket)) {
           current.sockets.add(socket);
@@ -189,6 +249,7 @@ export function createSpiffeTransport(configuration = loadConfig()) {
       });
       request.on('error', error => {
         emitTask('request_failed', {request_id:requestID, error_code:error.code ?? 'REQUEST_FAILED'});
+        finish('request_failed', {outcome: 'failed', error_code: errorCode(error)});
         if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') failures.set(error, {
           request_id: requestID, network_error: error.code, phase: 'https_request',
         });

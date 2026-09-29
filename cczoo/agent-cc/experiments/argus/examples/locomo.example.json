@@ -16,5 +16,11 @@
       "client_spiffe_id": "spiffe://argus.local/agent/locomo-a",
       "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem"
     }
-  ]
+  ],
+  "concurrent_clients": true,
+  "condition": "no_fault",
+  "schedule": {
+    "release_interval_s": 60,
+    "deadline_s": 180
+  }
 }

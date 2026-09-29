@@ -44,4 +44,4 @@ python3 experiments/argus/plot.py --output /secure/evidence/cost-reuse
 
 `memory_nonempty_goodput_rps` 只计测量窗口内成功且返回叶级记忆的查询。HTTP 成功但空召回作为该负载失败单列，不能用状态 API 的高吞吐替代记忆业务。它仍不表示回答正确：完整模型任务由随机事实链路或 LoCoMo 另测。
 
-`examples/suite.performance.example.json` 默认仍为 `new/status_api`，便于兼容已有命令。先单客户端测成本，再根据实际部署数量做 1/2/4/8；没有足够独立实例时记录容量停止。远程性能当前为 NOT_RUN。
+`examples/suite.performance.example.json` 当前默认是 `reuse/memory_query` 和 1/3 客户端。先单客户端测成本，三实例够用后再扩规模；状态 API 可另行单列探活开销。控制面 Quote/Trustee/命令至就绪计时见 [E3 配方](examples/E3-LIFECYCLE-RECIPE.md#small-control-plane-cost-measurements)，不得将 Trustee RTT 当成纯证明 CPU 耗时。远程性能当前为 NOT_RUN。

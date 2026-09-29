@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Read-only E3 snapshots, independent Docker create stream, and narrow checks.
+"""E3 snapshots, independent Docker create stream, and narrow measurements.
 
-This tool never renews identities, repeats a launch, deletes Agent state or
-creates a container. Remote freshness/Quote measurements remain separate.
+Snapshot and comparison commands are read-only. The explicit time-ready-command
+wrapper executes the supplied operator command once without recovery/replay.
+Remote freshness/Quote measurements remain separate.
 """
 import argparse
 import hashlib
@@ -22,7 +23,7 @@ import time
 from urllib.parse import urlencode, urlsplit
 from urllib.request import build_opener, ProxyHandler, HTTPRedirectHandler, Request
 
-from common import append, atomic, digest, read, require
+from common import append, atomic, digest, read, require, sha
 
 
 def now_ms():
@@ -85,8 +86,10 @@ class DockerConnection(http.client.HTTPConnection):
         self.sock.connect(self.path)
 
 
-def quote_snapshot(socket_path):
+def quote_snapshot(socket_path, run_id=None):
     """Read actual hardware-generation counters from the existing Provider UDS."""
+    if run_id is not None:
+        require(isinstance(run_id, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,159}', run_id), 'invalid run ID')
     started = now_ms()
     conn = DockerConnection(str(socket_path))
     try:
@@ -102,13 +105,16 @@ def quote_snapshot(socket_path):
             require(all(type(counts.get(k)) is int and counts[k] >= 0 for k in ("attempted", "generated", "failed")), "invalid Quote counters")
             require(counts["generated"] + counts["failed"] <= counts["attempted"], "inconsistent Quote counters")
         value.update(socket_path=str(socket_path), observation_started_at_ms=started, observation_completed_at_ms=now_ms())
+        if run_id is not None:
+            value['run_id'] = run_id
         return value
     finally:
         conn.close()
 
 
 def quote_delta(before, after):
-    result = {"result": "UNKNOWN", "scope": "actual Provider generation; includes discarded Quotes", "node": None, "workload": None}
+    result = {"result": "UNKNOWN", "scope": "actual Provider generation; includes discarded Quotes", "node": None, "workload": None,
+              "generation_timing": {}}
     if (before.get("schema") != "argus.quote-counters.v1" or after.get("schema") != before.get("schema")
             or any(not before.get(k) or before[k] != after.get(k) for k in ("provider_instance_id", "agent_id", "socket_path"))
             or before.get("observation_completed_at_ms", float("inf")) > after.get("observation_started_at_ms", 0)):
@@ -123,6 +129,14 @@ def quote_delta(before, after):
         if min(delta.values()) < 0:
             return result | {"reason": "counter reset"}
         result[kind] = delta
+        timing = {'result': 'UNKNOWN', 'scope': 'monotonic generate_quote calls, including failed and discarded attempts'}
+        durations = [x.get('generation_elapsed_ns') for x in (old, new)]
+        if all(type(value) is int and value >= 0 for value in durations) and durations[1] >= durations[0]:
+            elapsed = durations[1] - durations[0]
+            completed = delta['generated'] + delta['failed']
+            timing.update(result='OBSERVED', completed_calls=completed, elapsed_ns=elapsed,
+                          mean_ms=elapsed / completed / 1_000_000 if completed else None)
+        result['generation_timing'][kind] = timing
     return result | {"result": "OBSERVED", "provider_instance_id": before["provider_instance_id"], "agent_id": before["agent_id"]}
 
 
@@ -159,6 +173,60 @@ def storage_ready(config_file, url, api_key_file, expected_content_sha256, run_i
     except (OSError, ValueError, KeyError) as error:
         result["error_class"] = type(error).__name__
     result["completed_at_ms"] = now_ms()
+    return result
+
+
+def time_ready_command(config_file, argv_file, run_id, output, timeout_seconds=120, poll_interval=.25):
+    """Execute one explicit operator command, then observe deployment readiness.
+
+    This is command-to-observed-readiness wall cost, not Trustee processing time.
+    An existing output is never resumed/replayed; unknown command results remain
+    in the persisted record for the operator to reconcile.
+    """
+    require(isinstance(run_id, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,159}', run_id), 'invalid run ID')
+    require(0 < timeout_seconds <= 3600 and .05 <= poll_interval <= 5, 'invalid command/readiness timing limits')
+    argv = read(argv_file)
+    require(isinstance(argv, list) and argv and all(isinstance(s, str) and s for s in argv), 'argv file must contain a nonempty string array')
+    path = Path(output)
+    require(not path.exists(), 'timing output already exists; inspect the previous command outcome, do not replay it')
+    workload, config = runtime(config_file)
+    deployment = workload.Deployment(config)
+    before = workload.status(config)
+    result = {'schema': 'argus.command-readiness.v1', 'run_id': run_id, 'target_id': deployment.identity['target_id'],
+              'agent_id': deployment.identity['agent_id'], 'config_sha256': digest(config), 'argv_file_sha256': sha(argv_file),
+              'result': 'UNKNOWN', 'command_state': 'intent', 'automatic_retries': 0, 'initially_ready': before.get('ready') is True,
+              'command_elapsed_ms': None, 'ready_observed_elapsed_ms': None,
+              'scope': 'explicit command through first subsequent observed readiness; includes command, polling and local checks, not pure attestation cost'}
+    atomic(path, result)
+    started = time.perf_counter()
+    result.update(command_started_at_ms=now_ms(), command_state='submitted_outcome_unknown')
+    atomic(path, result)
+    try:
+        completed = subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   timeout=timeout_seconds, check=False)
+        result.update(command_state='completed', command_exit_code=completed.returncode,
+                      command_completed_at_ms=now_ms(), command_elapsed_ms=(time.perf_counter()-started)*1000)
+        atomic(path, result)
+        if completed.returncode:
+            result.update(result='FAIL', reason='explicit command failed; no retry executed')
+            return result
+        was_unready = not result['initially_ready']
+        while time.perf_counter()-started < timeout_seconds:
+            status = workload.status(config)
+            was_unready |= status.get('ready') is not True
+            # Do not attribute preexisting readiness to the command just measured.
+            new_helper = status.get('helper_invocation_id') and status.get('helper_invocation_id') != before.get('helper_invocation_id')
+            if status.get('ready') is True and (was_unready or new_helper):
+                result.update(result='OBSERVED', ready_observed_at_ms=now_ms(),
+                              ready_observed_elapsed_ms=(time.perf_counter()-started)*1000,
+                              helper_invocation_id=status.get('helper_invocation_id'), target_serial=status.get('target_serial'))
+                return result
+            time.sleep(min(poll_interval, max(0, timeout_seconds-(time.perf_counter()-started))))
+        result['reason'] = 'no new valid readiness observed within the measurement budget'
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        result.update(error_class=type(error).__name__, reason='command outcome or readiness unknown; no retry executed')
+    finally:
+        atomic(path, result)
     return result
 
 
@@ -287,7 +355,13 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     c = sub.add_parser("quote-snapshot")
     c.add_argument("--provider-socket", required=True)
+    c.add_argument("--run-id", help="required when importing this snapshot into a different host's E3 trial")
     c.add_argument("--output", required=True)
+    c = sub.add_parser('time-ready-command', help='execute one explicit command and measure time to observed readiness')
+    for name in ('config', 'argv-file', 'run-id', 'output'):
+        c.add_argument('--'+name, required=True)
+    c.add_argument('--timeout-seconds', type=float, default=120)
+    c.add_argument('--poll-interval', type=float, default=.25)
     c = sub.add_parser("storage-ready")
     for name in ("config", "url", "api-key-file", "expected-content-sha256", "run-id", "output"):
         c.add_argument("--" + name, required=True)
@@ -307,8 +381,12 @@ def main():
             c.add_argument("--resume-result", required=True)
             c.add_argument("--creates")
     args = parser.parse_args()
+    if args.command == 'time-ready-command':
+        result = time_ready_command(args.config, args.argv_file, args.run_id, args.output, args.timeout_seconds, args.poll_interval)
+        print(json.dumps(result))
+        raise SystemExit(0 if result['result'] == 'OBSERVED' else 1 if result['result'] == 'FAIL' else 2)
     if args.command == "quote-snapshot":
-        atomic(args.output, quote_snapshot(args.provider_socket))
+        atomic(args.output, quote_snapshot(args.provider_socket, args.run_id))
         return
     if args.command == "storage-ready":
         atomic(args.output, storage_ready(args.config, args.url, args.api_key_file, args.expected_content_sha256, args.run_id))

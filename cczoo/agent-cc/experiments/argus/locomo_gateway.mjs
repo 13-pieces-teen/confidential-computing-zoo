@@ -12,6 +12,7 @@ const spec = JSON.parse(fs.readFileSync(0, 'utf8'));
 let transport;
 let identityOf;
 let receipts = [];
+let qaStarted;
 try {
   const get = key => JSON.parse(execFileSync('openclaw', ['config', 'get', key, '--json'], {encoding:'utf8', stdio:['ignore','pipe','pipe']}));
   const installed = Object.values(get('plugins.installs')).map(v => v.installPath).filter(directory => {
@@ -48,7 +49,12 @@ try {
       ...(body === undefined ? {} : {body:JSON.stringify(body)}), signal:AbortSignal.timeout(30000)});
     const value = await response.json();
     receipts.push({...identityOf(response), http_status:response.status});
-    if (!response.ok || value.status === 'error') throw new Error('APPLICATION_REQUEST_FAILED');
+    if (!response.ok || value.status === 'error') {
+      const error = new Error('APPLICATION_REQUEST_FAILED');
+      error.httpStatus = response.status;
+      error.outcome = [401,403].includes(response.status) ? 'rejected' : 'failed';
+      throw error;
+    }
     return value;
   }
   if (spec.action === 'preflight') {
@@ -64,12 +70,16 @@ try {
     console.log(JSON.stringify({result:'OBSERVED', scope, receipts, value:value.result ?? value}));
   } else if (spec.action === 'qa') {
     const started = performance.now();
+    qaStarted = started;
     const out = execFileSync('openclaw', ['agent','--agent',spec.agent_id,'--session-key',spec.session_key,
       '--message',spec.question,'--timeout',String(spec.timeout_seconds ?? 180),'--json'],
       {encoding:'utf8', timeout:((spec.timeout_seconds ?? 180)+20)*1000, maxBuffer:16*1024*1024, stdio:['ignore','pipe','pipe']});
     const response = JSON.parse(out);
-    if (response.status !== 'ok' || !response.runId || response.error || !Array.isArray(response.result?.payloads)) throw new Error('GATEWAY_RESULT_INVALID');
+    if (response.status !== 'ok' || !response.runId || response.error || !Array.isArray(response.result?.payloads)) {
+      const error = new Error('GATEWAY_RESULT_INVALID'); error.outcome = 'failed'; throw error;
+    }
     const answer = response.result.payloads.filter(v => typeof v.text === 'string').map(v => v.text).join('\n').trim();
+    if (!answer) { const error = new Error('GATEWAY_EMPTY_ANSWER'); error.outcome = 'failed'; throw error; }
     console.log(JSON.stringify({result:'OBSERVED', scope, answer, run_id:response.runId,
       session_key:spec.session_key, duration_ms:performance.now()-started,
       model:response.result.meta?.agentMeta?.model ?? null,
@@ -77,7 +87,12 @@ try {
       usage:response.result.meta?.agentMeta?.usage ?? null}));
   } else throw new Error('INVALID_ACTION');
 } catch (error) {
-  const known = ['PINNED_PLUGIN_AMBIGUOUS','LOCOMO_SCOPE_OR_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','INVALID_ROUTE','INVALID_ACTION','GATEWAY_RESULT_INVALID','APPLICATION_REQUEST_FAILED'];
-  console.log(JSON.stringify({result:'UNKNOWN', code:known.includes(error.message) ? error.message : 'GATEWAY_IO_FAILED', receipts}));
+  const known = ['PINNED_PLUGIN_AMBIGUOUS','LOCOMO_SCOPE_OR_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','INVALID_ROUTE','INVALID_ACTION','GATEWAY_RESULT_INVALID','GATEWAY_EMPTY_ANSWER','APPLICATION_REQUEST_FAILED'];
+  const timeout = error.code === 'ETIMEDOUT' || error.name === 'TimeoutError' || error.name === 'AbortError';
+  // Never forward process stderr or an arbitrary exception message: those can
+  // contain the question, credentials or application response text.
+  console.log(JSON.stringify({result:'UNKNOWN', code:timeout ? 'GATEWAY_TIMEOUT' : known.includes(error.message) ? error.message : 'GATEWAY_IO_FAILED',
+    outcome:timeout ? 'timeout' : error.outcome ?? 'unknown', http_status:error.httpStatus ?? null,
+    duration_ms:qaStarted === undefined ? null : performance.now()-qaStarted, receipts}));
   process.exitCode = 1;
 } finally { transport?.close(); }

@@ -11,6 +11,7 @@ import random
 import statistics
 
 from common import atomic, digest, read, require, sha
+from locomo_analysis import METRICS as LOCOMO_METRICS
 
 STRATA = ("case", "scale", "connection_mode", "workload_kind", "workload_spec", "condition", "fault_kind", "fault_scope")
 CONTINUOUS_METRICS = ("continuous_task_success_rate", "continuous_joint_success_rate",
@@ -19,7 +20,7 @@ CONTINUOUS_METRICS = ("continuous_task_success_rate", "continuous_joint_success_
 METRICS = ("pass_value", "api_goodput_rps", "memory_nonempty_goodput_rps", "p95_ms",
            "tcp_connect_p50_ms", "tls_handshake_p50_ms", "connect_p50_ms", "api_p95_ms", "connection_reuse_fraction",
            "process_cpu_seconds", "sum_process_peak_rss_bytes", "locomo_conversation_macro_f1",
-           "locomo_answered_f1", "locomo_coverage", "locomo_abstention") + CONTINUOUS_METRICS
+           "locomo_answered_f1", "locomo_coverage", "locomo_abstention") + CONTINUOUS_METRICS + LOCOMO_METRICS
 
 
 def stratum(row):
@@ -113,7 +114,7 @@ def summarize_requests(rows, measurement_seconds):
 
 
 def locomo_evidence(output, directory, run):
-    """Bind native QA scores to the runner receipt, independently of step PASS."""
+    """Bind native application observations and auxiliary QA scores to their receipt."""
     path = directory / "locomo/result.json"
     native = read(path)
     require(native.get("schema") == "argus.locomo-result.v1" and native.get("result") in ("COMPLETE", "INCOMPLETE"), "unsupported LoCoMo result")
@@ -152,10 +153,15 @@ def locomo_evidence(output, directory, run):
     for metric in ("locomo_conversation_macro_f1", "locomo_answered_f1", "locomo_abstention"):
         value = result[metric]
         require(value is None or (type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1), "invalid QA score")
-    return result, {"run_id": run["run_id"], "operation_id": native["operation_id"], "result": native["result"],
+    from locomo_analysis import application
+    application_metrics, application_detail = application(native, run)
+    result.update(application_metrics)
+    return result, dict({"run_id": run["run_id"], "operation_id": native["operation_id"], "result": native["result"],
                     "overall": overall, "by_category": native["by_category"], "by_conversation": native["by_conversation"],
                     "conversation_bootstrap_95": native.get("conversation_bootstrap_95"),
-                    "source_sha256": sha(path), "delivery_compliance": "NOT_ASSESSED_BY_QA"}
+                    "planned_tasks": tasks, "group": run["group"], "block_id": run["block_id"],
+                    "condition": result.get("condition", run.get("condition", "unspecified")),
+                    "source_sha256": sha(path), "delivery_compliance": "NOT_ASSESSED_BY_QA"}, **application_detail)
 
 
 def summarize_resources(rows, run_id):
@@ -227,16 +233,22 @@ def analyze(output):
                 if row["result"] != "FAIL":
                     row.update(result="UNKNOWN", pass_value=None)
         qa = directory / "locomo/result.json"
+        from locomo_analysis import unobserved as unobserved_locomo
         if qa.is_file():
             try:
                 metrics, detail = locomo_evidence(output, directory, run)
                 row.update(metrics)
                 locomo.append(detail)
             except (ValueError, OSError, KeyError, TypeError) as error:
-                row.update(locomo_evidence="UNKNOWN", locomo_error=type(error).__name__, pass_value=None,
-                           connection_mode="not_applicable", workload_kind="locomo_derived",
-                           evidence_scope="application_workload_completion_not_security")
+                metrics, detail = unobserved_locomo(run, invalid=True)
+                row.update(metrics, locomo_error=type(error).__name__)
+                locomo.append(dict(detail, group=run["group"], block_id=run["block_id"], condition=run.get("condition", "unspecified")))
                 if row["result"] != "FAIL": row["result"] = "UNKNOWN"
+        elif (str(run.get("case", "")).split("-")[0] == "locomo" or run.get("workload_kind") == "locomo_derived"):
+            metrics, detail = unobserved_locomo(run)
+            row.update(metrics)
+            locomo.append(dict(detail, group=run["group"], block_id=run["block_id"], condition=run.get("condition", "unspecified")))
+            if row["result"] not in ("FAIL", "NOT_RUN"): row["result"] = "UNKNOWN"
         if run.get("case") == "continuous":
             row.update(pass_value=None, workload_kind="continuous_agent_tools",
                        evidence_scope="task_and_application_read_axes_separate")
@@ -269,13 +281,17 @@ def analyze(output):
         members = [r for r in rows if (*stratum(r), r["group"]) == key]
         summary = dict(zip((*STRATA, "group"), key))
         summary["verdicts"] = {v: sum(r["result"] == v for r in members) for v in ("PASS", "FAIL", "UNKNOWN", "NOT_RUN")}
-        summary["locomo_completion"] = {v: sum(r.get("locomo_evidence") == v for r in members) for v in ("COMPLETE", "INCOMPLETE", "UNKNOWN")}
+        summary["locomo_completion"] = {v: sum(r.get("locomo_evidence") == v for r in members) for v in ("COMPLETE", "INCOMPLETE", "UNKNOWN", "NOT_RUN")}
         summary["comparison_excluded_runs"] = sum(not r.get("comparison_eligible", True) for r in members)
         summary["verdict_scope"] = "application_workload_completion_not_security" if summary["workload_kind"] == "locomo_derived" else "scenario_evidence"
         if summary["workload_kind"] == "continuous_agent_tools":
             summary["verdict_scope"] = "execution_only; use independent task and application-read axes"
+        if summary["workload_kind"] == "locomo_derived":
+            summary["locomo_observed_models"] = members[0].get("locomo_observed_models", [["UNKNOWN", "UNKNOWN"]])
+            summary["locomo_execution_protocol"] = members[0].get("locomo_execution_protocol")
         for metric in METRICS:
-            summary[metric] = mean_ci([r[metric] for r in members if r.get(metric) is not None and r.get("comparison_eligible", True)])
+            summary[metric] = mean_ci([r[metric] for r in members if r.get(metric) is not None
+                                      and (r.get("comparison_eligible", True) or summary["workload_kind"] == "locomo_derived")])
         summaries.append(summary)
     for key in sorted({stratum(r) for r in rows}):
         members = [r for r in rows if stratum(r) == key]
@@ -288,7 +304,15 @@ def analyze(output):
               "unknown_excluded_from_means_but_reported": True}
     result["stratification"] = list(STRATA)
     result["locomo_results"] = locomo
-    result["locomo_scope"] = "QA quality/completion only; source and step hashes bound to runner operation; no security inference"
+    result["locomo_scope"] = "Application completion, latency and availability; QA F1 is auxiliary. Source and step hashes bind the runner operation; no reception-security inference."
+    from locomo_analysis import export as export_locomo
+    export_locomo(output, locomo)
+    result["locomo_totals"] = {
+        "all_planned_tasks_known": sum(r.get("planned_tasks") or 0 for r in locomo),
+        "runs_with_unknown_planned_count": sum(r.get("planned_tasks") is None for r in locomo),
+        "tasks_without_bound_run_evidence": sum(r.get("planned_tasks") or 0 for r in locomo if r.get("unobserved_run")),
+        "tasks_without_application_measurements": sum(r.get("planned_tasks") or 0 for r in locomo if not r.get("application")),
+        "observed_valid_completions": sum(r["application"]["valid_completed"] for r in locomo if r.get("application"))}
     from continuous_analysis import export as export_continuous, fault_contrasts, collateral_losses
     export_continuous(output, continuous)
     result["continuous_results"] = continuous
@@ -297,6 +321,10 @@ def analyze(output):
         "known_task_passes": sum(r["axes"]["task"]["PASS"] for r in continuous),
         "known_joint_passes": sum(r["joint_receipt_task"]["PASS/PASS"] for r in continuous)}
     result["paired_fault_minus_control"] = fault_contrasts(rows, CONTINUOUS_METRICS, mean_ci)
+    result["paired_locomo_fault_minus_control"] = fault_contrasts(
+        [r for r in rows if r.get("workload_kind") == "locomo_derived"], LOCOMO_METRICS, mean_ci)
+    for contrast in result["paired_locomo_fault_minus_control"]:
+        contrast["unit"] = "milliseconds" if contrast["metric"].endswith("_ms") else "invocations" if contrast["metric"] == "locomo_max_in_flight" else "fraction"
     clients = [dict(client, case="continuous", scale=run["scale"], group=run["group"],
                     condition=run["condition"], block_id=run["block_id"],
                     fault_kind=run.get("fault_kind", "unspecified"), fault_scope=run.get("fault_scope", "unspecified"),
@@ -318,7 +346,10 @@ def analyze(output):
               "Confidence intervals resample independent runs or complete paired seed blocks. Single runs have no interval.",
               "Tail latencies are descriptive; statistics.csv includes the successful latency sample count.",
               "For each scenario, inspect admission, business and receiver evidence separately; an aggregate pass cannot extend their trust boundary."]
-    lines += ["", "LoCoMo step PASS means workload completion only. F1, coverage and category-5 abstention are independent quantities; they do not measure delivery security.",
+    lines += ["", "LoCoMo step PASS means the measurement window completed (legacy COMPLETE results also qualify); application completion is counted separately, including failures. None of these establishes reception security.",
+              "Valid completion requires an observed answer, observed memory injection and completion within the deadline; it is not answer correctness. Every planned question remains in the denominator.",
+              "Task E2E measures Gateway adapter invocation wall time, including CLI/adapter overhead; request latency ends at the complete response body. Both latency tables count only their explicitly eligible observations.",
+              "Actual schedule, timeout, concurrency, control times and observed provider/model set define separate strata. Missing models or failed controls exclude paired estimates, while their task outcomes remain reported.",
               "LoCoMo conversation-macro F1 includes zero for uncompleted tasks; answered-only F1 and coverage are also retained. QA items are clustered by conversation.",
               "Memory nonempty Goodput counts successful replies containing private leaf memories. HTTP success alone is reported separately.",
               "New/reused connections and status/memory/custom workloads never share a mean or paired contrast. Legacy unspecified traces are separate."]
@@ -347,7 +378,37 @@ def analyze(output):
                       replacement.get("unestablished_admission_candidate_unique_facts")]
             lines.append("| " + " | ".join("UNKNOWN" if v is None else str(v) for v in values) + " |")
     if qa_rows:
-        lines += ["", "| LoCoMo run | Evidence | Coverage | Conversation F1 | Answered F1 | Abstention |",
+        lines += ["", "LoCoMo application measurements (missing evidence is UNKNOWN/NOT_RUN, not zero latency or a pass).",
+                  "| Run | Evidence | Planned | Attempted | Valid / planned | Injection / planned | Deadline misses | E2E mean / p95 ms (n) | HTTP mean / p95 ms (n) | Request coverage | Observed max concurrency |",
+                  "|---|---|---:|---:|---:|---:|---:|---|---|---|---:|"]
+        def display(value):
+            return "UNKNOWN" if value is None else str(round(value, 3) if isinstance(value, float) else value)
+        for r in qa_rows:
+            values = [r["run_id"], r.get("locomo_application_evidence"), r.get("locomo_planned", r.get("locomo_tasks")),
+                      r.get("locomo_attempted"), r.get("locomo_valid_completion_rate"), r.get("locomo_injection_rate"),
+                      r.get("locomo_deadline_misses")]
+            values += [" / ".join(display(r.get("locomo_" + name + suffix)) for suffix in ("_mean_ms", "_p95_ms"))
+                       + " (" + display(r.get("locomo_" + name + "_latency_samples")) + ")" for name in ("task", "request")]
+            values += [r.get("locomo_request_coverage"), r.get("locomo_max_in_flight")]
+            lines.append("| " + " | ".join(display(v) for v in values) + " |")
+        lines += ["", "| Run | Completed | Rejected | Failed | Timeout | Unknown | Deadline before start | Not run | Recovery→new successful access ms | Recovery→new valid task ms |",
+                  "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for r in qa_rows:
+            values = [r["run_id"], *(r.get("locomo_outcome_" + key) for key in
+                      ("completed", "rejected", "failed", "timeout", "unknown", "deadline_missed", "not_run")),
+                      r.get("locomo_recovery_access_ms"), r.get("locomo_recovery_task_ms")]
+            lines.append("| " + " | ".join(display(v) for v in values) + " |")
+        lines += ["", "| Run | Observed provider / model | Protocol stratum | Paired comparison eligible | Exclusion reason |",
+                  "|---|---|---|---|---|"]
+        for r in qa_rows:
+            values = [r["run_id"], "; ".join(" / ".join(model) for model in r.get("locomo_observed_models", [["UNKNOWN", "UNKNOWN"]])),
+                      r.get("workload_spec"), r.get("comparison_eligible"), "; ".join(r.get("comparison_exclusion_reasons", []))]
+            lines.append("| " + " | ".join(display(v).replace("|", "\\|") for v in values) + " |")
+        lines += ["", "Recovery measures application availability after the recovery command; instance admission requires its own evidence. Task/control timelines are exported as CSV and regenerable figures.",
+                  "Concurrency is the maximum over observed invocation intervals, not a claim about unobserved or unfinished remote work. Request audit coverage is reported beside the observed successful-request timings.",
+                  "Same-arm fault-minus-no-fault contrasts and unpaired counts are in analysis.json; failed controls and unknown models retain observations but cannot form a paired estimate.",
+                  "Auxiliary QA quality checks:",
+                  "| LoCoMo run | Evidence | Coverage | Conversation F1 | Answered F1 | Abstention |",
                   "|---|---|---:|---:|---:|---:|"]
         for r in qa_rows:
             lines.append("| " + " | ".join(str(r.get(k, "UNKNOWN")) for k in

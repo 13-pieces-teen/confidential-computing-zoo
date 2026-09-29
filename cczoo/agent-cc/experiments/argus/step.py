@@ -64,12 +64,14 @@ def execute(args):
             verdict = evidence["result"]
         if args.tool == 'locomo':
             verdict = ('PASS' if evidence.get('run_id') == run_id and evidence.get('operation_id') == operation_id
-                       and evidence.get('result') == 'COMPLETE' else 'UNKNOWN')
+                       and evidence.get('result') in ('COMPLETE', 'INCOMPLETE')
+                       and (measurement_complete or ('measurement_complete' not in evidence
+                                                    and evidence.get('result') == 'COMPLETE')) else 'UNKNOWN')
         if code is None or (code != 0 and verdict == "PASS"):
             verdict = "UNKNOWN"
     envelope = {"schema": "argus.step.v1", "run_id": run_id, "operation_id": operation_id,
                 "attempt": int(os.environ.get("ARGUS_ATTEMPT", "1")),
-                "measurement_complete": measurement_complete if args.tool in ("load", "continuous") else None,
+                "measurement_complete": measurement_complete if args.tool in ("load", "continuous", "locomo") else None,
                 "result": verdict, "tool": args.tool, "exit_code": code,
                 "native_result": native_result,
                 "evidence_scope": ('application_workload_completion_not_security' if args.tool == 'locomo'

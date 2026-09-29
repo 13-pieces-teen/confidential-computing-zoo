@@ -1,0 +1,24 @@
+{
+  "experiment_id": "locomo-paired01",
+  "groups": ["full_argus", "native_spire_guarded"],
+  "cases": ["locomo"],
+  "conditions": ["fault", "no_fault"],
+  "seeds": [0],
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "locomo_timeout_s": 21600,
+  "variant_outputs": {
+    "full_argus": "/root/argus-arms/locomo-paired01/full_argus",
+    "native_spire_guarded": "/root/argus-arms/locomo-paired01/native_spire_guarded"
+  },
+  "locomo_configs": {
+    "full_argus": {"0": {
+      "fault": "/secure/locomo/full-0-fault.json",
+      "no_fault": "/secure/locomo/full-0-no-fault.json"
+    }},
+    "native_spire_guarded": {"0": {
+      "fault": "/secure/locomo/native-0-fault.json",
+      "no_fault": "/secure/locomo/native-0-no-fault.json"
+    }}
+  }
+}
