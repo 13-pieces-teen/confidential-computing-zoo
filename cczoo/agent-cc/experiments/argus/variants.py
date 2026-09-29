@@ -26,7 +26,7 @@ VARIANTS = ("full_argus", "native_spire_guarded", "no_watchdog", "no_close", "st
 SHORT = dict(zip(VARIANTS, ("full", "native", "nowd", "noclose", "static")))
 ARTIFACTS = ["bin/" + x for x in (
     "argus-tdx-nodeattestor-agent", "argus-tdx-nodeattestor-server", "argus-tdx-workloadattestor",
-    "argus-workload", "spiffe-helper", "argus-agent-config", "spiffe-authz", "spiffe-mtls-probe",
+    "argus-workload", "argus-verify-admission", "argus-replay-policy", "spiffe-helper", "argus-agent-config", "spiffe-authz", "spiffe-mtls-probe",
     "spiffe-client-credentials", "argus-spire-evidence-provider")]
 ARTIFACTS += ["spire-1.15.3/bin/spire-agent", "spire-1.15.3/bin/spire-server"]
 

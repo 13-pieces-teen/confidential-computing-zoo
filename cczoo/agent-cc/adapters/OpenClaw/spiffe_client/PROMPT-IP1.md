@@ -1,23 +1,43 @@
-# IP1 执行 Prompt
+# IP1 执行 Prompt：持续任务客户端与结果汇总
 
-你运行在公司 IP1，请实际实施 OpenClaw 客户端阶段，并管理 IP1 新建 TDVM 内的操作。
+请在 IP1 及其客户端 TDVM 完成本次 Argus 验证。与 IP2 使用同一交付提交，依据飞书论文 revision 1329，先并行推进 E1 历史判定可达性审查和单客户端持续任务，再做共享故障恢复、三客户端及 Full/native 配对。真实测试由本次远程执行产生，不照抄历史 PASS。
 
-目标：在 IP1 创建独立 TDVM，在 Guest 内部署独立 SPIRE Agent/Broker、OpenClaw 容器和 spiffe-client-credentials；由真实 OpenClaw Gateway 调用 IP2 OpenViking 并收到结果，双方通过 mTLS 认证。OpenClaw 暂用 x509pop 普通节点准入及 unix/Docker workload selectors，不做 TDX Quote/Trustee 远程证明。IP2 的 OutOfDate PoC 条件继续保留。
+先读取适用 AGENTS.md，检查工作区、fetch 后使用操作者指定的完整 SHA；保留既有改动和部署目录。记录 git SHA、patch 摘要、source-manifest、实际构建和模型配置。阅读 cczoo/agent-cc/experiments/argus/PAPER-ALIGNMENT-1329.md、CONTINUOUS.md、CONTINUOUS-TASK.md、FACT-RECEIPTS.md、ADMISSION-ARCHIVE.md、E1-REACHABILITY.md 和 REMOTE-RUNBOOK.md。命令从 cczoo/agent-cc 运行。0d78ed0 是实现前基线，不代表本轮新增代码；两机以操作者指定的交付版本及实际摘要为准。
 
-先执行：
-1. 在现有 confidential-computing-zoo 仓库读取适用 AGENTS.md，检查工作区并 git fetch origin。使用用户指定的本次提交；若现有部署目录有修改，建立该提交的独立 worktree，不覆盖原部署目录。记录实际完整 SHA，确认本次提交属于 origin/feat/argus-spiffe-v2-val。
-2. 阅读 cczoo/agent-cc/adapters/OpenClaw/spiffe_client/DEPLOY-IP1-TDVM.md、README.md、VALIDATION.md。dist 产物不在 Git；从此提交构建插件和 Linux Helper，或核对用户交付包清单，不能默认拉取代码后已有二进制。只需构建客户端，不运行 IP2 的整套 Workload build/launch。
-3. 记录既有 SPIRE Server/Trustee 的实际配置、unit、可执行版本、CA/bundle、监听地址和当前状态。向操作者索取 IP2 的接入交接信息；在其尚未返回时，继续完成 Host 预检、TDVM 创建和 Guest 准备。
+1. 核对已有客户端 TDVM、共享 SPIRE Agent/Broker、独立 Gateway 和 publisher。够用时复用；首次创建沿用 DEPLOY-IP1-TDVM.md。原有 x509pop 客户端仍用当前方式，标明客户端节点 TDX 证明 NOT_RUN，不仅凭主机支持 TDX 就改认证路径。保留 Node 数据、信任根和 CanReattest=false。
+2. 重建本次定制插件及客户端 Helper，按 deploy/fleet 正常安装和重新登记变化的实例。执行 bash experiments/argus/remote-software-checks.sh client，保存输出、跳过原因和产物摘要。包版本相同不代表代码相同，以摘要判断。
+3. 从 IP2 取得实际 HTTPS origin、服务身份、精确客户端 allowlist、普通业务用户和 key 的安全取用位置、策略摘要及 collector/evidence 路径。按实际 Guest/容器网络核对，不把 IP2 localhost 当远端地址。业务不用 root key，秘密不放命令行、Git 或报告。
 
-实施：
-- 使用 IP1 已验证的 TDVM 能力、批准的基础镜像/TDVF，分配独立 overlay、名称和未占用 SSH 端口。优先运行 scripts/openclaw_tdvm.sh；如果公司 QEMU 参数不同，沿用已验证的启动方法并记录差异。启动预检用 boot 范围，不因缺少 QGS/Quote 通路阻塞本轮。确认 Guest 已启动并具有 TDX Guest 标识；此项不等于远程证明。
-- Guest 安装官方 SPIRE 1.15.3、Docker、Python 和客户端 Helper，固定 OpenClaw 镜像 manifest digest、image config digest、Node/OpenClaw 版本和启动命令。按手册在 Guest 生成节点私钥/CSR，由 IP1 的独立 x509pop CA 签发；保留现有 SPIRE CA。增量合并 Server 的 x509pop 配置，校验后按既有流程应用，并回查原控制面/IP2 连接状态。
-- 填写 deployment.example.json，用 deploy.py render 和 guest-install 生成/安装配置。Workload API 与 Broker sockets 必须分目录，容器只读挂载 client.json/credentials，不挂载 Agent/Broker sockets。核实 Guest → IP1 Server 和容器 → IP2 HTTPS 的真实可达性；TCP 隧道须保持 TLS 在 IP2 NGINX 终止，不把 Host/Guest/容器的 loopback 混用。
-- 使用当前 Server 回读的真实 x509pop Agent ID，执行 apply-entries/server-check。Helper 绑定二进制摘要，OpenClaw 绑定实际 UID、可执行路径、镜像摘要和 label。发现旧 parent 或宽松同身份 Entry 时明确报告冲突并保留证据，不静默放宽。
-- 按 install → Gateway 加载插件 → 核对真实 Guest host PID → guest-register → connect 执行。setup 后如需再次重启，先 guest-stop，再重启及登记新 PID。使用实际模型配置和 OpenViking 非 root 用户 API key，不把任何私钥、token/API key 写入报告。
-- 运行 verify_openclaw_plugin_e2e.sh，完成真实 Gateway 写入、插件读回、commit/archive、独立新会话召回随机事实，以及不存在项目的 UNKNOWN 负例。必须保留 Gateway mTLS 请求与 ContextEngine 召回关联；独立 curl/health 成功不替代业务成功。
-- 按手册连续观察 SVID 轮换及业务读取，并分别验证本轮 Guest Helper 的 stop/SIGKILL/SIGSTOP、Guest Broker 无响应、Gateway PID 替换和本轮业务 TCP 故障后的收敛/恢复。故障只作用于本轮客户端/Guest/专用链路，不暂停 IP1 Server/Trustee 或 IP2 现有服务。保留实际故障命令、时间、重启策略、journal、trace/events；每项完成后恢复本轮临时配置。
+若 Trustee AS 实际运行在 IP1，按 ADMISSION-ARCHIVE.md 在这里重建/安装本次 AS hook 与 verify_trucon.py，启用受保护的 ARGUS_TRUCON_EVIDENCE_DIR。它与 IP2 插件的 ARGUS_ADMISSION_EVIDENCE_DIR 按 nonce 合并；不要要求 IP2 从不运行 Trustee 的主机获取不存在的导出。实验准备期间按既有流程应用配置，不清理共享节点身份。
 
-遇到缺少模型凭据、IP2 origin 或网络资料时，先完成不依赖它们的步骤，再具体列出缺少项。失败可以修复本轮新增配置或代码，但不能用 mock、关闭 mTLS、跳过身份检查或修改成功判据替代验收。代码修复需留下 diff、测试和实际运行 SHA，不自动推送。
+与 IP2 并行核查 E1：保存实际批准政策文件、摘要及例外范围；协助原件验证和固定批准度量对照。对每条候选轨迹记录操作者权限、允许接口、共同当前事实检查、历史判断和接收结果。Full 与 guarded native 同时拒绝时，报告共同保护；只有共同检查允许且历史政策不同的真实可达轨迹才支持历史增量。离线删改日志/签名夹具只作政策诊断。
 
-输出：按 PASS/FAIL/BLOCKED/NOT_RUN 提交 IP1 Host 与 OpenClaw Guest 分开的报告，包含提交/产物摘要、VM 参数、真实 Agent ID/Entries、容器/进程实例、双方 SVID serial、request/session ID、业务/轮换/失效证据路径和恢复结果。OpenClaw TDX 远程证明固定记 NOT_RUN；IP2 记录实际 tcb_status 和批准策略摘要，当前策略不要求 TCB UpToDate。把本轮时间范围和 request/session ID 交给操作者，供 IP2 对齐服务端日志。原始证据留在受保护目录，仓库报告仅含脱敏结果。
+4. 先跑已有单客户端随机事实业务及错误身份/权限负例，检查六阶段原始结果。然后配置 continuous：autoCapture=false、autoRecall=false，允许真实 Agent 的 memory_recall/memory_store；不复用 LoCoMo 只读配置。preflight 核对实际运行配置、用户、服务身份和工具审计。每任务新会话，问题不含期望答案。
+5. 首轮 Full 单客户端 no_fault，按 CONTINUOUS-TASK.md prepare/run。核对 A 初始化 archive、非空提取与检索；B 的真实工具调用、request ID、完整事务段、commit/task ID、后继检索及确定性评分。未调用、空提取、改写、超时、未知提交均保留；不能补答案、代替 Agent 调工具或重发不确定写入。
+6. 再做 Full 共享服务故障闭环。与 IP2 固定 run_id、一项故障、fault_scope=shared_service、控制 argv、恢复脚本、卷保留及时间同步误差。任务释放、故障、恢复按独立固定时间表执行，不等待任务成功再平移。默认每客户端 18 任务，间隔 60 秒，deadline 120 秒，并发 1、队列 1、重试 0；fault/recovery 第 360/720 秒，Δ=10 秒为研究阈值。中断仅 resume 续查，不重放写入/故障，不重置原点。
+7. 单客户端通过后扩到三个独立 Gateway。使用 continuous-suite.example.json 和现有 variants/fleet；先两轮 pilot 再冻结参数。正式用 Full/native × fault/no_fault、十个配对结构 seed；各次运行独立普通用户、初始数据和 secret_seed，同次恢复保留卷。suite 不代为创建用户/部署 Gateway。按 run-order 安装本轮实际配置并登记变化实例后，再执行选定 run_id。
+
+统一入口：
+
+~~~sh
+python3 experiments/argus/suite.py --config /secure/continuous-suite.json --output /secure/generated-continuous
+python3 experiments/argus/runner.py prepare --config /secure/generated-continuous/suite.json --output /secure/evidence/continuous01
+python3 experiments/argus/runner.py preflight --output /secure/evidence/continuous01 --role client --run-id RUN_ID
+python3 experiments/argus/runner.py run --output /secure/evidence/continuous01 --role client --run-id RUN_ID
+# 中断后只查询原操作：
+python3 experiments/argus/runner.py resume --output /secure/evidence/continuous01 --role client --run-id RUN_ID
+~~~
+
+把 IP2 collector 原始记录及 fault/admission/recovery 材料按 FACT-RECEIPTS.md 收进 runs/RUN_ID/continuous/，核对 run/实例/hash 后 collect/analyze/plot：
+
+~~~sh
+python3 experiments/argus/runner.py collect --output /secure/evidence/continuous01
+python3 experiments/argus/runner.py analyze --output /secure/evidence/continuous01
+python3 experiments/argus/plot.py --output /secure/evidence/continuous01
+~~~
+
+联合评分保留全部计划任务分母、接收×任务四格、两轴 UNKNOWN/NOT_RUN、deadline miss、唯一事实、重复传输和部分帧候选字节。未调用工具不能算成功拦截。分别报告 Full-native、同组 fault-control、共享故障下各客户端变化及恢复分段。论文的局部连带完成率损失定义为 (no_fault−fault)×100 个百分点，仅针对采集前声明的未注入客户端；当前 continuous 服务故障组不能填这一结果。旧 fleet_fault 可单独验证局部可用性，不能冒充持续新事实的局部 E4。恢复从实际恢复命令计时，不能从服务已经就绪时起算。
+
+E2 新/旧 socket 和在途载荷按 fault_trial 独立执行，区分必要监督失效后的停止阈值与未准入替换实例读取。正常缓冲读取、缺准入记录和已证明未准入分别报告；不能将 Helper 冻结称为历史资格失效。E5 与 LoCoMo 后续单独跑，不把 HTTP Goodput 当 Agent 成功率。保留现行批准策略，不增加 TCB UpToDate。current-facts-only、Attest-on-connect、Invocation lease 尚未实现在线组，标 proposed_not_run；普通 new/reuse TLS 测量不等于连接时重新证明，也不称完整 aDNS/ACLE-MCP 复现。没有可达历史差异时保留诊断和等效结果，不临时加入跳过历史开关。
+
+输出 RESULTS-CONTINUOUS.template.md 对应报告、原始证据路径、两机版本、软件检查与远程测量分别的 PASS/FAIL/UNKNOWN/NOT_RUN，以及必要修复 diff。缺 IP2/模型信息先完成独立准备，再列具体缺口。修复限本轮，不放宽判据、不自动推送。将 run_id、关联 ID 和证据路径交操作者同步 IP2，不输出私密事实或密钥。

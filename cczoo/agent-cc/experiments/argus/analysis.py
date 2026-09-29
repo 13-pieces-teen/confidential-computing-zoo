@@ -12,11 +12,14 @@ import statistics
 
 from common import atomic, digest, read, require, sha
 
-STRATA = ("case", "scale", "connection_mode", "workload_kind", "workload_spec")
+STRATA = ("case", "scale", "connection_mode", "workload_kind", "workload_spec", "condition", "fault_kind", "fault_scope")
+CONTINUOUS_METRICS = ("continuous_task_success_rate", "continuous_joint_success_rate",
+                      "continuous_receipt_unknown_rate", "continuous_task_unknown_rate",
+                      "continuous_deadline_miss_rate", "continuous_offered_rate")
 METRICS = ("pass_value", "api_goodput_rps", "memory_nonempty_goodput_rps", "p95_ms",
            "tcp_connect_p50_ms", "tls_handshake_p50_ms", "connect_p50_ms", "api_p95_ms", "connection_reuse_fraction",
            "process_cpu_seconds", "sum_process_peak_rss_bytes", "locomo_conversation_macro_f1",
-           "locomo_answered_f1", "locomo_coverage", "locomo_abstention")
+           "locomo_answered_f1", "locomo_coverage", "locomo_abstention") + CONTINUOUS_METRICS
 
 
 def stratum(row):
@@ -46,7 +49,7 @@ def mean_ci(values, seed=20260926, iterations=2000):
 def paired_difference(rows, other, metric):
     full, arm = {}, {}
     for row in rows:
-        if row.get(metric) is None:
+        if row.get(metric) is None or not row.get("comparison_eligible", True):
             continue
         key = (row["block_id"], *stratum(row))
         target = full if row["group"] == "full_argus" else arm if row["group"] == other else None
@@ -181,7 +184,7 @@ def analyze(output):
     import json
     output = Path(output)
     verdicts = read(output / "verdicts.json")
-    rows, locomo = [], []
+    rows, locomo, continuous = [], [], []
     for run in verdicts["runs"]:
         row = dict(run, pass_value=1 if run["result"] == "PASS" else 0 if run["result"] == "FAIL" else None,
                    connection_mode="not_applicable", workload_kind="not_applicable", workload_spec="unspecified")
@@ -234,6 +237,18 @@ def analyze(output):
                            connection_mode="not_applicable", workload_kind="locomo_derived",
                            evidence_scope="application_workload_completion_not_security")
                 if row["result"] != "FAIL": row["result"] = "UNKNOWN"
+        if run.get("case") == "continuous":
+            row.update(pass_value=None, workload_kind="continuous_agent_tools",
+                       evidence_scope="task_and_application_read_axes_separate")
+            try:
+                from continuous_analysis import evidence as continuous_evidence
+                metrics, detail = continuous_evidence(output, directory, run)
+                row.update(metrics); continuous.append(detail)
+            except (ValueError, OSError, KeyError, TypeError) as error:
+                row.update(continuous_evidence="NOT_RUN" if row["result"] == "NOT_RUN" else "UNKNOWN",
+                           continuous_error=type(error).__name__)
+                from continuous_analysis import unobserved
+                continuous.append(unobserved(run))
         resource = directory / "resources.jsonl"
         if resource.is_file():
             try:
@@ -255,9 +270,12 @@ def analyze(output):
         summary = dict(zip((*STRATA, "group"), key))
         summary["verdicts"] = {v: sum(r["result"] == v for r in members) for v in ("PASS", "FAIL", "UNKNOWN", "NOT_RUN")}
         summary["locomo_completion"] = {v: sum(r.get("locomo_evidence") == v for r in members) for v in ("COMPLETE", "INCOMPLETE", "UNKNOWN")}
+        summary["comparison_excluded_runs"] = sum(not r.get("comparison_eligible", True) for r in members)
         summary["verdict_scope"] = "application_workload_completion_not_security" if summary["workload_kind"] == "locomo_derived" else "scenario_evidence"
+        if summary["workload_kind"] == "continuous_agent_tools":
+            summary["verdict_scope"] = "execution_only; use independent task and application-read axes"
         for metric in METRICS:
-            summary[metric] = mean_ci([r[metric] for r in members if r.get(metric) is not None])
+            summary[metric] = mean_ci([r[metric] for r in members if r.get(metric) is not None and r.get("comparison_eligible", True)])
         summaries.append(summary)
     for key in sorted({stratum(r) for r in rows}):
         members = [r for r in rows if stratum(r) == key]
@@ -271,11 +289,30 @@ def analyze(output):
     result["stratification"] = list(STRATA)
     result["locomo_results"] = locomo
     result["locomo_scope"] = "QA quality/completion only; source and step hashes bound to runner operation; no security inference"
+    from continuous_analysis import export as export_continuous, fault_contrasts, collateral_losses
+    export_continuous(output, continuous)
+    result["continuous_results"] = continuous
+    result["continuous_totals"] = {"all_planned_tasks": sum(r["planned_tasks"] for r in continuous),
+        "tasks_without_bound_run_evidence": sum(r["planned_tasks"] for r in continuous if r.get("unobserved_run")),
+        "known_task_passes": sum(r["axes"]["task"]["PASS"] for r in continuous),
+        "known_joint_passes": sum(r["joint_receipt_task"]["PASS/PASS"] for r in continuous)}
+    result["paired_fault_minus_control"] = fault_contrasts(rows, CONTINUOUS_METRICS, mean_ci)
+    clients = [dict(client, case="continuous", scale=run["scale"], group=run["group"],
+                    condition=run["condition"], block_id=run["block_id"],
+                    fault_kind=run.get("fault_kind", "unspecified"), fault_scope=run.get("fault_scope", "unspecified"),
+                    comparison_eligible=run.get("comparison_eligible", False),
+                    injected_client_id=run.get("injected_client_id"), uninjected_client_ids=run.get("uninjected_client_ids", []),
+                    fault_assignment_predeclared=run.get("fault_assignment_predeclared", False),
+                    workload_kind="continuous_agent_tools", workload_spec=run["protocol_digest"])
+               for run in continuous for client in run["clients"]]
+    result["paired_client_fault_minus_control"] = fault_contrasts(clients, CONTINUOUS_METRICS, mean_ci)
+    result["paired_uninjected_completion_loss_pp"] = collateral_losses(clients, mean_ci)
+    result["local_continuous_fault"] = "NOT_RUN"
     atomic(output / "analysis.json", result)
     lines = ["# Argus experiment results", "", "Counts retain FAIL, UNKNOWN and NOT_RUN. No missing run is treated as a pass.", "",
-             "| Case | Clients | Workload / connection | Group | PASS | FAIL | UNKNOWN | NOT_RUN |", "|---|---:|---|---|---:|---:|---:|---:|"]
+             "| Case | Clients | Workload / connection | Condition / group | PASS | FAIL | UNKNOWN | NOT_RUN |", "|---|---:|---|---|---:|---:|---:|---:|"]
     for s in summaries:
-        lines.append("| %s | %s | %s / %s | %s | %s | %s | %s | %s |" % (s["case"], s["scale"], s["workload_kind"], s["connection_mode"], s["group"], *(s["verdicts"][v] for v in ("PASS", "FAIL", "UNKNOWN", "NOT_RUN"))))
+        lines.append("| %s | %s | %s / %s | %s / %s | %s | %s | %s | %s |" % (s["case"], s["scale"], s["workload_kind"], s["connection_mode"], s["condition"], s["group"], *(s["verdicts"][v] for v in ("PASS", "FAIL", "UNKNOWN", "NOT_RUN"))))
     lines += ["", "API Goodput counts expected HTTP completions inside the measurement window. Agent task correctness is separate.",
               "Interrupted attempts are retained and counted separately; only the selected complete window contributes one sample to its original paired block.",
               "Confidence intervals resample independent runs or complete paired seed blocks. Single runs have no interval.",
@@ -286,6 +323,29 @@ def analyze(output):
               "Memory nonempty Goodput counts successful replies containing private leaf memories. HTTP success alone is reported separately.",
               "New/reused connections and status/memory/custom workloads never share a mean or paired contrast. Legacy unspecified traces are separate."]
     qa_rows = [r for r in rows if r.get("workload_kind") == "locomo_derived"]
+    if continuous:
+        lines += ["", "Continuous tasks use all planned tasks as the denominator. The four cells below are receipt criterion / task result; UNKNOWN and NOT_RUN remain on each axis.",
+                  "No tool invocation is not a successful guard block. A complete execution is not a security pass. Delta is a research threshold, not a runtime guarantee.",
+                  "| Run | Planned | PASS/PASS | PASS/FAIL | FAIL/PASS | FAIL/FAIL | Receipt UNKNOWN | Task UNKNOWN | Receipt NOT_RUN | Task NOT_RUN |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for detail in continuous:
+            lines.append("| " + " | ".join(map(str, [detail["run_id"], detail["planned_tasks"],
+                *(detail["joint_receipt_task"][k] for k in ("PASS/PASS", "PASS/FAIL", "FAIL/PASS", "FAIL/FAIL")),
+                detail["axes"]["receipt"]["UNKNOWN"], detail["axes"]["task"]["UNKNOWN"],
+                detail["axes"]["receipt"]["NOT_RUN"], detail["axes"]["task"]["NOT_RUN"]])) + " |")
+        lines += ["", "Same-arm fault-minus-control paired changes and their individual block differences are in analysis.json. Shared-service faults affect all dependent clients; these changes are not uninjected-client collateral loss.",
+                  "Local continuous Gateway-stop trials remain NOT_RUN. Completion loss is (no-fault minus fault) × 100 percentage points, and is reserved for predeclared uninjected clients in matched local-fault trials.",
+                  "Missing counterpart blocks are counted; no cross-arm substitution is made. Observed model mismatches retain their task outcomes but are excluded from paired estimates; comparison_exclusion_reasons records why."]
+        lines += ["", "Receipt stopping conditions and replacement admission are separate. UNKNOWN admission association is not proof of an unadmitted replacement. Post-threshold supervision reads do not establish a history-policy violation.",
+                  "| Run | Stop condition | Post-stop unique facts | Replacement evidence | Proven unadmitted unique facts | Unestablished candidates |",
+                  "|---|---|---:|---|---:|---:|"]
+        for detail in continuous:
+            receipt = detail.get("receiver", {})
+            replacement = receipt.get("unadmitted_replacement", {})
+            values = [detail["run_id"], receipt.get("stop_condition", {}).get("scope"),
+                      (receipt.get("whole_window") or {}).get("post_stop_condition_unique_facts"),
+                      replacement.get("result"), replacement.get("unique_facts"),
+                      replacement.get("unestablished_admission_candidate_unique_facts")]
+            lines.append("| " + " | ".join("UNKNOWN" if v is None else str(v) for v in values) + " |")
     if qa_rows:
         lines += ["", "| LoCoMo run | Evidence | Coverage | Conversation F1 | Answered F1 | Abstention |",
                   "|---|---|---:|---:|---:|---:|"]

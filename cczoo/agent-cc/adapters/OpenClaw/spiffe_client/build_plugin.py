@@ -64,6 +64,14 @@ def build(archive: bytes) -> tuple[bytes, dict]:
         replace(recall, "const uniqueMemories = allMemories.filter(",
                 "auditRecallSearch(allMemories, autoRecallSettled);\n      const uniqueMemories = allMemories.filter(", 1)
         files[recall] = b'import { auditRecallSearch } from "./argus-spiffe/recall-audit.mjs";\n' + files[recall]
+        registration = prefix + "plugin/tool-registration." + extension
+        replace(registration, "api.registerTool(toolOrFactory, opts);",
+                "api.registerTool(auditToolFactory(toolOrFactory), opts);", 1)
+        files[registration] = b'import { auditToolFactory } from "../argus-spiffe/task-audit.mjs";\n' + files[registration]
+        client = prefix + "client." + extension
+        replace(client, "if (!options?.wait || !result.task_id) {",
+                "auditCommit(result, sessionId);\n        if (!options?.wait || !result.task_id) {", 1)
+        files[client] = b'import { auditCommit } from "./argus-spiffe/task-audit.mjs";\n' + files[client]
     probe = "package/services/setup/probe-service.ts"
     replace(probe, "(url, init) => fetch(url, init)", "(url, init) => spiffeFetch(url, init)", 1)
     files[probe] = b'import { spiffeFetch } from "../../argus-spiffe/transport.mjs";\n' + files[probe]

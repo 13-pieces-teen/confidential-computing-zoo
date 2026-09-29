@@ -102,7 +102,11 @@ func (p *Plugin) AttestReference(ctx context.Context, r *workloadattestorv1.Atte
 	if err = tc.Verify(ctx, ev); err != nil {
 		return nil, status.Errorf(codes.PermissionDenied, "Trustee appraisal: %v", err)
 	}
-	if err = p.check(t); err != nil {
+	err = p.check(t)
+	if recorder, ok := tc.(interface{ RecordLocalOutcome(protocol.Evidence, bool) }); ok {
+		recorder.RecordLocalOutcome(ev, err == nil)
+	}
+	if err != nil {
 		return nil, status.Errorf(codes.PermissionDenied, "target changed during appraisal: %v", err)
 	}
 	// These values come from the approved target matched to the Quote-bound

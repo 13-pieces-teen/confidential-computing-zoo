@@ -1,5 +1,9 @@
 # 第 4—7 项交付验证记录（2026-09-26）
 
+**飞书 revision 1329 核对：**最新修改与检查见 [PAPER-ALIGNMENT-1329.md](PAPER-ALIGNMENT-1329.md)，远程测试仍为 NOT_RUN。下方历史 PASS 不覆盖最新统计与接收判据修正。
+
+**2026-09-29 更新：**本轮 continuous / 证明导出 / Quote counter / 完整事实接收新增代码按用户分工仅做本地语法和构建检查，未执行测试。当前交付状态及检查结果统一见 [IMPLEMENTATION-20260929.md](IMPLEMENTATION-20260929.md)。下方数字均为先前版本历史结果，不能当成本轮回归通过。
+
 基线：`8be8afe688ee92956f4f4d036beeb4d4616ee38d`。本记录描述本地代码与软件测试；真实硬件、远程应用和性能数据尚未产生。下方保留多轮验证记录，当前发布状态以 Git 与最新 review 交付为准；原有无关论文及 `sigstore_baseline.py` 修改保留。
 
 ## 最新目录整理与整体 review

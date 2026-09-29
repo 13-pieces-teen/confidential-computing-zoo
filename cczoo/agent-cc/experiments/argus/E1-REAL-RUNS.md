@@ -6,6 +6,12 @@ workflow. Run the same recipe separately for `full_argus` and
 `native_spire_guarded`. Keep their generated identities, entries, directories and
 units isolated. A native success is a valid observation, not a failed experiment.
 
+For the historical-policy contribution, first complete the short
+[E1 reachability record](E1-REACHABILITY.md). These lifecycle recipes alone do not
+establish that an ordinary deployment participant can reach an unadmitted
+receiver through the old ingress. The current NGINX joins the registered
+target's network namespace; a replacement container does not inherit that route.
+
 The collector below calls the installed production `workload.py` verification
 and the installed `argus-workload check`. It records current target, readiness,
 verified mTLS peer/serial and correlated Workload EAR acceptance where the arm
@@ -159,11 +165,15 @@ Do not update approved policy to match the bad configuration during this case.
 
 ## 5. Evidence mismatch, hidden stop and offline rules
 
-The current production CLI does **not** export all raw Quote, structured Trustee
-request, signed EAR and appraisal-policy bytes for each acceptance/denial. Its
-correlated EAR hash/log is useful operational evidence but not an independently
-re-verifiable archive. Therefore a complete live wrong-nonce/REPORTDATA replay
-driver is not claimed to exist here; these outer negative cases remain `NOT_RUN`.
+Optional production capture now exports the actual Quote, Trustee request, EAR
+when one is returned, history and policy input. Enable it and collect/recheck a
+nonce bundle using [ADMISSION-ARCHIVE.md](ADMISSION-ARCHIVE.md). This observation
+CLI does not merge that separate archive; its comparison reports
+`raw_quote_and_signed_ear_archive=SEPARATE_ARCHIVE_REQUIRED`. A correlated EAR
+hash/journal alone is not an independently re-verifiable archive. Early rejection
+may have no EAR or post-appraisal target check, and incomplete exports remain
+incomplete evidence. A live wrong-nonce/REPORTDATA replay driver is not claimed
+to exist here; these online negative cases remain `NOT_RUN`.
 
 Existing local signed fixtures are executable:
 
@@ -175,7 +185,11 @@ They use actual production log-verifier cryptography with ephemeral test keys.
 Their `fixture_result` must stay separate from live admission. The fixed RTMR,
 target-launch-only and full-history rules remain offline diagnostics.
 
-When an operator already has a genuine captured verifier request and its original
+For the fixed-approved-measurement comparison, use `approve-reference` followed
+by `replay-bundle` in [ADMISSION-ARCHIVE.md](ADMISSION-ARCHIVE.md). That route pins
+the legal reference before the changed history and requires the same actual
+approved policy bytes. Use the commands below only for legacy exploratory
+log-only replay when an operator already has a genuine captured verifier request and its original
 verification context with hashed Quote/REPORTDATA/policy-result artifacts, use:
 
 ```sh

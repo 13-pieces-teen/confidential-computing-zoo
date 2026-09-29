@@ -498,12 +498,16 @@ class LiveTLSProbeTests(unittest.TestCase):
                 stream = next(r for r in records if r.get('type') == 'request' and r.get('lane') == 'inflight')
                 self.assertTrue(stream['ok'])
                 self.assertEqual(stream['tls_connections'], 1)
+                self.assertTrue(stream['socket_id'])
+                self.assertEqual(stream['peer_address'][1], server.server_port)
+                self.assertEqual(stream['local_address'][0], '127.0.0.1')
                 self.assertGreater(len(chunks), 2)
                 self.assertGreater(chunks[-1][0] - chunks[0][0], .5)
                 self.assertEqual(sum(n for _, n in chunks), len((root/'body.json').read_bytes()))
                 responses = [r for r in records if r.get('type') == 'response_chunk']
                 self.assertTrue(responses)
                 self.assertTrue(all(r['peer_verified'] and r['server_id'] == 'spiffe://test/service' for r in responses))
+                self.assertTrue(all(r['socket_id'] == stream['socket_id'] for r in responses if r['request_id'] == stream['request_id']))
                 self.assertEqual(sum(r['response_bytes'] for r in responses if r['request_id'] == stream['request_id']), 2)
                 partial = remote.PinnedConnection("127.0.0.1", server.server_port, context=client_context,
                                                   timeout=2, server_id="spiffe://test/service", once=True)

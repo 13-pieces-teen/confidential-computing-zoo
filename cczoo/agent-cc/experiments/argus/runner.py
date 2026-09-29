@@ -36,6 +36,11 @@ def validate(m):
         require(SAFE.fullmatch(case.get("name", "")) and case["name"] not in names, "duplicate/invalid case")
         names.add(case["name"])
         require(case.get("experiment") in ["E1", "E2", "E3", "E4", "E5"], "invalid experiment")
+        if "conditions" in case:
+            require(case["name"] == "continuous" and case["conditions"]
+                    and len(set(case["conditions"])) == len(case["conditions"])
+                    and set(case["conditions"]) <= {"fault", "no_fault"},
+                    "continuous conditions must be distinct fault/no_fault values")
         for field in ("seeds", "scales", "groups"):
             if field not in case:
                 continue
@@ -83,10 +88,25 @@ def plan(m):
                 groups = list(case.get("groups", m["groups"]))
                 random.Random(digest([m["experiment_id"], case["name"], scale, seed])).shuffle(groups)
                 block = "%s-n%d-s%d" % (case["name"], scale, seed)
-                for group in groups:
-                    result.append({"run_id": m["experiment_id"] + "-" + digest([case["name"], scale, seed, group])[:32],
-                                   "block_id": block, "case": case["name"], "experiment": case["experiment"],
-                                   "scale": scale, "seed": seed, "group": group})
+                assignments = [(group, condition) for group in groups for condition in case.get("conditions", [None])]
+                if "conditions" in case:
+                    random.Random(digest([m["experiment_id"], block, "conditions"])).shuffle(assignments)
+                for group, condition in assignments:
+                    identity = [case["name"], scale, seed, group]
+                    if condition is not None:
+                        identity.append(condition)
+                    row = {"run_id": m["experiment_id"] + "-" + digest(identity)[:32],
+                           "block_id": block, "case": case["name"], "experiment": case["experiment"],
+                           "scale": scale, "seed": seed, "group": group}
+                    if condition is not None:
+                        row["condition"] = condition
+                        row["fault_kind"] = case.get("fault_kind", "unspecified")
+                        row["fault_scope"] = case.get("fault_scope", "unspecified")
+                        row["planned_tasks"] = 18 * scale  # continuous v1: three phases, six tasks/client/phase
+                        key = f"{group}:{scale}:{seed}:{condition}"
+                        require(key in m.get("continuous_inputs", {}), "missing continuous run configuration: " + key)
+                        row["continuous_config"] = m["continuous_inputs"][key]
+                    result.append(row)
     return result
 
 
@@ -151,7 +171,11 @@ def preflight(output, role, only_run=None, case=None, group=None):
             for field in ("business_config", "load_config"):
                 if arm.get(field) and field not in used_fields:
                     unused.add(str(resolve(saved["base"], arm[field])))
+    continuous_paths = {str(resolve(saved["base"], p)) for p in m.get("continuous_inputs", {}).values()}
+    selected_paths = {str(resolve(saved["base"], r["continuous_config"])) for r in runs if r.get("continuous_config")}
     for path, expected in saved["artifacts"].items():
+        if path in continuous_paths and path not in selected_paths:
+            continue
         if path in unused or (path in owners and not owners[path] & groups):
             continue
         check("artifact:" + path, Path(path).is_file() and sha(path) == expected)
@@ -310,6 +334,7 @@ def execute(output, role, resume=False, only_run=None, case=None, group=None, ne
                 env.update(ARGUS_RUN_ID=run["run_id"], ARGUS_OPERATION_ID=context["operation_id"],
                            ARGUS_SEED=str(run["seed"]), ARGUS_BLOCK_ID=run["block_id"],
                            ARGUS_GROUP=run["group"], ARGUS_SCALE=str(run["scale"]), ARGUS_ATTEMPT=str(attempt))
+                env["ARGUS_CONDITION"] = run.get("condition", "unspecified")
                 try:
                     p = run_logged(argv, cwd=saved["base"], env=env, timeout=op["timeout_s"],
                                    diagnostic=directory / (op["id"] + "-diagnostic.json"), stage=op["id"],

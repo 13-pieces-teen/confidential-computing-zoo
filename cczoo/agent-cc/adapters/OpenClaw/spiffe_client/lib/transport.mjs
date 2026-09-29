@@ -1,9 +1,10 @@
 import { readFileSync, lstatSync, constants, openSync, closeSync, fstatSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { Agent, request as httpsRequest } from 'node:https';
-import { Readable } from 'node:stream';
-import { randomUUID } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
+import { randomUUID, createHash } from 'node:crypto';
 import { recordRecallRequest } from './recall-audit.mjs';
+import { currentTask, taskHeaders, taskEvent, frameReceipts } from './task-audit.mjs';
 import { validateMaterial, validateSVID, spiffeID } from './svid.mjs';
 
 const receipts = new WeakMap();
@@ -124,7 +125,12 @@ export function createSpiffeTransport(configuration = loadConfig()) {
   const transport = async (input, init = {}) => {
     const url = new URL(input);
     if (url.origin !== config.origin || url.protocol !== 'https:' || url.username || url.password || url.hash) throw fail('request is outside the configured HTTPS origin');
-    const current = refresh();
+    const requestID = randomUUID();
+    const task = currentTask() ?? null;
+    const emitTask = (event, fields) => taskEvent(event, fields, task);
+    let current;
+    try { current = refresh(); }
+    catch (error) { emitTask('request_blocked_local', {request_id:requestID, path:url.pathname, reason:'CREDENTIALS_UNAVAILABLE'}); throw error; }
     const message = new Request(url, init);
     const headers = Object.fromEntries(message.headers);
     // Preserve fetch's body representation while avoiding implicit compression or
@@ -132,10 +138,11 @@ export function createSpiffeTransport(configuration = loadConfig()) {
     delete headers.host;
     delete headers.connection;
     headers['accept-encoding'] = 'identity';
-    const requestID = randomUUID();
     headers['x-argus-request-id'] = requestID;
+    Object.assign(headers, taskHeaders(task));
     const signal = AbortSignal.any([message.signal, AbortSignal.timeout(config.requestTimeoutMs)]);
     return new Promise((resolve, reject) => {
+      emitTask('request_attempted', {request_id:requestID, method:message.method, path:url.pathname});
       const request = httpsRequest(url, { method: message.method, headers, agent: current.agent, signal }, response => {
         const status = response.statusCode;
         if (status >= 300 && status < 400) {
@@ -155,7 +162,7 @@ export function createSpiffeTransport(configuration = loadConfig()) {
         const empty = message.method === 'HEAD' || [204, 205, 304].includes(status);
         const result = new Response(empty ? null : Readable.toWeb(response), { status, statusText: response.statusMessage, headers: responseHeaders });
         if (empty) response.resume();
-        const receipt = { component: 'argus-openclaw-spiffe', request_id: requestID, method: message.method, path: url.pathname,
+        const receipt = { ...task, component: 'argus-openclaw-spiffe', request_id: requestID, method: message.method, path: url.pathname,
           client_spiffe_id: config.clientSpiffeId, server_spiffe_id: config.serverSpiffeId,
           client_serial: current.serial, server_serial: server.serial, generation: current.generation,
           http_status: status, checked_at: new Date().toISOString() };
@@ -181,6 +188,7 @@ export function createSpiffeTransport(configuration = loadConfig()) {
         }
       });
       request.on('error', error => {
+        emitTask('request_failed', {request_id:requestID, error_code:error.code ?? 'REQUEST_FAILED'});
         if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') failures.set(error, {
           request_id: requestID, network_error: error.code, phase: 'https_request',
         });
@@ -190,7 +198,21 @@ export function createSpiffeTransport(configuration = loadConfig()) {
         const body = Readable.fromWeb(message.body);
         body.on('error', error => request.destroy(error));
         request.once('close', () => body.destroy());
-        body.pipe(request);
+        if (task) {
+          let count = 0; const chunks = []; const hash = createHash('sha256');
+          const observer = new Transform({transform(chunk, _encoding, done) {
+            count += chunk.length; hash.update(chunk);
+            if (count <= 1048576) chunks.push(chunk);
+            done(null, chunk);
+          }, flush(done) {
+            emitTask('request_body', {request_id:requestID, body_bytes:count, body_sha256:hash.digest('hex'),
+              body_scan_complete:count <= 1048576, facts:count <= 1048576 ? frameReceipts(Buffer.concat(chunks).toString('utf8')) : []});
+            done();
+          }});
+          observer.on('error', error => request.destroy(error));
+          request.once('close', () => observer.destroy());
+          body.pipe(observer).pipe(request);
+        } else body.pipe(request);
       } else request.end();
     });
   };

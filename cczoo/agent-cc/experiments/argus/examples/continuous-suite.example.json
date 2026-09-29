@@ -1,0 +1,25 @@
+{
+  "experiment_id": "continuous01",
+  "cases": ["continuous"],
+  "mode": "pilot",
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "groups": ["full_argus", "native_spire_guarded"],
+  "conditions": ["fault", "no_fault"],
+  "seeds": [0],
+  "run_timeout_s": 7200,
+  "variant_outputs": {
+    "full_argus": "/secure/variants/full_argus",
+    "native_spire_guarded": "/secure/variants/native_spire_guarded"
+  },
+  "continuous_configs": {
+    "full_argus": {"0": {
+      "fault": "/secure/continuous/full-0-fault.json",
+      "no_fault": "/secure/continuous/full-0-control.json"
+    }},
+    "native_spire_guarded": {"0": {
+      "fault": "/secure/continuous/native-0-fault.json",
+      "no_fault": "/secure/continuous/native-0-control.json"
+    }}
+  }
+}

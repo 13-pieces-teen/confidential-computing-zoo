@@ -4,6 +4,8 @@ ARGUS_WORKLOAD_ARTIFACTS=(
     bin/argus-tdx-nodeattestor-agent
     bin/argus-tdx-nodeattestor-server
     bin/argus-tdx-workloadattestor
+    bin/argus-verify-admission
+    bin/argus-replay-policy
     bin/argus-workload
     bin/spiffe-helper
     bin/argus-agent-config

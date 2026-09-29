@@ -25,11 +25,11 @@ def verify_upstream():
     return entries[0]
 
 
-def wrap_uvicorn(original, socket_path, run_id):
+def wrap_uvicorn(original, socket_path, run_id, *, synthetic_facts=False):
     def run(app, *args, **kwargs):
         if isinstance(app, str) or kwargs.get("workers", 1) != 1 or kwargs.get("factory") or kwargs.get("reload"):
             raise RuntimeError("receiver process binding requires a single ASGI worker without reload")
-        return original(ReceiverAudit(app, socket_path, run_id), *args, **kwargs)
+        return original(ReceiverAudit(app, socket_path, run_id, synthetic_facts=synthetic_facts), *args, **kwargs)
     return run
 
 
@@ -46,7 +46,8 @@ def main():
         # Validate before any model or OpenViking configuration is imported.
         ReceiverAudit(None, socket_path, run_id)
         import uvicorn
-        uvicorn.run = wrap_uvicorn(uvicorn.run, socket_path, run_id)
+        uvicorn.run = wrap_uvicorn(uvicorn.run, socket_path, run_id,
+                                  synthetic_facts=os.environ.get("ARGUS_AUDIT_SYNTHETIC_FACTS") == "1")
     print(json.dumps({"argus_receiver_audit": mode, "boundary": "asgi_application_read",
                       "remote_acceptance": "NOT_RUN"}), flush=True)
     # The upstream lightweight entry parses --config before importing OpenViking.

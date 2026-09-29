@@ -58,8 +58,11 @@ def profile_settings(metadata, workload_id):
         raise ValueError("OpenViking data directory is missing")
     if "receiver_audit" in deployment:
         audit = deployment["receiver_audit"]
-        if not isinstance(audit, dict) or set(audit) != {"run_id", "mode", "image_config_digest"}:
+        if not isinstance(audit, dict) or set(audit) not in ({"run_id", "mode", "image_config_digest"},
+                                                          {"run_id", "mode", "image_config_digest", "synthetic_facts"}):
             raise ValueError("invalid receiver audit settings")
+        if "synthetic_facts" in audit and type(audit["synthetic_facts"]) is not bool:
+            raise ValueError("receiver audit synthetic_facts must be boolean")
         if not isinstance(audit["run_id"], str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", audit["run_id"]) or audit["mode"] not in ("on", "off") or not isinstance(audit["image_config_digest"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", audit["image_config_digest"]):
             raise ValueError("receiver audit requires an explicit run, mode and pinned image digest")
         audit_roots = (PurePosixPath("/run/argus-audit"), PurePosixPath("/run/argus-receiver"))
@@ -91,6 +94,8 @@ def launch_environment(settings):
         audit = settings["receiver_audit"]
         result.update(ARGUS_AUDIT_MODE=audit["mode"], ARGUS_AUDIT_RUN_ID=audit["run_id"],
                       ARGUS_AUDIT_SOCKET="/run/argus-audit/receiver.sock")
+        if "synthetic_facts" in audit:
+            result["ARGUS_AUDIT_SYNTHETIC_FACTS"] = "1" if audit["synthetic_facts"] else "0"
     return result
 
 

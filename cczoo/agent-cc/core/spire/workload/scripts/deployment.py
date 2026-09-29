@@ -58,7 +58,9 @@ class Deployment:
         self.receiver_audit = c.get("receiver_audit")
         if self.receiver_audit is not None:
             audit = self.receiver_audit
-            object_keys(audit, {"run_id", "mode", "image_config_digest"})
+            object_keys(audit, {"run_id", "mode", "image_config_digest"}, {"synthetic_facts"})
+            if "synthetic_facts" in audit and type(audit["synthetic_facts"]) is not bool:
+                raise ValueError("receiver_audit.synthetic_facts must be boolean")
             if not isinstance(audit["run_id"], str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", audit["run_id"]):
                 raise ValueError("receiver_audit.run_id must be a short lowercase experiment name")
             if audit["mode"] not in ("on", "off"):

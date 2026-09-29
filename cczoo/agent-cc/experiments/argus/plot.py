@@ -15,12 +15,16 @@ METRICS = {"api_goodput_rps": "API Goodput (requests/s)", "p95_ms": "Per-run HTT
            "locomo_conversation_macro_f1": "LoCoMo-derived conversation macro F1 (uncompleted = 0)",
            "locomo_coverage": "LoCoMo-derived answered task coverage",
            "locomo_abstention": "Declared abstention on category-5 questions",
+           "continuous_task_success_rate": "Successful tasks / all planned tasks",
+           "continuous_joint_success_rate": "Receipt PASS and task PASS / all planned tasks",
+           "continuous_receipt_unknown_rate": "Receipt UNKNOWN / all planned tasks",
+           "continuous_deadline_miss_rate": "Deadline misses / all planned tasks",
            "process_cpu_seconds": "Observed process CPU time (s)",
            "sum_process_peak_rss_bytes": "Sum of per-process peak RSS (bytes; upper bound)"}
 
 
 def context(row):
-    return tuple(row.get(key, "unspecified") for key in ("case", "connection_mode", "workload_kind", "workload_spec"))
+    return tuple(row.get(key, "unspecified") for key in ("case", "connection_mode", "workload_kind", "workload_spec", "condition", "fault_kind"))
 
 
 def observed(row, metric):
@@ -34,7 +38,7 @@ def render(output):
     result = read(source)
     available = [(key, metric) for key in sorted({context(s) for s in result["summaries"]}) for metric in METRICS
                  if any(context(s) == key and observed(s, metric) for s in result["summaries"])]
-    if not available:
+    if not available and not result.get("continuous_results"):
         value = {"result": "NOT_RUN", "reason": "no complete quantitative observations", "files": []}
         atomic(output / "figures.json", value)
         return value
@@ -44,7 +48,7 @@ def render(output):
     files = []
     figures = output / "figures"; figures.mkdir(exist_ok=True)
     for key, metric in available:
-        case, connection_mode, workload_kind, workload_spec = key
+        case, connection_mode, workload_kind, workload_spec, condition, fault_kind = key
         fig, ax = plt.subplots(figsize=(7, 4.3), layout="constrained")
         for group in sorted({s["group"] for s in result["summaries"]}):
             rows = sorted((s for s in result["summaries"] if context(s) == key and s["group"] == group and observed(s, metric)), key=lambda s: s["scale"])
@@ -55,15 +59,17 @@ def render(output):
                 if all(type(stats.get(k)) in (int, float) and math.isfinite(stats[k]) for k in ("low", "high")):
                     ax.errorbar(s["scale"], stats["mean"], yerr=[[max(0, stats["mean"]-stats["low"])] , [max(0, stats["high"]-stats["mean"])]], color=line.get_color(), capsize=3)
                 ax.annotate("n=" + str(stats["n_runs"]), (s["scale"], stats["mean"]), xytext=(4, 5), textcoords="offset points", fontsize=7)
-        ax.set(xlabel="Independent clients", ylabel=METRICS[metric], title=f"{case}\n{workload_kind} / {connection_mode}")
+        ax.set(xlabel="Independent clients", ylabel=METRICS[metric], title=f"{case}\n{workload_kind} / {connection_mode} / {condition}")
         ax.spines[["top", "right"]].set_visible(False)
         ax.grid(axis="y", alpha=.2); ax.legend(fontsize=8)
         for extension in ("svg", "pdf"):
-            suffix = "-" + "-".join((workload_kind, connection_mode, workload_spec[:12]))
+            suffix = "-" + "-".join((workload_kind, connection_mode, workload_spec[:12], condition, fault_kind))
             path = figures / (case + suffix + "-" + metric + "." + extension)
             fig.savefig(path)
             files.append({"path": str(path.relative_to(output)), "sha256": sha(path)})
         plt.close(fig)
+    from continuous_plot import render as render_continuous
+    files.extend(render_continuous(output, result, plt))
     value = {"result": "GENERATED", "analysis_sha256": sha(source), "files": files,
              "uncertainty": "95% independent-run bootstrap intervals from analysis.json; none for n=1",
              "tail_latency": "mean of per-run p95; request counts remain in statistics.csv"}

@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SCOPES = ["ARGUS.md", "README.md", "README_CN.md", "experiments/README.md",
           "experiments/ARGUS-SCOPE-REDUCTION-PLAN-20260926.md",
           "adapters/OpenClaw", "adapters/OpenViking", "experiments/argus", "core/spire/workload",
-          "core/spire/helpers/spiffe-helper", "core/tc_api/tc_api/services/launch.py",
+          "core/spire/helpers/spiffe-helper", "core/spire/plugins/argus-tdx-workloadattestor",
+          "core/argus/src", "core/argus/Cargo.toml", "core/argus/Cargo.lock",
+          "core/tc_api/tc_api/services/launch.py",
           "core/tc_api/tc_api/services/workload_profile.py", "core/tc_api/tests/test_workload_profile.py"]
 EXCLUDED = {"__pycache__", ".pytest_cache", "node_modules", "dist", "build", ".git", ".venv", "venv", "vendor"}
 SUFFIXES = {".py", ".go", ".mod", ".sum", ".json", ".md", ".mjs", ".js", ".ts", ".sh", ".service", ".hcl", ".conf", ".rego", ".txt", ".yaml", ".yml", ".lock", ".rs", ".toml", ".proto"}

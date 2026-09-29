@@ -25,6 +25,9 @@ def generate(config_file, output):
     source, output = Path(config_file).resolve(), Path(output).resolve()
     c = read(source)
     require(not output.exists(), "suite output must be new")
+    if c.get("cases") == ["continuous"]:
+        from continuous_suite import generate as generate_continuous
+        return generate_continuous(source, output)
     selected_cases = c.get("cases", ["private-memory"])
     require(isinstance(selected_cases, list) and selected_cases and len(selected_cases) == len(set(selected_cases))
             and set(selected_cases) <= {"private-memory", "steady-api", "locomo"}, "select private-memory, steady-api or locomo")

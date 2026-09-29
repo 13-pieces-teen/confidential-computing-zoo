@@ -11,6 +11,7 @@ import io
 import json
 from pathlib import Path
 import sys
+import time
 from urllib.parse import urlsplit, parse_qs
 
 from common import atomic, digest, read, require, sha
@@ -131,23 +132,104 @@ def capture(config, request_file, context_file, output):
     return archive
 
 
+def approve_reference(bundle, verifier_bin, policy_bin, output):
+    """Freeze an independently collected legal run before comparison activity."""
+    from admission_evidence import verify
+    bundle = Path(bundle).resolve()
+    result = verify(bundle, verifier_bin, policy_bin)
+    require(result["result"] == "PASS" and result.get("admission", {}).get("status") == "OBSERVED_ADMITTED",
+            "approved reference requires a reverified legal admission observation")
+    request = read(bundle / "trustee/history-request.json")
+    reference = {"schema": "argus.fixed-approved-measurement.v1", "approved_at_ms": time.time_ns() // 1000000,
+                 "reference_bundle": str(bundle), "bundle_manifest_sha256": sha(bundle / "manifest.json"),
+                 "rtmr2": request["rtmr2"], "target": result["target"], "nonce": result["nonce"],
+                 "quote_sha256": sha(bundle / "plugin/quote.bin"),
+                 "policy_sha256": sha(bundle / "approved-policy.rego"),
+                 "verification_scope": result["scope"], "offline_dcap": "NOT_RUN"}
+    require(not Path(output).exists(), "reference already exists; do not replace a frozen reference")
+    atomic(output, reference)
+    return reference
+
+
+def approved_measurement(reference_file, request):
+    reference = read(reference_file)
+    require(reference.get("schema") == "argus.fixed-approved-measurement.v1", "unsupported approved reference")
+    bundle = Path(reference["reference_bundle"])
+    manifest = read(bundle / "manifest.json")
+    require(sha(bundle / "manifest.json") == reference["bundle_manifest_sha256"], "reference bundle manifest changed")
+    for name, expected in manifest["files"].items():
+        path = (bundle / name).resolve()
+        require(path.is_relative_to(bundle.resolve()) and sha(path) == expected, "reference original changed")
+    original = read(bundle / "trustee/history-request.json")
+    original_target = {k: v for k, v in original["runtime_data"].items() if k not in ("protocol", "nonce")}
+    require(reference["rtmr2"] == original["rtmr2"] and reference["nonce"] == original["runtime_data"]["nonce"]
+            and reference["target"] == original_target
+            and reference["quote_sha256"] == sha(bundle / "plugin/quote.bin")
+            and reference["policy_sha256"] == sha(bundle / "approved-policy.rego"), "reference association changed")
+    target = {k: v for k, v in request["runtime_data"].items() if k not in ("protocol", "nonce")}
+    require(target == reference["target"], "fixed measurement comparison must retain the same target and policy")
+    return reference
+
+
+def replay_bundle(bundle, reference_file, verifier_bin, policy_bin, output):
+    from admission_evidence import verify, history_verifier
+    bundle = Path(bundle).resolve()
+    checked = verify(bundle, verifier_bin, policy_bin)
+    require(checked["result"] == "PASS", "comparison admission originals must pass context reverification")
+    request = read(bundle / "trustee/history-request.json")
+    reference = approved_measurement(reference_file, request)
+    require(sha(bundle / "approved-policy.rego") == reference["policy_sha256"],
+            "fixed measurement comparison requires the same approved policy bytes, not only its ID")
+    require(checked["nonce"] == reference["nonce"] or checked["captured_at_ms"] >= reference["approved_at_ms"],
+            "reference must be frozen before comparison capture")
+    result = diagnose(history_verifier(bundle), request, reference["rtmr2"])
+    result.update(fixed_reference_status="FROZEN_APPROVED_CAPTURE", approved_reference_sha256=sha(reference_file),
+                  bundle_manifest_sha256=checked["bundle_manifest_sha256"], same_approved_policy=True,
+                  offline_dcap="NOT_RUN")
+    atomic(output, result)
+    return result
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
     a = sub.add_parser("capture")
     for name in ("config", "request", "context", "output"): a.add_argument("--" + name, required=True)
     a = sub.add_parser("replay")
-    for name in ("config", "archive", "fixed-rtmr", "output"): a.add_argument("--" + name, required=True)
+    for name in ("config", "archive", "output"): a.add_argument("--" + name, required=True)
+    group = a.add_mutually_exclusive_group(required=True)
+    group.add_argument("--approved-reference")
+    group.add_argument("--fixed-rtmr", help="legacy exploratory value; not a fixed-approved paper reference")
+    a = sub.add_parser("approve-reference")
+    for name in ("bundle", "verifier-bin", "policy-bin", "output"): a.add_argument("--" + name, required=True)
+    a = sub.add_parser("replay-bundle")
+    for name in ("bundle", "approved-reference", "verifier-bin", "policy-bin", "output"): a.add_argument("--" + name, required=True)
     args = p.parse_args()
     if args.command == "capture":
         capture(args.config, args.request, args.context, args.output)
+    elif args.command == "approve-reference":
+        approve_reference(args.bundle, args.verifier_bin, args.policy_bin, args.output)
+    elif args.command == "replay-bundle":
+        replay_bundle(args.bundle, args.approved_reference, args.verifier_bin, args.policy_bin, args.output)
     else:
         archive = read(args.archive)
         validate_archive(args.config, archive)
-        require(len(args.fixed_rtmr) == 96 and all(c in "0123456789abcdef" for c in args.fixed_rtmr), "expected 48-byte fixed RTMR")
+        reference = approved_measurement(args.approved_reference, archive["request"]) if args.approved_reference else None
+        fixed = reference["rtmr2"] if reference else args.fixed_rtmr
+        require(len(fixed) == 96 and all(c in "0123456789abcdef" for c in fixed), "expected 48-byte fixed RTMR")
         cls, _, _ = production()
         verifier = cls(read(args.config)); verifier.opener = ArchiveTransport(archive["entries"])
-        result = diagnose(verifier, archive["request"], args.fixed_rtmr)
+        result = diagnose(verifier, archive["request"], fixed)
+        result["fixed_reference_status"] = "FROZEN_APPROVED_CAPTURE" if reference else "UNAPPROVED_EXPLORATORY"
+        if reference:
+            from datetime import datetime
+            captured = archive["verification_context"].get("captured_at")
+            require(isinstance(captured, str), "comparison capture time is missing")
+            at = datetime.fromisoformat(captured.replace("Z", "+00:00"))
+            require(at.tzinfo is not None, "capture time needs an explicit timezone")
+            same = archive["request"]["runtime_data"]["nonce"] == reference["nonce"]
+            require(same or at.timestamp() * 1000 >= reference["approved_at_ms"], "reference must be frozen before comparison capture")
+            result["approved_reference_sha256"] = sha(args.approved_reference)
         result["archive_sha256"] = sha(args.archive)
         atomic(args.output, result)
 

@@ -24,6 +24,7 @@ PYTHONPATH="$SPIRE_ROOT/../tc_api:$SPIRE_ROOT/../tlog${PYTHONPATH:+:$PYTHONPATH}
     "$WORKLOAD_ROOT/trustee" -q
 (cd "$SPIRE_ROOT/plugins/argus-tdx-nodeattestor" && go build -trimpath -o "$OUT/bin/argus-tdx-nodeattestor-agent" ./cmd/agent && go build -trimpath -o "$OUT/bin/argus-tdx-nodeattestor-server" ./cmd/server)
 (cd "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" && go build -trimpath -o "$OUT/bin/argus-tdx-workloadattestor" ./cmd/argus-tdx-workloadattestor)
+(cd "$SPIRE_ROOT/plugins/argus-tdx-workloadattestor" && go build -trimpath -o "$OUT/bin/argus-verify-admission" ./cmd/argus-verify-admission)
 (cd "$WORKLOAD_ROOT" && go build -trimpath -o "$OUT/bin/argus-workload" ./cmd/argus-workload)
 (cd "$SPIRE_ROOT/helpers/spiffe-helper" && go build -trimpath -ldflags '-X github.com/spiffe/spiffe-helper/pkg/version.gittag=0.11.0-argus.1' -o "$OUT/bin/spiffe-helper" ./cmd/spiffe-helper)
 for tool in argus-agent-config spiffe-authz spiffe-mtls-probe spiffe-client-credentials; do
@@ -32,6 +33,8 @@ done
 (export CARGO_TARGET_DIR="$OUT/cargo-provider"; cd "$SPIRE_ROOT/../argus" && cargo test --locked --bin argus-spire-evidence-provider && cargo build --locked --release --bin argus-spire-evidence-provider)
 install -m 0755 "$OUT/cargo-provider/release/argus-spire-evidence-provider" "$OUT/bin/"
 (export CARGO_TARGET_DIR="$OUT/cargo-trustee"; cd "$WORKLOAD_ROOT/trustee-contract" && cargo test --locked)
+(export CARGO_TARGET_DIR="$OUT/cargo-trustee"; cd "$WORKLOAD_ROOT/trustee-contract" && cargo build --locked --release --bin argus-replay-policy)
+install -m 0755 "$OUT/cargo-trustee/release/argus-replay-policy" "$OUT/bin/"
 archive="$OUT/spire-1.15.3-linux-amd64-musl.tar.gz"
 curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
     https://github.com/spiffe/spire/releases/download/v1.15.3/spire-1.15.3-linux-amd64-musl.tar.gz -o "$archive"

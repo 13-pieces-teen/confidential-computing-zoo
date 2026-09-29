@@ -1,5 +1,7 @@
 # Argus 4—7：实现与实验入口
 
+2026-09-29 持续任务实现以 `0d78ed0` 为代码基线，现已按飞书 revision **1329** 核对，见 [PAPER-ALIGNMENT-1329.md](PAPER-ALIGNMENT-1329.md)。运行入口为 [CONTINUOUS.md](CONTINUOUS.md)，包括真实 Agent 两工具、完整事务接收、证明导出/Quote 计数、故障/无故障配对与联合评分。前轮建设见 [IMPLEMENTATION-20260929.md](IMPLEMENTATION-20260929.md)；下方较早测试数字不代表本轮代码已通过测试。
+
 目录职责与模块关系见 [STRUCTURE.md](STRUCTURE.md)，完整生产组件索引见 [ARGUS.md](../../ARGUS.md)。配置示例统一位于 [examples/](examples/)，运行配置片段位于 [config/](config/)。
 
 最新整体 review、修复及发布范围见 [REVIEW-20260926.md](REVIEW-20260926.md)。

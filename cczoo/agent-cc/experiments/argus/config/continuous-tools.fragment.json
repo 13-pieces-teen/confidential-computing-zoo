@@ -1,0 +1,14 @@
+{
+  "plugins": {
+    "slots": {"contextEngine": "openviking"},
+    "entries": {"openviking": {"config": {
+      "mode": "remote",
+      "autoCapture": false,
+      "autoRecall": false,
+      "enabledTools": ["memory_recall", "memory_store"],
+      "recallTargetTypes": ["user"],
+      "recallResources": false
+    }}}
+  },
+  "tools": {"allow": ["memory_recall", "memory_store"]}
+}

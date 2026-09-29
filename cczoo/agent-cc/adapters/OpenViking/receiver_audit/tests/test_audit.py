@@ -87,6 +87,17 @@ class DatagramAuditTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await self.request([{"type": "http.request", "body": b"fact"}], channel=channel)), 1)
         self.assertGreater(channel.dropped, 0)
 
+    async def test_exit_observation_requires_pid_lifetime_change(self):
+        channel = self.telemetry()
+        channel.emit("watermark"); self.collector.drain()
+        actual = process_facts(os.getpid())
+        with patch("receiver_audit.collector.process_facts", return_value=dict(actual, cgroup_sha256="changed")):
+            self.collector.observe_exits()
+        self.assertFalse(any(r["type"] == "source_exited" for r in self.rows()))
+        with patch("receiver_audit.collector.process_facts", return_value=dict(actual, start_time="replacement")):
+            self.collector.observe_exits()
+        self.assertTrue(any(r["type"] == "source_exited" for r in self.rows()))
+
     async def test_disconnect_does_not_invalidate_later_complete_intervals(self):
         channel = self.telemetry()
         await self.request([{"type": "http.disconnect"}], channel=channel)

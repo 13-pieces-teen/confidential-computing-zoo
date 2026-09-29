@@ -112,10 +112,21 @@ def test_protected_audit_settings_reach_real_profile_validation(tmp_path, monkey
         profile.profile_settings({"workload_attestation_profile": profile.PROFILE}, "memory")
     bad_directory["enabled"] = False
     for update in ({"run_id": "../control"}, {"mode": "auto"}, {"image_config_digest": "latest"},
-                   {"socket_directory": "/var/run/docker.sock"}):
+                   {"socket_directory": "/var/run/docker.sock"}, {"synthetic_facts": "true"}):
         config.write_text(json.dumps({"schema_version": 1, "workload": settings, "receiver_audit": {**audit, **update}}))
         with pytest.raises(ValueError):
             profile.profile_settings({"workload_attestation_profile": profile.PROFILE}, "memory")
+
+
+def test_fact_matching_is_explicit_in_launch_environment_and_projection():
+    settings = {"config_path": "/etc/openviking/config.json", "config_host_path": "/srv/config.json",
+                "data_path": "/var/lib/openviking", "data_host_path": "/srv/data", "published_port": 9001,
+                "tls_port": 443, "receiver_audit": {"run_id": "experiment", "mode": "on"}}
+    assert "ARGUS_AUDIT_SYNTHETIC_FACTS" not in profile.launch_environment(settings)
+    for enabled, expected in ((False, "0"), (True, "1")):
+        settings["receiver_audit"]["synthetic_facts"] = enabled
+        assert profile.launch_environment(settings)["ARGUS_AUDIT_SYNTHETIC_FACTS"] == expected
+        assert "ARGUS_AUDIT_SYNTHETIC_FACTS" in profile.security_projection(settings, "launch", "memory")["launch_env_keys"]
 
 
 @pytest.mark.parametrize("uid,mode,size", [

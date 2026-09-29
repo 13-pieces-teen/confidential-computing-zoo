@@ -1,5 +1,7 @@
 # 双机交付和验收顺序
 
+**当前对应论文 revision 1329：**先并行推进 [E1 可达性审查](E1-REACHABILITY.md) 和 [单客户端持续任务](CONTINUOUS.md)，再做共享故障恢复、三客户端 Full/native 配对。变化及未落实范围见 [核对记录](PAPER-ALIGNMENT-1329.md)。完整远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)。新增测试入口 `bash experiments/argus/remote-software-checks.sh client|server|analysis`；从 `cczoo/agent-cc` 执行。E2/E3/E5 与 LoCoMo 的现有配方仍按下方独立使用。
+
 本文件是待远程运行的步骤。代码、本地测试、镜像构建、真实准入、真实业务结果分别记录；不能把脚本已生成写成远程 PASS。`IP1` 指原有 SPIRE Server/客户端控制侧及客户端 TDVM，`IP2` 指服务 TDVM/TC API/OpenViking 侧；沿用已有连接配置和信任根。
 
 ## 两侧先准备
@@ -75,7 +77,7 @@ PYTHONPATH=core/tlog python3 experiments/argus/admission_cases.py --output /secu
 
 真实准入保留服务器 nonce、Quote/REPORTDATA 核验、批准策略、完整历史、当前实例、Entry 及实际 TLS/接收证据。配置错配/旧证据由外层 Trustee/协议验证，离线 LogVerifier 的 ALLOW 不能覆盖这一层。
 
-真实路径使用新增 [E1-REAL-RUNS.md](E1-REAL-RUNS.md) 的固定配方及 `admission_trial.py preflight/observe/compare`：合法准入→旧实例停止→同镜像新实例的旧绑定拒绝→独立准入成功，另跑无关受控活动与配置变化。生产 verify 成功关联到实际 accepted nonce；本地 target checker 拒绝标为 `LOCAL_BINDING_REJECTED`，不能直接写成远端 Verifier DENY。当前 CLI 没有完整导出原 Quote、request 与签名 EAR 的接口，对缺原件的外层负例保留 NOT_RUN。
+真实路径使用 [E1-REAL-RUNS.md](E1-REAL-RUNS.md) 的固定配方及 `admission_trial.py preflight/observe/compare`：合法准入→旧实例停止→同镜像新实例的旧绑定拒绝→独立准入成功，另跑无关受控活动与配置变化。生产 verify 成功关联到实际 accepted nonce；本地 target checker 拒绝标为 `LOCAL_BINDING_REJECTED`，不能直接写成远端 Verifier DENY。新增可选 [准入原件导出与复核](ADMISSION-ARCHIVE.md)，必须实际启用并取得完整归档；缺原件仍保持 UNKNOWN/NOT_RUN，不从日志补造 Evidence/EAR。
 
 E3 用 [node_attestation_observe.py](../../core/spire/workload/scripts/node_attestation_observe.py) 在首次加入/普通 Agent SVID 续期前后采样，独立记录 Workload SVID 和 Workload Quote。用 `lifecycle_evidence.py` 检查同实例轮换和恢复；缺少创建事件完整覆盖时，不把前后相同容器快照写成“没有创建过重复容器”。
 

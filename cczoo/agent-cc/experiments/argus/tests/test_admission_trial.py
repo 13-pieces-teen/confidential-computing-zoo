@@ -109,7 +109,7 @@ class AdmissionTrialTests(unittest.TestCase):
         result = compare(before, after)
         self.assertEqual(result['result'], 'OBSERVED')
         self.assertIn('local', result['scope'])
-        self.assertEqual(result['raw_quote_and_signed_ear_archive'], 'NOT_PROVIDED_BY_PRODUCTION_CLI')
+        self.assertEqual(result['raw_quote_and_signed_ear_archive'], 'SEPARATE_ARCHIVE_REQUIRED')
 
 
 if __name__ == '__main__':

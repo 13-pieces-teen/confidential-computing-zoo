@@ -7,6 +7,7 @@ creates a container. Remote freshness/Quote measurements remain separate.
 import argparse
 import hashlib
 import http.client
+import ipaddress
 import json
 import math
 import os
@@ -18,7 +19,8 @@ import struct
 import subprocess
 import sys
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
+from urllib.request import build_opener, ProxyHandler, HTTPRedirectHandler, Request
 
 from common import append, atomic, digest, read, require
 
@@ -81,6 +83,83 @@ class DockerConnection(http.client.HTTPConnection):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.settimeout(self.timeout)
         self.sock.connect(self.path)
+
+
+def quote_snapshot(socket_path):
+    """Read actual hardware-generation counters from the existing Provider UDS."""
+    started = now_ms()
+    conn = DockerConnection(str(socket_path))
+    try:
+        conn.request("GET", "/ra/v1/quote-counters")
+        response = conn.getresponse()
+        raw = response.read(65537)
+        require(response.status == 200 and len(raw) <= 65536, "Provider counters unavailable")
+        value = json.loads(raw)
+        require(value.get("schema") == "argus.quote-counters.v1", "unexpected Provider counter schema")
+        require(value.get("provider_instance_id") and value.get("agent_id"), "Provider identity missing")
+        for kind in ("node", "workload"):
+            counts = value[kind]
+            require(all(type(counts.get(k)) is int and counts[k] >= 0 for k in ("attempted", "generated", "failed")), "invalid Quote counters")
+            require(counts["generated"] + counts["failed"] <= counts["attempted"], "inconsistent Quote counters")
+        value.update(socket_path=str(socket_path), observation_started_at_ms=started, observation_completed_at_ms=now_ms())
+        return value
+    finally:
+        conn.close()
+
+
+def quote_delta(before, after):
+    result = {"result": "UNKNOWN", "scope": "actual Provider generation; includes discarded Quotes", "node": None, "workload": None}
+    if (before.get("schema") != "argus.quote-counters.v1" or after.get("schema") != before.get("schema")
+            or any(not before.get(k) or before[k] != after.get(k) for k in ("provider_instance_id", "agent_id", "socket_path"))
+            or before.get("observation_completed_at_ms", float("inf")) > after.get("observation_started_at_ms", 0)):
+        return result | {"reason": "Provider process/source changed or observation windows overlap"}
+    for kind in ("node", "workload"):
+        old, new = before.get(kind, {}), after.get(kind, {})
+        if not all(type(x.get(k)) is int and x[k] >= 0 for x in (old, new) for k in ("attempted", "generated", "failed")):
+            return result | {"reason": "generation counter missing"}
+        if any(x["attempted"] != x["generated"] + x["failed"] for x in (old, new)):
+            return result | {"reason": "Quote generation was in flight at a snapshot boundary"}
+        delta = {k: new[k] - old[k] for k in ("attempted", "generated", "failed")}
+        if min(delta.values()) < 0:
+            return result | {"reason": "counter reset"}
+        result[kind] = delta
+    return result | {"result": "OBSERVED", "provider_instance_id": before["provider_instance_id"], "agent_id": before["agent_id"]}
+
+
+def storage_ready(config_file, url, api_key_file, expected_content_sha256, run_id):
+    """One read-only local-backend content probe, separate from ingress admission."""
+    workload, config = runtime(config_file)
+    deployment = workload.Deployment(config)
+    target = json.loads(workload.run([deployment.bin / "argus-workload", "-action", "check", "-registration", deployment.target]))
+    parsed = urlsplit(url)
+    require(parsed.scheme == "http" and parsed.hostname and ipaddress.ip_address(parsed.hostname).is_loopback
+            and not parsed.username and not parsed.password and not parsed.fragment
+            and parsed.port == int(target["listen_port"]) and parsed.path == "/api/v1/content/read",
+            "storage probe requires the local backend's content-read route and bound listen port")
+    require(re.fullmatch(r"[0-9a-f]{64}", expected_content_sha256), "expected persisted content hash required")
+    key = workload.protected_file(api_key_file).read_text().strip()
+    require(key, "empty business key")
+    class NoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+    started = now_ms()
+    result = {"schema": "argus.storage-ready.v1", "run_id": run_id, "target": target,
+              "started_at_ms": started, "result": "UNKNOWN", "expected_content_sha256": expected_content_sha256,
+              "scope": "local persisted-content read; not client ingress admission or Agent task success"}
+    try:
+        opener = build_opener(ProxyHandler({}), NoRedirect())
+        with opener.open(Request(url, headers={"X-API-Key": key}), timeout=5) as response:
+            raw = response.read(1_048_577)
+            require(len(raw) <= 1_048_576, "storage probe response too large")
+            value = json.loads(raw)
+            content = value.get("result")
+            require(response.status == 200 and value.get("status") == "ok" and isinstance(content, str), "storage read did not return content")
+            actual = hashlib.sha256(content.encode()).hexdigest()
+            result.update(result="PASS" if actual == expected_content_sha256 else "FAIL", observed_content_sha256=actual)
+    except (OSError, ValueError, KeyError) as error:
+        result["error_class"] = type(error).__name__
+    result["completed_at_ms"] = now_ms()
+    return result
 
 
 def observe_creates(socket_path, workload_id, duration, output):
@@ -206,6 +285,12 @@ def resumed_launch(before, after, resumed, creates):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    c = sub.add_parser("quote-snapshot")
+    c.add_argument("--provider-socket", required=True)
+    c.add_argument("--output", required=True)
+    c = sub.add_parser("storage-ready")
+    for name in ("config", "url", "api-key-file", "expected-content-sha256", "run-id", "output"):
+        c.add_argument("--" + name, required=True)
     c = sub.add_parser("snapshot")
     c.add_argument("--config", required=True)
     c.add_argument("--output", required=True)
@@ -222,6 +307,12 @@ def main():
             c.add_argument("--resume-result", required=True)
             c.add_argument("--creates")
     args = parser.parse_args()
+    if args.command == "quote-snapshot":
+        atomic(args.output, quote_snapshot(args.provider_socket))
+        return
+    if args.command == "storage-ready":
+        atomic(args.output, storage_ready(args.config, args.url, args.api_key_file, args.expected_content_sha256, args.run_id))
+        return
     if args.command == "observe-creates":
         raise SystemExit(0 if observe_creates(args.docker_socket, args.workload_id, args.duration, args.output) else 2)
     if args.command == "snapshot":

@@ -34,8 +34,10 @@ class DeploymentTests(unittest.TestCase):
         c = alternative()
         c["receiver_audit"] = {"run_id": "trial-a", "mode": "on", "image_config_digest": c["approved"]["image_config_digest"]}
         self.assertEqual(Deployment(c).receiver_audit["run_id"], "trial-a")
+        c["receiver_audit"]["synthetic_facts"] = True
+        self.assertTrue(Deployment(c).receiver_audit["synthetic_facts"])
         for field, value in (("run_id", "../control"), ("mode", "auto"),
-                             ("image_config_digest", "sha256:" + "f" * 64)):
+                             ("image_config_digest", "sha256:" + "f" * 64), ("synthetic_facts", "true")):
             bad = copy.deepcopy(c)
             bad["receiver_audit"][field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):

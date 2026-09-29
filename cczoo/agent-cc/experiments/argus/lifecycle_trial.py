@@ -14,7 +14,7 @@ import time
 from urllib.parse import urlsplit
 
 from common import atomic, digest, read, require, sha
-from lifecycle_evidence import rotation, resumed_launch
+from lifecycle_evidence import rotation, resumed_launch, quote_delta
 
 ROOT = Path(__file__).resolve().parents[2]
 NODE_SCRIPT = ROOT / 'core/spire/workload/scripts/node_attestation_observe.py'
@@ -50,6 +50,9 @@ def capture_phase(config, directory, phase):
     if config.get('workload_config'):
         commands.append(('workload', [sys.executable, str(Path(__file__).with_name('lifecycle_evidence.py')),
                                      'snapshot', '--config', config['workload_config']]))
+    if config.get('provider_socket'):
+        commands.append(('provider', [sys.executable, str(Path(__file__).with_name('lifecycle_evidence.py')),
+                                      'quote-snapshot', '--provider-socket', config['provider_socket']]))
     for kind, argv in commands:
         output = directory / (kind+'-'+phase+'.json')
         item = {'result': 'UNKNOWN', 'started_at_ms': now_ms(), 'source': output.name}
@@ -81,7 +84,7 @@ def observe(config_file, output):
     result = {'schema': 'argus.lifecycle-trial.v1', 'run_id': config['run_id'], 'case': config['case'],
               'target_id': config['target_id'], 'config_sha256': digest(config), 'complete': False,
               'started_at_ms': now_ms(), 'duration_seconds': duration, 'automatic_mutations': False,
-              'workload_quote_source': 'UNAVAILABLE'}
+              'workload_quote_source': 'provider_generation_counters' if config.get('provider_socket') else 'UNAVAILABLE'}
     atomic(directory/'observation.json', result)
     result['before'] = capture_phase(config, directory, 'before')
     result['observation_started_at_ms'] = now_ms()
@@ -201,7 +204,8 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
               'observation_sha256':sha(directory/'observation.json'), 'automatic_mutations':False,
               'node':{'result':'NOT_RUN'}, 'workload':{'result':'NOT_RUN'},
               'node_quote_samples':{'result':'NOT_RUN','count':None},
-              'workload_quote_samples':{'result':'UNKNOWN','count':None,'reason':'no dedicated Workload Quote counter captured; SVID changes do not establish Quote counts'},
+              'workload_quote_samples':{'result':'UNKNOWN','count':None,'reason':'received Workload Quote samples are not captured here; real generation counts are reported separately in quote_generated'},
+              'quote_generated':{'result':'NOT_RUN','node':None,'workload':None},
               'business_continuity':{'result':'NOT_RUN','coverage':'NOT_RUN'}}
     if observation.get('complete') is not True:
         return result | {'reason':'observer was interrupted; existing snapshots are preserved and no action is replayed'}
@@ -212,6 +216,9 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
     try:
         node = snapshot_pair(directory, observation, 'node')
         workload = snapshot_pair(directory, observation, 'workload')
+        provider = snapshot_pair(directory, observation, 'provider')
+        if provider:
+            result['quote_generated'] = quote_delta(*provider)
         if node:
             mode = 'enrollment' if observation['case'] == 'node-enrollment' else 'renewal'
             result['node'] = node_observer().assess(*node, mode, clock_uncertainty_ms)

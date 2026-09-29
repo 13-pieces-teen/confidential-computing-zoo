@@ -189,7 +189,7 @@ def compare(before, after):
             'case_setup_observed': setup, 'declared_property_observed': bool(observed),
             'result': 'OBSERVED' if setup and observed else 'UNKNOWN', 'scope': scope,
             'actual_admission_before': before['actual_admission'], 'actual_admission_after': after['actual_admission'],
-            'raw_quote_and_signed_ear_archive': 'NOT_PROVIDED_BY_PRODUCTION_CLI',
+            'raw_quote_and_signed_ear_archive': 'SEPARATE_ARCHIVE_REQUIRED',
             'native_expected_failure': 'NOT_ASSUMED'}
 
 

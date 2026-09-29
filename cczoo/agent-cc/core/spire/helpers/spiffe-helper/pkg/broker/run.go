@@ -129,7 +129,8 @@ func subscribe(ctx context.Context, agentAddress string, c Config, t protocol.Ta
 		return err
 	}
 	// Emit before sending the request so appraisal events follow this boundary.
-	log.Printf("workload subscription launch_id=%s container_id=%s pid=%s start_time=%s policy=%s", t.LaunchID, t.ContainerID, t.PID, t.StartTime, t.PolicyID)
+	log.Printf("workload subscription launch_id=%s container_id=%s pid=%s start_time=%s policy=%s subscription_id=%s", t.LaunchID, t.ContainerID, t.PID, t.StartTime, t.PolicyID, p.InvocationID)
+	defer log.Printf("workload subscription ended launch_id=%s subscription_id=%s", t.LaunchID, p.InvocationID)
 	stream, err := api.NewAPIClient(conn).SubscribeToX509SVID(metadata.AppendToOutgoingContext(ctx, "broker.spiffe.io", "true"), &api.SubscribeToX509SVIDRequest{Reference: &api.WorkloadReference{Reference: ref}})
 	if err != nil {
 		return err
@@ -211,7 +212,7 @@ func consume(ctx context.Context, recv func() (*api.SubscribeToX509SVIDResponse,
 				return err
 			}
 			deadline = c.Expires
-			log.Printf("target SVID published serial=%s expires=%s launch_id=%s container_id=%s pid=%s start_time=%s policy=%s", c.Serial, c.Expires.UTC().Format(time.RFC3339), t.LaunchID, t.ContainerID, t.PID, t.StartTime, t.PolicyID)
+			log.Printf("target SVID published serial=%s expires=%s launch_id=%s container_id=%s pid=%s start_time=%s policy=%s subscription_id=%s", c.Serial, c.Expires.UTC().Format(time.RFC3339), t.LaunchID, t.ContainerID, t.PID, t.StartTime, t.PolicyID, p.InvocationID)
 		}
 	}
 }

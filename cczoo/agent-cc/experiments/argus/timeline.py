@@ -205,6 +205,7 @@ def snapshot(deployment):
     if any(name not in units or units[name].get("LoadState") != "loaded" for name in names):
         raise ValueError("configured observer unit is not loaded")
     helper, entry = (units[name] for name in names)
+    target = None
     try:
         receipt = json.loads((deployment.credentials / "ready").read_text())
         target = json.loads(deployment.target.read_text())
@@ -217,6 +218,7 @@ def snapshot(deployment):
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         raise ValueError("readiness could not be observed") from None
     return {"ready": ready, "readiness": readiness,
+            "target": target,
             "helper_active": helper.get("ActiveState") == "active", "helper_invocation": helper.get("InvocationID"),
             "entry_active": entry.get("ActiveState") == "active" and entry.get("MainPID", "0") != "0",
             "entry_stopped": entry.get("ActiveState") in ("inactive", "failed") and entry.get("MainPID") == "0",
@@ -231,6 +233,7 @@ def observe(deployment, output, run_id, *, duration=60, interval=.25, stop_file=
         raise ValueError("observer stop-file already exists; use a fresh experiment path")
     deadline = time.monotonic() + duration
     healthy, last_ready, last_entry, seen, failures = False, None, None, set(), 0
+    previous_ready = False
     with Path(output).open("x", encoding="utf-8") as stream:
         def emit(row):
             stream.write(json.dumps({"run_id": run_id, "schema": "argus.lifecycle-observation.v1", **row}) + "\n")
@@ -249,6 +252,12 @@ def observe(deployment, output, run_id, *, duration=60, interval=.25, stop_file=
                 if not healthy and state["ready"] and state["entry_active"] and state["helper_active"]:
                     healthy = True
                     emit({"type": "observer_ready", **ended})
+                current_ready = state["ready"] and state["entry_active"] and state["helper_active"]
+                if current_ready and not previous_ready:
+                    emit({"type": "entry_ready", **ended, "target": state.get("target"),
+                          "helper_invocation_id": state.get("helper_invocation"), "verified": True,
+                          "timing": "poll_observation", "source": "read_only_readiness_and_systemctl_poll"})
+                previous_ready = current_ready
                 for kind, changed, prior, boundary in (
                     ("detected", not state["ready"], last_ready, "readiness_withdrawal_or_expiry"),
                     ("entry_stopped", state["entry_stopped"], last_entry, "systemd_unit_inactive_no_main_pid")):

@@ -26,7 +26,7 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -35,7 +35,8 @@ use sha2::{Digest, Sha384};
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tdx_quote::{tsm::TsmInstanceQuoteGenerator, QuoteError, ReportData};
 
@@ -202,6 +203,50 @@ struct AppState {
     observe: fn(&Path, &Path) -> Result<workload::Target>,
     trucon_socket_path: PathBuf,
     snapshot: fn(&Path) -> Result<workload::trucon::Snapshot>,
+    counters: Arc<QuoteCounters>,
+}
+
+#[derive(Default, Clone, Serialize)]
+struct QuoteCount {
+    attempted: u64,
+    generated: u64,
+    failed: u64,
+}
+
+struct QuoteCounters {
+    instance_id: String,
+    counts: Mutex<[QuoteCount; 2]>,
+}
+
+impl Default for QuoteCounters {
+    fn default() -> Self {
+        let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap_or_default();
+        Self {
+            instance_id: format!("{}:{}:{}", boot.trim(), std::process::id(),
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos()),
+            counts: Mutex::new(Default::default()),
+        }
+    }
+}
+
+impl AppState {
+    // Count the real generation boundary, including Quotes discarded because a
+    // subsequent target/history check changed. No lock covers hardware I/O.
+    fn generate(&self, kind: usize, data: &ReportData) -> Result<Vec<u8>, QuoteError> {
+        self.counters.counts.lock().unwrap_or_else(|p| p.into_inner())[kind].attempted += 1;
+        let result = self.quote_source.generate_quote(data);
+        let mut counts = self.counters.counts.lock().unwrap_or_else(|p| p.into_inner());
+        if result.is_ok() { counts[kind].generated += 1; } else { counts[kind].failed += 1; }
+        result
+    }
+}
+
+async fn quote_counters(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let counts = state.counters.counts.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    Json(serde_json::json!({"schema":"argus.quote-counters.v1",
+        "provider_instance_id":state.counters.instance_id, "agent_id":state.agent_id,
+        "captured_at_ms":SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),
+        "node":counts[0], "workload":counts[1]}))
 }
 
 #[derive(Debug)]
@@ -275,9 +320,8 @@ async fn node_evidence_handler(
     let nonce = decode_fixed_32("nonce", &request.nonce)?;
     let proof_public_key = decode_fixed_32("proof_public_key", &request.proof_public_key)?;
     let report_data = node_report_data(&state.agent_id, &nonce, &proof_public_key);
-    let quote_source = state.quote_source;
     // TSM configfs I/O is blocking, so keep it off the async HTTP worker.
-    let quote = tokio::task::spawn_blocking(move || quote_source.generate_quote(&report_data))
+    let quote = tokio::task::spawn_blocking(move || state.generate(0, &report_data))
         .await
         .map_err(ProviderError::QuoteTask)?
         .map_err(ProviderError::Quote)?;
@@ -300,10 +344,12 @@ fn router(agent_id: String, quote_source: Arc<dyn QuoteSource>) -> Router {
         observe: workload::load_and_check,
         trucon_socket_path: PathBuf::from(workload::trucon::DEFAULT_SOCKET),
         snapshot: workload::trucon::snapshot,
+        counters: Arc::new(QuoteCounters::default()),
     })
 }
 fn provider_router(state: AppState) -> Router {
-    let mut app = Router::new().route("/ra/v1/node-evidence", post(node_evidence_handler));
+    let mut app = Router::new().route("/ra/v1/node-evidence", post(node_evidence_handler))
+        .route("/ra/v1/quote-counters", get(quote_counters));
     if state.workload_registration_path.is_some() {
         app = app.route("/ra/v1/workload-evidence", post(workload_evidence_handler));
     }
@@ -330,8 +376,8 @@ async fn workload_evidence_handler(
         return Err((StatusCode::BAD_REQUEST, "invalid workload request".into()));
     }
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value> {
-        let path = state.workload_registration_path.context("workload endpoint disabled")?;
-        let data_path = state.workload_data_path.context("workload data path is not configured")?;
+        let path = state.workload_registration_path.as_ref().context("workload endpoint disabled")?;
+        let data_path = state.workload_data_path.as_ref().context("workload data path is not configured")?;
         let before = (state.observe)(&path, &data_path)?;
         if before["agent_id"] != state.agent_id {bail!("registered target differs from configured SPIRE Agent");}
         if before["pid"] != request.pid.to_string() {bail!("PID is not the registered target");}
@@ -347,7 +393,7 @@ async fn workload_evidence_handler(
                     continue;
                 }
             };
-            let quote = state.quote_source.generate_quote(&workload::report_data(&data)?)?;
+            let quote = state.generate(1, &workload::report_data(&data)?)?;
             if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
             if (state.snapshot)(&state.trucon_socket_path).is_ok_and(|after| after == snapshot) {
                 tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], "fresh workload TDX Quote generated");
@@ -445,6 +491,7 @@ async fn serve(config: Config) -> Result<()> {
         observe: workload::load_and_check,
         trucon_socket_path: config.trucon_socket_path,
         snapshot: workload::trucon::snapshot,
+        counters: Arc::new(QuoteCounters::default()),
     });
     let (listener, _socket_guard) = bind_socket(&config.socket_path)?;
     tracing::info!(socket = %config.socket_path.display(), "TDX Evidence Provider listening");
@@ -562,6 +609,28 @@ mod tests {
             hex::encode(report_data),
             "8c757b939b80ebf93a362bf42ba6210aae0bb71f5e572ebaf338e5f966629894a42cced85201393bf178f9f485b3e43c00000000000000000000000000000000"
         );
+    }
+
+    #[tokio::test]
+    async fn quote_counter_endpoint_reports_generation_failures_without_generating_a_quote() {
+        let app = router(TEST_AGENT_ID.into(), Arc::new(FailingQuoteSource));
+        let request_body = serde_json::json!({
+            "nonce": URL_SAFE_NO_PAD.encode([0x11; 32]),
+            "proof_public_key": URL_SAFE_NO_PAD.encode([0x22; 32]),
+        });
+        let response = app.clone().oneshot(request(request_body)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let query = Request::builder().uri("/ra/v1/quote-counters").body(Body::empty()).unwrap();
+        let response = app.oneshot(query).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let counters: serde_json::Value = serde_json::from_slice(
+            &response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(counters["schema"], "argus.quote-counters.v1");
+        assert_eq!(counters["node"]["attempted"], 1);
+        assert_eq!(counters["node"]["generated"], 0);
+        assert_eq!(counters["node"]["failed"], 1);
+        assert_eq!(counters["workload"]["attempted"], 0);
+        assert!(!counters["provider_instance_id"].as_str().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -800,6 +869,7 @@ mod tests {
             observe: observe_fixture,
             trucon_socket_path: PathBuf::from("/unused-test-socket"),
             snapshot: snapshot_fixture,
+            counters: Arc::new(QuoteCounters::default()),
         })
     }
     fn snapshot_fixture(_: &Path) -> Result<workload::trucon::Snapshot> {
@@ -851,6 +921,7 @@ mod tests {
             observe: observe_fixture,
             trucon_socket_path: history.0.clone(),
             snapshot: unavailable_snapshot,
+            counters: Arc::new(QuoteCounters::default()),
         };
         let response = provider_router(state.clone())
             .oneshot(workload_request(valid_workload_request()))
@@ -859,12 +930,17 @@ mod tests {
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         assert_eq!(source.1.load(std::sync::atomic::Ordering::SeqCst), 0);
         state.snapshot = snapshot_from_file;
+        let counters = state.counters.clone();
         let response = provider_router(state)
             .oneshot(workload_request(valid_workload_request()))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         assert_eq!(source.1.load(std::sync::atomic::Ordering::SeqCst), 3);
+        let counts = counters.counts.lock().unwrap();
+        assert_eq!(counts[1].attempted, 3);
+        assert_eq!(counts[1].generated, 3); // Includes all discarded Quotes.
+        assert_eq!(counts[1].failed, 0);
     }
     fn workload_request(body: serde_json::Value) -> Request<Body> {
         let mut r = request(body);
@@ -947,6 +1023,7 @@ mod tests {
             observe: observe_fixture,
             trucon_socket_path: PathBuf::from("/unused-test-socket"),
             snapshot: snapshot_fixture,
+            counters: Arc::new(QuoteCounters::default()),
         };
         let response = provider_router(state.clone())
             .oneshot(workload_request(valid_workload_request()))

@@ -80,6 +80,7 @@ type Client struct {
 	policyID         string
 	maxResponseBytes int64
 	now              func() time.Time
+	capture          *captureWriter
 }
 
 // NewClient constructs a bounded Trustee appraisal client.
@@ -126,11 +127,12 @@ func NewClient(
 		policyID:         policyID,
 		maxResponseBytes: maxResponseBytes,
 		now:              time.Now,
+		capture:          newCaptureWriterFromEnv(),
 	}, nil
 }
 
 // Verify accepts only a signed, current Trustee appraisal bound to this request.
-func (client *Client) Verify(ctx context.Context, input protocol.Evidence) error {
+func (client *Client) Verify(ctx context.Context, input protocol.Evidence) (verificationError error) {
 	canonical, err := input.RuntimeData.Canonical()
 	if err != nil {
 		return err
@@ -142,6 +144,14 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) error
 	if err != nil {
 		return err
 	}
+	verifiedAt := client.now()
+	var token []byte
+	var httpStatus int
+	defer func() {
+		if client.capture != nil {
+			client.capture.appraisal(input, requestBody, token, httpStatus, verifiedAt, verificationError == nil)
+		}
+	}()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, client.attestationURL, bytes.NewReader(requestBody))
 	if err != nil {
 		return err
@@ -153,19 +163,37 @@ func (client *Client) Verify(ctx context.Context, input protocol.Evidence) error
 		return fmt.Errorf("call Trustee: %w", err)
 	}
 	defer response.Body.Close()
+	httpStatus = response.StatusCode
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("Trustee returned HTTP %d", response.StatusCode)
 	}
-	token, err := readLimited(response.Body, client.maxResponseBytes)
+	token, err = readLimited(response.Body, client.maxResponseBytes)
 	if err != nil {
 		return err
 	}
-	if err := verifyEAR(token, client.earPublicKey, client.expectedIssuer, client.expectedProfile, client.policyID, canonical, client.now()); err != nil {
+	verifiedAt = client.now()
+	if err := verifyEAR(token, client.earPublicKey, client.expectedIssuer, client.expectedProfile, client.policyID, canonical, verifiedAt); err != nil {
 		return err
 	}
 	hash := sha256.Sum256(token)
 	log.Printf("workload EAR accepted launch_id=%s nonce=%s policy=%s ear_sha256=%x container_id=%s pid=%s start_time=%s", input.RuntimeData.LaunchID, input.RuntimeData.Nonce, client.policyID, hash, input.RuntimeData.ContainerID, input.RuntimeData.PID, input.RuntimeData.StartTime)
 	return nil
+}
+
+// VerifyArchivedEAR uses precisely the admission EAR checks at the recorded
+// capture time. It verifies an archived assertion, not a fresh TDX Quote.
+func VerifyArchivedEAR(token []byte, publicKey *ecdsa.PublicKey, issuer, profile, policy string, evidence protocol.Evidence, at time.Time) error {
+	if publicKey == nil || publicKey.Curve != elliptic.P256() {
+		return fmt.Errorf("EAR public key must use P-256")
+	}
+	canonical, err := evidence.RuntimeData.Canonical()
+	if err != nil {
+		return err
+	}
+	if evidence.RuntimeData.PolicyID != policy {
+		return fmt.Errorf("workload policy mismatch")
+	}
+	return verifyEAR(token, publicKey, issuer, profile, policy, canonical, at)
 }
 
 // Trustee v0.21 JCS-canonicalizes structured runtime data before SHA-384 hashing.

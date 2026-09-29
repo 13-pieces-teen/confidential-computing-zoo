@@ -234,10 +234,10 @@ def run(config_file, output, resume=False):
         probe = dict(config["probe"])
         probe.update(resolve_credentials(probe, int((probe.get('duration', 40) + 5) * 1000)))
         argv = [sys.executable, str(REMOTE_TOOL), "probe", "--run-id", config["run_id"], "--output", str(output / "trace.jsonl")]
-        for key in ("url", "cert", "key", "bundle", "server_id", "duration", "interval", "timeout", "method", "body_file", "api_key_env", "response_marker"):
+        for key in ("url", "cert", "key", "bundle", "server_id", "duration", "interval", "timeout", "method", "body_file", "payload_plan", "api_key_env", "response_marker"):
             if key in probe:
                 argv.extend(["--" + key.replace("_", "-"), str(probe[key])])
-        require(probe.get("method") == "POST" and probe.get("body_file"), "delivery trial requires a synthetic body")
+        require(probe.get("method") == "POST" and (probe.get("body_file") or probe.get("payload_plan")), "delivery trial requires a synthetic body")
         inflight = probe.get('inflight', True)
         if inflight:
             argv.append('--inflight')

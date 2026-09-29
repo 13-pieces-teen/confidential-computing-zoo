@@ -149,10 +149,14 @@ class Collector:
             if source is None:
                 source = self.sources[key] = dict(identity=identity, seq=0, drops=0, dirty=False,
                     watermark=None, stopped=False, started={"at_ms": frame["source_started_at_ms"],
-                    "monotonic_ns": frame["source_started_monotonic_ns"]}, last_mono=0)
-                self.write("source_seen", **identity)
+                    "monotonic_ns": frame["source_started_monotonic_ns"]}, last_mono=0,
+                    fact_matching=frame.get("fact_matching") is True)
+                self.write("source_seen", **identity, fact_matching=source["fact_matching"],
+                           source_started_at_ms=source["started"]["at_ms"],
+                           source_started_monotonic_ns=source["started"]["monotonic_ns"])
             source["dirty"] |= (frame["source_seq"] != source["seq"] + 1 or
-                                frame["dropped"] != source["drops"] or frame["monotonic_ns"] < source["last_mono"])
+                                frame["dropped"] != source["drops"] or frame["monotonic_ns"] < source["last_mono"]
+                                or (frame.get("fact_matching") is True) != source["fact_matching"])
             source.update(seq=frame["source_seq"], drops=frame["dropped"], last_mono=frame["monotonic_ns"])
             when = {k: frame[k] for k in ("at_ms", "monotonic_ns")}
             op = frame.get("op")
@@ -168,16 +172,42 @@ class Collector:
                 source["stopped"] = True
                 self.write("source_stop", **identity, **when)
                 return
-            if op not in ("begin", "pending", "observed", "end"):
+            if op not in ("begin", "pending", "observed", "end", "fact_observed", "fact_partial"):
                 raise ValueError("unknown event")
             if not ID.fullmatch(frame.get("request_id", "")) or not ID.fullmatch(frame.get("stream_id", "")):
                 raise ValueError("invalid correlation metadata")
             fields = dict(identity, **when, source_seq=frame["source_seq"], request_id=frame["request_id"],
                           stream_id=frame["stream_id"], received_at_ms=time.time_ns() // 1000000,
                           received_monotonic_ns=time.monotonic_ns())
+            for name in ("client_id", "task_id", "attempt", "tool_call_id"):
+                if name in frame and isinstance(frame[name], str) and ID.fullmatch(frame[name]):
+                    fields[name] = frame[name]
             if op == "begin":
                 self.write("received", **fields, phase="request_enter", chunk_seq=0,
-                           received_body_bytes=0, correlated=frame.get("correlated") is True)
+                           received_body_bytes=0, correlated=frame.get("correlated") is True,
+                           fact_matching=frame.get("fact_matching") is True)
+            elif op == "fact_observed":
+                if (not isinstance(frame.get("fact_id"), str) or not re.fullmatch(r"[0-9a-f]{32}", frame["fact_id"])
+                        or not isinstance(frame.get("full_fact_sha256"), str)
+                        or not re.fullmatch(r"[0-9a-f]{64}", frame["full_fact_sha256"])
+                        or any(type(frame.get(k)) is not int for k in ("fact_bytes", "start_offset", "end_offset", "completion_chunk", "read_at_ms", "read_monotonic_ns"))
+                        or frame["start_offset"] < 0 or frame["completion_chunk"] < 1
+                        or frame["read_monotonic_ns"] > frame["monotonic_ns"]
+                        or frame["fact_bytes"] <= 0 or frame["end_offset"] - frame["start_offset"] != frame["fact_bytes"]):
+                    raise ValueError("invalid complete fact observation")
+                fields.update(at_ms=frame["read_at_ms"], monotonic_ns=frame["read_monotonic_ns"])
+                self.write("fact_observed", **fields, boundary="asgi_application_read",
+                           **{k: frame[k] for k in ("fact_id", "full_fact_sha256", "fact_bytes", "start_offset", "end_offset", "completion_chunk")})
+            elif op == "fact_partial":
+                if (frame.get("fact_id") is not None and (not isinstance(frame["fact_id"], str) or not re.fullmatch(r"[0-9a-f]{32}", frame["fact_id"]))
+                        or any(type(frame.get(k)) is not int for k in ("candidate_frame_bytes", "start_offset", "end_offset", "last_chunk", "read_at_ms", "read_monotonic_ns"))
+                        or frame["candidate_frame_bytes"] <= 0 or frame["start_offset"] < 0 or frame["last_chunk"] < 1
+                        or frame["read_monotonic_ns"] > frame["monotonic_ns"]
+                        or frame["end_offset"] - frame["start_offset"] != frame["candidate_frame_bytes"]):
+                    raise ValueError("invalid partial frame observation")
+                fields.update(at_ms=frame["read_at_ms"], monotonic_ns=frame["read_monotonic_ns"])
+                self.write("fact_partial", **fields, boundary="asgi_application_read", complete_fact=False,
+                           **{k: frame[k] for k in ("fact_id", "candidate_frame_bytes", "start_offset", "end_offset", "last_chunk")})
             elif op in ("pending", "observed"):
                 if type(frame.get("chunk_seq")) is not int or frame["chunk_seq"] < 1:
                     raise ValueError("invalid read sequence")
@@ -226,6 +256,24 @@ class Collector:
         self.flush()
         return {"schema_version": 2, "run_id": self.binding["run_id"], "collector_id": self.collector_id,
                 "first_read": self.first_reads.get(request_id)}
+
+    def observe_exits(self):
+        """Finite polling proves absence only after this observation, never the crash tail."""
+        for source in self.sources.values():
+            if source.get("exit_observed"):
+                continue
+            expected = source["identity"]["process"]
+            try:
+                current = process_facts(expected["pid"])
+                gone = any(current[k] != expected[k] for k in ("pid", "start_time", "boot_id"))
+            except FileNotFoundError:
+                gone = True
+            except OSError:
+                continue
+            if gone:
+                source["exit_observed"] = True
+                self.write("source_exited", **source["identity"],
+                           boundary="original_pid_starttime_absent", timing="poll_observation")
 
     def finish(self):
         if self.finalized:
@@ -290,6 +338,7 @@ async def serve(args):
             try:
                 await asyncio.wait_for(stop.wait(), .25)
             except asyncio.TimeoutError:
+                collector.observe_exits()
                 collector.flush()
     finally:
         server.close()

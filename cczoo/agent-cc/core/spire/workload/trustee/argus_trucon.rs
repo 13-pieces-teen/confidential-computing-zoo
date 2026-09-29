@@ -13,6 +13,7 @@ use tokio::{
 };
 
 static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+static CAPTURE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
 
 pub fn prepare(
     tee: &Tee,
@@ -115,6 +116,10 @@ pub async fn appraise(request: Option<&Value>, claims: &mut Value, tee_class: &s
             .arg(&config)
             .env_clear()
             .env("PATH", "/usr/bin:/bin")
+            .env(
+                "ARGUS_TRUCON_EVIDENCE_DIR",
+                std::env::var("ARGUS_TRUCON_EVIDENCE_DIR").unwrap_or_default(),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -147,5 +152,49 @@ pub async fn appraise(request: Option<&Value>, claims: &mut Value, tee_class: &s
     .await
     .context("TruCon verifier timeout")??;
     claims["trucon"] = result;
+    // Best-effort research capture is disabled unless explicitly configured.
+    // It is not part of the verdict, and the async writer is never awaited.
+    if let Ok(directory) = std::env::var("ARGUS_TRUCON_EVIDENCE_DIR") {
+        if Path::new(&directory).is_absolute() {
+            let input = json!({"tdx": claims, "runtime_data_claims": request["runtime_data"]});
+            let nonce = request["runtime_data"]["nonce"]
+                .as_str().unwrap_or("").to_owned();
+            if nonce.len() == 43
+                && nonce.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+            {
+                if let Ok(permit) = CAPTURE_SLOTS.try_acquire() {
+                    tokio::task::spawn_blocking(move || {
+                        let _permit = permit;
+                        let export = || -> std::io::Result<()> {
+                            use std::io::Write;
+                            let bytes = serde_json::to_vec(&input).map_err(std::io::Error::other)?;
+                            if bytes.len() > 1048576 {
+                                return Err(std::io::Error::other("policy capture exceeds limit"));
+                            }
+                            let folder = Path::new(&directory).join(nonce);
+                            std::fs::create_dir_all(&folder)?;
+                            let temporary = folder.join(".policy-input.pending");
+                            let mut options = std::fs::OpenOptions::new();
+                            options.write(true).create_new(true);
+                            #[cfg(unix)]
+                            {
+                                use std::os::unix::fs::OpenOptionsExt;
+                                options.mode(0o600);
+                            }
+                            let mut file = options.open(&temporary)?;
+                            file.write_all(&bytes)?;
+                            drop(file);
+                            std::fs::rename(temporary, folder.join("policy-input.json"))
+                        };
+                        if export().is_err() {
+                            eprintln!("TruCon capture incomplete: policy input export failed");
+                        }
+                    });
+                } else {
+                    eprintln!("TruCon capture incomplete: policy writer busy");
+                }
+            }
+        }
+    }
     Ok(())
 }

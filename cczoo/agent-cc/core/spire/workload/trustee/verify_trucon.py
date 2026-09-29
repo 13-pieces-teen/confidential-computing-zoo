@@ -8,10 +8,12 @@ import base64
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
 import time
+import tempfile
 import urllib.request
 from urllib.parse import urlsplit
 
@@ -135,6 +137,7 @@ class LogVerifier:
         require(self.init_keys or self.sigstore, "initialization signer trust is not configured")
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies), NoRedirect())
         self.deadline = time.monotonic() + 45
+        self.capture_entries = {} if os.environ.get("ARGUS_TRUCON_EVIDENCE_DIR") else None
 
     def fetch(self, reference):
         require(isinstance(reference, str) and REFERENCE.fullmatch(reference), "invalid Rekor reference")
@@ -158,6 +161,8 @@ class LogVerifier:
                     "Rekor returned a different log index")
         else:
             require(uuid == reference, "Rekor returned a different UUID")
+        if self.capture_entries is not None:
+            self.capture_entries[reference] = {uuid: raw}
         return uuid, raw
 
     def entry(self, reference, owner):
@@ -282,16 +287,111 @@ class LogVerifier:
         return {"verified": True, "baseline_rtmr": baseline, "launch_entry_uuid": matched[0]}
 
 
+def export_capture(directory, request, config_path, verifier, verdict, error_class=None):
+    """Optional research original capture; exceptions never change appraisal."""
+    if not directory:
+        return
+    try:
+        nonce = request["runtime_data"]["nonce"]
+        require(re.fullmatch(r"[A-Za-z0-9_-]{43}", nonce) is not None, "invalid capture nonce")
+        root = Path(directory)
+        require(root.is_absolute(), "absolute capture directory required")
+        root = root / nonce
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        config = strict_json(Path(config_path).read_bytes())
+        encode = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+        files = {"history-request.json": encode(request), "history-config.json": Path(config_path).read_bytes(),
+                 "rekor.json": encode(verifier.capture_entries or {}), "history-result.json": encode({
+                     "result": "ALLOW" if verdict is not None else "DENY", "verdict": verdict, "error_class": error_class})}
+        trust = {}
+        paths = [config["rekor_public_key_path"], *config.get("init_public_key_paths", [])]
+        if config.get("sigstore_trusted_root_path"):
+            paths.append(config["sigstore_trusted_root_path"])
+        for number, path in enumerate(paths):
+            filename = f"trust-{number}.bin"
+            files[filename] = Path(path).read_bytes()
+            trust[path] = filename
+        meta = {"schema": "argus.trucon-export.v1", "nonce": nonce, "captured_at_ms": time.time_ns() // 1000000,
+                "trust_files": trust, "artifacts": {k: hashlib.sha256(v).hexdigest() for k, v in files.items()},
+                "coverage": "COMPLETE" if set(verifier.capture_entries or {}) == set(request["rekor_entry_ids"]) else "PARTIAL"}
+        files["capture.json"] = encode(meta)
+        require(sum(len(contents) for contents in files.values()) <= 64 * 1024 * 1024,
+                "capture exceeds experiment export byte budget")
+        for name, contents in files.items():
+            fd, temp = tempfile.mkstemp(prefix=".capture-", dir=root)
+            try:
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(contents)
+                os.replace(temp, root / name)
+            finally:
+                if os.path.exists(temp):
+                    os.unlink(temp)
+    except Exception:
+        print("TruCon capture incomplete: export failed", file=sys.stderr)
+
+
+def export_capture_async(directory, request, config_path, verifier, verdict, error_class=None):
+    """A short-lived Linux verifier must never wait for experiment file I/O.
+
+    The detached child has no AS pipes, a five-second budget and one filesystem
+    writer slot per capture directory. Missing output is evidence loss, not DENY.
+    """
+    if not directory:
+        return
+    if sys.platform != "linux" or not hasattr(os, "fork"):
+        print("TruCon capture unavailable: asynchronous export requires Linux", file=sys.stderr)
+        return
+    try:
+        pid = os.fork()
+    except OSError:
+        print("TruCon capture incomplete: cannot start optional writer", file=sys.stderr)
+        return
+    if pid:
+        print("TruCon capture scheduled nonce=" + str(request.get("runtime_data", {}).get("nonce", "")), file=sys.stderr)
+        return
+    try:
+        import fcntl
+        import resource
+        import signal
+        signal.alarm(5)
+        os.setsid()
+        null = os.open(os.devnull, os.O_RDWR)
+        for descriptor in range(3):
+            os.dup2(null, descriptor)
+        maximum = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+        os.closerange(3, int(maximum if maximum != resource.RLIM_INFINITY else 1048576))
+        root = Path(directory)
+        if not root.is_absolute():
+            os._exit(0)
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with (root / ".capture-writer.lock").open("a") as lock:
+            os.fchmod(lock.fileno(), 0o600)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            export_capture(directory, request, config_path, verifier, verdict, error_class)
+    except BaseException:
+        pass
+    finally:
+        os._exit(0)
+
+
 def main():
+    request = verifier = verdict = None
+    error_class = None
     try:
         require(len(sys.argv) == 2, "usage: verify_trucon.py <server-owned-config.json>")
         raw = sys.stdin.buffer.read(524289)
         require(len(raw) <= 524288, "verifier request exceeds size limit")
-        result = LogVerifier(strict_json(Path(sys.argv[1]).read_bytes())).verify(strict_json(raw))
-        print(json.dumps(result, separators=(",", ":")))
+        request = strict_json(raw)
+        verifier = LogVerifier(strict_json(Path(sys.argv[1]).read_bytes()))
+        verdict = verifier.verify(request)
+        print(json.dumps(verdict, separators=(",", ":")))
     except Exception as exc:
+        error_class = type(exc).__name__
         print("TruCon verification failed: " + str(exc), file=sys.stderr)
         return 1
+    finally:
+        if request is not None and verifier is not None:
+            export_capture_async(os.environ.get("ARGUS_TRUCON_EVIDENCE_DIR"), request, sys.argv[1], verifier, verdict, error_class)
     return 0
 
 

@@ -21,15 +21,16 @@ def execute(args):
     require(not Path(args.receipt).is_absolute() and ".." not in Path(args.receipt).parts,
             "receipt must stay in run directory")
     directory = Path(args.output).resolve(); directory.mkdir(parents=True, exist_ok=True)
-    native = directory / {"fleet": "business", "load": "load", "locomo": "locomo"}[args.tool]
+    native = directory / {"fleet": "business", "load": "load", "locomo": "locomo", "continuous": "continuous"}[args.tool]
     if args.tool == "fleet":
         script = ROOT / "adapters/OpenClaw/spiffe_client/fleet_business.py"
         argv = [sys.executable, str(script), args.action, "--config", args.config, "--output", str(native)]
         result_file = native / "result.json"
         if args.instance: argv += ["--instance", args.instance]
-    elif args.tool == "locomo":
-        require(args.action in ('run', 'resume'), 'LoCoMo supports run or resume')
-        argv = [sys.executable, str(Path(__file__).with_name('locomo_run.py')), args.action,
+    elif args.tool in ("locomo", "continuous"):
+        require(args.action in ('run', 'resume'), 'workload supports run or resume')
+        script = 'locomo_run.py' if args.tool == 'locomo' else 'continuous.py'
+        argv = [sys.executable, str(Path(__file__).with_name(script)), args.action,
                 '--config', args.config, '--output', str(native)]
         result_file = native / 'result.json'
     else:
@@ -56,7 +57,9 @@ def execute(args):
         native_result = evidence.get('result')
         source_hash = sha(result_file)
         measurement_complete = evidence.get("measurement_complete") is True
-        native_complete = args.tool != 'fleet' or (evidence.get('completed') is True and evidence.get('operation_id') == operation_id)
+        native_complete = (args.tool != 'fleet' or evidence.get('completed') is True)
+        if args.tool in ('fleet', 'continuous'):
+            native_complete = native_complete and evidence.get('operation_id') == operation_id
         if native_complete and evidence.get("run_id") == run_id and evidence.get("result") in ("PASS", "FAIL", "UNKNOWN", "NOT_RUN"):
             verdict = evidence["result"]
         if args.tool == 'locomo':
@@ -66,10 +69,11 @@ def execute(args):
             verdict = "UNKNOWN"
     envelope = {"schema": "argus.step.v1", "run_id": run_id, "operation_id": operation_id,
                 "attempt": int(os.environ.get("ARGUS_ATTEMPT", "1")),
-                "measurement_complete": measurement_complete if args.tool == "load" else None,
+                "measurement_complete": measurement_complete if args.tool in ("load", "continuous") else None,
                 "result": verdict, "tool": args.tool, "exit_code": code,
                 "native_result": native_result,
-                "evidence_scope": ('application_workload_completion_not_security' if args.tool == 'locomo' else args.tool),
+                "evidence_scope": ('application_workload_completion_not_security' if args.tool == 'locomo'
+                                   else 'continuous_execution_only; task_and_receipt_axes_separate' if args.tool == 'continuous' else args.tool),
                 "source": Path(os.path.relpath(result_file, (directory / args.receipt).parent)).as_posix(),
                 "source_sha256": source_hash}
     atomic(directory / args.receipt, envelope)
@@ -78,7 +82,7 @@ def execute(args):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("tool", choices=("fleet", "load", "locomo")); p.add_argument("action", choices=("run", "resume", "isolation"))
+    p.add_argument("tool", choices=("fleet", "load", "locomo", "continuous")); p.add_argument("action", choices=("run", "resume", "isolation"))
     p.add_argument("--config", required=True); p.add_argument("--output", required=True)
     p.add_argument("--receipt", default="step-result.json"); p.add_argument("--instance")
     p.add_argument("--clients", type=int, default=1); p.add_argument("--timeout", type=float, default=15000)

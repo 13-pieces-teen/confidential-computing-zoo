@@ -158,6 +158,8 @@ class PinnedConnection(http.client.HTTPSConnection):
         self.serial = None
         self.peer_sha256 = None
         self.peer_verified = False
+        self.socket_id = None
+        self.local_address = self.peer_address = None
 
     def connect(self):
         if self.once and self.connections:
@@ -172,6 +174,20 @@ class PinnedConnection(http.client.HTTPSConnection):
         self.serial = cert.get("serialNumber")
         self.peer_sha256 = hashlib.sha256(self.sock.getpeercert(binary_form=True)).hexdigest()
         self.peer_verified = True
+        self.socket_id = uuid.uuid4().hex
+        self.local_address, self.peer_address = self.sock.getsockname(), self.sock.getpeername()
+
+
+def transport_event(error):
+    if isinstance(error, ConnectionResetError):
+        return "peer_reset"
+    if isinstance(error, (http.client.RemoteDisconnected, ssl.SSLEOFError, http.client.IncompleteRead)):
+        return "peer_eof"
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    if isinstance(error, ssl.SSLError):
+        return "tls_error"
+    return "transport_error"
 
 
 def read_response(response, row, conn, emit, marker=None, *, limit=1_048_576, chunk_size=16_384):
@@ -184,6 +200,8 @@ def read_response(response, row, conn, emit, marker=None, *, limit=1_048_576, ch
     row.update(http_status=response.status, response_bytes=0, response_chunks=0,
                response_observation_version=1, response_complete=False,
                sentinel_response=False, server_serial=conn.serial)
+    row.update(socket_id=getattr(conn, "socket_id", None), local_address=getattr(conn, "local_address", None),
+               peer_address=getattr(conn, "peer_address", None), peer_announced_close=bool(response.will_close) if hasattr(response, "will_close") else None)
     tail = b""
 
     def observed(data, started):
@@ -202,7 +220,8 @@ def read_response(response, row, conn, emit, marker=None, *, limit=1_048_576, ch
               "read_started_at_ms": started["at_ms"], "read_started_monotonic_ns": started["monotonic_ns"],
               **clocks(), "boundary": "client_http_body_read", "peer_verified": conn.peer_verified,
               "server_id": conn.server_id, "server_serial": conn.serial, "peer_sha256": conn.peer_sha256,
-              "tls_connections": conn.connections})
+              "tls_connections": conn.connections, "socket_id": getattr(conn, "socket_id", None),
+              "local_address": getattr(conn, "local_address", None), "peer_address": getattr(conn, "peer_address", None)})
 
     while True:
         started = clocks()
@@ -245,6 +264,30 @@ def probe(args):
         raise ValueError("probe request body exceeds 1 MiB")
     if args.method == "GET" and body:
         raise ValueError("GET probes cannot have a body; use explicit POST for an application-approved sentinel endpoint")
+    payloads = None
+    if getattr(args, "payload_plan", None):
+        plan_path = Path(args.payload_plan).resolve()
+        payloads = json.loads(plan_path.read_text())
+        if payloads.get("schema") != "argus.connection-payloads.v1" or args.method != "POST":
+            raise ValueError("synthetic payload plan requires POST and supported schema")
+        ids = []
+        for lane_name in ("existing", "new", "inflight"):
+            for item in payloads.get(lane_name, []):
+                raw = (plan_path.parent / item["body_file"]).read_bytes()
+                if len(raw) > 1_048_576 or hashlib.sha256(raw).hexdigest() != item["body_sha256"]:
+                    raise ValueError("payload plan body differs")
+                item["body"] = raw
+                ids.append(item["fact_id"])
+        if len(ids) != len(set(ids)) or not payloads.get("existing") or not payloads.get("new") or len(payloads.get("inflight", [])) != 1:
+            raise ValueError("each lane/request needs a distinct fact and one independent in-flight body")
+    def payload(lane_name, index):
+        if payloads is None:
+            return body, {}
+        entries = payloads[lane_name]
+        if index >= len(entries):
+            return None, {}
+        entry = entries[index]
+        return entry["body"], {k: entry[k] for k in ("fact_id", "full_fact_sha256", "fact_bytes", "body_sha256")}
     marker = args.response_marker.encode() if args.response_marker else None
     api_key = os.environ.get(args.api_key_env) if args.api_key_env else None
     if args.api_key_env and not api_key:
@@ -261,15 +304,17 @@ def probe(args):
               "interval_ms": int(args.interval * 1000), "timeout_ms": int(args.timeout * 1000),
               "method": args.method, "server_id": args.server_id, "body_sha256": hashlib.sha256(body).hexdigest(),
               "response_observation_version": 1,
+              "payload_plan_sha256": hashlib.sha256(Path(args.payload_plan).read_bytes()).hexdigest() if payloads else None,
               "inflight_required": bool(getattr(args, "inflight", False))})
         def inflight():
             """Send one real HTTP body across the observation window, without replay."""
-            if args.method != "POST" or len(body) < 2:
+            inflight_body, fact = payload("inflight", 0)
+            if args.method != "POST" or len(inflight_body) < 2:
                 raise ValueError("in-flight probe requires a POST body of at least two bytes")
             conn = factory(True)
             row = {"type": "stream_start", "run_id": args.run_id, "request_id": str(uuid.uuid4()),
-                   "lane": "inflight", "started_at_ms": now_ms(), "ok": False, "request_body_bytes": len(body),
-                   "response_bytes": 0, "response_observation_version": 1}
+                   "lane": "inflight", "started_at_ms": now_ms(), "ok": False, "request_body_bytes": len(inflight_body),
+                   "response_bytes": 0, "response_observation_version": 1, **fact}
             emit(row)
             sent, sent_chunks = 0, 0
             try:
@@ -281,8 +326,8 @@ def probe(args):
                 if api_key:
                     conn.putheader("X-API-Key", api_key)
                 conn.endheaders()
-                size = max(1, (len(body) + 31) // 32)
-                chunks = [body[i:i + size] for i in range(0, len(body), size)]
+                size = max(1, (len(inflight_body) + 31) // 32)
+                chunks = [inflight_body[i:i + size] for i in range(0, len(inflight_body), size)]
                 start = time.monotonic()
                 for index, chunk in enumerate(chunks):
                     scheduled = start + (deadline - start) * index / max(1, len(chunks) - 1)
@@ -294,33 +339,43 @@ def probe(args):
                 read_response(response, row, conn, emit, marker)
             except (OSError, ValueError, http.client.HTTPException) as error:
                 row['error'] = type(error).__name__
+                row['transport_event'] = transport_event(error)
             finally:
                 row.update(type="request", completed_at_ms=now_ms(), tls_connections=conn.connections,
-                           sent_body_bytes=sent, sent_chunks=sent_chunks)
+                           sent_body_bytes=sent, sent_chunks=sent_chunks, socket_id=getattr(conn, "socket_id", None),
+                           local_address=getattr(conn, "local_address", None), peer_address=getattr(conn, "peer_address", None))
                 emit(row)
                 conn.close()
         def lane(name):
             original = factory(True) if name == "existing" else None
+            index = 0
             while time.monotonic() < deadline:
+                request_body, fact = payload(name, index)
+                if request_body is None:
+                    break
+                index += 1
                 conn = original if original else factory(False)
                 row = {"type": "request", "run_id": args.run_id, "request_id": str(uuid.uuid4()),
                        "lane": name, "started_at_ms": now_ms(), "ok": False, "response_bytes": 0,
-                       "sentinel_response": False, "request_body_bytes": len(body),
-                       "response_observation_version": 1}
+                       "sentinel_response": False, "request_body_bytes": len(request_body),
+                       "response_observation_version": 1, **fact}
                 headers = {"X-Argus-Run-ID": args.run_id, "X-Argus-Request-ID": row["request_id"],
                            "Content-Type": args.content_type, "Connection": "keep-alive"}
                 if api_key:
                     headers["X-API-Key"] = api_key
                 try:
-                    conn.request(args.method, path, body=body if body else None, headers=headers)
+                    conn.request(args.method, path, body=request_body if request_body else None, headers=headers)
                     response = conn.getresponse()
                     read_response(response, row, conn, emit, marker)
                 except (OSError, ValueError, http.client.HTTPException) as error:
                     # Never record request headers, secret bodies, keys, or arbitrary exception text.
                     row["error"] = type(error).__name__
+                    row["transport_event"] = transport_event(error)
                     conn.close()
                 finally:
                     row.update(completed_at_ms=now_ms(), tls_connections=conn.connections)
+                    row.update(socket_id=getattr(conn, "socket_id", None), local_address=getattr(conn, "local_address", None),
+                               peer_address=getattr(conn, "peer_address", None))
                     emit(row)
                     if not original:
                         conn.close()
@@ -823,6 +878,7 @@ def main():
     p.add_argument("--timeout", type=float, default=2)
     p.add_argument("--method", choices=("GET", "POST"), default="GET")
     p.add_argument("--body-file")
+    p.add_argument("--payload-plan", help="distinct synthetic fact body per lane/request; no payload replay")
     p.add_argument("--inflight", action="store_true", help="also send one slow chunked POST across the fault window")
     p.add_argument("--content-type", default="application/json")
     p.add_argument("--api-key-env", default="")
@@ -852,7 +908,7 @@ def main():
             parser.error("duration [1,3600], interval [.05,5], timeout [.1,30] seconds required")
         if args.api_key_env and not os.environ.get(args.api_key_env):
             parser.error("configured API key environment variable is empty")
-        if args.inflight and (args.method != "POST" or not args.body_file):
+        if args.inflight and (args.method != "POST" or not (args.body_file or args.payload_plan)):
             parser.error("--inflight requires a synthetic POST body")
         probe(args)
     elif args.command == "fault":
