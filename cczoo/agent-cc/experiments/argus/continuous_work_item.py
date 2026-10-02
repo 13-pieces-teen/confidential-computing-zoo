@@ -99,8 +99,13 @@ def make_fixture(c, secret_seed):
                        ('max_travel_minutes', rng.randint(60, 120)),
                        ('min_indoor_stops', rng.randint(1, 2))]
         client_steps = []
+        planned_constraints = dict(policy['initial_constraints'])
         for index, (constraint, value) in enumerate(constraints):
             step_id = f's{index:02d}'
+            if value == planned_constraints[constraint]:
+                raise ValueError(f'work-item input {client}/{step_id} leaves {constraint} unchanged; '
+                                 'validate structure_seed before freezing the experiment')
+            planned_constraints[constraint] = value
             fields = {'fact_id': token(f'{client}/{step_id}/id', 32), 'project_id': project,
                       'chain_id': token(client + '/trip/chain', 12),
                       'event_ref': token(f'{client}/{step_id}/ref', 32), 'amount_cents': value}

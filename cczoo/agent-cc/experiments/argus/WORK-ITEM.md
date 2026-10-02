@@ -17,6 +17,8 @@
 
 每步发布一个唯一完整 `ARGUS_FACT_V1` 接收帧，以及独立的 `ARGUS_PROPOSAL_V1` 业务封套。Proposal JSON 明确包含 `schema=argus.proposal.v1`、`work_item_id`、`fact_id`、`step_index`、`constraint_key`、`unit` 和 `value`：预算单位 `cent`，步行 / 通行 `minute`，室内停靠 `count`。封套原文与接收帧、派生 `Decision` 一起保存；后续按原始 Proposal 类型和顺序重算，不能从错误旧 Decision 猜测。Proposal 必须与同一记录内接收帧的 fact_id 和数值一致。规范化 JSON 的哈希用于观测关联，不是密码学认证。
 
+`prepare` 按计划步骤检查约束状态；提案与该约束的前值相同时直接报错，且不发布 fixture、manifest 或运行状态。预实验先校验计划种子，再冻结四条件共用的种子与生成规则；正式样本不按运行结果筛选。该检查保证每步改变约束值，不要求每步都改变最优路线。
+
 成功步骤恰好一次 `memory_store`，使用唯一的原 session ID，不把模型答案写回作为控制器补偿。controller 初始只写路线规则；用户更新全部由真实 Agent 工具处理。任一前序写入结果未知时，所有阶段均禁止提交新的写入，只查询原 session / task；不通过重发消除未知。此规则也覆盖 s02 未知后的 s03。后继步骤保留原计划及截止时间，未确认时记录 `PRIOR_WRITE_UNRESOLVED`。
 
 调度每阶段 2 步，故障命令位于 `2 × release_interval_s`，恢复命令位于 `4 × release_interval_s`。pause 长度至少覆盖三个实验 stop budget。固定计划不因回答速度移动，仍是一客户端一个活动步骤及一个排队步骤，deadline / 队列失败保留在六步分母。
@@ -55,4 +57,4 @@ python3 continuous.py analyze --config /protected/trip.json --output /protected/
 
 模型预检记录选择的模型、模型配置哈希及能读取到的配置采样字段。配置字段不代表提供方实际应用了参数：`sampling_observation` 区分 `CONFIGURED_NOT_EFFECTIVE_VERIFIED` 和 `PROVIDER_DEFAULT_UNVERIFIED`，`effective_parameters` 仍为 UNKNOWN。当前不声称已锁定或核验提供方采样；正式报告保留这一限制。每步仍记录实际返回的 provider / model 并检测名称不符。
 
-本地 focused fixture 覆盖原始 Proposal 存取与类型校验、从实际存储文本重算且不读取私有 fixture 的类型/答案、所有阶段未知写入阻止后继提交、完整完成与正确继续分离、缺少 typed recall 不通过、计划与实际事件阶段分离、合法恢复证据错配保持 UNKNOWN。真实模型、远端 TDX、合法重新准入、停止时序与 receiver 联合结果仍为 **NOT_RUN**。正式运行前完成一条真实输入→工具→传输→应用完整读取→持久提交→后继回读链；提案更新是否实际改变约束或可行集合，也要在预实验中检查并冻结生成规则。
+本地 focused fixture 覆盖准备阶段的同值提案拒绝、原始 Proposal 存取与类型校验、从实际存储文本重算且不读取私有 fixture 的类型/答案、所有阶段未知写入阻止后继提交、完整完成与正确继续分离、缺少 typed recall 不通过、计划与实际事件阶段分离、合法恢复证据错配保持 UNKNOWN。真实模型、远端 TDX、合法重新准入、停止时序与 receiver 联合结果仍为 **NOT_RUN**。正式运行前完成一条真实输入→工具→传输→应用完整读取→持久提交→后继回读链，并验收错误旧 Decision 可由原始提案纠正、缺失必要回读不能判为正确继续。

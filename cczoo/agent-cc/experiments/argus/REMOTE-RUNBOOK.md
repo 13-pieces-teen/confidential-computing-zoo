@@ -1,6 +1,6 @@
 # 双机交付和验收顺序
 
-**当前对应论文 revision 1373：**按 [逐实验双机顺序](TWO-HOST-SEQUENCE.md) 执行 P0 → E1 → E2 → E3 → E4 → E5；E5 单客户端 pilot 也可提前到 E3 后。每次只运行一个指定场景/组/轮次，先保存两侧数据和本轮总结，再进入下一项。E2 无需等待模型记忆任务。完整修改和边界见 [核对记录](PAPER-ALIGNMENT-1373.md)；远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)。从 `cczoo/agent-cc` 执行 `bash experiments/argus/remote-software-checks.sh client|server|analysis`，软件检查和真实远程测量分别记录。
+**当前对应论文 revision 2095：**按 [逐实验双机顺序](TWO-HOST-SEQUENCE.md) 执行 P0 → E1 → E2 → E3 → E4 → E5；E5 单客户端 pilot 也可提前到 E3 后。每次只运行一个指定场景/组/轮次，先保存两侧数据和本轮总结，再进入下一项。E2 无需等待模型记忆任务。实现和边界见 [实现记录](IMPLEMENTATION-1935.md) 与 [六步任务协议](WORK-ITEM.md)；远程提示词：[IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md)，其中旧多客户端/LoCoMo 主流程以本页为准。从 `cczoo/agent-cc` 执行 `bash experiments/argus/remote-software-checks.sh client|server|analysis`，软件检查和真实远程测量分别记录。
 
 本文件是待远程运行的步骤。代码、本地测试、镜像构建、真实准入、真实业务结果分别记录；不能把脚本已生成写成远程 PASS。`IP1` 指原有 SPIRE Server/客户端控制侧及客户端 TDVM，`IP2` 指服务 TDVM/TC API/OpenViking 侧；沿用已有连接配置和信任根。
 
@@ -12,7 +12,7 @@ OpenClaw 定制插件也需从该提交重新构建，并通过正常部署/登�
 
 使用 [variants.py](variants.py) 生成各组，只将已校验的完整 payload 装到实验位置。每次换组先停止前组，确认 unit、旧入口和 Broker 不再运行，再激活下一组；Node 状态继续保留。使用生成组内的 `server_script`、`server_config` 及服务名，不能混用生产 `workload.py`。`inspect --live` 在正式故障注入之前运行；之后人为设置的 `Restart=no` 实验 drop-in 要单独保存，不伪装成正常生效配置。
 
-首轮只准备完整 Argus，按三条路径收集证据：合法实例与未重新准入替换实例的区别；实例/Helper 失效后的交付窗口；单客户端通过后扩到三个客户端的私有记忆。其他对照组、性能 pilot、LoCoMo 和图表均按需启用，不是功能验证的前置条件。`runner preflight/run/resume` 可用 `--run-id`、`--case`、`--group` 选择本次范围。
+首轮只准备完整 Argus，先验证单客户端真实记忆读写链，再按 E1—E5 收集准入、交付、恢复、Agent 任务和成本证据。主实验保持一个客户端；多客户端、LoCoMo 和静态 mTLS 是可选补充。`runner preflight/run/resume` 可用 `--run-id`、`--case`、`--group` 选择本次范围。
 
 ## IP2：共享服务与接收审计
 
@@ -20,21 +20,22 @@ OpenClaw 定制插件也需从该提交重新构建，并通过正常部署/登�
 2. 依 [receiver_audit/README.md](../../adapters/OpenViking/receiver_audit/README.md) 构建锁定派生镜像，核对其实际 image config digest，走现有镜像批准和 TC API 发布流程。原基础镜像的批准值不能冒用到派生镜像。
 3. 在该次隔离部署配置中声明 `receiver_audit.run_id/mode/image_config_digest`，创建 root 控制的 data/control/evidence 目录，正常 TC API launch。只有 data socket 目录进入目标容器；collector/control/evidence 不进入容器。
 4. 对实际 listener PID 完成 register，使用 `collector bind` 生成受保护的实例关联记录，然后独立运行 collector。采集器不得放在 Helper/NGINX/目标容器的 systemd 依赖停止范围内。
-5. 使用原有效 API 管理凭据创建三个普通业务用户及各自 key。正常业务配置中不使用 root key。把用户 key 通过现有秘密分发渠道交给相应客户端的受保护文件；不要写入实验清单、命令行、日志或 Git。
+5. 使用原有效 API 管理凭据创建本轮普通业务用户及 key；E4 每个组/条件/重复使用新用户，权限负例所需的另一用户独立配置，不增加并发客户端。正常业务配置中不使用 root key。把用户 key 通过现有秘密分发渠道交给相应客户端的受保护文件；不要写入实验清单、命令行、日志或 Git。
 6. 配置精确 `allowed_client_ids`；删除配置中的旧 `client_id` 字段，避免两者并存。每组从生成的 `environment.json` 获取目标和客户端 ID。
 
 镜像批准仍核对实际摘要。审计本身不参与准入：采集器未启动、退出或队列满不阻断业务。可以继续业务验收，但 E2 相应接收区间为 UNKNOWN，不能关闭审计后记为零接收。audit off 只用于单独、明确标识的开销对照。
 
 ## IP1 / 客户端 TDVM：独立 Gateway 与私有记忆
 
-遵循 [FLEET-ACCEPTANCE.md](../../adapters/OpenClaw/spiffe_client/FLEET-ACCEPTANCE.md)。先部署一个 Gateway，通过原随机事实跨会话验收，再使用三实例 fleet 配置。节点公共安装/重启单独执行，实例命令都带 `--instance`。
+遵循 [FLEET-ACCEPTANCE.md](../../adapters/OpenClaw/spiffe_client/FLEET-ACCEPTANCE.md)，本轮只配置一个业务 Gateway，通过原随机事实跨会话验收。节点公共安装/重启单独执行，实例命令都带 `--instance`。
 
 ```sh
 python3 adapters/OpenClaw/spiffe_client/deploy.py render-node --config /secure/fleet.json --output /secure/rendered-node
 python3 adapters/OpenClaw/spiffe_client/deploy.py render --config /secure/fleet.json --instance alice --output /secure/rendered-alice
-# 按 fleet 文档完成 IP1 Entries 与 Guest 安装/登记；同样处理 bob、carol。
-python3 adapters/OpenClaw/spiffe_client/fleet_business.py run --config /secure/business.json --output /secure/evidence/three-clients
-python3 adapters/OpenClaw/spiffe_client/fleet_business.py resume --config /secure/business.json --output /secure/evidence/three-clients
+# 按 fleet 文档完成 IP1 Entries 与 Guest 安装/登记；business.json 仅列本轮客户端。
+python3 adapters/OpenClaw/spiffe_client/fleet_business.py run --config /secure/business.json --output /secure/evidence/single-client
+# 只有中断后才续查原操作：
+python3 adapters/OpenClaw/spiffe_client/fleet_business.py resume --config /secure/business.json --output /secure/evidence/single-client
 ```
 
 验收必须检查六阶段结果、实际 API 用户、私有范围、注入证据和新会话回答。包含跨用户直接读/搜索/问答、有效身份+无效 key、错误身份+有效 key、伪造请求头、直接后端入口负例。没有配置 wrong-identity 或 direct-backend 负例时对应项目为 NOT_RUN，不能省略后称完整通过。
@@ -71,6 +72,8 @@ PYTHONPATH=core/tlog python3 experiments/argus/admission_cases.py --output /secu
 
 真实路径使用 [E1-REAL-RUNS.md](E1-REAL-RUNS.md) 的固定配方及 `admission_trial.py preflight/observe/compare`：合法准入→旧实例停止→同镜像新实例的旧绑定拒绝→独立准入成功，另跑无关受控活动与配置变化。生产 verify 成功关联到实际 accepted nonce；本地 target checker 拒绝标为 `LOCAL_BINDING_REJECTED`，不能直接写成远端 Verifier DENY。新增可选 [准入原件导出与复核](ADMISSION-ARCHIVE.md)，必须实际启用并取得完整归档；缺原件仍保持 UNKNOWN/NOT_RUN，不从日志补造 Evidence/EAR。
 
+当前重点先验证 [E1-STAGE-RECEIPTS.md](E1-STAGE-RECEIPTS.md) 的 `record_pending`：实际启动生效但记录尚未确认时，显式 `attempt --new-subscription` 后 `observe` 并关联同一 mutation 的待决区间。`observe` 本身不触发新准入。恢复记录确认后使用新 attempt 目录，独立验证合法准入。Full/native 都保留相同本地检查，记录真实第一拒绝层，不预设基线一定放行。
+
 E3 用 [node_attestation_observe.py](../../core/spire/workload/scripts/node_attestation_observe.py) 在首次加入/普通 Agent SVID 续期前后采样，独立记录 Workload SVID 和 Workload Quote。用 `lifecycle_evidence.py` 检查同实例轮换和恢复；缺少创建事件完整覆盖时，不把前后相同容器快照写成“没有创建过重复容器”。
 
 在 IP2 独立启动 `lifecycle_evidence.py observe-creates --workload-id WORKLOAD --duration 120 --output creates.jsonl`，等待输出 `CREATE_OBSERVER_READY`，再采集已知未完成启动的 before snapshot、执行 resume-launch、采集 after snapshot，最后等事件订阅自然到期。该 observer 仅记录元数据，丢失、提前 EOF、PID/目标不一致均使结论为 UNKNOWN。时间窗口必须覆盖整个恢复过程；同主机时钟下用 `lifecycle_evidence.py resume --before … --after … --resume-result … --creates … --output …` 生成判定。
@@ -86,15 +89,15 @@ python3 /opt/argus-experiments/paper01/full_argus/payload/scripts/workload.py re
 
 新增 [E3-LIFECYCLE-RECIPE.md](examples/E3-LIFECYCLE-RECIPE.md) 将上述快照与同 run ID 的连续非空记忆 API trace 关联：SPIRE Server API/metrics 所在主机采 Node，OpenViking 主机采 Workload，客户端独立运行 `load.py` 或 `load_fleet.py`。`lifecycle_trial.py observe` 只读等待自然轮换；`collect` 核对时间覆盖、身份和原文件哈希，分开输出身份变化、Quote 计数与业务中断。Node 在 IP1 而 Provider 在 IP2 时，先后采集相同 run ID 的 Provider 快照，转移原文件，向 collect 传 --provider-before/--provider-after；本机 Workload 观测使用 provider_socket。快照必须覆盖观测窗口并匹配 Agent/Provider 启动，缺失或重启使计数 UNKNOWN。
 
-## E4：多客户端故障与 LoCoMo
+## E4：单客户端六步持续工作项
 
-完成三客户端随机事实链路后，按 [FLEET-FAULT.md](examples/FLEET-FAULT.md) 的固定命令运行 `client-stop` 和 `shared-service-fault`。局部故障只停止选中容器，连续查询其他 Gateway；共享故障复用已有远程注入工具。每次先保存完整业务验收证据和至少三轮成功基线，再故障、观测，最后由操作者显式按正常部署恢复。`observe-recovery` 只做安全查询和各客户端新会话问答，不自动重建或重新故障。它评价业务影响，零交付仍由 E2 的实际接收证据回答。
+使用 [WORK-ITEM.md](WORK-ITEM.md) 和 [work-item-paper-suite.example.json](examples/work-item-paper-suite.example.json)：一个 OpenClaw 客户端、固定模型、六步行程任务，Full/native × fault/no_fault 四条件。每个配置显式选择 `work-item-v1`，每轮使用新用户及独立 secret seed。先完成无故障与故障/恢复工程 pilot，验收原始 Proposal 的真实存取、错误旧 Decision 的纠正与缺必要回读的失败判定，再冻结正式配置。
 
-LoCoMo 遵循 [LOCOMO.md](LOCOMO.md)，先从本地锁定数据做固定样本转换。每个对话绑定独立普通用户和已登记的评测 Gateway；登记前设置 `autoCapture=false`、`autoRecall=true`、禁用模型工具写回。原始历史显式导入，QA 每题新会话，答案只留在本地评分器。不同组/重复使用不同初始空用户。可直接运行 `locomo_run.py`，或用 `suite.py` 可选 `locomo` case 纳入 prepare/run/resume/collect/analyze。
+`prepare` 会拒绝约束值没有实际变化的计划输入；种子校验在正式冻结前完成，不按模型表现或组间差异挑选样本。正常、暂停、恢复各两步，固定释放/deadline 和故障/恢复时点；所有步骤保留在计划分母。按 [逐实验双机顺序](TWO-HOST-SEQUENCE.md) 的 suite/runner 命令逐轮运行，每次先部署对应组和 Gateway 配置，再选 manifest 中的 run ID。
 
-LoCoMo 先初始化全部会话，再进入 QA；独立 Gateway 并发执行、同一 Gateway 单 worker。固定释放/deadline，故障/恢复命令按 QA 起点独立计时，题目来自固定 fixture。先做单客户端无故障，再三个客户端，最后使用 [suite.locomo-paired.example.json](examples/suite.locomo-paired.example.json) 执行 Full/native × fault/no_fault。每个运行引用独立配置和新业务用户；按生成顺序先部署对应配置，再选择 run ID。详见 [LOCOMO.md](LOCOMO.md)。
+分别报告完整任务成功、已确认状态上的正确继续和具有独立准入/读取证据的合法恢复。保留每个提案 CONFIRMED/REJECTED/UNKNOWN 等状态，不能用恢复后的一个正确答案覆盖缺失更新。中断只续查已知操作、收集审计，不重发未知写入、故障或恢复命令，也不重置时间窗。
 
-E4 主要报告端到端及请求延迟、全部计划任务分母、注入有效完成、失败/超时/未知、实际并发和恢复。F1 仅辅助检查功能一致性，不说明 Argus 改进记忆质量。COMPLETE 不代表答对或安全通过。中断只续查已知操作、收集审计，不补发 QA 或控制命令，也不重置时间窗。
+旧多客户端故障和 LoCoMo 工具继续可用，详见 [FLEET-FAULT.md](examples/FLEET-FAULT.md) 与 [LOCOMO.md](LOCOMO.md)，不进入当前主实验的前置条件或分母。
 
 ## 对照与性能
 
@@ -102,10 +105,10 @@ E4 主要报告端到端及请求延迟、全部计划任务分母、注入有�
 
 静态组先 `static_clients.py build --output /secure/static-build`，记录实际 binary SHA，将其安装至配置声明的路径。为每个静态客户端和静态服务器签发专用实验 URI SAN 证书，使用同一专用测试 CA。根据生成 `static-clients.json` 对每实例执行 `install`、`register`，并 `inspect` 核对实际 unit；该组使用静态 register，不能启动普通动态 publisher。结束后按工具 `restore` 恢复原 unit，或停用整个隔离实例。
 
-三客户端功能完成后，默认比较 1/3 规模。需要扩展时另行冻结规模配置；没有足够独立客户端时保留容量停止。先做 pilot 冻结总到达负载，各组采用同样配置，再执行 30 s 预热、120 s 测量、五次独立重复。真实 Agent 任务单独评价，不和普通 API 延迟混合。使用 `resources.py` 同步记录受测进程 CPU/RSS，审计开销采用同镜像 on/off 配对。
+当前默认比较单客户端 Full/native；扩展规模需另行冻结，不是主实验前置。先做 pilot 冻结总到达负载，各组采用同样配置，再执行 30 s 预热、120 s 测量、五次独立重复。真实 Agent 任务单独评价，不和普通 API 延迟混合。使用 `resources.py` 同步记录受测进程 CPU/RSS，审计开销采用同镜像 on/off 配对。
 
 `new` 与 `reuse`、`status_api` 与 `memory_query` 分别配置和汇总，见 [E5-MEMORY-LOAD.md](E5-MEMORY-LOAD.md)。预实验必须为每个用户准备实际非空记忆，报告实际建连/复用数、TCP/TLS/API 时间、非空 Goodput；不能只测健康检查。固定 POST 搜索的中断测量不自动重放，新实验需保留旧窗口并显式准备。
 
 性能配置见 `examples/suite.performance.example.json`。安全 GET 测量中断后可 `runner.py resume --output … --role client --run-id … --new-attempt`，保留旧 attempt，从预热重新开始；未知业务写入和故障不重放。每行测量不再同步刷盘，正常结束才写完成标记，分析时排除未完成窗口并报告中断次数。资源日志必须连同 `resources.jsonl.complete.json` 一起收集。
 
-最后运行 `collect` / `analyze`，保存原始 JSONL、运行清单、判定、CSV、Markdown 和 SVG。先报告合成机制任务，再报告 LoCoMo 派生任务，所有未执行项保留 NOT_RUN。不能把本地 source/fixture 测试计入真实远程实验样本。
+最后对 E4/E5 各批运行 `collect` / `analyze` / `plot.py`，保存原始 JSONL、运行清单、判定、CSV、Markdown 和图表。E5 三档历史和共享待决另按 [E5-COST-TRIALS.md](E5-COST-TRIALS.md) 收集。以 [结果模板](RESULTS-FRAMEWORK.template.md) 汇入 E1—E5 各自原件和结果，所有未执行项保留 NOT_RUN。不能把本地 source/fixture 测试计入真实远程实验样本。

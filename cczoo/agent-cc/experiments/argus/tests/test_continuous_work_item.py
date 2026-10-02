@@ -148,6 +148,20 @@ def test_six_steps_one_work_item_plan_and_no_expected_answers_in_prompt(tmp_path
     assert manifest['scenario'] == 'work-item-v1'
 
 
+@pytest.mark.parametrize('seed,step_id,constraint', [
+    (2001, 's03', 'max_walk_minutes'),
+    (21126, 's02', 'budget_cents'),
+])
+def test_prepare_rejects_unchanged_constraint_before_publishing_run(tmp_path, seed, step_id, constraint):
+    path, c = configured(tmp_path)
+    c['structure_seed'] = seed
+    atomic(path, c)
+    output = tmp_path / 'prepared'
+    with pytest.raises(ValueError, match=f'{step_id} leaves {constraint} unchanged'):
+        prepare(path, output)
+    assert not output.exists()
+
+
 def test_all_constraints_are_checked_not_only_the_previous_fact():
     work_item = 'trip-'+'a'*24
     policy = {'work_item_id':work_item,'initial_constraints':{'budget_cents':200,'max_walk_minutes':60,'max_travel_minutes':90,'min_indoor_stops':0},
