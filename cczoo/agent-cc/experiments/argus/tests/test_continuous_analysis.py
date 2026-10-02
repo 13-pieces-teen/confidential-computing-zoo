@@ -7,6 +7,30 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analysis import mean_ci, paired_difference
 from continuous_analysis import summarize, fault_contrasts, bound_result, condition_evidence, collateral_losses
+
+
+def test_unobserved_work_item_uses_six_not_eighteen():
+    from continuous_analysis import unobserved
+    result = unobserved(dict(run_id='r', group='full_argus', condition='fault', block_id='b',
+                             scale=3, scenario='work-item-v1', result='NOT_RUN'))
+    assert result['planned_tasks'] == 18
+    assert result['axes']['task']['NOT_RUN'] == 18
+
+
+def test_whole_work_item_completion_is_not_step_success_rate(tmp_path, monkeypatch):
+    import continuous_analysis as module
+    directory = tmp_path/'runs/r'
+    native = dict(result='PASS', scenario='work-item-v1', protocol_digest='p', steps=[step('a')],
+                  work_items=[dict(client_id='c1',complete_task_result='FAIL',continuation_result='PASS')])
+    atomic(directory/'continuous/result.json', native)
+    monkeypatch.setattr(module, 'bound_result', lambda *args: native)
+    monkeypatch.setattr(module, 'condition_evidence', lambda *args: {'result':'OBSERVED'})
+    metrics, detail = module.evidence(tmp_path,directory,dict(run_id='r',group='full_argus',block_id='b',scale=1,
+                                                            condition='no_fault',fault_kind='helper-freeze'))
+    assert metrics['continuous_step_success_rate'] == 1
+    assert metrics['continuous_work_item_completion_rate'] == 0
+    assert metrics['continuous_work_item_continuation_rate'] == 1
+    assert detail['work_items'][0]['complete_task_result'] == 'FAIL'
 from common import atomic, sha
 
 
@@ -72,6 +96,30 @@ def test_continuous_analysis_requires_bound_native_and_full_plan(tmp_path):
     atomic(path, dict(schema="argus.continuous-result.v1", run_id="r", operation_id="op", steps=[], protocol_digest="p"))
     with pytest.raises(ValueError, match="receipt differs"):
         bound_result(tmp_path, directory, {"run_id": "r"})
+
+
+def test_work_item_analysis_requires_typed_manifest_and_matches_proposal_hash(tmp_path):
+    from continuous_proposal import SCHEMA
+    directory=tmp_path/'runs/r'
+    fact=step('a') | dict(full_fact_sha256='a'*64,fact_bytes=100,work_item_id='w',
+                         constraint_key='budget_cents',proposal_sha256='b'*64)
+    def write_contract(schema=SCHEMA,result_hash='b'*64):
+        manifest=directory/'continuous/manifest.json'
+        atomic(manifest,dict(run_id='r',facts=[fact],protocol={'proposal_schema':schema}))
+        native=directory/'continuous/result.json'
+        atomic(native,dict(schema='argus.continuous-result.v1',scenario='work-item-v1',run_id='r',operation_id='op',
+                           steps=[fact | dict(proposal_sha256=result_hash)],protocol_digest='p',manifest_sha256=sha(manifest)))
+        receipt=directory/'step-result.json'
+        atomic(receipt,dict(schema='argus.step.v1',tool='continuous',run_id='r',operation_id='op',
+                            source='continuous/result.json',source_sha256=sha(native)))
+        atomic(tmp_path/'state.json',{'operations':{'r/op':dict(run_id='r',operation_id='op',phase='complete',
+               evidence='runs/r/step-result.json',evidence_sha256=sha(receipt))}})
+    write_contract()
+    assert bound_result(tmp_path,directory,{'run_id':'r'})['steps'][0]['proposal_sha256']=='b'*64
+    write_contract(schema=None)
+    with pytest.raises(ValueError,match='typed Proposal'): bound_result(tmp_path,directory,{'run_id':'r'})
+    write_contract(result_hash='c'*64)
+    with pytest.raises(ValueError,match='planned fact'): bound_result(tmp_path,directory,{'run_id':'r'})
 
 
 def test_fault_condition_requires_real_matching_event_in_control_window(tmp_path, monkeypatch):

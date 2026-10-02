@@ -108,7 +108,9 @@ def plan(m):
                         row["fault_scope"] = case.get("fault_scope", "unspecified")
                         key = f"{group}:{scale}:{seed}:{condition}"
                         if case["name"] == "continuous":
-                            row["planned_tasks"] = 18 * scale  # legacy continuous v1
+                            row['scenario'] = case.get('scenario', 'ledger-v1')
+                            row["planned_tasks"] = case.get('planned_tasks', 18 * scale)
+                            require(type(row['planned_tasks']) is int and row['planned_tasks'] > 0, 'invalid planned continuous task count')
                             require(key in m.get("continuous_inputs", {}), "missing continuous run configuration: " + key)
                             row["continuous_config"] = m["continuous_inputs"][key]
                         else:

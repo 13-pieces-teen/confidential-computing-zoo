@@ -1,12 +1,14 @@
 # 按实验执行：IP1/IP2 的先后顺序
 
-本表对应论文 revision 1373，只调整执行和记录方式，不改变实验定义。建议顺序为 **P0 准备 → E1 准入 → E2 失效交付 → E3 复用恢复 → E4 Agent 接入 → E5 成本**。E5 的单客户端 pilot 也可在 E3 后先做；首次启动/准入的计时在 P0/E1 顺手采集，E5 引用同一份原件，不重复当成独立样本。
+本表执行范围对齐论文 revision 1935；代码补齐见 [实现记录](IMPLEMENTATION-1935.md)。建议顺序为 **P0 准备与管理域隔离核验 → E1 准入及生命周期崩溃 → E2 失效交付 → E3 复用恢复 → E4 单客户端六步工作项 → E5 成本**。E5 的单客户端 pilot 也可在 E3 后先做；首次启动/准入的计时在 P0/E1 顺手采集，E5 引用同一份原件，不重复当成独立样本。真实运行尚未完成的项目保留 NOT_RUN。
 
 IP1 包括 SPIRE Server/Trustee 所在控制侧及客户端 TDVM；IP2 是服务 TDVM。以实际进程位置为准，不能从 IP1 读取 IP2 的本地 socket。两侧使用同一交付提交，保留正常节点身份与现行政策。
 
 ## 怎么发送 prompt
 
 分别把 [IP1](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md) 发给对应主机的 Codex。两份文件都按 P0、E1—E5 分节。**每次指定一个实验、一个场景/实验组和当前步骤**；完成当前步骤后输出交接信息，等待需要的另一侧结果，不自行把后续实验全跑掉。
+
+两份旧 prompt 中的 E4 LoCoMo 描述是辅助负载。当前 E4 主实验还须附上 [CONTINUOUS-TASK.md](CONTINUOUS-TASK.md) 及明确的 `work-item-v1` 配置，避免工具为保持兼容而默认运行旧 18 步场景。
 
 例如先给 IP2：
 
@@ -35,8 +37,10 @@ run_id：本轮实际唯一 ID；交付 SHA：两机共同版本。
 | E3-A 普通 Agent 续期 | IP1 启动持续非空记忆 API probe，并确认已进入测量；IP2 采 Provider before | IP1 开 Node observer，等待自然续期并正常结束；IP2 随后采 Provider after | IP1 在快照结束后让 probe 正常完成，导入双机原件 collect；不重启 Agent |
 | E3-B Workload 轮换 | IP1 先启动 probe；IP2 在本机启动带 provider_socket 的 Workload observer | 保持目标/Helper 正常，等待自然证书轮换，observer 正常结束 | IP1 probe 覆盖整个窗口，取回 IP2 原件 collect |
 | E3-C 已知启动恢复 | 准备真实已知且未完成的 launch ID；IP1 先启动 probe，IP2 先启动 creates observer | IP2 lifecycle observer 取得 before 后，只执行一次 resume-launch，再记录 after | creates/probe 均覆盖完整过程后正常结束，IP1 合并；没有适用未完成操作则记录 NOT_RUN |
-| E4 Agent 接入 | IP1 先冻结样本/模型/计划；IP2 按本 run 准备新用户、组和恢复包装 | IP1 配置并登记 Gateway，preflight 后运行单个 run；全部历史初始化结束才进入 QA，控制器按固定时间调用 IP2 包装 | IP2 保存控制/准入/就绪原件；IP1 保存 QA/请求/注入、collect/analyze；再切下一 run |
+| E3-D/E 新订阅与合法替换 | 分别冻结同实例新订阅、新受控 launch 案例；保留实例与旧订阅 | 用各自生命周期命令实施，保存新准入/订阅/Quote/入口原件 | 关联新 SVID 的首次非空业务响应；不能用 resume-launch 代替替换 |
+| E4 持续工作项 | IP1 冻结六步行程任务、模型、协议、规模；IP2 按本 run 准备新用户、组和恢复包装 | IP1 配置并登记 Gateway，preflight 后运行单个 run；约束逐步释放，固定时点触发故障与显式恢复；未知写入只查询 | IP2 保存控制/准入/就绪原件；IP1 保存工作项、提案状态、实际释放、真实读写、最终正确性及收集分析；再切下一 run |
 | E5 成本 | 两边确认组、规模、连接模式、负载及真实 PID；IP2 先启资源采样 | IP1 在采样已开始后运行负载，完成预热和测量；IP2 保持环境不变 | IP2 采样覆盖负载结束并自然写完成标记；IP1 收集每台主机的资源记录及请求结果，逐轮汇总 |
+| E5 小型补充 | IP2 按 [成本配方](E5-COST-TRIALS.md) 冻结三个历史点或 A/B 同链待决；IP1 保留对应原件 | 历史点显式新订阅；共享场景只取证探针不停止 B 原 Helper，IP1 旧连接负载覆盖全过程 | 传输 Trustee 原始计时及负载文件，只读关联；共享影响复用 E1 原 run ID |
 
 P0 不需要为每个实验从零重装。只更新确实变化的组件、组和实例；修改配置后按正常登记/准入流程启用。一个失败结果也可以完整归档；若后续依赖健康基线，先恢复该基线，而不是重跑到 PASS 或丢掉失败轮次。
 
@@ -48,9 +52,9 @@ P0 不需要为每个实验从零重装。只更新确实变化的组件、组�
 |---|---|---|---|
 | P0 | 版本/构建、客户端配置摘要、六阶段业务结果与权限负例 | 版本/构建、政策/镜像/Helper 摘要、launch/目标/身份/就绪 | 哪条路径已通、哪个阶段失败、未执行项 |
 | E1 | 实际 Server/Trustee 材料、按 nonce 关联的导出、阶段访问记录 | before/unregistered-new/after 的 observation、target、comparison、准入原件 | 各案例真实准入/拒绝层、实例变更、共同检查与历史差异可达性 |
-| E2 | trace、state、result、assessment、collection 快照和 timeline | 原始 fault JSONL、receiver JSONL、lifecycle、collector 覆盖和恢复记录 | 故障/检测/入口/最后读取时间，新/旧/在途结果；界限后读取与 UNKNOWN |
+| E2 | trace、实际释放、state、result、assessment、collection 快照和 timeline | 原始 fault JSONL、receiver JSONL、lifecycle、collector 覆盖和恢复记录 | 故障/检测/入口/最后读取时间，新/旧/在途结果；故障前释放的延迟读取、故障后新事实读取与 UNKNOWN |
 | E3 | 连续 requests/load-result、Node observer（A）、最终 collect 结果 | Provider before/after；Workload observer（B）；creates/resume 原件（C） | SVID 更新、Quote 尝试/生成/失败、Provider 启动、覆盖与中断、是否重复创建 |
-| E4 | fixture checksum、模型/配置、state/result/predictions、请求/注入、时间线 CSV、分析 | 本 run 用户作用域信息、控制回执、实际故障及恢复/准入/就绪日志 | 全计划/尝试/完成/有效完成、失败/超时/未知、请求和任务耗时、实际并发、恢复；F1 辅助 |
+| E4 | fixture checksum、模型/配置、稳定工作项、提案状态、state/result、请求/实际释放、时间线 CSV、分析 | 本 run 用户作用域信息、控制回执、实际故障及恢复/准入/就绪日志 | 六步全计划/尝试/确认/拒绝/未知、最终约束正确性、实际读取、任务中断及恢复耗时；LoCoMo/F1 辅助 |
 | E5 | requests/load-result、客户端资源、冻结负载、逐轮统计 | 服务端资源及 complete 标记、Quote/Trustee/就绪计时原件 | 分层延迟、样本数、Goodput、实际连接复用、错误率、CPU/RSS、独立重复数 |
 
 每个 run 在原始工具输出旁各写一份 `IP1-summary.md` / `IP2-summary.md`，使用 [单轮模板](RESULTS-RUN.template.md)；**不用另造工具结果 JSON**。IP1 接收 IP2 原件后写本轮 `SUMMARY.md`，再更新整批 [RESULTS-FRAMEWORK.template.md](RESULTS-FRAMEWORK.template.md) 对应行。保留原始文件名和相对引用，转移整个工具证据目录，使用 SHA256 核对文件。预测文本留在受保护目录，交接信息不含 key/正文。

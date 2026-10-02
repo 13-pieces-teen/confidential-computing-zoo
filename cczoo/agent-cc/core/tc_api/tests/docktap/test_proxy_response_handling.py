@@ -72,9 +72,11 @@ def test_lifecycle_request_and_trusted_log_use_same_full_container_id(operation,
     expected = f"{method} {prefix}/containers/{container_id}{suffix} HTTP/1.1".encode() + headers
     assert docker.sent == [expected]
     assert client.sent == [response]
-    record, recorded_operation = committer.enqueue_operation.call_args.args
+    record, recorded_operation = committer.begin_mutation.call_args.args
     assert recorded_operation == operation
     assert record.container["id"] == container_id
+    committer.complete_mutation.assert_called_once_with(committer.begin_mutation.return_value, record)
+    committer.enqueue_operation.assert_not_called()
     # Exercise the real context/entry builders used before signing the event.
     builder = object.__new__(TruConCommitter)
     builder._workload_store = None
@@ -153,6 +155,17 @@ class FakeDockerSocket:
 
     def close(self):
         self.closed = True
+
+
+class DurableLifecycleFake:
+    """The proxy waits for durable result acknowledgement before replying."""
+    def begin_mutation(self, op_record, operation_type, *, workload_id=None, launch_id=None):
+        self.context = (operation_type, workload_id, launch_id)
+        return 'mutation-test'
+
+    def complete_mutation(self, mutation_id, op_record):
+        assert mutation_id == 'mutation-test'
+        self.enqueued.append((op_record, *self.context))
 
 
 def test_handle_client_uses_shared_response_reader_and_half_closes_non_streaming_upstream_socket():
@@ -389,7 +402,7 @@ def test_handle_client_blocks_submittable_requests_without_attestation_token_whe
 
 
 def test_handle_client_returns_pull_success_before_async_trucon_submission():
-    class AsyncCommitter:
+    class AsyncCommitter(DurableLifecycleFake):
         def __init__(self):
             self.submit_called = False
             self.enqueued = []
@@ -437,8 +450,8 @@ def test_handle_client_returns_pull_success_before_async_trucon_submission():
     log_operation_json.assert_called_once_with(op_record)
 
 
-def test_handle_client_returns_create_success_before_async_trucon_submission():
-    class AsyncCommitter:
+def test_handle_client_returns_create_success_after_durable_result_before_async_signing():
+    class AsyncCommitter(DurableLifecycleFake):
         def __init__(self):
             self.submit_called = False
             self.enqueued = []
@@ -543,7 +556,7 @@ def test_handle_client_submits_build_requests_to_trucon_without_background_queue
 
 
 def test_create_does_not_grant_followup_start_without_delegation():
-    class AsyncCommitter:
+    class AsyncCommitter(DurableLifecycleFake):
         def __init__(self):
             self.enqueued = []
 

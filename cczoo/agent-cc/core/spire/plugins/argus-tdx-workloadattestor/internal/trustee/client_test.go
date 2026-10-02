@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 	"net/http"
@@ -19,6 +20,24 @@ import (
 	"testing"
 	"time"
 )
+
+func TestNegativeAppraisalRequiresBindingBeforePolicyClassification(t *testing.T) {
+	now := time.Now()
+	key := newSigningKey(t)
+	canonical, _ := fixture(t).RuntimeData.Canonical()
+	claims := validClaims(now, canonical)
+	cpu := claims["submods"].(map[string]any)["cpu0"].(map[string]any)
+	cpu["ear.status"] = "contraindicated"
+	token := []byte(signEAR(t, key, claims))
+	if !errors.Is(verifyEAR(token, &key.PublicKey, testIssuer, testProfile, testPolicyID, canonical, now), ErrPolicyDenied) {
+		t.Fatal("bound negative EAR not classified")
+	}
+	cpu["ear.appraisal-policy-id"] = "wrong"
+	token = []byte(signEAR(t, key, claims))
+	if err := verifyEAR(token, &key.PublicKey, testIssuer, testProfile, testPolicyID, canonical, now); err == nil || errors.Is(err, ErrPolicyDenied) {
+		t.Fatal("wrong-policy EAR misclassified as bound policy denial")
+	}
+}
 
 const (
 	testPolicyID = "argus-workload-openviking-v1"

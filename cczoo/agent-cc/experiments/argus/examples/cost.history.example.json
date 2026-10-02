@@ -1,0 +1,15 @@
+{
+  "schema": "argus.cost-trial.v1",
+  "run_id": "history-pilot-full-01",
+  "group": "full_argus",
+  "deployment": "/root/argus-arms/paper/full_argus/environment.json",
+  "mode": "pilot",
+  "frozen": false,
+  "timeout_seconds": 180,
+  "history_wait_seconds": 60,
+  "history_points": [
+    {"id": "small", "expected_records": null},
+    {"id": "medium", "expected_records": null, "growth_argv_file": "/secure/approved-growth-medium.json"},
+    {"id": "large", "expected_records": null, "growth_argv_file": "/secure/approved-growth-large.json"}
+  ]
+}

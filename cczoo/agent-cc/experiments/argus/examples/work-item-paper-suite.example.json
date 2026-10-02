@@ -1,0 +1,26 @@
+{
+  "experiment_id": "trip-paper01",
+  "profile": "argus-single-work-item-v1",
+  "cases": ["continuous"],
+  "mode": "pilot",
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "groups": ["full_argus", "native_spire_guarded"],
+  "conditions": ["fault", "no_fault"],
+  "seeds": [1],
+  "run_timeout_s": 900,
+  "variant_outputs": {
+    "full_argus": "/secure/variants/full_argus",
+    "native_spire_guarded": "/secure/variants/native_spire_guarded"
+  },
+  "continuous_configs": {
+    "full_argus": {"1": {
+      "fault": "/secure/trip/full-1-fault.json",
+      "no_fault": "/secure/trip/full-1-control.json"
+    }},
+    "native_spire_guarded": {"1": {
+      "fault": "/secure/trip/native-1-fault.json",
+      "no_fault": "/secure/trip/native-1-control.json"
+    }}
+  }
+}

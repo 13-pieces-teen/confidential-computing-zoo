@@ -3,39 +3,15 @@
   "fleet_config": "/secure/fleet.json",
   "groups": [
     "full_argus",
-    "native_spire_guarded",
-    "static_mtls"
+    "native_spire_guarded"
   ],
   "variant_outputs": {
     "full_argus": "/root/argus-arms/cost01/full_argus",
-    "native_spire_guarded": "/root/argus-arms/cost01/native_spire_guarded",
-    "static_mtls": "/root/argus-arms/cost01/static_mtls"
+    "native_spire_guarded": "/root/argus-arms/cost01/native_spire_guarded"
   },
   "business_configs": {
     "full_argus": "/secure/business-full.json",
-    "native_spire_guarded": "/secure/business-native.json",
-    "static_mtls": "/secure/business-static.json"
-  },
-  "static_clients": {
-    "binary": "/opt/argus-experiments/static-client/argus-static-client",
-    "binary_sha256": "REPLACE_WITH_REAL_BUILD_SHA256",
-    "instances": {
-      "alice": {
-        "cert": "/secure/static/alice-cert.pem",
-        "key": "/secure/static/alice-key.pem",
-        "bundle": "/secure/static/ca.pem"
-      },
-      "bob": {
-        "cert": "/secure/static/bob-cert.pem",
-        "key": "/secure/static/bob-key.pem",
-        "bundle": "/secure/static/ca.pem"
-      },
-      "carol": {
-        "cert": "/secure/static/carol-cert.pem",
-        "key": "/secure/static/carol-key.pem",
-        "bundle": "/secure/static/ca.pem"
-      }
-    }
+    "native_spire_guarded": "/secure/business-native.json"
   },
   "load": {
     "frozen": false,
@@ -48,17 +24,14 @@
     "measurement_seconds": 120,
     "timeout_seconds": 10,
     "body_files": {
-      "alice": "/secure/fixtures/alice-memory-query.json",
-      "bob": "/secure/fixtures/bob-memory-query.json",
-      "carol": "/secure/fixtures/carol-memory-query.json"
+      "alice": "/secure/fixtures/alice-memory-query.json"
     }
   },
   "cases": [
     "steady-api"
   ],
   "scales": [
-    1,
-    3
+    1
   ],
   "performance_seeds": [
     101,

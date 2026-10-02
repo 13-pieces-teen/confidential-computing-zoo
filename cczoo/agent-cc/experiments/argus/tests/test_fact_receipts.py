@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import append, atomic, sha
-from fact_receipts import assess, _recovery_status
+from fact_receipts import assess, _recovery_status, first_release, release_counts
 
 
 def fixture(tmp, *, fault=False, at=2000, gap=False, sent=True, recovery=False, matching=True):
@@ -17,7 +17,9 @@ def fixture(tmp, *, fault=False, at=2000, gap=False, sent=True, recovery=False, 
     atomic(tmp / "manifest.json", {"facts": [fact]})
     atomic(tmp / "result.json", {"run_id": "run", "started_at_ms": 1000, "completed_at_ms": 10000,
            "measurement_complete": True, "steps": [dict(fact, planned_at_ms=1000, started_at_ms=6600 if recovery else 1100, completed_at_ms=9500,
-           request_ids=["r"] if sent else [], task_result="PASS")]})
+           request_ids=["r"] if sent else [], task_result="PASS", released_at_ms=1100, release_source="gateway_agent_dispatch",
+           release_receipt={"at_ms": 1100, "source": "gateway_agent_dispatch", "boundary": "openclaw_cli_input",
+                            "task_id": "s00", "fact_id": fact["fact_id"], "session_key": "fixture-session", "prompt_sha256": "a" * 64})]})
     def admission(name, completed, nonce):
         directory = tmp / name
         directory.mkdir()
@@ -35,7 +37,8 @@ def fixture(tmp, *, fault=False, at=2000, gap=False, sent=True, recovery=False, 
                "admissions": [admission("initial", 900, "nonce-initial")]}
     if fault:
         checkpoint = {"type": "fault", "event": "helper-freeze", "run_id": "run", "executed": False, "target": target,
-                      "started_at_ms": 5000, "started_monotonic_ns": 5000000000, "clock_id": "boot:server"}
+                      "started_at_ms": 5000, "started_monotonic_ns": 5000000000, "completed_at_ms": 5100,
+                      "completed_monotonic_ns": 5100000000, "clock_id": "boot:server"}
         # remote_acceptance.fault journals one JSON object per line before and
         # after the command; this is not a pretty-printed atomic JSON document.
         append(tmp / "fault.jsonl", checkpoint)
@@ -187,7 +190,9 @@ def test_supervision_stop_is_not_unadmitted_replacement(tmp_path):
     value = assess(*fixture(tmp_path, fault=True, at=7000))
     assert value["facts"][0]["result"] == "FAIL"
     assert value["stop_condition"]["scope"] == "supervision_stop"
-    assert value["unadmitted_replacement"]["complete_fact_reads"] == 0
+    assert value["unadmitted_replacement"]["complete_fact_reads"] is None
+    assert value["unadmitted_replacement"]["result"] == "UNKNOWN"
+    assert value["unadmitted_replacement"]["positive_admission_association"]["unassociated_complete_fact_reads"] == 0
     assert value["whole_window"]["last_complete_fact_read"]["at_ms"] == 7000
     assert value["whole_window"]["last_stop_window_fact_read"]["relative_time"]["lower_ms"] == 2000
 
@@ -352,3 +357,139 @@ def test_interrupted_run_without_end_never_proves_absent_reads(tmp_path):
     value = assess(*paths)
     assert value["facts"][0]["result"] == "UNKNOWN"
     assert value["facts"][0]["received"] == "UNKNOWN"
+
+
+def set_dispatch_release(paths, at, **receipt_changes):
+    native = json.loads(paths[1].read_text())
+    step = native["steps"][0]
+    step["released_at_ms"] = at
+    step["release_receipt"].update(at_ms=at, **receipt_changes)
+    atomic(paths[1], native)
+
+
+def test_actual_release_separates_late_old_input_from_new_post_fault_input(tmp_path):
+    paths = fixture(tmp_path, fault=True, at=7000)
+    # The schedule claims after fault; the verified receipt is before it.
+    native = json.loads(paths[1].read_text())
+    native["steps"][0]["planned_at_ms"] = 8000
+    atomic(paths[1], native)
+    before = assess(*paths)
+    groups = before["post_bound"]["release_classification"]
+    assert groups["pre_fault_released_late"]["unique_facts"] == 1
+    assert groups["post_fault_first_released"]["unique_facts"] == 0
+    # Changing actual release, while leaving the original planned time before
+    # fault, changes only the first-release category, not the definite READ/FAIL.
+    set_dispatch_release(paths, 6200)
+    after = assess(*paths)
+    assert after["facts"][0]["result"] == "FAIL"
+    assert after["post_bound"]["post_stop_condition_complete_fact_reads"] == 1
+    assert after["post_bound"]["release_classification"]["post_fault_first_released"]["unique_facts"] == 1
+
+
+def test_release_during_fault_command_and_missing_receipt_are_unknown(tmp_path):
+    paths = fixture(tmp_path, fault=True, at=7000, gap=True)
+    set_dispatch_release(paths, 5050)
+    value = assess(*paths)
+    assert value["facts"][0]["first_release"]["classification"] == "UNKNOWN"
+    assert value["facts"][0]["received"] is True
+    assert value["facts"][0]["result"] == "FAIL"
+    assert value["coverage"]["result"] == "UNKNOWN"
+    assert value["post_bound"]["release_classification"]["boundary_or_missing_release"]["complete_fact_reads"] == 1
+    native = json.loads(paths[1].read_text())
+    native["steps"][0].pop("release_receipt")
+    native["steps"][0]["released_at_ms"] = 1000
+    atomic(paths[1], native)
+    assert assess(*paths)["facts"][0]["first_release"]["classification"] == "UNKNOWN"
+
+
+def test_dispatch_receipt_must_match_fact_task_source_and_native_timestamp(tmp_path):
+    paths = fixture(tmp_path, fault=True, at=7000)
+    for changes in ({"fact_id": "f" * 32}, {"task_id": "another-task"}, {"source": "planned_schedule"},
+                    {"prompt_sha256": "not-a-digest"}, {"boundary": "model_received"}):
+        native = json.loads(paths[1].read_text())
+        original = dict(native["steps"][0]["release_receipt"])
+        native["steps"][0]["release_receipt"].update(changes)
+        atomic(paths[1], native)
+        assert assess(*paths)["facts"][0]["first_release"]["classification"] == "UNKNOWN"
+        native["steps"][0]["release_receipt"] = original
+        atomic(paths[1], native)
+
+
+def test_release_interval_clock_uncertainty_and_fault_completion(tmp_path):
+    record = {"status": "OBSERVED", "source": "client_tls_socket_write", "boundary": "client_fact_prefix_transport_write",
+              "at_ms": 5200, "completed_at_ms": 5220, "source_sha256": "a" * 64}
+    fault = {"started_at_ms": 5000, "completed_at_ms": 5100}
+    assert first_release([record], fault, 0)["classification"] == "POST_FAULT"
+    assert first_release([record], fault, 100)["classification"] == "UNKNOWN"
+    assert first_release([record], {"started_at_ms": 5000}, 0)["classification"] == "UNKNOWN"
+    record.update(clock_id="boot:x", monotonic_ns=5200000000, completed_monotonic_ns=5220000000)
+    fault.update(clock_id="boot:x", started_monotonic_ns=5000000000, completed_monotonic_ns=5100000000)
+    assert first_release([record], fault, 100)["classification"] == "POST_FAULT"
+
+
+def test_repeated_socket_attempts_use_first_release_not_later_success():
+    old = {"status": "OBSERVED", "source": "client_tls_socket_write", "boundary": "client_fact_prefix_transport_write",
+           "at_ms": 4000, "completed_at_ms": 4020, "source_sha256": "a" * 64}
+    new = dict(old, at_ms=6500, completed_at_ms=6520)
+    value = first_release([new, old], {"started_at_ms": 5000, "completed_at_ms": 5100}, 0)
+    assert value["classification"] == "PRE_FAULT" and value["attempt_count"] == 2
+
+
+def test_hand_written_denied_interval_cannot_make_confirmed_unadmitted_reads(tmp_path):
+    paths = fixture(tmp_path, fault=True, at=7000, gap=True)
+    context = json.loads(paths[3].read_text())
+    context["eligibility_intervals"] = [{"eligible": False, "status": "DENIED", "started_at_ms": 1, "ended_at_ms": 10000}]
+    atomic(paths[3], context)
+    value = assess(*paths)
+    assert value["facts"][0]["received"] is True and value["facts"][0]["result"] == "FAIL"
+    assert value["unadmitted_replacement"]["result"] == "UNKNOWN"
+    assert value["unadmitted_replacement"]["complete_fact_reads"] is None
+    assert value["unadmitted_replacement"]["eligibility_input_status"] == "UNSUPPORTED"
+
+
+def test_post_fault_release_does_not_make_a_read_overlapping_fault_definite():
+    row = {"fact_id": "f", "result": "UNKNOWN", "relative_time": {"lower_ms": 90, "upper_ms": 120},
+           "first_release": {"classification": "POST_FAULT"}}
+    value = release_counts([row], {"started_at_ms": 5000, "completed_at_ms": 5100}, 0)
+    assert value["post_fault_first_released"]["complete_fact_reads"] == 0
+    assert value["boundary_or_missing_release"]["complete_fact_reads"] == 1
+
+
+def test_read_before_claimed_release_keeps_read_and_marks_release_unknown(tmp_path):
+    paths = fixture(tmp_path, fault=True, at=7000)
+    set_dispatch_release(paths, 8000)
+    value = assess(*paths)
+    assert value["facts"][0]["received"] is True and value["facts"][0]["result"] == "FAIL"
+    release = value["facts"][0]["reads"][0]["first_release"]
+    assert release["classification"] == "UNKNOWN"
+    assert "read precedes" in release["reason"]
+    assert value["post_bound"]["release_classification"]["post_fault_first_released"]["complete_fact_reads"] == 0
+
+
+def test_later_failed_retry_does_not_erase_known_first_release():
+    old = {"status": "OBSERVED", "source": "client_tls_socket_write", "boundary": "client_fact_prefix_transport_write",
+           "at_ms": 4000, "completed_at_ms": 4020, "source_sha256": "a" * 64}
+    failed_retry = dict(old, status="UNKNOWN", at_ms=6500, completed_at_ms=6520)
+    fault = {"started_at_ms": 5000, "completed_at_ms": 5100}
+    assert first_release([old, failed_retry], fault, 0)["classification"] == "PRE_FAULT"
+    assert first_release([dict(old, status="UNKNOWN"), dict(old, at_ms=6500, completed_at_ms=6520)], fault, 0)["classification"] == "UNKNOWN"
+
+
+def test_unfinished_socket_release_stream_cannot_assert_first_release(tmp_path):
+    paths = fixture(tmp_path, fault=True, at=7000, gap=True)
+    native = json.loads(paths[1].read_text()); native["steps"][0].pop("release_receipt")
+    atomic(paths[1], native)
+    fact = json.loads(paths[0].read_text())["facts"][0]
+    rows = [{"type": "release_start", "schema": "argus.input-release.v1", "boundary": "client_fact_prefix_transport_write"},
+            {"type": "input_release", "source": "client_tls_socket_write", "boundary": "client_fact_prefix_transport_write",
+             "request_id": "r", "at_ms": 6200, "completed_at_ms": 6250, "status": "OBSERVED",
+             **{k: fact[k] for k in ("fact_id", "full_fact_sha256", "fact_bytes")}}]
+    path = tmp_path / "releases.jsonl"
+    path.write_text("".join(json.dumps(dict(r, run_id="run", record_seq=i)) + "\n" for i, r in enumerate(rows, 1)))
+    context = json.loads(paths[3].read_text()); context["release_file"] = {"path": path.name, "sha256": sha(path)}
+    atomic(paths[3], context)
+    value = assess(*paths)
+    assert value["facts"][0]["result"] == "FAIL" and value["facts"][0]["received"] is True
+    assert value["facts"][0]["first_release"]["classification"] == "UNKNOWN"
+    assert value["coverage"]["result"] == "UNKNOWN"
+    assert any("did not complete" in d.get("reason", "") for d in value["release_diagnostics"])

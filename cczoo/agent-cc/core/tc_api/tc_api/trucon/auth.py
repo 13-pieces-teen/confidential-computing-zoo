@@ -30,6 +30,12 @@ def authorize_caller(caller_service: str, request: Request) -> Optional[JSONResp
         return JSONResponse(status_code=403, content={"detail": "Provider requires root UDS peer and read-only chain-state access"})
 
     if caller_service == "docktap":
+        if request.method == 'GET' and request.url.path == '/mutations':
+            return None
+        if request.method == 'POST' and (request.url.path == '/mutations/reserve' or
+                (request.url.path.startswith('/mutations/mutation-') and
+                 request.url.path.rsplit('/', 1)[-1] in {'result', 'submission'})):
+            return None
         if request.method == "POST" and request.url.path in {"/commit", "/commit-intents/reserve", "/init-chain"}:
             return None
         if request.method == "GET" and request.url.path.startswith("/init-chain/") and request.url.path.endswith("/baseline"):

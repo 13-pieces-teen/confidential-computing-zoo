@@ -62,6 +62,9 @@ def _mock_signing_context(bundle_json='{"fake": "bundle"}'):
 @pytest.fixture(autouse=True)
 def _token_based_auth_mode(monkeypatch):
     monkeypatch.setenv("DOCKTAP_AUTH_MODE", "delegation_disabled")
+    # These legacy signing/retry tests do not exercise the durable HTTP outbox;
+    # test_mutation_delivery covers it through the real sequencer handlers.
+    monkeypatch.setattr(TruConCommitter, '_recover_mutations', lambda self: None)
 
 
 # ---------------------------------------------------------------------------

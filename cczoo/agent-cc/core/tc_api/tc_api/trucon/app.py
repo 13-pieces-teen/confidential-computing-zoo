@@ -744,10 +744,14 @@ app = FastAPI(
 )
 
 from .routers import query as _query_module
+from .routers import mutations as _mutations_module
 from . import schemas as _schemas_module
 from ..identity import sigstore_baseline as _sigstore_baseline_module
 
 app.include_router(_query_module.router)
+_query_module.sequencer_lock = _sequencer_lock
+_mutations_module.sequencer_lock = _sequencer_lock
+app.include_router(_mutations_module.router)
 verify_chain = _query_module.verify_chain
 ChainStateResponse = _schemas_module.ChainStateResponse
 build_baseline_sigstore_bundle = _sigstore_baseline_module.build_baseline_sigstore_bundle
@@ -1053,6 +1057,15 @@ def commit(req: CommitRequest, request: Request):
 
         # 0. Idempotency check — before any side effects
         if req.idempotency_key:
+            if req.idempotency_key.startswith('mutation-'):
+                from .database import get_docktap_mutation
+                mutation = get_docktap_mutation(req.idempotency_key)
+                if mutation is None:
+                    raise HTTPException(status_code=409, detail='Mutation reservation is required')
+                submission = json.loads(mutation['submission_json']) if mutation['submission_json'] else None
+                if submission is None or any(getattr(req, key) != submission.get(key) for key in
+                        ('bundle', 'chain_id', 'event_digest', 'event_id', 'intent_token', 'idempotency_key', 'instance_id', 'owner_authorization')):
+                    raise HTTPException(status_code=409, detail='Commit does not match the durable mutation submission')
             existing = get_record_by_idempotency_key(req.idempotency_key, req.chain_id)
             if existing:
                 latency_ms = (time.perf_counter() - t0) * 1000
@@ -1150,6 +1163,11 @@ def commit(req: CommitRequest, request: Request):
                         status_code=500,
                         detail=_tdx_environment_hint(f"RTMR extend failed: {e}"),
                     )
+
+                if req.idempotency_key and req.idempotency_key.startswith('mutation-'):
+                    from ..experiment_barrier import checkpoint
+                    checkpoint('after_rtmr_extend', mutation_id=req.idempotency_key,
+                               operation_type=mutation['operation_type'], record_id=record_id)
 
             insert_record(
                 record_id=record_id,

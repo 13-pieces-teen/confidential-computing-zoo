@@ -9,7 +9,7 @@ from common import atomic, read
 from runner import plan
 
 
-def setup(tmp_path, monkeypatch):
+def build_source(tmp_path, monkeypatch):
     monkeypatch.setattr(continuous_suite, "inspect_variant", lambda p: {"variant": p.name})
     groups = ["full_argus", "native_spire_guarded"]
     source = {"experiment_id": "ctest", "cases": ["continuous"], "groups": groups, "seeds": [0],
@@ -33,7 +33,7 @@ def setup(tmp_path, monkeypatch):
 
 
 def test_conditions_are_paired_randomized_once_and_resumable(tmp_path, monkeypatch):
-    setup(tmp_path, monkeypatch)
+    build_source(tmp_path, monkeypatch)
     m = continuous_suite.generate(tmp_path / "source.json", tmp_path / "out")
     runs = plan(m)
     assert runs == plan(m) and len(runs) == 4 and len({r["run_id"] for r in runs}) == 4
@@ -44,9 +44,9 @@ def test_conditions_are_paired_randomized_once_and_resumable(tmp_path, monkeypat
     assert m['local_continuous_fault'] == 'NOT_RUN'
 
 
-@pytest.mark.parametrize("change", ["user", "secret", "schedule", "model", "formal", "fault_scope", "uninjected"])
+@pytest.mark.parametrize("change", ["user", "secret", "schedule", "model", "formal", "fault_scope", "uninjected", "scenario"])
 def test_continuous_rejects_contamination_and_unpaired_protocol(tmp_path, monkeypatch, change):
-    source = setup(tmp_path, monkeypatch)
+    source = build_source(tmp_path, monkeypatch)
     fault = read(source["continuous_configs"]["full_argus"]["0"]["fault"])
     path = source["continuous_configs"]["full_argus"]["0"]["no_fault"]
     control = read(path)
@@ -57,5 +57,44 @@ def test_continuous_rejects_contamination_and_unpaired_protocol(tmp_path, monkey
     if change == "formal": source["mode"] = "formal"
     if change == "fault_scope": control['fault_scope'] = 'local_client'
     if change == "uninjected": control['uninjected_client_ids'] = ['c1']
+    if change == 'scenario': control['scenario'] = 'work-item-v1'
     atomic(path, control); atomic(tmp_path / "source.json", source)
     with pytest.raises(ValueError): continuous_suite.generate(tmp_path / "source.json", tmp_path / "out")
+
+
+def test_work_item_suite_keeps_six_step_denominator(tmp_path, monkeypatch):
+    source = build_source(tmp_path, monkeypatch)
+    for group in source['groups']:
+        for condition, path in source['continuous_configs'][group]['0'].items():
+            value = read(path)
+            value['scenario'] = 'work-item-v1'
+            value['controls']['fault']['at_s'] = 120
+            value['controls']['recovery']['at_s'] = 240
+            atomic(path, value)
+    suite = continuous_suite.generate(tmp_path/'source.json', tmp_path/'out')
+    assert suite['cases'][0]['planned_tasks'] == 6
+    assert {r['planned_tasks'] for r in plan(suite)} == {6}
+    assert {r['scenario'] for r in plan(suite)} == {'work-item-v1'}
+
+
+@pytest.mark.parametrize('change',['valid','scenario','missing_condition','budget'])
+def test_single_work_item_paper_profile_enforces_the_four_cell_protocol(tmp_path,monkeypatch,change):
+    source=build_source(tmp_path,monkeypatch)
+    source['profile']='argus-single-work-item-v1'
+    for group in source['groups']:
+        for condition,path in source['continuous_configs'][group]['0'].items():
+            config=read(path); config.update(scenario='work-item-v1',max_concurrency=1,queue_limit=1,task_retries=0)
+            config['controls']['fault']['at_s']=120
+            config['controls']['recovery']['at_s']=240
+            atomic(path,config)
+    path=source['continuous_configs']['full_argus']['0']['fault']
+    config=read(path)
+    if change=='scenario': config['scenario']='ledger-v1'
+    if change=='budget': config['task_retries']=1
+    if change=='missing_condition': source['conditions']=['fault']
+    atomic(path,config); atomic(tmp_path/'source.json',source)
+    if change=='valid':
+        suite=continuous_suite.generate(tmp_path/'source.json',tmp_path/'out')
+        assert suite['profile']=='argus-single-work-item-v1' and len(plan(suite))==4
+    else:
+        with pytest.raises(ValueError): continuous_suite.generate(tmp_path/'source.json',tmp_path/'out')

@@ -110,6 +110,130 @@ def _clock(row, origin, uncertainty, *, at="at_ms", mono="monotonic_ns"):
     return relative(row, origin, at=at, mono=mono, uncertainty_ms=uncertainty)
 
 
+def release_records(manifest, native, context, base, native_sha256):
+    """Link actual release receipts; schedule/offer/intent timestamps are never evidence."""
+    facts = {f["fact_id"]: f for f in manifest["facts"]}
+    records, diagnostics = {}, []
+    for step in native.get("steps", native.get("task_results", [])):
+        fact = facts.get(step.get("fact_id"))
+        receipt = step.get("release_receipt") or {}
+        if not fact or step.get("released_at_ms") is None:
+            continue
+        task = fact.get("task_id", fact.get("step_id"))
+        if (step.get("release_source") != "gateway_agent_dispatch"
+                or receipt.get("source") != "gateway_agent_dispatch" or receipt.get("boundary") != "openclaw_cli_input"
+                or receipt.get("fact_id") != fact["fact_id"] or receipt.get("task_id") != task
+                or step.get("client_id") != fact.get("client_id") or step.get("step_id") != fact.get("step_id")
+                or type(receipt.get("at_ms")) is not int or receipt["at_ms"] != step["released_at_ms"]
+                or not receipt.get("session_key") or not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("prompt_sha256", "")))
+                or receipt.get("work_item_id") != fact.get("work_item_id")):
+            diagnostics.append({"fact_id": fact["fact_id"], "result": "UNKNOWN", "reason": "dispatch receipt association incomplete"})
+            continue
+        records.setdefault(fact["fact_id"], []).append({"at_ms": receipt["at_ms"], "completed_at_ms": receipt["at_ms"],
+            "source": receipt["source"], "boundary": receipt["boundary"], "task_id": task,
+            "source_sha256": native_sha256, "status": "OBSERVED"})
+    item = context.get("release_file")
+    if item:
+        try:
+            path = _path(base, item["path"])
+            require(sha(path) == item["sha256"], "release file checksum differs")
+            rows = acceptance.probe_rows(path, context["run_id"])
+            require(rows and all(r.get("run_id") == context["run_id"] for r in rows), "release run differs")
+            require(rows[0].get("type") == "release_start" and rows[0].get("schema") == "argus.input-release.v1"
+                    and rows[0].get("boundary") == "client_fact_prefix_transport_write", "release stream start missing")
+            require([r.get("record_seq") for r in rows] == list(range(1, len(rows) + 1)), "release stream sequence incomplete")
+            require(not any(r.get("type") == "probe_gap" for r in rows), "release stream damaged")
+            for row in rows:
+                if row.get("type") != "input_release":
+                    continue
+                fact = facts.get(row.get("fact_id"))
+                require(fact and row.get("full_fact_sha256") == fact["full_fact_sha256"]
+                        and row.get("fact_bytes") == fact["fact_bytes"] and row.get("request_id")
+                        and row.get("source") == "client_tls_socket_write"
+                        and row.get("boundary") == "client_fact_prefix_transport_write"
+                        and type(row.get("at_ms")) is int and type(row.get("completed_at_ms")) is int
+                        and row["completed_at_ms"] >= row["at_ms"], "release receipt incomplete")
+                records.setdefault(fact["fact_id"], []).append(dict(row, source_sha256=item["sha256"]))
+            stops = [r for r in rows if r.get("type") == "release_stop"]
+            if len(stops) != 1 or stops[0].get("complete") is not True or rows[-1] != stops[0]:
+                # A killed writer can send before emitting its receipt. Retain
+                # READ, but do not assert first release for an unfinished stream.
+                diagnostics.append({"result": "UNKNOWN", "reason": "release stream did not complete; first-release association remains unknown"})
+                for fact_id in facts:
+                    records.setdefault(fact_id, []).append({"status": "UNKNOWN"})
+            for gap in [r for r in rows if r.get("type") == "release_gap"]:
+                # A failed write can have partially released an earlier fragment.
+                # Refuse first-release claims when it cannot be linked to a fact.
+                diagnostics.append({"result": "UNKNOWN", "reason": "unassociated partial socket write"})
+                for fact_id in facts:
+                    records.setdefault(fact_id, []).append(dict(gap, status="UNKNOWN", source_sha256=item["sha256"]))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            diagnostics.append({"result": "UNKNOWN", "error_class": type(error).__name__, "reason": "release stream did not verify"})
+            records = {}
+    return records, diagnostics
+
+
+def first_release(records, fault, uncertainty):
+    """Bracket the first actual release against the entire fault-command interval."""
+    unknown = {"result": "UNKNOWN", "classification": "UNKNOWN", "reason": "no linked actual first-release receipt"}
+    if not records or any(type(r.get("at_ms")) is not int for r in records):
+        return unknown
+    sources = {r["source"] for r in records}
+    if len(sources) != 1:
+        return dict(unknown, reason="different release boundaries cannot be merged")
+    origin = fault or {"started_at_ms": 0}
+    intervals = []
+    for row in records:
+        left = _clock(row, origin, uncertainty)
+        right = _clock(row, origin, uncertainty, at="completed_at_ms", mono="completed_monotonic_ns")
+        if not left or not right or left["lower_ms"] > right["upper_ms"]:
+            return unknown
+        intervals.append((left["lower_ms"], right["upper_ms"], row, left["clock"]))
+    observed = [r for r in intervals if r[2].get("status") == "OBSERVED"]
+    if not observed:
+        return unknown
+    lower, upper, row, basis = min(observed, key=lambda r: (r[0], r[1]))
+    if any(r[2].get("status") != "OBSERVED" and r[0] <= upper for r in intervals):
+        return dict(unknown, reason="an earlier partial write may have released this fact")
+    # The earliest possible release upper bound also brackets the first release
+    # when repeated attempts' uncertain wall-clock intervals overlap.
+    upper = min(r[1] for r in observed)
+    value = {"result": "OBSERVED", "classification": "NO_FAULT", "source": row["source"], "boundary": row["boundary"],
+             "released_at_ms": row["at_ms"], "release_completed_at_ms": row["completed_at_ms"],
+             "relative_time": {"lower_ms": lower, "upper_ms": upper, "clock": basis},
+             "attempt_count": len(records), "source_sha256": row["source_sha256"]}
+    if not fault:
+        return value
+    end = _clock(fault, fault, uncertainty, at="completed_at_ms", mono="completed_monotonic_ns")
+    if upper < 0:
+        value["classification"] = "PRE_FAULT"
+    elif end and lower > end["upper_ms"]:
+        value["classification"] = "POST_FAULT"
+    else:
+        value.update(result="UNKNOWN", classification="UNKNOWN", reason="release overlaps fault interval or fault completion is missing")
+    return value
+
+
+def release_counts(reads, fault, uncertainty):
+    """Keep old-input late reads separate from facts first released after fault."""
+    groups = {name: [] for name in ("pre_fault_released_late", "post_fault_first_released", "boundary_or_missing_release", "pre_fault_read")}
+    end = _clock(fault, fault, uncertainty, at="completed_at_ms", mono="completed_monotonic_ns") if fault else None
+    for row in reads:
+        when, release = row["relative_time"], row["first_release"]
+        if not fault or when["upper_ms"] < 0:
+            group = "pre_fault_read"
+        elif release["classification"] == "POST_FAULT" and end and when["lower_ms"] > end["upper_ms"]:
+            group = "post_fault_first_released"
+        elif release["classification"] == "PRE_FAULT" and end and when["lower_ms"] > end["upper_ms"]:
+            group = "pre_fault_released_late"
+        else:
+            group = "boundary_or_missing_release"
+        groups[group].append(row)
+    return {name: {"complete_fact_reads": len(values), "unique_facts": len({r["fact_id"] for r in values}),
+                   "post_stop_condition_complete_fact_reads": sum(r["result"] == "FAIL" for r in values)}
+            for name, values in groups.items()}
+
+
 def _coverage(rows, start, end, origin, uncertainty):
     sources = {r.get("source_id"): r for r in rows if r.get("type") == "source_seen"}
     result = []
@@ -260,6 +384,7 @@ def assess(manifest_path, result_path, receiver_path, context_path):
     if fault:
         require(any(acceptance.same_target(b, fault["target"]) for b in bindings), "fault target differs from receiver binding")
     admissions, errors = admission_records(context, base)
+    releases, release_errors = release_records(manifest, result, context, base, sha(result_path))
     incomplete_end = False
     if "observation_end_at_ms" in context:
         end_wall, end_source = context["observation_end_at_ms"], "explicit_context_window"
@@ -307,6 +432,7 @@ def assess(manifest_path, result_path, receiver_path, context_path):
 
     for fact in manifest["facts"]:
         step = steps.get((fact["client_id"], fact["step_id"]), {})
+        released = first_release(releases.get(fact["fact_id"], []), fault, uncertainty)
         reads = []
         for row in rows:
             if row.get("type") != "fact_observed" or row.get("fact_id") != fact["fact_id"]:
@@ -319,20 +445,28 @@ def assess(manifest_path, result_path, receiver_path, context_path):
             when = _clock(row, origin, uncertainty)
             if not when or when["lower_ms"] > end_rel or when["upper_ms"] < start_rel:
                 continue
+            read_release = released
+            if released.get("relative_time", {}).get("lower_ms", float("-inf")) > when["upper_ms"]:
+                read_release = dict(released, result="UNKNOWN", classification="UNKNOWN",
+                                    reason="read precedes recorded first release; evidence association is incomplete")
             decision, phase, admission, scope, reason = policy(row, when)
             event = {k: row.get(k) for k in ("request_id", "stream_id", "instance_id", "launch_id", "at_ms", "completion_chunk", "start_offset", "end_offset")}
             event.update(result=decision, phase=phase, scope=scope, reason=reason, relative_time=when,
+                         first_release=read_release,
                          admission_source_sha256=admission.get("source_sha256") if admission else None)
             reads.append(event)
             all_reads.append(event | {"fact_id": fact["fact_id"]})
         attempted = bool(step.get("request_ids") or reads)
-        planned = step.get("planned_at_ms", result["started_at_ms"] + round(fact["release_offset_s"] * 1000))
-        fact_coverage = _coverage(rows, planned - origin["started_at_ms"] - uncertainty, end_rel, origin, uncertainty)
+        # Without a release receipt, cover the whole measured window; a planned
+        # release cannot hide an earlier gap or prove absent delivery.
+        release_start = released.get("relative_time", {}).get("lower_ms", start_rel)
+        fact_coverage = _coverage(rows, release_start, end_rel, origin, uncertainty)
         if incomplete_end:
             fact_coverage.update(result="UNKNOWN", reason="observation end is incomplete")
         decisions = [r["result"] for r in reads]
         decision = ("FAIL" if "FAIL" in decisions else "NOT_RUN" if not attempted else
-                    "UNKNOWN" if "UNKNOWN" in decisions or fact_coverage["result"] != "PASS" or not admissions or errors else "PASS")
+                    "UNKNOWN" if "UNKNOWN" in decisions or fact_coverage["result"] != "PASS" or not admissions or errors
+                    or (not reads and released["result"] != "OBSERVED") else "PASS")
         phases = {phase: ("FAIL" if any(r["result"] == "FAIL" for r in reads if r["phase"] == phase) else
                           "UNKNOWN" if fact_coverage["result"] != "PASS" or any(r["result"] == "UNKNOWN" for r in reads if r["phase"] == phase) else
                           "PASS" if any(r["phase"] == phase for r in reads) else "NOT_RUN")
@@ -351,6 +485,7 @@ def assess(manifest_path, result_path, receiver_path, context_path):
                 block_events.append({"request_id": event["request_id"], "at_ms": stamp, "reason": event.get("reason")})
         facts.append({"fact_id": fact["fact_id"], "client_id": fact["client_id"], "task_id": fact["step_id"],
                       "step_id": fact["step_id"], "result": decision, "received": True if reads else False if fact_coverage["result"] == "PASS" else "UNKNOWN",
+                      "first_release": released,
                       "attempted_delivery": attempted, "interception_success": decision == "PASS" and attempted and not reads and bool(block_events),
                       "local_block_events": block_events,
                       "phases": phases, "reads": reads, "coverage": fact_coverage["result"]})
@@ -387,17 +522,19 @@ def assess(manifest_path, result_path, receiver_path, context_path):
                 "post_stop_condition_body_bytes": sum(r.get("received_body_bytes", 0) for r in stop_body),
                 "unestablished_admission_complete_fact_reads": sum(r["scope"] == "admission_unestablished" for r in selected),
                 "last_complete_fact_read": last(selected), "last_stop_window_fact_read": last(stop_reads),
+                "release_classification": release_counts(selected, fault, uncertainty),
                 "last_body_read": last(assessed_body), "last_stop_window_body_read": last(stop_window_body)}
     uncertain = [r for r in all_reads if r["scope"] == "admission_unestablished"]
     observed_zero = coverage["result"] == "PASS" and not uncertain and bool(admissions) and not errors
     replacement = {
-        "result": "PASS" if observed_zero else "UNKNOWN",
-        "complete_fact_reads": 0 if observed_zero else None, "unique_facts": 0 if observed_zero else None,
+        "result": "UNKNOWN", "complete_fact_reads": None, "unique_facts": None,
         "unestablished_admission_candidate_reads": len(uncertain),
         "unestablished_admission_candidate_unique_facts": len({r["fact_id"] for r in uncertain}),
-        "reason": ("all observed complete fact reads have positive instance admission association and complete coverage"
-                   if observed_zero else "E1 ADMITTED/UNKNOWN and old-binding rejection cannot establish an unadmitted replacement interval"),
-        "scope": "complete synthetic fact reads in this covered run; candidates are not proven unadmitted replacements"}
+        "positive_admission_association": {"result": "PASS" if observed_zero else "UNKNOWN",
+            "unassociated_complete_fact_reads": 0 if observed_zero else None},
+        "reason": "existing archives prove observed admission, not an independent policy DENIED/invalid interval; eligibility is UNKNOWN",
+        "eligibility_input_status": "UNSUPPORTED" if context.get("eligibility_intervals") else "NOT_PROVIDED",
+        "scope": "independent policy eligibility of receiving instances; hand-written eligible flags are not evidence"}
     return {"schema": "argus.fact-receipts.v1", "run_id": run, "facts": facts, "coverage": coverage,
             "observation_window": {"started_at_ms": result["started_at_ms"], "ended_at_ms": end_wall,
                                    "end_source": end_source, "end_established": not incomplete_end},
@@ -405,6 +542,7 @@ def assess(manifest_path, result_path, receiver_path, context_path):
             "stop_condition": {"scope": stop_scope, "event": (fault or {}).get("event"),
                                "bound_ms": context.get("bound_ms"), "threshold_is_experiment_condition": True},
             "unadmitted_replacement": replacement,
+            "release_diagnostics": release_errors,
             "admission_diagnostics": errors, "admissions": admissions,
             "recovery": recovery_summary(context, base, fault, admissions, all_reads, steps, uncertainty, result, sha(result_path)),
             "source_sha256": {"manifest": sha(manifest_path), "result": sha(result_path), "receiver": sha(receiver_path), "context": sha(context_path)},

@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/spiffe-helper/cmd/spiffe-helper/config"
@@ -26,6 +28,9 @@ func main() {
 	versionFlag := flag.Bool("version", false, "print version")
 	configFile := flag.String("config", "helper.conf", "<configFile> Configuration file path")
 	daemonModeFlag := flag.Bool(daemonModeFlagName, true, "Toggle running as a daemon to rotate X.509/JWT or just fetch and exit")
+	probeBroker := flag.Bool("probe-broker", false, "observe one separate Broker subscription without publishing credentials or running hooks")
+	probeRunID := flag.String("probe-run-id", "", "experiment run ID for --probe-broker")
+	probeTimeout := flag.Duration("probe-timeout", 30*time.Second, "bounded one-subscription probe timeout (at most 5m)")
 	flag.Parse()
 
 	if *versionFlag {
@@ -45,6 +50,22 @@ func main() {
 	if err := hclConfig.ValidateConfig(log); err != nil {
 		log.WithError(err).Errorf("invalid configuration")
 		os.Exit(1)
+	}
+	if *probeBroker {
+		if hclConfig.Broker == nil {
+			log.Error("--probe-broker requires Broker configuration")
+			os.Exit(2)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		result := broker.Probe(ctx, hclConfig.AgentAddress, hclConfig.CertDir, *hclConfig.Broker, *probeRunID, *probeTimeout)
+		if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+			os.Exit(2)
+		}
+		if result.Result != "OBSERVED" {
+			os.Exit(2)
+		}
+		return
 	}
 
 	if err = startSidecar(hclConfig, log); err != nil {

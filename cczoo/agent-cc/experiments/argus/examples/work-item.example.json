@@ -1,0 +1,33 @@
+{
+  "schema": "argus.continuous.v1",
+  "scenario": "work-item-v1",
+  "run_id": "trip-pilot-alice",
+  "block_id": "trip-pilot-01",
+  "group": "full_argus",
+  "condition": "no_fault",
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "mode": "pilot",
+  "structure_seed": 1,
+  "model_settings": {"model": "RECORD_THE_ACTUAL_PINNED_PROVIDER_AND_MODEL"},
+  "schedule": {"release_interval_s": 60, "deadline_s": 120, "stop_budget_s": 10, "frozen": false},
+  "qa_timeout_seconds": 120,
+  "max_concurrency": 1,
+  "queue_limit": 1,
+  "task_retries": 0,
+  "bindings": [{
+    "client_id": "alice",
+    "container": "REPLACE_GATEWAY_CONTAINER",
+    "docker_user": "10001:10001",
+    "config_path": "/home/node/.openclaw/openclaw.json",
+    "agent_id": "main",
+    "account_id": "argus-eval",
+    "user_id": "alice-trip-pilot-01",
+    "client_spiffe_id": "spiffe://argus.local/agent/alice",
+    "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem"
+  }],
+  "controls": {
+    "fault": {"at_s": 120, "argv": [], "timeout_s": 120},
+    "recovery": {"at_s": 240, "argv": [], "timeout_s": 120}
+  }
+}

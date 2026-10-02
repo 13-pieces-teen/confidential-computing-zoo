@@ -1,6 +1,6 @@
 # E1 historical-policy reachability record
 
-Aligned with Feishu revision 1329. Run this alongside the single-client
+Aligned with the E1 scope in Feishu revision 1935. Run this alongside the single-client
 continuous-task pilot. It is a short record of actual operations and evidence,
 not a new orchestrator or an instruction to weaken production checks.
 
@@ -8,6 +8,10 @@ The question is whether two real trajectories pass the same current-fact and
 local checks, while the approved lifecycle policy distinguishes their histories.
 A signed fixture demonstrates a verifier rule. Additional online protection
 requires a reachable receiver and a difference after the common checks.
+
+Use [E1-STAGE-RECEIPTS.md](E1-STAGE-RECEIPTS.md) for the explicit fresh-subscription
+attempt, first-rejection receipts, actual pending capture and default-off
+lifecycle barriers. Ordinary `observe` only checks an existing admission.
 
 ## 1. Fix the case and authority before executing it
 
@@ -20,6 +24,7 @@ Choose one case below and record the principal executing **each** operation:
 | Candidate | What it can establish |
 |---|---|
 | Approved target plus allowed unrelated measured activity | History tolerance and fixed-measurement diagnostic; not an attack. |
+| Running approved target while its supported operation record is pending | Real record-readiness gate, with current checks and the pending interval captured; not by itself a full-history-policy advantage. |
 | Approved new launch with the saved old registration | The actual rejection stage; common local rejection is common protection. |
 | Approved new launch with fresh registration | Independent legal admission, not a historical-policy violation. |
 | Controlled stop/start of the same container and fresh registration | Candidate current-fact/history distinction, subject to all common checks. |

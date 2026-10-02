@@ -1,8 +1,12 @@
 """Join independent task and application-read evidence without imputing success."""
 import csv
+import json
 from pathlib import Path
 
 from common import atomic, read, require, sha
+from continuous_work_item import SCENARIOS
+from continuous_observations import annotate_phases, join_work_items
+from continuous_proposal import SCHEMA as PROPOSAL_SCHEMA
 
 OUTCOMES = ("PASS", "FAIL", "UNKNOWN", "NOT_RUN")
 SERVICE_FAULTS = ("helper-freeze", "helper-crash", "target-exit")
@@ -84,8 +88,13 @@ def bound_result(output, directory, run):
     require(len(facts) == len(steps) and set(facts) == {s["fact_id"] for s in steps}, "planned task denominator changed")
     for step in steps:
         fact = facts[step["fact_id"]]
-        require(all(fact.get(k) == step.get(k) for k in ("client_id", "step_id", "full_fact_sha256", "fact_bytes")),
+        require(all(fact.get(k) == step.get(k) for k in ("client_id", "step_id", "full_fact_sha256", "fact_bytes",
+                                                       "work_item_id", "constraint_key", "proposal_sha256")),
                 "task differs from planned fact")
+    if value.get('scenario') == 'work-item-v1':
+        require(manifest.get('protocol',{}).get('proposal_schema') == PROPOSAL_SCHEMA
+                and all(isinstance(f.get('proposal_sha256'),str) and len(f['proposal_sha256']) == 64 for f in facts.values()),
+                'work-item result predates or lacks the typed Proposal contract')
     require(value.get("protocol_digest"), "continuous protocol digest missing")
     require(all(fault_scope(item) in ("unspecified", fault_scope(run)) for item in (value, manifest)),
             "continuous fault domain differs")
@@ -93,7 +102,9 @@ def bound_result(output, directory, run):
 
 
 def unobserved(run):
-    n = run.get("planned_tasks", 18 * run["scale"])
+    scenario = run.get('scenario', 'ledger-v1')
+    require(scenario in SCENARIOS, 'invalid continuous scenario')
+    n = run.get("planned_tasks", 3 * SCENARIOS[scenario] * run["scale"])
     task = "NOT_RUN" if run["result"] == "NOT_RUN" else "UNKNOWN"
     return dict(run_id=run["run_id"], group=run["group"], condition=run.get("condition", "unspecified"),
                 block_id=run["block_id"], scale=run["scale"], fault_scope=fault_scope(run),
@@ -133,7 +144,7 @@ def condition_evidence(value, run, context_path):
         require(control.get("status") == "completed" and control.get("returncode") == 0
                 and control["started_at_ms"] - uncertainty <= fault["started_at_ms"] <= control["completed_at_ms"] + uncertainty,
                 "fault checkpoint is outside this control invocation")
-        return {"result": "OBSERVED", "event": kind, "source_sha256": sha(path)}
+        return {"result": "OBSERVED", "event": kind, "source_sha256": sha(path), "fault_started_at_ms":fault['started_at_ms']}
     except (ValueError, OSError, KeyError, TypeError) as error:
         return {"result": "UNKNOWN", "reason": str(error)}
 
@@ -144,6 +155,10 @@ def evidence(output, directory, run):
     receipt = {"schema": "argus.fact-receipts.v1", "result": "UNKNOWN", "facts": [],
                "reason": "receiver/context not collected"}
     condition = condition_evidence(value, run, context)
+    try:
+        context_value = read(context) if context.is_file() else {}
+    except (ValueError,OSError,TypeError):
+        context_value = {}
     # A missing checkpoint must not silently turn a fault trial into a no-fault
     # receipt PASS. Task scores remain usable as individual observations.
     if receiver.is_file() and context.is_file():
@@ -160,6 +175,20 @@ def evidence(output, directory, run):
         scored_receipt = dict(receipt, facts=[dict(f, result="UNKNOWN") if f.get("result") == "PASS" else f
                                              for f in receipt.get("facts", [])])
     metrics, detail = summarize(value["steps"], scored_receipt)
+    detail['steps'] = annotate_phases(detail['steps'],value,condition,context_value.get('clock_uncertainty_ms'))
+    if value.get('scenario') == 'work-item-v1':
+        work_items = join_work_items(value,scored_receipt,condition)
+        require(len(work_items) == run['scale'], 'missing planned work items')
+        metrics['continuous_work_item_completion_rate'] = sum(w.get('complete_task_result') == 'PASS' for w in work_items) / len(work_items)
+        metrics['continuous_work_item_continuation_rate'] = sum(w.get('continuation_result') == 'PASS' for w in work_items) / len(work_items)
+        metrics['continuous_step_success_rate'] = metrics['continuous_task_success_rate']
+        metrics['continuous_business_tasks'] = len(work_items)
+        metrics['continuous_planned_steps'] = len(value['steps'])
+        detail['work_items'] = work_items
+        metrics['continuous_legal_recovery_rate'] = (sum(w['legal_recovery_result'] == 'PASS' for w in work_items) / len(work_items)
+                                                    if value.get('condition') == 'fault' else None)
+        metrics['continuous_legal_recovery_unknown_rate'] = (sum(w['legal_recovery_result'] == 'UNKNOWN' for w in work_items) / len(work_items)
+                                                            if value.get('condition') == 'fault' else None)
     exclusion_reasons = []
     if condition["result"] != "OBSERVED": exclusion_reasons.append("condition_evidence_unknown")
     if value.get("model_mismatches"): exclusion_reasons.append("observed_model_mismatch")
@@ -197,6 +226,11 @@ def evidence(output, directory, run):
     detail["clients"] = []
     for client in sorted({s["client_id"] for s in value["steps"]}):
         cm, cd = summarize([s for s in value["steps"] if s["client_id"] == client], scored_receipt)
+        if value.get('scenario') == 'work-item-v1':
+            item = next(w for w in detail['work_items'] if w['client_id'] == client)
+            cm.update(continuous_work_item_completion_rate=int(item['complete_task_result'] == 'PASS'),
+                      continuous_work_item_continuation_rate=int(item['continuation_result'] == 'PASS'),
+                      continuous_step_success_rate=cm['continuous_task_success_rate'])
         detail["clients"].append(dict(client_id=client, **cm, axes=cd["axes"], counts=cd["counts"]))
     atomic(directory / "continuous/joint-result.json", detail)
     return metrics, detail
@@ -205,16 +239,36 @@ def evidence(output, directory, run):
 def export(output, details):
     """Metadata only: generated facts and Agent answers never enter paper tables."""
     rows = []
-    keep = ("client_id", "step_id", "phase", "fact_id", "task_result", "receipt_result", "reason",
+    keep = ("client_id", "step_id", "phase", "planned_phase", "actual_dispatch_phase", "actual_tool_phases", "fact_id", "task_result", "receipt_result", "reason",
             "offered", "attempted", "received", "committed", "recalled", "deadline_missed", "tool_call_count",
-            "planned_at_ms", "offered_at_ms", "started_at_ms", "deadline_at_ms", "completed_at_ms")
+            "work_item_id", "proposal_sha256", "proposal_persisted", "write_attempted", "write_outcome", "dispatch_attempted", "released_at_ms", "release_source",
+            "planned_at_ms", "offered_at_ms", "started_at_ms", "deadline_at_ms", "completed_at_ms", "answer_at_ms", "goal_confirmed_at_ms")
     for run in details:
         for step in run["steps"]:
             rows.append(dict(run_id=run["run_id"], group=run["group"], condition=run["condition"],
-                             block_id=run["block_id"], **{k: step.get(k) for k in keep}))
+                              block_id=run["block_id"], **{k: json.dumps(step[k]) if isinstance(step.get(k),(list,dict)) else step.get(k) for k in keep}))
     with (output / "continuous-tasks.csv").open("w", encoding="utf-8", newline="") as stream:
         fields = ["run_id", "group", "condition", "block_id", *keep]
         writer = csv.DictWriter(stream, fieldnames=fields); writer.writeheader(); writer.writerows(rows)
+    events = []
+    for run in details:
+        for step in run['steps']:
+            for event in step.get('tool_events', []):
+                events.append(dict(run_id=run['run_id'],client_id=step['client_id'],step_id=step['step_id'],
+                                   planned_phase=step.get('phase'),**event))
+    with (output / 'continuous-tool-events.csv').open('w',encoding='utf-8',newline='') as stream:
+        fields = ['run_id','client_id','step_id','planned_phase','event','tool_name','tool_call_id','checked_at','at_ms','actual_phase']
+        writer = csv.DictWriter(stream,fieldnames=fields,extrasaction='ignore'); writer.writeheader(); writer.writerows(events)
+    items = []
+    fields = ['run_id','group','condition','block_id','client_id','work_item_id','complete_task_result',
+              'continuation_result','legal_recovery_result','legal_recovery_reason','proposals',
+              'unapplied_required_proposals','recovery_intervals','legal_recovery_evidence']
+    for run in details:
+        for item in run.get('work_items', []):
+            row = {**{k:run.get(k) for k in ('run_id','group','condition','block_id')},**item}
+            items.append({k:json.dumps(row[k],sort_keys=True) if isinstance(row.get(k),(dict,list)) else row.get(k) for k in fields})
+    with (output / 'continuous-work-items.csv').open('w',encoding='utf-8',newline='') as stream:
+        writer = csv.DictWriter(stream,fieldnames=fields); writer.writeheader(); writer.writerows(items)
 
 
 def fault_contrasts(rows, metrics, mean_ci):

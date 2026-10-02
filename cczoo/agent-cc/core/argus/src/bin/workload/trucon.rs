@@ -5,6 +5,16 @@ use std::{collections::HashSet, path::Path};
 
 pub const DEFAULT_SOCKET: &str = "/var/run/trucon/trucon.sock";
 
+#[derive(Debug)]
+pub struct HistoryFailure(pub &'static str);
+impl std::fmt::Display for HistoryFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(self.0) }
+}
+impl std::error::Error for HistoryFailure {}
+pub fn reason_code(error: &anyhow::Error) -> &'static str {
+    error.downcast_ref::<HistoryFailure>().map_or("HISTORY_UNAVAILABLE", |value| value.0)
+}
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Snapshot {
     pub chain_id: String,
@@ -78,12 +88,15 @@ fn decode_response(bytes: &[u8]) -> Result<Snapshot> {
     }
     let headers = std::str::from_utf8(&bytes[..split])?;
     let mut lines = headers.split("\r\n");
-    if lines.next().and_then(|l| l.split_whitespace().nth(1)) != Some("200") {
-        bail!("TruCon history is not ready for attestation");
-    }
+    let status = lines.next().and_then(|l| l.split_whitespace().nth(1));
     let mut content_length = None;
+    let mut reason = None;
     for line in lines {
         let (name, value) = line.split_once(':').context("invalid HTTP header")?;
+        if name.eq_ignore_ascii_case("x-argus-reason") {
+            if reason.is_some() { bail!("duplicate reason code"); }
+            reason = Some(value.trim());
+        }
         if name.eq_ignore_ascii_case("transfer-encoding") {
             bail!("unsupported transfer encoding");
         }
@@ -97,6 +110,16 @@ fn decode_response(bytes: &[u8]) -> Result<Snapshot> {
     let body = &bytes[split + 4..];
     if content_length != Some(body.len()) {
         bail!("incomplete TruCon response");
+    }
+    if status != Some("200") {
+        let code = match (status, reason) {
+            (Some("409"), Some("MUTATION_PENDING")) => "MUTATION_PENDING",
+            (Some("409"), Some("HISTORY_CAPACITY")) => "HISTORY_CAPACITY",
+            (Some("409"), Some("HISTORY_NOT_CONFIRMED")) => "HISTORY_NOT_CONFIRMED",
+            (Some("404"), Some("HISTORY_MISSING")) => "HISTORY_MISSING",
+            _ => "HISTORY_UNAVAILABLE",
+        };
+        return Err(HistoryFailure(code).into());
     }
     let snapshot: Snapshot = serde_json::from_slice(body)?;
     snapshot.validate()?;
@@ -140,5 +163,20 @@ mod tests {
         assert!(value.validate().is_err());
         assert!(decode_response(b"HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\n\r\n").is_err());
         assert!(decode_response(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\n{}").is_err());
+    }
+
+    #[test]
+    fn safe_reason_is_bound_to_status_and_complete_response() {
+        for (status, header, expected) in [
+            ("409", "MUTATION_PENDING", "MUTATION_PENDING"),
+            ("409", "HISTORY_CAPACITY", "HISTORY_CAPACITY"),
+            ("503", "MUTATION_PENDING", "HISTORY_UNAVAILABLE"),
+            ("409", "unknown-secret", "HISTORY_UNAVAILABLE"),
+        ] {
+            let bytes = format!("HTTP/1.1 {status} Error\r\nContent-Length: 0\r\nX-Argus-Reason: {header}\r\n\r\n");
+            assert_eq!(reason_code(&decode_response(bytes.as_bytes()).unwrap_err()), expected);
+        }
+        let error = decode_response(b"HTTP/1.1 409 Error\r\nContent-Length: 2\r\nX-Argus-Reason: MUTATION_PENDING\r\n\r\n").unwrap_err();
+        assert_eq!(reason_code(&error), "HISTORY_UNAVAILABLE");
     }
 }

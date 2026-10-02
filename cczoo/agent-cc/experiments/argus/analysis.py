@@ -16,7 +16,10 @@ from locomo_analysis import METRICS as LOCOMO_METRICS
 STRATA = ("case", "scale", "connection_mode", "workload_kind", "workload_spec", "condition", "fault_kind", "fault_scope")
 CONTINUOUS_METRICS = ("continuous_task_success_rate", "continuous_joint_success_rate",
                       "continuous_receipt_unknown_rate", "continuous_task_unknown_rate",
-                      "continuous_deadline_miss_rate", "continuous_offered_rate")
+                      "continuous_deadline_miss_rate", "continuous_offered_rate",
+                      "continuous_step_success_rate", "continuous_work_item_completion_rate",
+                      "continuous_work_item_continuation_rate", "continuous_legal_recovery_rate",
+                      "continuous_legal_recovery_unknown_rate")
 METRICS = ("pass_value", "api_goodput_rps", "memory_nonempty_goodput_rps", "p95_ms",
            "tcp_connect_p50_ms", "tls_handshake_p50_ms", "connect_p50_ms", "api_p95_ms", "connection_reuse_fraction",
            "process_cpu_seconds", "sum_process_peak_rss_bytes", "locomo_conversation_macro_f1",

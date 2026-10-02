@@ -99,3 +99,32 @@ automatic recovery or manufacture new launch evidence.
 Local tests mutate only temporary JSON fixture inodes and stub systemd/Docker
 actions. Real monitor detection, shutdown and post-bound delivery remain NOT_RUN
 until executed on the remote experiment instance.
+
+## Original backend liveness during E2
+
+Set `timeline.backend_probe: true` in `fault-trial` (enabled in the example).
+The server observer first obtains the checked target registration, then performs
+fixed, unauthenticated `GET /health` requests to `127.0.0.1` in that original
+process's network namespace. It requires Linux root, checks PID/start time,
+boot, network namespace and owned listening-socket inodes before and after each
+request, and never reuses the approved configuration digest as a liveness test.
+The request carries no private fact, API key, query, or request body. It creates
+no route, listener, firewall exception or reusable forwarding entry. Response
+content is not archived. It does not probe a replacement process automatically.
+
+The fixed health handler must be available in the pinned service build; absence,
+timeout, identity change, non-200 response and explicit unhealthy response remain
+`UNKNOWN`, never proof of ingress protection. When enabled, this probe must
+succeed in the initial healthy baseline before fault injection. Its polling cost
+and gaps are included in the finite observation cadence; keep it identical across
+the compared arms.
+
+`timeline.backend_availability` reports positive samples after the fault and
+after observed entry closure separately. `live_after_entry_stop=OBSERVED`
+establishes that the original application still answered its health endpoint at
+those sampled times. It does not establish uninterrupted memory availability or
+memory-result correctness. Combine it with actual post-fault input releases,
+receiver reads, the original TLS lane and the targeted no-close control. If the
+backend has died, zero observed private reads must not be described as an effect
+of active ingress closure. Independent policy eligibility remains a separate
+`UNKNOWN` when the required eligibility interval is absent.

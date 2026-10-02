@@ -15,9 +15,7 @@
   "workload_kind": "memory_query",
   "path": "/api/v1/search/find",
   "body_files": {
-    "alice": "/secure/fixtures/alice-memory-query.json",
-    "bob": "/secure/fixtures/bob-memory-query.json",
-    "carol": "/secure/fixtures/carol-memory-query.json"
+    "alice": "/secure/fixtures/alice-memory-query.json"
   },
   "rate": 1,
   "concurrency_per_client": 8,
@@ -42,6 +40,6 @@ python3 experiments/argus/plot.py --output /secure/evidence/cost-reuse
 
 负载工具每个客户端/worker 持有独立连接，记录实际 connection ID、是否复用、重连原因、TCP/TLS/API 时间。服务端关闭连接或凭据 generation 变化会使下一次请求重新建连；失败的 POST 不自动重放。`reuse` 是请求策略，不保证服务器实际保持每条连接；报告必须列实际复用数。
 
-`memory_nonempty_goodput_rps` 只计测量窗口内成功且返回叶级记忆的查询。HTTP 成功但空召回作为该负载失败单列，不能用状态 API 的高吞吐替代记忆业务。它仍不表示回答正确：完整模型任务由随机事实链路或 LoCoMo 另测。
+`memory_nonempty_goodput_rps` 只计测量窗口内成功且返回叶级记忆的查询。HTTP 成功但空召回作为该负载失败单列，不能用状态 API 的高吞吐替代记忆业务。它仍不表示回答正确：完整模型任务由 E4 六步工作项另测。
 
-`examples/suite.performance.example.json` 当前默认是 `reuse/memory_query` 和 1/3 客户端。先单客户端测成本，三实例够用后再扩规模；状态 API 可另行单列探活开销。控制面 Quote/Trustee/命令至就绪计时见 [E3 配方](examples/E3-LIFECYCLE-RECIPE.md#small-control-plane-cost-measurements)，不得将 Trustee RTT 当成纯证明 CPU 耗时。远程性能当前为 NOT_RUN。
+`examples/suite.performance.example.json` 当前默认是 Full/native、`reuse/memory_query` 和单客户端。状态 API 可另行单列探活开销。控制面 Quote/Trustee/命令至就绪计时见 [E3 配方](examples/E3-LIFECYCLE-RECIPE.md#small-control-plane-cost-measurements)，不得将 Trustee RTT 当成纯证明 CPU 耗时。三个历史长度点与两个服务共享待决观测使用 [cost_trials.py 配方](E5-COST-TRIALS.md)。远程性能当前为 NOT_RUN。

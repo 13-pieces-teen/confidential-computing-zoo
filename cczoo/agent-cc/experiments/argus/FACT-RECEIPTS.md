@@ -2,8 +2,11 @@
 
 This adds experiment observation to the existing implementation. It does not
 change admission policy, SVID issuance, or the nonblocking audit data path.
-Tests are provided; they have not been executed for this delivery. Real TDX,
-systemd timing and model behavior remain remote measurements.
+The 2026-10-02 focused receipt/connection/coordinator tests were executed locally;
+see `tmp/argus-implementation-20261002/receipt-delivery.md` for the final count and
+command. Real TDX, Linux systemd timing, remote receiver behavior and model
+results remain NOT_RUN. The independent DENIED/invalid-interval qualification
+oracle below is an input contract, not an implemented online oracle.
 
 ## Service preparation
 
@@ -150,16 +153,49 @@ or an unadmitted replacement. Unknown fault types remain UNKNOWN. Reads by a
 different, positively admitted instance do not inherit the old instance's stop
 condition; legal re-admission starts a separate interval.
 
-`unadmitted_replacement` is independently reported. The current E1 observation
-establishes ADMITTED or UNKNOWN; old-binding rejection alone does not establish
-an interval in which another receiver is unadmitted. Unassociated reads remain
-`admission_unestablished`, with candidate counts and null/UNKNOWN confirmed
-replacement counts. Only complete coverage and positive admission association
-for all observed reads support zero for this run; this is not evidence that a
-replacement attack was attempted. Nonzero confirmed unadmitted counts require
-additional actual rejection and admission-interval evidence, not a hand-written
-flag in the context file. Do not fill the abstract's replacement result from
-the Helper-freeze stop metric.
+`unadmitted_replacement` is independently reported and currently always returns
+UNKNOWN with null confirmed counts. The current E1 observation establishes
+observed ADMITTED or UNKNOWN; it does not establish independent policy eligibility
+for every comparison group. Old-binding rejection alone does not establish an
+interval in which another receiver is unadmitted. Unassociated reads remain
+`admission_unestablished` with candidate counts. Complete coverage and positive
+admission association are retained in the separate `positive_admission_association`
+field; that zero is not a confirmed zero of policy-ineligible reads or evidence
+that a replacement attack was attempted. Context `eligibility_intervals`, including
+hand-written `eligible=false` or `status=DENIED`, are UNSUPPORTED and never change
+the receiver verdict. Do not fill the abstract's replacement result from the
+Helper-freeze stop metric.
+
+### Minimum independent eligibility input contract (not implemented)
+
+An online DENIED/invalid-interval adapter must be added and verified before
+confirmed nonzero or zero replacement counts can be reported. It must provide:
+
+1. The run, exact container/launch/PID/starttime/boot instance key, common approved
+   policy ID and artifact digest, and pinned verifier/build/trust configuration.
+   A baseline's own SVID or Ready result is a separate operational observation.
+2. Original challenge/nonce, target-bound current evidence, authenticated history,
+   signed appraisal result and deterministic production-policy replay establishing
+   DENIED; or a trusted, positively observed instance-condition invalidation with
+   its precisely scoped reason. A timeout, missing ADMITTED row, mismatched old
+   registration or operator-written label is insufficient.
+3. The verified association between that evidence and the actual receiver's
+   protected process binding, plus the affected admission/use epoch where needed.
+   A logical SPIFFE ID alone does not distinguish a replacement process.
+4. Actual start/end observations with clock domains and measured uncertainty.
+   Re-admission ends an invalid interval only after that instance's fresh,
+   positively linked evidence. Missing endings or boundary-overlapping reads
+   remain UNKNOWN rather than using planned fault/recovery times.
+5. Hashed originals and a verifier that rechecks the cryptographic/policy/instance
+   links, rather than trusting a saved PASS/DENIED result. The context selects
+   that pinned input; it cannot choose a verdict by boolean.
+
+Once implemented, a complete trusted READ wholly inside a positively established
+ineligible interval must produce FAIL and a nonzero confirmed count even when
+coverage elsewhere is UNKNOWN. Proving zero additionally requires attempted
+releases, full reader attribution and complete coverage of the requested interval.
+Current archives lack the complete positive negative-decision chain, so this
+delivery deliberately does not create an online DENIED oracle.
 
 For the same process instance, a post-fault observation establishes re-admission
 only by comparison with a known pre-fault nonce or Helper invocation. Re-observing
@@ -254,9 +290,60 @@ automatic reconnection. EOF, reset and timeout observations are separate;
 timeouts do not prove peer closure. These are E2 transport microexperiments,
 not substitutes for real Agent memory tasks.
 
+`fault_trial.py` now launches `connection_facts.py probe`, a finite wrapper around
+the existing transport probe. It subclasses its actual send boundary while keeping
+the existing TLS pinning, HTTP implementation, lane scheduling and reconnect rules.
+Its `releases.jsonl` records the first frame-prefix fragment passed to transport
+per request, with the actual socket-write start/return interval and clock domain.
+Split-prefix recognition retains the first fragment's original clock; repeated
+attempts use the earliest actual release, not the last successful request. A write
+that raises may have partially sent data and is UNKNOWN. A damaged or unfinished
+release stream cannot prove first release. The prefix matcher logs only fact IDs,
+hashes, lengths and clocks; it does not log request bodies.
+
+This E2 boundary is **the controlled experiment driver passing a fact's first
+fragment to transport**, not the Agent first learning that fact or the service
+receiving it. Socket-write return does not imply receiver delivery. Actual ASGI
+READ remains the independent receipt boundary. Payload creation, `planned_at_ms`,
+`offered_at_ms` and request-start timestamps cannot substitute for release.
+
+For continuous tasks, the different release source is `gateway_agent_dispatch`:
+`result.steps.released_at_ms` must equal the matching Gateway `release_receipt.at_ms`
+at `openclaw_cli_input`, linked to task/fact/work-item/session and prompt digest.
+Missing receipt means UNKNOWN even if controller dispatch intent exists. That is
+Agent-input dispatch, not a socket write or model-provider receipt. The assessor
+keeps these sources separate and does not merge them into one first-release clock.
+
+`whole_window.release_classification` and `post_bound.release_classification` add
+four groups, each with complete-read, unique-fact and post-stop violation counts:
+`pre_fault_released_late`, `post_fault_first_released`,
+`boundary_or_missing_release`, and `pre_fault_read`. PRE requires release wholly
+before fault-command start; POST requires release and read wholly after actual
+fault-command completion, including measured clock error. Overlap, missing fault
+completion, contradictory chronology or absent release evidence remains UNKNOWN.
+The existing `post_stop_condition_*` and `forbidden_complete_fact_reads` metrics
+retain their read-time meaning and compatibility; a known READ/FAIL is not removed
+because first-release classification or later coverage is UNKNOWN.
+
+The fact/collection `result` is the receive/stop-condition verdict. It is not a
+combined certification of first-release completeness or independent instance
+eligibility: a conforming observed read may retain PASS while `first_release` or
+`unadmitted_replacement` is UNKNOWN. Report these three axes separately.
+
+The default coordinator collects a hashed `fact-manifest.json`,
+`fact-native-result.json`, `fact-context.json`, `releases.jsonl` and
+`fact-receipts.json` alongside its existing trace/fault/receiver snapshot. Optional
+`receipt_context` points to the existing hashed admission context; omission leaves
+admission association UNKNOWN while complete READ and first-release evidence are
+still reported. Legacy unframed `body_file` traffic retains transport assessment
+but cannot produce synthetic-fact counts. Resume collects existing observations
+and never resends a fact or injects another fault.
+
 ## Tests to run on the validation hosts
 
-Tests have been written but not run in this change. Suggested focused entries:
+Focused receipt/connection/coordinator tests were run locally for this delivery;
+the final command and log are in `tmp/argus-implementation-20261002/receipt-delivery.md`.
+Additional validation-host entries remain:
 
 ```sh
 python3 -m pytest adapters/OpenViking/receiver_audit/tests \

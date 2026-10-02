@@ -205,3 +205,81 @@ polled after the command finishes, so the latter is a conservative observation
 cost, including polling/checks, not an exact issuance time or pure attestation
 duration. Existing readiness with the same Helper does not count as newly ready.
 Normal Agent renewal continues to use the read-only recipe above.
+
+## Same-instance resubscription and new controlled replacement
+
+The additional cases are `workload-resubscribe` and `replacement-launch`.
+Copy `e3-workload-rotation.example.json`, retain the actual workload deployment
+and Provider socket, and select exactly one case with a fresh run ID/output.
+The observer now captures a retained journal cursor before its first snapshot
+and a bounded Helper-unit journal window after its second snapshot. Unit, boot,
+invocation, target fields, serials and source hashes are checked by the collector.
+Missing/vacuumed cursor, changed boot, missing events and mismatched windows keep
+event counts `UNKNOWN`. `observed_serial_transitions_min` remains a two-snapshot
+lower bound; `helper_events` separately reports subscription starts/ends, SVID
+publications and distinct observed serials. None is a Quote counter.
+
+After `E3_OBSERVER_READY`, perform the explicitly planned action once:
+
+- For `workload-resubscribe`, preserve the target tuple and restart only the
+  approved Helper through the usual operator flow. This deliberately closes and
+  rebuilds its ingress, and is an E3 recovery case, not the E5 shared-pending test.
+- For `replacement-launch`, follow the ordinary new controlled launch and
+  registration path. The new launch ID and container ID must both differ; a
+  Docker restart or `resume-launch` does not satisfy this case.
+
+Wrap the action that establishes the new entrance with the existing
+`time-ready-command`. During the observer window, after the entrance is ready,
+collect a fresh same-run `admission_trial.py observe` result for that deployment.
+Finish this admission observation before the second lifecycle snapshot. Preserve
+the associated Quote/EAR/history originals using the existing archive recipe.
+For Full Argus the production observation must contain the newly accepted
+Workload challenge and the Provider window must show new Workload generation;
+the native baseline's installed runtime variant instead expects zero Workload
+generation. The collector never converts missing counters to zero.
+
+```sh
+python3 experiments/argus/lifecycle_trial.py collect \
+  --observation /var/lib/argus/experiments/e3-resubscribe \
+  --admission-observation /var/lib/argus/experiments/e3-admitted/observation.json \
+  --readiness-result /var/lib/argus/experiments/e3-readiness.json \
+  --load-result /secure/e3-memory/load-result.json \
+  --clock-uncertainty-ms 20 --max-probe-gap-ms 2000 \
+  --output /var/lib/argus/experiments/e3-result.json
+```
+
+The recovery join uses `peer_svid_serial` from the actual TLS certificate on each
+memory request, including reused connections. It matches the new readiness
+generation before reporting readiness-to-first-observed-nonempty-response time.
+An old connection with the same logical SPIFFE ID is insufficient. Missing serial
+or a different generation remains `UNKNOWN`. This is API recovery; E4 separately
+checks correct Agent continuation and task completion.
+
+## Separate subscription probe without disrupting the active Helper
+
+For the two-service E5 shared-pending check, use the approved Helper binary's
+explicit probe mode with its existing protected configuration and permitted UID:
+
+```sh
+/opt/argus-experiment/bin/spiffe-helper \
+  -config /etc/argus-experiment/helper.conf \
+  -probe-broker -probe-run-id e5-shared-01 -probe-timeout 30s \
+  > /var/lib/argus/experiments/e5-shared-probe.json
+```
+
+Use actual installed paths. This process obtains its own authorized Helper
+identity, starts one additional PID-reference Broker subscription, validates the
+target SVID and rechecks the target. It never invokes Publisher, readiness,
+reload/stop hooks or the original Helper's lifecycle. Only metadata is printed;
+received key material is neither printed nor persisted. The existing service
+and Helper remain running. Source selectors and caller UID must be identical to
+the approved deployment; this mode does not grant a new executable identity.
+
+`argus.subscription-probe.v1` includes run/subscription IDs, start/end/subscribe
+times, target and public serial. `OBSERVED` means a valid target identity was
+received under a stable target binding, not independent evidence of a new policy
+appraisal. Timeouts, missing identity and RPC failures return `UNKNOWN` (exit 2),
+never a fabricated policy denial. Correlate a claimed pending rejection with the
+actual Provider/pending and appraisal records. Successful output uses exit 0.
+Real hardware evaluation and the unchanged-original-Helper check remain remote
+acceptance work.

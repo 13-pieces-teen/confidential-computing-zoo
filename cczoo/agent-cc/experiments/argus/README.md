@@ -1,14 +1,20 @@
 # Argus 4—7：实现与实验入口
 
-当前主线对应飞书 revision **1373**，见 [PAPER-ALIGNMENT-1373.md](PAPER-ALIGNMENT-1373.md)。E1/E2/E3/E5 评价框架准入、交付停止、复用与分层成本；E4 使用典型 LoCoMo 只读 QA 评价真实 Agent 接入、性能和故障恢复。累计金额/前驱事务的 continuous 工具保留为可选历史负载，不再是默认论文实验。最新 [IP1 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md) 和 [结果模板](RESULTS-FRAMEWORK.template.md) 已同步。下方历史测试数字不代表本轮远程通过。
+当前执行范围对齐飞书 revision **1935** 的精简实验，以及作者于 2026-10-02 确认的可信管理员边界。主实验使用单客户端、固定模型、六步持续行程工作项；Full/native 为共同对照，监督与主动关闭消融只用于对应 E2 场景。E1 核验第一拒绝层，E2 测实际新增接收，E3/E4 关联复用、重新准入与任务继续，E5 测正常 API 和三个历史长度点，另做两个服务同链待决检查。LoCoMo、静态 mTLS 和多客户端扫描保留为可选旧工具，不是本轮主实验前置要求。
+
+旧 [IP1 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP1.md)、[IP2 prompt](../../adapters/OpenClaw/spiffe_client/PROMPT-IP2.md) 及 [1373 对齐记录](PAPER-ALIGNMENT-1373.md) 保留其原始执行背景；涉及 E4 时以 [持续任务协议](CONTINUOUS-TASK.md)、[当前取舍](PAPER-ALIGNMENT-1806.md) 和本目录当前结果模板为准。本地代码与测试不等于真实 TDX 或模型实验结果。
+
+此前的生命周期记录修复与六步任务初版见 [2026-10-02 前序交付记录](IMPLEMENTATION-20261002.md)。
+
+最新代码补齐、验证与执行入口见 [精简实验实现记录](IMPLEMENTATION-1935.md)。E4 从 [单客户端四条件配置](examples/work-item-paper-suite.example.json) 开始；E5 共享/历史测量见 [小型成本实验](E5-COST-TRIALS.md)。历史 [1806 取舍](PAPER-ALIGNMENT-1806.md) 保留为变更背景。
 
 双机实际执行请先看 [按实验的先后顺序和交接表](TWO-HOST-SEQUENCE.md)。每轮各主机记录 [单轮结果](RESULTS-RUN.template.md)，IP1 汇总后再进入下一项。
 
 目录职责与模块关系见 [STRUCTURE.md](STRUCTURE.md)，完整生产组件索引见 [ARGUS.md](../../ARGUS.md)。配置示例统一位于 [examples/](examples/)，运行配置片段位于 [config/](config/)。
 
-最新整体 review、修复及发布范围见 [REVIEW-20260926.md](REVIEW-20260926.md)。
+较早的整体 review、修复及发布范围见 [REVIEW-20260926.md](REVIEW-20260926.md)。
 
-基线为 `8be8afe`。本轮扩展独立 Gateway、多用户私有记忆、应用读取审计、隔离的对照组和可恢复实验工具。真实 TDX、systemd 关闭时间、模型记忆效果、镜像运行及跨机性能在远程运行前为 **NOT_RUN**。本地测试不替代远程验收。
+早期扩展以 `8be8afe` 为代码基线，加入独立 Gateway、多用户私有记忆、应用读取审计和隔离对照组。当前实现以工作树及交付清单为准。真实 TDX、systemd 关闭时间、模型记忆效果、镜像运行及跨机性能在远程运行前为 **NOT_RUN**。本地测试不替代远程验收。
 
 2026-09-26 AAMAS 方案的新增实现、最新验证和交付边界见 [改造交付说明](AAMAS-IMPLEMENTATION-20260926.md)。
 
@@ -33,16 +39,18 @@
 | 多客户端局部/共享故障与显式恢复 | [fleet_fault.py](fleet_fault.py)、[FLEET-FAULT.md](examples/FLEET-FAULT.md) |
 | API 负载、资源与统计 | [load_fleet.py](load_fleet.py)、[resources.py](resources.py)、[analysis.py](analysis.py) |
 | LoCoMo 导入、续查、新会话 QA 与评分 | [locomo_run.py](locomo_run.py)、[LOCOMO.md](LOCOMO.md)；使用本地已有数据，不冒称官方协议 |
+| 持续工作项、真实记忆读写、中断与恢复 | [continuous.py](continuous.py)、[continuous_work_item.py](continuous_work_item.py)、[六步工作项协议](WORK-ITEM.md)；显式选择 `work-item-v1`，旧配置仍使用 `ledger-v1` |
+| 首次释放与服务读取的分离统计 | [connection_facts.py](connection_facts.py)、[fact_receipts.py](fact_receipts.py)、[证据合同](FACT-RECEIPTS.md) |
 | 双机顺序、证据边界 | [REMOTE-RUNBOOK.md](REMOTE-RUNBOOK.md)、[CLAIMS-EVIDENCE.md](CLAIMS-EVIDENCE.md) |
 | 本地验证与源码交付清单 | [VALIDATION.md](VALIDATION.md)、[source-manifest.json](source-manifest.json) |
 
-默认拓扑是客户端 TDVM 内一个共享 SPIRE Agent、三个独立 OpenClaw Gateway，以及服务 TDVM 的共享 OpenViking。Gateway 的身份、UID/GID、凭据组、配置、数据、容器 label、登记和发布 unit 分开；共享 Node/可信 publisher 是公共信任边界。停止一个实例不停止 Node。
+论文主拓扑是客户端 TDVM 的一个 SPIRE Agent 和一个 OpenClaw Gateway，以及服务 TDVM 的 OpenViking。工具仍支持多 Gateway；其身份、UID/GID、凭据组、配置、数据、容器 label、登记和发布 unit 分开。共享 Node/可信 publisher 是公共信任边界，停止一个实例不停止 Node。
 
 服务准入采用精确 SPIFFE ID 集合；`identity.allowed_client_ids` 与旧 `identity.client_id` 互斥。业务权限继续由 OpenViking 从有效 API key 解析。请求头、`actor` 或声称的用户不是安全身份。没有新增 SPIFFE 与 API key 强制一一绑定；持有另一份有效 key 的获准客户端可使用该 key 本身的权限。
 
 ## 实验流程
 
-所有命令从 `cczoo/agent-cc` 执行；Linux 运行建议 Python 3.12。先完成构建和一个真实单客户端路径，再扩到三客户端。每个实验组顺序占用服务监听端口；先停止前组，检查已停止，再激活下一组。共享 Node 数据不得删除。
+所有命令从 `cczoo/agent-cc` 执行；Linux 运行建议 Python 3.12。先完成构建和真实单客户端路径，再运行冻结的主实验。每个实验组顺序占用服务监听端口；先停止前组，检查已停止，再激活下一组。共享 Node 数据不得删除。
 
 1. 用 `variants.py render` 生成每组隔离服务配置及实际源代码，`inspect` 检查文件和声明机制。没有完整构建时 `payload_ready=false`，工具拒绝安装或正式执行。
 2. 为各组准备实际非 root 用户 key 文件，使用相同模型、数据、权限与预算。每组使用独立业务用户，防止上一组的持久记忆污染下一组。
@@ -77,9 +85,11 @@ python3 experiments/argus/plot.py --output /secure/evidence/paper01
 
 中断的安全 GET 测量可用 `resume --run-id RUN_ID --new-attempt` 显式新开一轮：先前窗口留在 `runs/RUN_ID/attempts/N`，新一轮从预热开始。不能拼接窗口；完整 FAIL/UNKNOWN 不能用此选项反复刷结果，未知 POST/创建/故障也不会重放。统计保留中断次数，新 attempt 沿用原配对块。
 
-默认功能配置是一个种子的 smoke 验证，不是论文统计样本。正式 E4 的种子数按实验设计另行设置；E5 示例为 1/3 客户端、五轮、预热 30 秒和测量 120 秒。容量不够时保留 `CAPACITY_STOP`。E1/E2/E3 的部署相关检查和里程碑在 [scenarios.json](scenarios.json) 列出，未知环境参数必须填写，不假造硬件动作或业务里程碑。LoCoMo 与图表不在首轮功能验收的必经路径中。
+默认功能配置是一个种子的 smoke 验证，不是论文统计样本。正式 E4 的种子数按实验设计冻结；E5 示例使用 Full/native、单客户端、五轮、预热 30 秒和测量 120 秒，具体负载由 pilot 冻结。容量不够时保留 `CAPACITY_STOP`。E1/E2/E3 的部署相关检查和里程碑在 [scenarios.json](scenarios.json) 列出，未知环境参数必须填写，不假造硬件动作或业务里程碑。
 
 LoCoMo 使用 `suite.py` 的可选 `locomo` case，或直接运行 `locomo_run.py`。它需要独立的初始空用户及登记前配置好的只读评测 Gateway；不能与 `private-memory` case 共用本批用户。每个新重复使用新用户/部署，一次中断继续原 journal。`step` 的 PASS 只表示 LoCoMo 工作负载 COMPLETE；QA 分数、注入观测、应用读取分别报告。
+
+E4 持续任务显式选择 `scenario: work-item-v1`，固定一个工作项、六个步骤，使用新会话继续同一业务工作项。带类型和顺序的原始 Proposal 独立存储，后续按真实回读重算；任一前序必要写入未知时阻止后继写入。完整任务与已确认状态上继续分别计分。配置、真实控制命令及证据要求见 [WORK-ITEM.md](WORK-ITEM.md)；不得把计划步骤或未调用工具当作实际交付。
 
 ## 证据与统计
 

@@ -14,7 +14,11 @@ SCOPES = ["ARGUS.md", "README.md", "README_CN.md", "experiments/README.md",
           "core/spire/helpers/spiffe-helper", "core/spire/plugins/argus-tdx-workloadattestor",
           "core/argus/src", "core/argus/Cargo.toml", "core/argus/Cargo.lock",
           "core/tc_api/tc_api/services/launch.py",
-          "core/tc_api/tc_api/services/workload_profile.py", "core/tc_api/tests/test_workload_profile.py"]
+          "core/tc_api/tc_api/services/workload_profile.py", "core/tc_api/tests/test_workload_profile.py",
+          "core/tc_api/tc_api/docktap", "core/tc_api/tc_api/trucon",
+          "core/tc_api/tests/docktap", "core/tc_api/tests/test_attestation_snapshot.py",
+          "core/tc_api/tc_api/experiment_barrier.py", "core/tc_api/tests/test_experiment_barrier.py",
+          "core/tc_api/docs/docktap"]
 EXCLUDED = {"__pycache__", ".pytest_cache", "node_modules", "dist", "build", ".git", ".venv", "venv", "vendor"}
 SUFFIXES = {".py", ".go", ".mod", ".sum", ".json", ".md", ".mjs", ".js", ".ts", ".sh", ".service", ".hcl", ".conf", ".rego", ".txt", ".yaml", ".yml", ".lock", ".rs", ".toml", ".proto"}
 LOCAL_OUTPUTS = ("experiments/argus/private/", "experiments/argus/evidence/", "experiments/argus/generated/")

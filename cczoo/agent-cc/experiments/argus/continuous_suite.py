@@ -8,6 +8,8 @@ from pathlib import Path
 from common import atomic, digest, read, require, resolve
 from runner import plan, validate
 from variants import inspect_variant, SHORT
+from continuous_work_item import SCENARIOS
+from continuous_proposal import SCHEMA as PROPOSAL_SCHEMA
 
 
 def generate(source, output):
@@ -19,6 +21,11 @@ def generate(source, output):
             and set(groups) <= {"full_argus", "native_spire_guarded"}, "continuous main comparison uses Full/native")
     seeds = c.get("seeds", list(range(10)))
     conditions = c.get("conditions", ["fault", "no_fault"])
+    profile = c.get('profile')
+    require(profile in (None,'argus-single-work-item-v1'),'unknown continuous profile')
+    if profile:
+        require(set(groups) == {'full_argus','native_spire_guarded'} and set(conditions) == {'fault','no_fault'},
+                'paper profile requires all four Full/native and fault/no-fault conditions')
     fault_kind = c.get("fault_kind", "helper-freeze")
     require(fault_kind in ("helper-freeze", "helper-crash", "target-exit"),
             "continuous v1 selects one existing service fault; client faults retain fleet_fault")
@@ -28,6 +35,7 @@ def generate(source, output):
             and set(conditions) <= {"fault", "no_fault"}, "invalid continuous conditions")
     arms, artifacts, inputs, protocols, users, secrets = {}, [], {}, {}, set(), set()
     scale = None
+    scenario = None
     for group in groups:
         variant = resolve(source.parent, c["variant_outputs"][group])
         report = inspect_variant(variant)
@@ -43,6 +51,13 @@ def generate(source, output):
                 path = resolve(source.parent, c["continuous_configs"][group][str(seed)][condition])
                 config = read(path)
                 require(config.get("schema") == "argus.continuous.v1", "invalid continuous config")
+                selected_scenario = config.get('scenario', 'ledger-v1')
+                require(selected_scenario in SCENARIOS, 'invalid continuous scenario')
+                scenario = selected_scenario if scenario is None else scenario
+                require(scenario == selected_scenario, 'paired runs must use the same continuous scenario')
+                require(not profile or selected_scenario == 'work-item-v1','paper profile requires typed six-step work item')
+                require(config.get('max_concurrency',1) == 1 and config.get('queue_limit',1) == 1
+                        and config.get('task_retries',0) == 0,'continuous budget must be one active, one queued, zero retries')
                 require(config.get("group") == group and config.get("condition") == condition
                         and config.get("structure_seed") == seed, "continuous group/condition/structure seed mismatch")
                 require(config.get("fault_kind", fault_kind) == fault_kind, "paired runs must select the same fault kind")
@@ -52,6 +67,7 @@ def generate(source, output):
                 bindings = config["bindings"]
                 scale = len(bindings) if scale is None else scale
                 require(scale > 0 and len(bindings) == scale, "paired runs need equal client counts")
+                require(not profile or scale == 1,'paper profile requires exactly one client')
                 require(len({b["client_id"] for b in bindings}) == scale, "duplicate continuous client")
                 require(len({b["container"] for b in bindings}) == scale, "one independent Gateway per client")
                 for binding in bindings:
@@ -77,7 +93,9 @@ def generate(source, output):
                             "formal fault runs require actual fault and recovery commands")
                 # Commands/identities differ by arm; the offered load and event
                 # times must not. Secret values never enter this public digest.
-                protocol = digest({"schedule": schedule, "qa_timeout_seconds": config.get("qa_timeout_seconds", 120),
+                protocol = digest({"scenario": selected_scenario, "schedule": schedule, "qa_timeout_seconds": config.get("qa_timeout_seconds", 120),
+                                   "proposal_schema":PROPOSAL_SCHEMA if selected_scenario == 'work-item-v1' else None,
+                                   "max_concurrency":1,"queue_limit":1,"task_retries":0,
                                    "model_settings": config.get("model_settings", {}),
                                    "client_ids": sorted(b["client_id"] for b in bindings),
                                    "control_times": {k: v.get("at_s") for k, v in controls.items()}})
@@ -101,8 +119,10 @@ def generate(source, output):
          "policy": {"can_reattest": False, "source": "unchanged approved server artifact"},
          "artifacts": artifacts, "secrets": {}, "continuous_inputs": inputs,
          "cases": [{"name": "continuous", "experiment": "E4", "conditions": conditions, "fault_kind": fault_kind,
-                    "fault_scope": "shared_service", "operations": [operation]}],
+                    "fault_scope": "shared_service", "scenario":scenario,
+                    "planned_tasks":3 * SCENARIOS[scenario] * scale, "operations": [operation]}],
          "local_continuous_fault": "NOT_RUN",
+         "profile":profile,
          "continuous_protocols": {str(k): v for k, v in protocols.items()}, "capture_mode": c.get("mode", "pilot")}
     validate(m)
     output.mkdir(parents=True)

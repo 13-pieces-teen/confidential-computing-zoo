@@ -29,7 +29,7 @@ def render(output, analysis, plt):
                   else r["joint_receipt_task"][cell] for r in runs]
         ax.barh(labels, values, left=left, label=cell, color=color)
         left = [a + b for a, b in zip(left, values)]
-    ax.set(xlabel="All planned tasks", title="Receipt criterion / task result (unknown axes remain separate in tables)")
+    ax.set(xlabel="All planned steps", title="Receipt criterion / step result (unknown axes remain separate in tables)")
     ax.legend(fontsize=7, ncol=3); save(fig, "continuous-joint-outcomes")
     for run in runs:
         origin = run.get("started_at_ms")
@@ -42,13 +42,26 @@ def render(output, analysis, plt):
             if not isinstance(planned, (int, float)): continue
             start = step.get("started_at_ms")
             ax.scatter((planned-origin)/1000, y, marker="|", color="black", s=22)
+            released = step.get("released_at_ms")
+            if isinstance(released, (int, float)):
+                ax.scatter((released-origin)/1000, y, marker="o", color="#5c9dc6", s=14)
+            for event in step.get('tool_events', []):
+                stamp = event.get('at_ms')
+                if event.get('event') != 'tool_started' or not isinstance(stamp,(int,float)): continue
+                name = event.get('tool_name')
+                if name not in ('memory_recall','memory_store'): continue
+                ax.scatter((stamp-origin)/1000,y,marker='^' if name == 'memory_recall' else 's',
+                           color='#6b55a3' if name == 'memory_recall' else '#d98235',s=18)
+                uncertainty = step.get('phase_clock_uncertainty_ms')
+                if isinstance(uncertainty,(int,float)) and uncertainty > 0:
+                    ax.errorbar((stamp-origin)/1000,y,xerr=2*uncertainty/1000,fmt='none',ecolor='#888888',linewidth=.6)
             if isinstance(start, (int, float)) and isinstance(end, (int, float)):
                 ax.plot([(start-origin)/1000, (end-origin)/1000], [y, y], linewidth=3, color=colors[step["task_result"]])
             deadline = step.get("deadline_at_ms")
             if isinstance(deadline, (int, float)):
                 ax.scatter((deadline-origin)/1000, y, marker="x", color="#888888", s=10)
         ax.set(yticks=range(len(steps)), yticklabels=[s["client_id"] + "/" + s["step_id"] for s in steps],
-               xlabel="Seconds since fixed schedule origin (tick = release; cross = deadline)", title=run["run_id"])
+               xlabel="Seconds since schedule origin (tick: offer; dot: dispatch; triangle: recall; square: store; cross: deadline)", title=run["run_id"])
         ax.tick_params(axis="y", labelsize=6); save(fig, run["run_id"] + "-task-timeline")
         # Draw only milestones collected by the receiver/lifecycle code. Missing
         # phases stay absent; command success never supplies an admission time.
@@ -78,7 +91,7 @@ def render(output, analysis, plt):
             if c.get("low") is not None: ax.plot([c["low"], c["high"]], [i, i])
         ax.axvline(0, color="#777777", linewidth=.7)
         ax.set(yticks=range(len(contrasts)), yticklabels=[c["group"]+" / "+c["client_id"]+" n="+str(c["n_runs"]) for c in contrasts],
-               xlabel="Fault minus matched no-fault task success rate", title="Per-client changes (shared faults affect all dependent clients)")
+               xlabel="Fault minus matched no-fault step success rate", title="Per-client changes (shared faults affect all dependent clients)")
         save(fig, "continuous-client-effects")
     losses = [c for c in analysis.get("paired_uninjected_completion_loss_pp", []) if c.get("n_runs", 0)]
     if losses:

@@ -3,13 +3,14 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import stat
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import atomic, digest, read, sha
-from admission_trial import compare, config, observe, target_check
+from admission_trial import attempt, compare, config, observe, pending_observation, target_check
 
 
 class AdmissionTrialTests(unittest.TestCase):
@@ -110,6 +111,104 @@ class AdmissionTrialTests(unittest.TestCase):
         self.assertEqual(result['result'], 'OBSERVED')
         self.assertIn('local', result['scope'])
         self.assertEqual(result['raw_quote_and_signed_ear_archive'], 'SEPARATE_ARCHIVE_REQUIRED')
+
+    def test_explicit_attempt_uses_isolated_units_and_fresh_correlated_journal(self):
+        self.target.update(boot_id='b' * 32, policy_id='p')
+        atomic(self.target_path, self.target)
+        units = {'helper': 'ax-test-full-helper.service', 'provider': 'ax-test-full-provider.service', 'agent': 'ax-test-full-agent.service'}
+        self.d.unit = units.__getitem__
+        invocation, nonce = 'c' * 32, 'A' * 43
+        rows = []
+        def journal(message, at, role):
+            rows.append(json.dumps({'MESSAGE': message, '__REALTIME_TIMESTAMP': str(at * 1000),
+                                    '_BOOT_ID': 'b' * 32, '_SYSTEMD_UNIT': units[role], '_SYSTEMD_INVOCATION_ID': invocation}))
+        suffix = ' launch_id=launch-a container_id=' + 'a' * 64 + ' pid=7 start_time=8 policy=p subscription_id=' + invocation
+        journal('workload subscription' + suffix, 101, 'helper')
+        for index, stage in enumerate(('common_target', 'provider', 'evidence_binding', 'remote_appraisal', 'final_target')):
+            component = 'provider' if stage == 'provider' else 'plugin'
+            journal('argus admission stage ' + json.dumps({'schema': 'argus.admission-stage.v1', 'component': component,
+                    'attempt_id': nonce, 'nonce': nonce, 'stage': stage, 'status': 'ALLOW', 'reason_code': 'OBSERVED',
+                    'target': self.target}), 102 + index, 'provider' if stage == 'provider' else 'agent')
+        journal('target SVID published serial=123' + suffix, 108, 'helper')
+        commands = []
+        def invoke(argv, **kwargs):
+            commands.append(argv)
+            if argv[0] == 'systemctl':
+                self.status['helper_invocation_id'] = invocation
+                return SimpleNamespace(returncode=0, stdout='', stderr='')
+            return SimpleNamespace(returncode=0, stdout='\n'.join(rows), stderr='')
+        with patch('admission_trial.time.time_ns', side_effect=[100_000_000, 110_000_000]):
+            result = attempt(self.trial_path, self.root / 'attempt', new_subscription=True, loaded=(self.workload, self.c), invoke=invoke)
+        self.assertEqual(result['result'], 'ADMITTED')
+        self.assertEqual(result['accepted_nonce'], nonce)
+        self.assertTrue(result['complete'])
+        self.assertEqual(commands[0], ['systemctl', 'restart', units['helper']])
+        self.assertTrue(all(unit in commands[1] for unit in units.values()))
+
+    def test_old_ready_state_cannot_be_relabelled_new_admission(self):
+        self.d.unit = lambda role: 'ax-test-' + role + '.service'
+        invoke = lambda *a, **kw: SimpleNamespace(returncode=0, stdout='', stderr='')
+        with patch('admission_trial.time.monotonic', side_effect=[0, 2]):
+            result = attempt(self.trial_path, self.root / 'attempt', new_subscription=True, timeout_seconds=1,
+                             loaded=(self.workload, self.c), invoke=invoke)
+        self.assertEqual(result['result'], 'UNKNOWN')
+        self.assertFalse(result['complete'])
+        self.assertIsNone(result['ready_elapsed_ms'])
+
+    def test_attempt_requires_explicit_new_subscription(self):
+        with self.assertRaisesRegex(ValueError, 'explicit --new-subscription'):
+            attempt(self.trial_path, self.root / 'attempt', loaded=(self.workload, self.c))
+
+    def test_pending_case_needs_real_interval_and_does_not_assume_baseline_verdict(self):
+        before = self.sample(case='record_pending')
+        after = self.sample(case='record_pending', started_at_ms=3, completed_at_ms=4,
+                            pending={'pending_observed': True, 'mutation_matches_target': True, 'target_check': {'result': 'MATCH'}},
+                            target_check={'result': 'MATCH'}, new_admission_attempt={'new_subscription_requested': True,
+                                'complete': True, 'pending_entire_attempt': True, 'result': 'ADMITTED'})
+        self.assertEqual(compare(before, after)['result'], 'OBSERVED')
+        after['new_admission_attempt']['result'] = 'DENIED'
+        self.assertEqual(compare(before, after)['result'], 'OBSERVED')
+        after['new_admission_attempt']['pending_entire_attempt'] = False
+        self.assertFalse(compare(before, after)['case_setup_observed'])
+
+    def test_pending_capture_reads_exact_mutation_and_omits_credentials(self):
+        mutation = 'mutation-' + 'a' * 32
+        receipt = self.root / 'reached.json'
+        atomic(receipt, {'schema': 'argus.lifecycle-barrier-receipt.v1', 'mutation_id': mutation,
+                         'point': 'before_confirm', 'classification': 'HELD'})
+        value = read(self.trial_path) | {'case': 'record_pending', 'barrier_receipt': str(receipt)}
+        self.c['trucon_socket_path'] = '/root-only/trucon.sock'
+        class SocketPath:
+            def lstat(self):
+                return SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=0)
+            def resolve(self):
+                return self
+            def __str__(self):
+                return '/root-only/trucon.sock'
+        safe_op = {'container': {'id': self.target['container_id']}, 'response': {'status': 204}}
+        outbox = {'mutation_id': mutation, 'chain_id': 'default', 'operation_type': 'start', 'status': 'SUBMITTED',
+                  'record_id': 'record-1', 'request_json': json.dumps({'op_record': safe_op, 'identity_token': 'SECRET'}),
+                  'result_json': json.dumps({'op_record': safe_op}), 'submission_json': 'SIGNED-SECRET'}
+        calls = []
+        class Connection:
+            def __init__(self, path):
+                pass
+            def request(self, method, path, headers):
+                self.path = path; calls.append((method, path, headers))
+            def getresponse(self):
+                if self.path == '/mutations':
+                    return SimpleNamespace(status=200, read=lambda n: json.dumps({'mutations': [outbox]}).encode(), getheader=lambda h: None)
+                return SimpleNamespace(status=409, read=lambda n: b'{}', getheader=lambda h: 'MUTATION_PENDING')
+            def close(self):
+                pass
+        with patch('admission_trial.Path', return_value=SocketPath()), patch('admission_trial.TruConConnection', Connection), \
+                patch('admission_trial.target_check', return_value={'result': 'MATCH'}):
+            result = pending_observation(value, self.c, self.workload)
+        self.assertTrue(result['pending_observed'] and result['mutation_matches_target'])
+        self.assertEqual(result['mutation']['response_status'], 204)
+        self.assertNotIn('SECRET', json.dumps(result))
+        self.assertEqual(calls[0][:2], ('GET', '/mutations'))
+        self.assertEqual(calls[1][2]['X-TruCon-Caller-Service'], 'argus_provider')
 
 
 if __name__ == '__main__':

@@ -138,8 +138,17 @@ class LogVerifier:
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies), NoRedirect())
         self.deadline = time.monotonic() + 45
         self.capture_entries = {} if os.environ.get("ARGUS_TRUCON_EVIDENCE_DIR") else None
+        # Observation only: never included in the authenticated verdict/policy.
+        self.timings = {}
 
     def fetch(self, reference):
+        started = time.monotonic_ns()
+        try:
+            return self._fetch(reference)
+        finally:
+            self.timings["fetch_ms"] = self.timings.get("fetch_ms", 0.0) + (time.monotonic_ns() - started) / 1e6
+
+    def _fetch(self, reference):
         require(isinstance(reference, str) and REFERENCE.fullmatch(reference), "invalid Rekor reference")
         lookup = parse_log_reference(reference)
         suffix = "?logIndex=" + str(lookup["log_index"]) if "log_index" in lookup else "/" + reference
@@ -150,6 +159,8 @@ class LogVerifier:
             require(response.status == 200, "Rekor entry unavailable")
             body = response.read(MAX_ENTRY_BYTES + 1)
         require(len(body) <= MAX_ENTRY_BYTES, "Rekor entry exceeds size limit")
+        self.timings["fetched_entries"] = self.timings.get("fetched_entries", 0) + 1
+        self.timings["fetched_bytes"] = self.timings.get("fetched_bytes", 0) + len(body)
         result = strict_json(body)
         require(isinstance(result, dict) and len(result) == 1, "Rekor must return exactly one entry")
         uuid, raw = next(iter(result.items()))
@@ -226,6 +237,23 @@ class LogVerifier:
         return predicate, "sha256:" + hashlib.sha256(payload).hexdigest(), uuid
 
     def verify(self, request):
+        self.timings = {"schema": "argus.history-timing.v1", "fetch_ms": 0.0,
+                        "fetched_entries": 0, "fetched_bytes": 0,
+                        "requested_entries": len(request.get("rekor_entry_ids", [])) if isinstance(request.get("rekor_entry_ids"), list) else None,
+                        "scope": "local verification elapsed time; fetch includes transport and decoding; not pure CPU"}
+        started = time.monotonic_ns()
+        try:
+            verdict = self._verify(request)
+            self.timings["outcome"] = "ALLOW"
+            return verdict
+        except Exception:
+            self.timings["outcome"] = "DENY_OR_ERROR"
+            raise
+        finally:
+            self.timings["verify_ms"] = (time.monotonic_ns() - started) / 1e6
+            self.timings["verify_excluding_fetch_ms"] = max(0.0, self.timings["verify_ms"] - self.timings["fetch_ms"])
+
+    def _verify(self, request):
         require(set(request) == {"rekor_entry_ids", "runtime_data", "rtmr2"}, "unexpected verifier input")
         refs, runtime, quoted = request["rekor_entry_ids"], request["runtime_data"], request["rtmr2"]
         require(isinstance(refs, list) and 2 <= len(refs) <= 4096 and all(isinstance(x, str) and REFERENCE.fullmatch(x) for x in refs), "invalid Rekor reference list")
@@ -301,8 +329,10 @@ def export_capture(directory, request, config_path, verifier, verdict, error_cla
         config = strict_json(Path(config_path).read_bytes())
         encode = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
         files = {"history-request.json": encode(request), "history-config.json": Path(config_path).read_bytes(),
-                 "rekor.json": encode(verifier.capture_entries or {}), "history-result.json": encode({
-                     "result": "ALLOW" if verdict is not None else "DENY", "verdict": verdict, "error_class": error_class})}
+                  "rekor.json": encode(verifier.capture_entries or {}), "history-result.json": encode({
+                      "result": "ALLOW" if verdict is not None else "DENY", "verdict": verdict, "error_class": error_class})}
+        if getattr(verifier, "timings", None):
+            files["history-timing.json"] = encode(verifier.timings)
         trust = {}
         paths = [config["rekor_public_key_path"], *config.get("init_public_key_paths", [])]
         if config.get("sigstore_trusted_root_path"):

@@ -14,11 +14,12 @@ import time
 from urllib.parse import urlsplit
 
 from common import atomic, digest, read, require, sha
-from lifecycle_evidence import rotation, resumed_launch, quote_delta
+from lifecycle_evidence import rotation, resumed_launch, quote_delta, helper_events, reestablished
 
 ROOT = Path(__file__).resolve().parents[2]
 NODE_SCRIPT = ROOT / 'core/spire/workload/scripts/node_attestation_observe.py'
-CASES = ('node-enrollment', 'agent-renewal', 'workload-rotation', 'resume-launch')
+CASES = ('node-enrollment', 'agent-renewal', 'workload-rotation', 'resume-launch',
+         'workload-resubscribe', 'replacement-launch')
 NODE_FIELDS = ('spire_server', 'server_socket', 'agent_id', 'metrics_url', 'attempt_metric',
                'quote_count_metric', 'process_start_metric')
 
@@ -88,6 +89,8 @@ def observe(config_file, output):
     if config.get('provider_agent_id'):
         result['provider_agent_id'] = config['provider_agent_id']
     atomic(directory/'observation.json', result)
+    if config.get('workload_config'):
+        result['helper_journal_anchor'] = capture_helper_journal(config, directory, 'anchor')
     result['before'] = capture_phase(config, directory, 'before')
     result['observation_started_at_ms'] = now_ms()
     atomic(directory/'observation.json', result)
@@ -98,9 +101,28 @@ def observe(config_file, output):
         time.sleep(min(.5, max(0, until-time.monotonic())))
     result['observation_ended_at_ms'] = now_ms()
     result['after'] = capture_phase(config, directory, 'after')
+    if config.get('workload_config'):
+        result['helper_journal'] = capture_helper_journal(config, directory, 'window')
     result['completed_at_ms'] = now_ms()
     result['complete'] = True
     atomic(directory/'observation.json', result)
+    return result
+
+
+def capture_helper_journal(config, directory, phase):
+    output = directory / ('helper-journal-' + phase + '.json')
+    argv = [sys.executable, str(Path(__file__).with_name('lifecycle_evidence.py')), 'journal-' + phase,
+            '--config', config['workload_config'], '--output', str(output)]
+    if phase == 'window':
+        argv += ['--anchor', str(directory / 'helper-journal-anchor.json')]
+    result = {'result': 'UNKNOWN', 'source': output.name}
+    try:
+        completed = subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=45, check=False)
+        if completed.returncode == 0 and output.is_file():
+            read(output)
+            result.update(result='OBSERVED', sha256=sha(output))
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        result['error_class'] = type(error).__name__
     return result
 
 
@@ -231,8 +253,45 @@ def imported_quote_pair(before_file, after_file, observation, node, workload, cl
     return result
 
 
+def recovery_access(readiness_file, load_result, observation, workload, uncertainty):
+    """Join existing readiness timing to actual memory access on that SVID."""
+    result = {'result': 'UNKNOWN', 'scope': 'observed readiness to first sampled nonempty memory response on the new SVID; not Agent task correctness'}
+    try:
+        require(workload and load_result, 'workload snapshots and memory request trace required')
+        ready, receipt = read(readiness_file), read(load_result)
+        after = workload[1]
+        require(ready.get('schema') == 'argus.command-readiness.v1' and ready.get('result') == 'OBSERVED'
+                and ready.get('run_id') == observation['run_id'] == receipt.get('run_id')
+                and ready.get('target_id') == observation['target_id']
+                and ready.get('config_sha256') == after['config_sha256']
+                and ready.get('helper_invocation_id') == after['status'].get('helper_invocation_id')
+                and ready.get('target_serial') == after['status'].get('target_serial'), 'readiness receipt belongs to another target/generation')
+        stamp = ready.get('ready_observed_at_ms')
+        require(type(stamp) is int and workload[0]['completed_at_ms'] <= stamp <= after['started_at_ms'], 'readiness is outside the lifecycle window')
+        trace = Path(load_result).parent / 'requests.jsonl'
+        require(receipt.get('measurement_complete') is True and receipt.get('workload_kind') == 'memory_query'
+                and receipt.get('requests_sha256') == sha(trace), 'memory trace incomplete or changed')
+        rows = [json.loads(line) for line in trace.read_text().splitlines() if line.strip()]
+        require(rows and all(r.get('run_id') == observation['run_id'] for r in rows), 'memory run association differs')
+        selected = [r for r in rows if r.get('phase') == 'measurement' and r.get('outcome') == 'success'
+                    and r.get('memory_result') == 'nonempty' and r.get('peer_identity_verified') is True
+                    and r.get('peer_spiffe_id') == observation['target_id'] and r.get('peer_svid_serial') == ready['target_serial']
+                    and type(r.get('started_at_ms')) is int and type(r.get('completed_at_ms')) is int
+                    and r['started_at_ms'] - uncertainty >= stamp and r['completed_at_ms'] >= r['started_at_ms']]
+        require(selected, 'no successful post-readiness memory response bound to the new SVID')
+        first = min(selected, key=lambda r: r['completed_at_ms'])
+        delta = first['completed_at_ms'] - stamp
+        result.update(result='OBSERVED', request_id=first['request_id'], ready_observed_at_ms=stamp,
+                      first_response_completed_at_ms=first['completed_at_ms'], target_serial=ready['target_serial'],
+                      readiness_to_response_ms={'lower_ms': max(0, delta-uncertainty), 'upper_ms': delta+uncertainty},
+                      source_sha256={'readiness': sha(readiness_file), 'load': sha(load_result), 'requests': sha(trace)})
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        result['reason'] = str(error) if isinstance(error, ValueError) else type(error).__name__
+    return result
+
+
 def collect(directory, load_result=None, resume_result=None, creates=None, clock_uncertainty_ms=0, max_probe_gap_ms=2000,
-            provider_before=None, provider_after=None):
+            provider_before=None, provider_after=None, admission_observation=None, readiness_result=None):
     require(type(clock_uncertainty_ms) is int and clock_uncertainty_ms >= 0, 'nonnegative clock uncertainty required')
     require(type(max_probe_gap_ms) is int and max_probe_gap_ms > 0, 'positive probe gap required')
     directory = Path(directory)
@@ -246,6 +305,8 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
               'node_quote_samples':{'result':'NOT_RUN','count':None},
               'workload_quote_samples':{'result':'UNKNOWN','count':None,'reason':'received Workload Quote samples are not captured here; real generation counts are reported separately in quote_generated'},
               'quote_generated':{'result':'NOT_RUN','node':None,'workload':None},
+              'helper_events':{'result':'UNKNOWN', 'subscription_starts':None, 'svid_publications':None},
+              'recovery_access':{'result':'NOT_RUN'},
               'business_continuity':{'result':'NOT_RUN','coverage':'NOT_RUN'}}
     if observation.get('complete') is not True:
         return result | {'reason':'observer was interrupted; existing snapshots are preserved and no action is replayed'}
@@ -276,6 +337,13 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
                                             'count':count if count is not None and count >= 0 else None}
         if workload:
             require(all(s.get('target_id') == observation['target_id'] for s in workload), 'workload target differs from trial')
+            journal = observation.get('helper_journal', {})
+            if journal.get('result') == 'OBSERVED':
+                require(journal.get('source') == 'helper-journal-window.json', 'journal source differs')
+                path = directory / journal['source']
+                require(sha(path) == journal.get('sha256'), 'journal checksum differs')
+                result['helper_events'] = helper_events(read(path), *workload)
+                result['helper_events']['source_sha256'] = sha(path)
             if observation['case'] == 'resume-launch':
                 if resume_result:
                     logs = [json.loads(line) for line in Path(creates).read_text().splitlines() if line.strip()] if creates else None
@@ -284,6 +352,12 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
                     if creates: result['creates_sha256'] = sha(creates)
                 else:
                     result['workload'] = {'result':'NOT_RUN','reason':'operator resume-launch result was not supplied; no mutation executed'}
+            elif observation['case'] in ('workload-resubscribe', 'replacement-launch'):
+                admission = read(admission_observation) if admission_observation else None
+                if admission:
+                    require(admission.get('run_id') == observation['run_id'], 'admission observation run differs')
+                    result['admission_observation_sha256'] = sha(admission_observation)
+                result['workload'] = reestablished(*workload, observation['case'], result['helper_events'], admission)
             else:
                 result['workload'] = rotation(*workload)
             old, new = workload[0].get('credential', {}), workload[1].get('credential', {})
@@ -291,6 +365,16 @@ def collect(directory, load_result=None, resume_result=None, creates=None, clock
         primary = result['node'] if observation['case'] in ('node-enrollment','agent-renewal') else result['workload']
         result['result'] = primary['result']
         result['business_continuity'] = business_continuity(load_result, observation, clock_uncertainty_ms, max_probe_gap_ms)
+        if observation['case'] in ('workload-resubscribe', 'replacement-launch') and result['result'] == 'PASS':
+            counts = result['quote_generated']
+            native = workload[1].get('runtime_variant') == 'native_spire_guarded'
+            generated = counts.get('workload', {}).get('generated') if counts.get('workload') else None
+            result['new_workload_evidence'] = ('NOT_APPLICABLE_NATIVE' if native else 'OBSERVED') if counts.get('result') == 'OBSERVED' and (
+                generated == 0 if native else type(generated) is int and generated > 0) else 'UNKNOWN'
+            if result['new_workload_evidence'] == 'UNKNOWN':
+                result.update(result='UNKNOWN', reason='new subscription is observed, but a new generated Workload Quote is not established')
+        if readiness_result:
+            result['recovery_access'] = recovery_access(readiness_result, load_result, observation, workload, clock_uncertainty_ms)
     except (OSError, ValueError, KeyError, TypeError) as error:
         result.update(result='UNKNOWN', error_class=type(error).__name__)
     return result
@@ -304,12 +388,14 @@ def main():
     p.add_argument('--resume-result'); p.add_argument('--creates'); p.add_argument('--output', required=True)
     p.add_argument('--clock-uncertainty-ms', type=int, required=True); p.add_argument('--max-probe-gap-ms', type=int, default=2000)
     p.add_argument('--provider-before'); p.add_argument('--provider-after')
+    p.add_argument('--admission-observation', help='same-run E1 production observation of the newly admitted target')
+    p.add_argument('--readiness-result', help='existing time-ready-command receipt; joined to the first subsequent legal memory response')
     args = parser.parse_args()
     if args.action == 'observe':
         value = observe(args.config, args.output)
     else:
         value = collect(args.observation, args.load_result, args.resume_result, args.creates, args.clock_uncertainty_ms, args.max_probe_gap_ms,
-                        args.provider_before, args.provider_after)
+                        args.provider_before, args.provider_after, args.admission_observation, args.readiness_result)
         atomic(args.output, value)
     print(json.dumps(value, indent=2))
     return 0 if args.action == 'observe' or value['result'] == 'PASS' else 1 if value['result'] == 'FAIL' else 2

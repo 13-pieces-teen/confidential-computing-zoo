@@ -1,17 +1,68 @@
 package workloadattestor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
+	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/trustee"
 	"github.com/spiffe/go-spiffe/v2/exp/proto/spiffe/broker"
 	v1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/agent/workloadattestor/v1"
 	"google.golang.org/protobuf/types/known/anypb"
+	"log"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
+
+func TestStageReceiptsDistinguishPolicyDenialFromTransportAndCurrentTarget(t *testing.T) {
+	for _, test := range []struct {
+		name, status, stage string
+		mutate              func(*Plugin)
+	}{
+		{"bound denial", "DENY", "remote_appraisal", func(p *Plugin) {
+			p.trustee = verifier(func(context.Context, protocol.Evidence) error { return trustee.ErrPolicyDenied })
+		}},
+		{"transport", "UNKNOWN", "remote_appraisal", func(p *Plugin) {
+			p.trustee = verifier(func(context.Context, protocol.Evidence) error { return fmt.Errorf("connection failed") })
+		}},
+		{"current target", "DENY", "common_target", func(p *Plugin) {
+			p.check = func(protocol.Target) error { return fmt.Errorf("workload config changed") }
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var buffer bytes.Buffer
+			previous := log.Writer()
+			log.SetOutput(&buffer)
+			defer log.SetOutput(previous)
+			p := configured(t)
+			test.mutate(p)
+			result, err := p.AttestReference(context.Background(), request(t))
+			if result != nil || err == nil {
+				t.Fatal("failure produced selectors")
+			}
+			found := false
+			for _, line := range strings.Split(buffer.String(), "\n") {
+				_, raw, ok := strings.Cut(line, "argus admission stage ")
+				if !ok {
+					continue
+				}
+				var receipt map[string]any
+				if json.Unmarshal([]byte(raw), &receipt) != nil {
+					t.Fatal(raw)
+				}
+				if receipt["stage"] == test.stage {
+					found = receipt["status"] == test.status && receipt["attempt_id"] == receipt["nonce"]
+				}
+			}
+			if !found {
+				t.Fatalf("missing correct receipt: %s", buffer.String())
+			}
+		})
+	}
+}
 
 type collector func(context.Context, protocol.EvidenceRequest) (protocol.Evidence, error)
 

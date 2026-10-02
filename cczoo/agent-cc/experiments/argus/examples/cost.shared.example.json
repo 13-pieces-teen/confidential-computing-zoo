@@ -1,0 +1,11 @@
+{
+  "schema": "argus.cost-trial.v1",
+  "run_id": "shared-pending-full-01",
+  "group": "full_argus",
+  "deployment": "/root/argus-arms/service-b/environment.json",
+  "other_deployment": "/root/argus-arms/service-a/environment.json",
+  "pending_config": "/secure/e1-pending-service-a.json",
+  "mode": "pilot",
+  "shared_window_seconds": 30,
+  "timeout_seconds": 180
+}

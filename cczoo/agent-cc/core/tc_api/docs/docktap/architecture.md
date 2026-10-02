@@ -47,9 +47,14 @@ Normalization rules for future onboarding:
 - `docker-engine` and `moby` normalize to `docker`
 - `libpod` normalizes to `podman`
 
-Docktap failure model: if Docktap goes down, Docker CLI traffic is blocked (by design — all operations must be recorded). Automatic restart ensures minimal downtime.
+Docktap failure model: traffic using its proxy socket is blocked while Docktap is
+down. Restart can resume submission of durably observed lifecycle results; an
+unknown Docker outcome remains fenced and needs operator reconciliation.
 
 ## High-Level Architecture
+
+For ordering, unresolved-operation admission behavior, and safe recovery, see
+[Durable lifecycle delivery](lifecycle-delivery.md).
 
 ```text
 Docker CLI (DOCKER_HOST=unix:///tmp/test-stream.sock)
@@ -405,7 +410,7 @@ Relationship linking in the tracker follows these rules:
 - `container_list` remains a read-only observation type and does not become a parent in the core lifecycle chain.
 - `container_logs` remains a read-only observation type and does not become a parent in the core lifecycle chain.
 - `network_inspect`, `volume_inspect`, and `plugin_inspect` remain read-only observation types and do not become parents in the core lifecycle chain.
-- `exec_create` and `exec_start` remain read-only observation types and do not become parents in the core lifecycle chain.
+- `exec_create` and `exec_start` are forwarded without lifecycle recording and do not become parents in the core lifecycle chain. They execute mutations and must not be treated as read-only actions.
 - `inspect` and `unknown` operations are recorded but typically do not become chain
   parents in the core pull/create/start/stop/rm lifecycle.
 
@@ -695,5 +700,5 @@ This document does not duplicate concrete test commands. Use `docs/TESTING.md` a
 - Keep tracker and parsing logic in `proxy/operation_log.py` to avoid duplicate behavior across runtimes.
 - Keep engine-specific request normalization in `proxy/runtime_adapter.py` so TruCon commit logic and verifier-facing event semantics remain canonical.
 - `stream_test.py` and `main.py` now share behavior through `DockerProxyServer.handle_client`.
-- Docktap local state is operational cache and short-lived diagnostics only. Replay correctness comes from TruCon and immutable backends, not from Docktap-local retention.
+- Docktap's in-memory tracker/retry state is operational cache. Lifecycle delivery uses the persistent TruCon mutation outbox described below; replay correctness still depends on authenticated TruCon records and immutable backends.
 - A background sweeper periodically removes expired operation records, removed-container mappings, and resolved retry records while preserving retryable items until they are acknowledged or terminally exhausted.

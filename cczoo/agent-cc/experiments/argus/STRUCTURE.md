@@ -6,17 +6,18 @@ The executable command paths remain stable. Example inputs are collected in `exa
 |---|---|---|
 | Plan, prepare, select and resume runs | `suite.py`, `runner.py` | `step.py` binds native tool receipts; `common.py` handles journals, locks and diagnostics |
 | Isolated experiment deployment | `variants.py`, `static_clients.py` | `trusted_runtime.py`, `static_runtime.py`, `static-client/`; never enable weakened modes in ordinary deployment |
-| E1 admission | `admission_trial.py` | Production verify and target binding; [fixed recipes](E1-REAL-RUNS.md), [reachability record](E1-REACHABILITY.md) |
+| E1 admission | `admission_trial.py`, `admission_stages.py`, `lifecycle_barrier.py` | Fresh Helper subscription, correlated first-rejection receipts and default-off lifecycle cuts; [stage/barrier contract](E1-STAGE-RECEIPTS.md), [reachability record](E1-REACHABILITY.md) |
 | E1 offline history diagnosis | `admission_cases.py`, `history_diagnostics.py` | Signed fixtures and production history verifier; not full fresh Quote appraisal |
-| E2 fault and receive timeline | `fault_trial.py`, `timeline.py`, `fault_fixture.py` | Production `remote_acceptance.py`, receiver collector, `milestone.py`; [fault recipes](FAULT-FIXTURES.md) |
-| E3 renewal and recovery | `lifecycle_trial.py`, `lifecycle_evidence.py` | Existing Node snapshots and create-event stream; [recipe](examples/E3-LIFECYCLE-RECIPE.md) |
+| E2 fault and receive timeline | `fault_trial.py`, `timeline.py`, `fault_fixture.py`, `backend_probe.py` | Production `remote_acceptance.py`, receiver collector, fixed root-local backend health observation; [fault recipes](FAULT-FIXTURES.md) |
+| E3 renewal and recovery | `lifecycle_trial.py`, `lifecycle_evidence.py` | Node snapshots, fresh subscriptions, replacement launch, Helper journal cursor and actual peer SVID serial; [recipe](examples/E3-LIFECYCLE-RECIPE.md) |
 | E4 private memory and local/shared faults | Adapter `fleet_business.py`, `fleet_fault.py` | [fleet fault recipe](examples/FLEET-FAULT.md); recovery stays explicit |
-| Optional legacy continuous real Agent tools | `continuous.py`, `continuous_gateway.mjs`, `fact_protocol.py` | [task protocol](CONTINUOUS-TASK.md); fixed releases, fresh sessions, known-operation queries only |
-| Optional legacy paired conditions and joint axes | `continuous_suite.py`, `continuous_analysis.py`, `continuous_plot.py` | Existing suite/runner/step integration; [two-host workflow](CONTINUOUS.md) |
-| Complete synthetic fact receipts | `fact_receipts.py`, receiver `facts.py` | Passive ASGI matching plus real admission observations; [contract](FACT-RECEIPTS.md) |
+| E4 continuous work item and legacy workload | `continuous.py`, `continuous_work_item.py`, `continuous_proposal.py`, `continuous_gateway.mjs`, `fact_protocol.py` | [task protocol](WORK-ITEM.md); typed original proposals and audited recall, all-stage unknown-write gate; select `work-item-v1` for six steps |
+| Paired continuous conditions and joint axes | `continuous_suite.py`, `continuous_analysis.py`, `continuous_plot.py` | Existing suite/runner/step integration; [two-host workflow](CONTINUOUS.md); pair only identical scenarios and protocols |
+| Complete synthetic fact receipts and legal continuation | `fact_receipts.py`, `continuous_observations.py`, receiver `facts.py` | Passive ASGI matching plus run/instance-bound admission observations; [contract](FACT-RECEIPTS.md); missing independent evidence remains UNKNOWN |
 | Captured proof and policy replay | `admission_evidence.py`, production `argus-verify-admission`, `argus-replay-policy` | [archive contract](ADMISSION-ARCHIVE.md); captured hardware verdict, not fresh offline DCAP |
-| E4 LoCoMo-derived workload | `locomo.py`, `locomo_run.py`, `locomo_gateway.mjs`, `locomo_execution.py`, `locomo_suite.py` | [protocol](LOCOMO.md); fixture answers remain in the local grader |
+| E4 auxiliary LoCoMo-derived workload | `locomo.py`, `locomo_run.py`, `locomo_gateway.mjs`, `locomo_execution.py`, `locomo_suite.py` | [protocol](LOCOMO.md); fixture answers remain in the local grader; recall scores do not establish safe continuation |
 | E5 HTTP/TLS load and process sampling | `load.py`, `load_fleet.py`, `resources.py` | `client_material.py`; [nonempty memory load](E5-MEMORY-LOAD.md) |
+| E5 three history points and two-service pending | `cost_trials.py` | Existing E1 attempt/barriers, read-only chain snapshots and approved Helper subscription probe; [recipe](E5-COST-TRIALS.md) |
 | Collect and summarize | `analysis.py`, `plot.py` (also via runner) | Separate connection/workload strata, QA scores, unknown coverage and independent run intervals |
 | Source delivery | `delivery.py`, `source-manifest.json` | Source content hashes; actual binary/image manifests are created by their build tools |
 

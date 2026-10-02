@@ -15,6 +15,7 @@
 """Read-only query endpoints for TruCon."""
 
 from typing import List
+import threading
 
 from fastapi import APIRouter, HTTPException
 
@@ -33,6 +34,7 @@ router = APIRouter()
 
 DEFAULT_CHAIN_ID = "default"
 MAX_HISTORY_ENTRIES = 4096
+sequencer_lock = threading.Lock()
 
 
 @router.get("/chain-state", response_model=ChainStateResponse, response_model_exclude_unset=True)
@@ -42,15 +44,27 @@ def get_chain_state_endpoint(include_history: bool = False):
     History mode returns a consistent head and its ordered log references, or
     409 while any record is unconfirmed. References retain the backend's format.
     """
+    # Same lock as mutation reservation and commit in the service. The returned
+    # view linearizes before a new reservation can be acknowledged to Docktap.
+    with sequencer_lock:
+        return _chain_state(include_history)
+
+
+def _chain_state(include_history):
+    if _db.has_unresolved_docktap_mutation(DEFAULT_CHAIN_ID):
+        raise HTTPException(status_code=409, detail='Docker mutation has no confirmed lifecycle record',
+                            headers={'X-Argus-Reason': 'MUTATION_PENDING'})
     if include_history:
         rows = _db.get_chain_records(DEFAULT_CHAIN_ID, limit=MAX_HISTORY_ENTRIES + 1, metadata_only=True)
         try:
             return confirmed_chain_state(DEFAULT_CHAIN_ID, rows, MAX_HISTORY_ENTRIES)
         except ValueError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            reason = 'HISTORY_CAPACITY' if len(rows) > MAX_HISTORY_ENTRIES else 'HISTORY_NOT_CONFIRMED'
+            raise HTTPException(status_code=409, detail=str(exc), headers={'X-Argus-Reason': reason}) from exc
     state = _db.get_chain_state(DEFAULT_CHAIN_ID)
     if not state:
-        raise HTTPException(status_code=404, detail=f"No chain state for '{DEFAULT_CHAIN_ID}'")
+        raise HTTPException(status_code=404, detail=f"No chain state for '{DEFAULT_CHAIN_ID}'",
+                            headers={'X-Argus-Reason': 'HISTORY_MISSING'})
     return ChainStateResponse(
         chain_id=DEFAULT_CHAIN_ID,
         head_record_id=state['head_record_id'],

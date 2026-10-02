@@ -7,8 +7,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -59,6 +62,26 @@ func (p *Plugin) Attest(context.Context, *workloadattestorv1.AttestRequest) (*wo
 // AttestReference appraises one registered PID instance for a Broker request.
 // Local instance checks bracket appraisal; they do not lock the process or
 // establish continuous integrity after this call returns.
+func stageReceipt(nonce string, t protocol.Target, stage, state, reason string) {
+	value := map[string]any{"schema": "argus.admission-stage.v1", "component": "plugin", "attempt_id": nonce, "nonce": nonce,
+		"stage": stage, "status": state, "reason_code": reason,
+		"target": map[string]string{"launch_id": t.LaunchID, "container_id": t.ContainerID, "pid": t.PID, "start_time": t.StartTime, "boot_id": t.BootID, "policy_id": t.PolicyID}}
+	if data, err := json.Marshal(value); err == nil {
+		log.Printf("argus admission stage %s", data)
+	}
+}
+
+func targetCheckStatus(err error) string {
+	switch err.Error() {
+	case "target belongs to another boot", "target PID was reused", "target process is not alive", "target process exited",
+		"target ns/pid changed", "target ns/net changed", "target exe changed", "target is not in registered container cgroup",
+		"workload config changed", "upstream is served by another process":
+		return "DENY"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func (p *Plugin) AttestReference(ctx context.Context, r *workloadattestorv1.AttestReferenceRequest) (*workloadattestorv1.AttestReferenceResponse, error) {
 	p.clientsMu.RLock()
 	ec, tc, c := p.evidence, p.trustee, p.config
@@ -74,41 +97,57 @@ func (p *Plugin) AttestReference(ctx context.Context, r *workloadattestorv1.Atte
 	if err := anypb.UnmarshalTo(ref, &pid, proto.UnmarshalOptions{}); err != nil || pid.Pid <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "invalid workload PID")
 	}
+	nonce, err := p.nonce()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "nonce: %v", err)
+	}
 	t, err := p.load(c.TargetRegistrationPath)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "load target: %v", err)
 	}
 	if err = c.checkApproved(t); err != nil {
+		stageReceipt(nonce, t, "common_target", "DENY", "APPROVED_TARGET_MISMATCH")
 		return nil, status.Error(codes.PermissionDenied, err.Error())
 	}
 	if t.PID != strconv.FormatInt(int64(pid.Pid), 10) {
+		stageReceipt(nonce, t, "common_target", "DENY", "REGISTERED_PID_MISMATCH")
 		return nil, status.Error(codes.PermissionDenied, "PID is not the registered instance")
 	}
 	if err = p.check(t); err != nil {
+		stageReceipt(nonce, t, "common_target", targetCheckStatus(err), "TARGET_CHECK_FAILED")
 		return nil, status.Errorf(codes.PermissionDenied, "target changed: %v", err)
 	}
-	nonce, err := p.nonce()
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "nonce: %v", err)
-	}
+	stageReceipt(nonce, t, "common_target", "ALLOW", "CURRENT_TARGET_MATCHED")
 	req := protocol.EvidenceRequest{Protocol: protocol.Version, Nonce: nonce, PID: pid.Pid}
 	ev, err := ec.Collect(ctx, req)
 	if err != nil {
+		// Provider logs distinguish readiness denial from transport failure using this nonce.
+		stageReceipt(nonce, t, "evidence_collection", "UNKNOWN", "PROVIDER_UNAVAILABLE")
 		return nil, status.Errorf(codes.Unavailable, "collect evidence: %v", err)
 	}
 	if err = ev.Validate(req, t); err != nil {
+		stageReceipt(nonce, t, "evidence_binding", "DENY", "EVIDENCE_BINDING_MISMATCH")
 		return nil, status.Errorf(codes.PermissionDenied, "evidence binding: %v", err)
 	}
+	stageReceipt(nonce, t, "evidence_binding", "ALLOW", "EVIDENCE_BOUND")
 	if err = tc.Verify(ctx, ev); err != nil {
+		state, reason := "UNKNOWN", "REMOTE_APPRAISAL_UNAVAILABLE"
+		if errors.Is(err, trustee.ErrPolicyDenied) {
+			state, reason = "DENY", "EAR_NON_AFFIRMING"
+		}
+		stageReceipt(nonce, t, "remote_appraisal", state, reason)
 		return nil, status.Errorf(codes.PermissionDenied, "Trustee appraisal: %v", err)
 	}
+	stageReceipt(nonce, t, "remote_appraisal", "ALLOW", "SIGNED_APPRAISAL_ACCEPTED")
 	err = p.check(t)
 	if recorder, ok := tc.(interface{ RecordLocalOutcome(protocol.Evidence, bool) }); ok {
 		recorder.RecordLocalOutcome(ev, err == nil)
 	}
 	if err != nil {
+		stageReceipt(nonce, t, "final_target", targetCheckStatus(err), "TARGET_CHECK_FAILED")
 		return nil, status.Errorf(codes.PermissionDenied, "target changed during appraisal: %v", err)
 	}
+	stageReceipt(nonce, t, "final_target", "ALLOW", "SELECTORS_RETURNED")
 	// These values come from the approved target matched to the Quote-bound
 	// runtime data and signed EAR. SPIRE adds the plugin selector type; its
 	// Server CA issues the SVID after registration matching.

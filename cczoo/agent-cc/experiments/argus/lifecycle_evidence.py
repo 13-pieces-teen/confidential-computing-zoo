@@ -42,6 +42,8 @@ def capture(config_file):
     result = {"schema": "argus.lifecycle-snapshot.v1", "started_at_ms": now_ms(),
               "config_sha256": digest(c), "workload_id": d.workload["id"],
               "target_id": d.identity["target_id"], "hardware_acceptance": "NOT_RUN"}
+    installed = json.loads(workload.protected_file(d.install / 'build-manifest.json').read_text())
+    result['runtime_variant'] = installed.get('experiment_variant', 'full_argus')
     first = workload.status(c)
     result["status"] = first
     if d.target.exists():
@@ -298,6 +300,136 @@ def rotation(before, after):
                      "scope": "same instance and Helper, valid public Workload SVID changed"}
 
 
+def journal_anchor(config_file):
+    workload, config = runtime(config_file)
+    deployment = workload.Deployment(config)
+    started = now_ms()
+    rows = [json.loads(line) for line in workload.run(['journalctl', '-n', '1', '--no-pager', '-o', 'json']).splitlines() if line.strip()]
+    require(len(rows) == 1 and rows[0].get('__CURSOR') and rows[0].get('_BOOT_ID'), 'journal anchor unavailable')
+    return {'schema': 'argus.helper-journal-anchor.v1', 'config_sha256': digest(config),
+            'helper_unit': deployment.unit('helper'), 'cursor': rows[0]['__CURSOR'],
+            'boot_id': rows[0]['_BOOT_ID'], 'started_at_ms': started, 'completed_at_ms': now_ms()}
+
+
+def journal_window(config_file, anchor_file):
+    workload, config = runtime(config_file)
+    deployment, anchor = workload.Deployment(config), read(anchor_file)
+    require(anchor.get('schema') == 'argus.helper-journal-anchor.v1' and anchor.get('config_sha256') == digest(config)
+            and anchor.get('helper_unit') == deployment.unit('helper'), 'journal anchor deployment mismatch')
+    # Check the original cursor is still retained. Successful empty queries alone
+    # cannot establish absence after a journal vacuum or boot change.
+    boundary = [json.loads(line) for line in workload.run(['journalctl', '--cursor=' + anchor['cursor'], '-n', '1',
+                                                         '--no-pager', '-o', 'json']).splitlines() if line.strip()]
+    require(len(boundary) == 1 and boundary[0].get('__CURSOR') == anchor['cursor'], 'journal anchor no longer retained')
+    require(Path('/proc/sys/kernel/random/boot_id').read_text().strip().replace('-', '') == anchor['boot_id'], 'journal boot changed')
+    ended = now_ms()
+    raw = workload.run(['journalctl', '--after-cursor=' + anchor['cursor'], '-u', deployment.unit('helper'),
+                        '--until=@%.3f' % (ended / 1000), '--no-pager', '-o', 'json'])
+    rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
+    return {'schema': 'argus.helper-journal.v1', 'config_sha256': digest(config), 'helper_unit': deployment.unit('helper'),
+            'anchor': anchor, 'anchor_sha256': sha(anchor_file), 'completed_at_ms': now_ms(),
+            'coverage_started_at_ms': anchor['completed_at_ms'], 'coverage_ended_at_ms': ended,
+            'source': 'trusted_local_journal_cursor_query', 'records': rows}
+
+
+def helper_events(archive, before, after):
+    result = {'result': 'UNKNOWN', 'subscription_starts': None, 'subscription_ends': None,
+              'svid_publications': None, 'distinct_svid_serials': None,
+              'scope': 'trusted local journal events in the snapshot window; not Quote counts'}
+    try:
+        require(same_run(before, after), 'event snapshots differ')
+        require(archive.get('schema') == 'argus.helper-journal.v1' and archive.get('config_sha256') == before['config_sha256']
+                and archive.get('source') == 'trusted_local_journal_cursor_query', 'journal capture source differs')
+        left, right = before['started_at_ms'], after['completed_at_ms']
+        require(archive.get('coverage_started_at_ms', float('inf')) <= left and archive.get('coverage_ended_at_ms', 0) >= right,
+                'journal query does not cover the snapshots')
+        boot = before['target']['boot_id'].replace('-', '')
+        require(after['target']['boot_id'].replace('-', '') == boot == archive['anchor']['boot_id'], 'journal boot differs')
+        records, cursors, events = archive.get('records', []), set(), []
+        targets = [s['target'] for s in (before, after)]
+        for row in records:
+            require(isinstance(row.get('__CURSOR'), str) and row['__CURSOR'] not in cursors, 'journal cursor missing or duplicated')
+            cursors.add(row['__CURSOR'])
+            require(row.get('_SYSTEMD_UNIT') == archive['helper_unit'] and row.get('_BOOT_ID') == boot, 'journal unit or boot mismatch')
+            at = int(row['__REALTIME_TIMESTAMP']) / 1000
+            if not left <= at <= right:
+                continue
+            message = row.get('MESSAGE', '')
+            if not isinstance(message, str):
+                continue
+            kind = next((kind for prefix, kind in (('workload subscription ended ', 'end'),
+                        ('workload subscription ', 'start'), ('target SVID published ', 'publish')) if prefix in message), None)
+            if kind is None:
+                continue
+            pairs = re.findall(r'(?:^|\s)([a-z_][a-z0-9_]*)=([^\s"\\]+)', message)
+            fields = dict(pairs)
+            require(len(fields) == len(pairs), 'duplicate event field')
+            subscription = fields.get('subscription_id')
+            require(subscription and subscription == row.get('_SYSTEMD_INVOCATION_ID'), 'subscription invocation differs')
+            matching = [t for t in targets if fields.get('launch_id') == t.get('launch_id')]
+            if not matching:
+                continue
+            if kind != 'end':
+                require(any(all(fields.get(k) == str(t.get(k)) for k in ('launch_id', 'container_id', 'pid', 'start_time'))
+                            and fields.get('policy') == t.get('policy_id') for t in matching), 'event target differs from snapshots')
+            if kind == 'publish':
+                require(re.fullmatch(r'[0-9]+', fields.get('serial', '')), 'SVID publication lacks serial')
+            events.append(dict(kind=kind, at_ms=at, subscription_id=subscription,
+                               launch_id=fields.get('launch_id'), serial=fields.get('serial')))
+        result.update(result='OBSERVED', subscription_starts=sum(r['kind'] == 'start' for r in events),
+                      subscription_ends=sum(r['kind'] == 'end' for r in events),
+                      svid_publications=sum(r['kind'] == 'publish' for r in events),
+                      distinct_svid_serials=len({r['serial'] for r in events if r['kind'] == 'publish'}), events=events)
+    except (KeyError, ValueError, TypeError) as error:
+        result['reason'] = str(error)
+    return result
+
+
+def reestablished(before, after, kind, events, admission=None):
+    """Resubscription and new controlled launch are distinct from rotation/resume."""
+    result = {'schema': 'argus.lifecycle-result.v1', 'case': kind, 'result': 'UNKNOWN',
+              'hardware_acceptance': 'NOT_RUN', 'admission': 'UNKNOWN'}
+    try:
+        require(kind in ('workload-resubscribe', 'replacement-launch') and same_run(before, after), 'snapshot/case association differs')
+        require(before.get('runtime_variant', 'full_argus') == after.get('runtime_variant', 'full_argus'), 'runtime variant changed')
+        a, b = before['target'], after['target']
+        require(all(s.get('status', {}).get('ready') is True for s in (before, after)), 'both endpoint snapshots must be ready')
+        old, new = [s['status'].get('helper_invocation_id') for s in (before, after)]
+        require(old and new and old != new, 'new subscription invocation was not observed')
+        require(events.get('result') == 'OBSERVED' and any(e['kind'] == 'start' and e['subscription_id'] == new for e in events['events'])
+                and any(e['kind'] == 'publish' and e['subscription_id'] == new and e['serial'] == after['status'].get('target_serial') for e in events['events']),
+                'new subscription and current SVID publication are not linked')
+        for snap in (before, after):
+            cred = snap.get('credential', {})
+            require(cred.get('chain_valid') is True and cred.get('uri_san') == [snap['target_id']]
+                    and cred.get('serial') == snap['status'].get('target_serial'), 'valid public SVID/readiness association missing')
+        if kind == 'workload-resubscribe':
+            require(a == b, 'same-instance subscription changed the target')
+        else:
+            require(a.get('launch_id') and b.get('launch_id') and a['launch_id'] != b['launch_id']
+                    and a.get('container_id') != b.get('container_id') and b.get('container_id'), 'replacement needs a new controlled launch and container')
+            launch = after.get('launch', {})
+            require(launch.get('stage') == 'complete' and launch.get('config_sha256') == after['config_sha256']
+                    and all(launch.get(k) == b.get(k) for k in ('launch_id', 'container_id')), 'new launch completion/target association missing')
+        require(admission and admission.get('schema') == 'argus.e1-observation.v1'
+                and admission.get('actual_admission') == 'ADMITTED' and admission.get('target_check', {}).get('result') == 'MATCH'
+                and admission.get('registered_target') == b and admission.get('deployment_sha256') == after['config_sha256']
+                and admission.get('target_id') == after['target_id']
+                and admission.get('status_after', {}).get('helper_invocation_id') == new
+                and admission.get('production_verification', {}).get('target') == b,
+                'new admission observation is missing or belongs to another target/subscription')
+        require(admission.get('started_at_ms', 0) >= before['completed_at_ms']
+                and admission.get('completed_at_ms', float('inf')) <= after['started_at_ms'], 'admission observation must lie between snapshots')
+        if after.get('runtime_variant', 'full_argus') != 'native_spire_guarded':
+            require(re.fullmatch(r'[A-Za-z0-9_-]{43}', admission.get('accepted_workload_nonce') or ''),
+                    'new remote-appraisal challenge association is missing')
+        result.update(result='PASS', admission='OBSERVED', target=b, subscription_id=new,
+                      scope='new local subscription/publication and production admission observation; Quote/EAR originals remain separate')
+    except (KeyError, ValueError, TypeError) as error:
+        result['reason'] = str(error)
+    return result
+
+
 def same_run(before, after):
     return (before.get("schema") == after.get("schema") == "argus.lifecycle-snapshot.v1" and
             all(before.get(key) and before.get(key) == after.get(key) for key in ("config_sha256", "workload_id", "target_id")) and
@@ -353,6 +485,12 @@ def resumed_launch(before, after, resumed, creates):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    for name in ('journal-anchor', 'journal-window'):
+        c = sub.add_parser(name)
+        c.add_argument('--config', required=True)
+        c.add_argument('--output', required=True)
+        if name == 'journal-window':
+            c.add_argument('--anchor', required=True)
     c = sub.add_parser("quote-snapshot")
     c.add_argument("--provider-socket", required=True)
     c.add_argument("--run-id", help="required when importing this snapshot into a different host's E3 trial")
@@ -381,6 +519,9 @@ def main():
             c.add_argument("--resume-result", required=True)
             c.add_argument("--creates")
     args = parser.parse_args()
+    if args.command in ('journal-anchor', 'journal-window'):
+        atomic(args.output, journal_anchor(args.config) if args.command == 'journal-anchor' else journal_window(args.config, args.anchor))
+        return
     if args.command == 'time-ready-command':
         result = time_ready_command(args.config, args.argv_file, args.run_id, args.output, args.timeout_seconds, args.poll_interval)
         print(json.dumps(result))

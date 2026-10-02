@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/confidential-containers/agent-cc-argus-spiffe/core/spire/plugins/argus-tdx-workloadattestor/internal/protocol"
 	"io"
@@ -23,6 +24,9 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrPolicyDenied is emitted only after signature, time, policy and request binding pass.
+var ErrPolicyDenied = errors.New("EAR cpu0 appraisal is not affirming")
 
 type tdxEvidence struct {
 	CCEventLog    any      `json:"cc_eventlog"`
@@ -277,8 +281,8 @@ func verifyEAR(token []byte, publicKey *ecdsa.PublicKey, expectedIssuer, expecte
 		return fmt.Errorf("EAR validity window is not current")
 	}
 	cpu, ok := claims.Submods["cpu0"]
-	if !ok || cpu.Status != "affirming" {
-		return fmt.Errorf("EAR cpu0 appraisal is not affirming")
+	if !ok {
+		return fmt.Errorf("EAR cpu0 appraisal missing")
 	}
 	if cpu.PolicyID != policyID {
 		return fmt.Errorf("EAR appraisal policy ID mismatch")
@@ -291,6 +295,12 @@ func verifyEAR(token []byte, publicKey *ecdsa.PublicKey, expectedIssuer, expecte
 	expectedReportData := append(runtimeDigest[:], make([]byte, 16)...)
 	if !bytes.Equal(reportData, expectedReportData) {
 		return fmt.Errorf("EAR report_data does not match workload runtime data")
+	}
+	if cpu.Status == "contraindicated" {
+		return ErrPolicyDenied
+	}
+	if cpu.Status != "affirming" {
+		return fmt.Errorf("EAR cpu0 appraisal is indeterminate or unsupported")
 	}
 	return nil
 }

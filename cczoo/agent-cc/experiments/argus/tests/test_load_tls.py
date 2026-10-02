@@ -217,6 +217,8 @@ def test_real_mtls_connections_are_created_or_reused_as_requested(tls, mode):
     finally:
         session.close()
     assert all(row['outcome'] == 'success' for row in rows)
+    expected_serial = str(x509.load_pem_x509_certificate((tls.root/'service-test.pem').read_bytes()).serial_number)
+    assert all(row['peer_svid_serial'] == expected_serial for row in rows)
     expected = 3 if mode == 'new' else 1
     # These ports are observed by the real mTLS server, not inferred from flags.
     assert len({item['peer_port'] for item in tls.seen}) == expected

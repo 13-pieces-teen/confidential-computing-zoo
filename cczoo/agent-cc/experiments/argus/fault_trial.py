@@ -60,7 +60,8 @@ def lifecycle_config(config):
     if value is None:
         return None
     require(isinstance(value, dict), "timeline must be an observation configuration")
-    require(set(value) <= {"server_tool", "output", "stop_file", "interval"}, "unknown timeline option")
+    require(set(value) <= {"server_tool", "output", "stop_file", "interval", "backend_probe"}, "unknown timeline option")
+    require(type(value.get('backend_probe', False)) is bool, 'backend_probe must be an explicit boolean')
     for key in ("server_tool", "output", "stop_file"):
         require(isinstance(value.get(key), str) and value[key].startswith("/"), "absolute timeline tool/evidence paths required")
     require(value["output"] != value["stop_file"] and value["output"] not in (config["fault_file"], config["receiver_file"])
@@ -78,7 +79,9 @@ def start_lifecycle(config, output):
     require(1 <= duration <= 3600, "combined observation duration exceeds one hour")
     argv = [config.get("server_python", "python3"), observer["server_tool"], "observe", "--config", config["server_deployment"],
             "--run-id", config["run_id"], "--output", observer["output"], "--stop-file", observer["stop_file"],
-            "--duration", str(duration), "--interval", str(observer.get("interval", .25))]
+             "--duration", str(duration), "--interval", str(observer.get("interval", .25))]
+    if observer.get('backend_probe'):
+        argv.append('--backend-probe')
     child = subprocess.Popen(ssh_command(config, argv), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     tail = bytearray()
     def drain():
@@ -187,8 +190,67 @@ def collect(config, output):
     summary_path = output / ("timeline-" + str(time.time_ns()) + ".json")
     atomic(summary_path, summary)
     result.update(timeline_path=summary_path.name, timeline_sha256=sha(summary_path), lifecycle_observation=observation)
+    result['backend_availability'] = summary['backend_availability']
+    result["fact_receipts"] = collect_fact_receipts(config, output, sources)
+    # Definite complete READ violations are never erased by another UNKNOWN
+    # source or an incomplete observation interval.
+    if result["fact_receipts"].get("result") == "FAIL":
+        result["result"] = "FAIL"
     atomic(output / "result.json", result)
     return result
+
+
+def collect_fact_receipts(config, output, sources):
+    """Use the same assessor for default E2 connection traffic and Agent tasks."""
+    from connection_facts import measurement_inputs
+    from fact_receipts import assess
+    try:
+        traces = timeline.acceptance.probe_rows(sources / "trace.jsonl", config["run_id"])
+        manifest, native = measurement_inputs(config["probe"], traces, config["run_id"])
+        require(manifest["facts"], "body has no complete synthetic fact")
+        start = next(r for r in traces if r.get("type") == "probe_start")
+        source = Path(config["probe"].get("payload_plan") or config["probe"]["body_file"])
+        checksum_key = "payload_plan_sha256" if config["probe"].get("payload_plan") else "body_sha256"
+        require(sha(source) == start.get(checksum_key), "probe payload source changed")
+        for fact in manifest["facts"]:
+            if "body_file" in fact:
+                require(sha(source.parent / fact["body_file"]) == fact["body_sha256"], "probe payload bytes changed")
+        atomic(sources / "fact-manifest.json", manifest)
+        atomic(sources / "fact-native-result.json", native)
+        context = {"schema": "argus.fact-receipt-context.v1", "run_id": config["run_id"], "admissions": []}
+        if config.get("receipt_context"):
+            context_path = Path(config["receipt_context"]).resolve()
+            context = read(context_path)
+            require(context.get("schema") == "argus.fact-receipt-context.v1" and context.get("run_id") == config["run_id"], "receipt context differs")
+            # Preserve the existing hashed admission references after copying the
+            # context into this immutable collection snapshot.
+            for item in context.get("admissions", []):
+                for key in ("observation", "bundle", "verifier_bin", "policy_bin"):
+                    if key in item:
+                        item[key] = str((context_path.parent / item[key]).resolve())
+        context.update(clock_uncertainty_ms=config["clock_uncertainty_ms"], fault_file="fault.jsonl", bound_ms=config["bound_ms"])
+        if (output / "releases.jsonl").exists():
+            (sources / "releases.jsonl").write_bytes((output / "releases.jsonl").read_bytes())
+            context["release_file"] = {"path": "releases.jsonl", "sha256": sha(sources / "releases.jsonl")}
+        else:
+            context.pop("release_file", None)
+        # E2 holds recovery and has no Agent/task completion or storage milestone.
+        context.pop("storage_probe", None)
+        context.pop("lifecycle_file", None)
+        atomic(sources / "fact-context.json", context)
+        receipt = assess(sources / "fact-manifest.json", sources / "fact-native-result.json",
+                         sources / "receiver.jsonl", sources / "fact-context.json")
+        atomic(sources / "fact-receipts.json", receipt)
+        decisions = [f["result"] for f in receipt["facts"]]
+        verdict = ("FAIL" if "FAIL" in decisions else "UNKNOWN" if "UNKNOWN" in decisions or receipt["coverage"]["result"] != "PASS"
+                   else "PASS" if "PASS" in decisions else "NOT_RUN")
+        return {"result": verdict, "path": str((sources / "fact-receipts.json").relative_to(output)),
+                "sha256": sha(sources / "fact-receipts.json"), "whole_window": receipt["whole_window"],
+                "post_bound": receipt["post_bound"], "coverage": receipt["coverage"],
+                "unadmitted_replacement": receipt["unadmitted_replacement"]}
+    except (OSError, ValueError, KeyError, TypeError, StopIteration) as error:
+        return {"result": "UNKNOWN", "error_class": type(error).__name__,
+                "reason": "fact payload/release/receiver association unavailable; legacy transport metrics retained"}
 
 
 def inflight_first_read(config, output):
@@ -236,7 +298,8 @@ def run(config_file, output, resume=False):
         atomic(state_path, state)
         probe = dict(config["probe"])
         probe.update(resolve_credentials(probe, int((probe.get('duration', 40) + 5) * 1000)))
-        argv = [sys.executable, str(REMOTE_TOOL), "probe", "--run-id", config["run_id"], "--output", str(output / "trace.jsonl")]
+        argv = [sys.executable, str(Path(__file__).with_name("connection_facts.py")), "probe",
+                "--run-id", config["run_id"], "--output", str(output / "trace.jsonl")]
         for key in ("url", "cert", "key", "bundle", "server_id", "duration", "interval", "timeout", "method", "body_file", "payload_plan", "api_key_env", "response_marker"):
             if key in probe:
                 argv.extend(["--" + key.replace("_", "-"), str(probe[key])])

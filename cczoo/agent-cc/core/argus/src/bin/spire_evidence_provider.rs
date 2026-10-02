@@ -381,32 +381,65 @@ async fn workload_evidence_handler(
         return Err((StatusCode::BAD_REQUEST, "invalid workload request".into()));
     }
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value> {
-        let path = state.workload_registration_path.as_ref().context("workload endpoint disabled")?;
-        let data_path = state.workload_data_path.as_ref().context("workload data path is not configured")?;
-        let before = (state.observe)(&path, &data_path)?;
-        if before["agent_id"] != state.agent_id {bail!("registered target differs from configured SPIRE Agent");}
-        if before["pid"] != request.pid.to_string() {bail!("PID is not the registered target");}
-        let data = workload::runtime_data(&before, &request.nonce)?;
-        // Snapshot on both sides detects concurrent commits. Trustee still
-        // verifies the complete history against the authenticated Quote RTMR2.
-        for attempt in 0..3 {
-            let snapshot = match (state.snapshot)(&state.trucon_socket_path) {
-                Ok(value) => value,
-                Err(error) => {
-                    if attempt == 2 { return Err(error); }
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    continue;
-                }
-            };
-            let quote = state.generate(1, &workload::report_data(&data)?)?;
-            if (state.observe)(&path, &data_path)? != before {bail!("target changed while generating Quote");}
-            if (state.snapshot)(&state.trucon_socket_path).is_ok_and(|after| after == snapshot) {
-                tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], "fresh workload TDX Quote generated");
-                return Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data, "rekor_entry_ids":snapshot.log_ids}));
+        let started = Instant::now();
+        let mut snapshot_ms = 0.0_f64;
+        let mut quote_ms = 0.0_f64;
+        let mut quote_attempts = 0_u32;
+        let mut history_entries = 0_usize;
+        let mut before = workload::Target::new();
+        let outcome = (|| -> Result<serde_json::Value> {
+            let path = state.workload_registration_path.as_ref().context("workload endpoint disabled")?;
+            let data_path = state.workload_data_path.as_ref().context("workload data path is not configured")?;
+            before = (state.observe)(&path, &data_path)?;
+            if before["agent_id"] != state.agent_id || before["pid"] != request.pid.to_string() {
+                return Err(workload::trucon::HistoryFailure("TARGET_CHANGED").into());
             }
-            if attempt < 2 { std::thread::sleep(std::time::Duration::from_millis(100)); }
-        }
-        bail!("TruCon history changed during all Quote attempts")
+            let data = workload::runtime_data(&before, &request.nonce)?;
+            for attempt in 0..3 {
+                let at = Instant::now();
+                let snapshot_result = (state.snapshot)(&state.trucon_socket_path);
+                snapshot_ms += at.elapsed().as_secs_f64() * 1000.0;
+                let snapshot = match snapshot_result {
+                    Ok(value) => value,
+                    Err(error) => {
+                        if attempt == 2 { return Err(error); }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        continue;
+                    }
+                };
+                history_entries = snapshot.log_ids.len();
+                let at = Instant::now();
+                quote_attempts += 1;
+                let quote_result = state.generate(1, &workload::report_data(&data)?);
+                quote_ms += at.elapsed().as_secs_f64() * 1000.0;
+                let quote = quote_result.context(workload::trucon::HistoryFailure("QUOTE_UNAVAILABLE"))?;
+                if (state.observe)(&path, &data_path)? != before {
+                    return Err(workload::trucon::HistoryFailure("TARGET_CHANGED").into());
+                }
+                let at = Instant::now();
+                let after = (state.snapshot)(&state.trucon_socket_path);
+                snapshot_ms += at.elapsed().as_secs_f64() * 1000.0;
+                if after.as_ref().is_ok_and(|value| value == &snapshot) {
+                    tracing::info!(launch_id=%before["launch_id"], pid=%before["pid"], "fresh workload TDX Quote generated");
+                    return Ok(serde_json::json!({"evidence_type":"tdx_quote", "quote":URL_SAFE_NO_PAD.encode(quote), "runtime_data":data, "rekor_entry_ids":snapshot.log_ids}));
+                }
+                if attempt == 2 {
+                    return Err(after.err().unwrap_or_else(|| workload::trucon::HistoryFailure("HISTORY_CHANGED").into()));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            unreachable!()
+        })();
+        let reason = outcome.as_ref().err().map(workload::trucon::reason_code).unwrap_or("EVIDENCE_COLLECTED");
+        let status = if outcome.is_ok() { "ALLOW" } else if matches!(reason, "MUTATION_PENDING" | "HISTORY_NOT_CONFIRMED" | "HISTORY_CAPACITY" | "TARGET_CHANGED") { "DENY" } else { "UNKNOWN" };
+        let target = serde_json::json!({"launch_id":before.get("launch_id"), "container_id":before.get("container_id"), "pid":before.get("pid"), "start_time":before.get("start_time"), "boot_id":before.get("boot_id"), "policy_id":before.get("policy_id")});
+        let receipt = serde_json::json!({"schema":"argus.admission-stage.v1", "component":"provider", "attempt_id":request.nonce, "nonce":request.nonce,
+            "stage":"provider", "status":status, "reason_code":reason, "target":target,
+            "timings":{"history_snapshot_ms":snapshot_ms, "quote_ms":quote_ms, "total_ms":started.elapsed().as_secs_f64()*1000.0,
+                       "quote_attempts":quote_attempts, "history_entries":history_entries}});
+        // Diagnostic timing and stage receipts do not enter REPORTDATA or policy.
+        tracing::info!("argus admission stage {}", receipt);
+        outcome
     }).await;
     match result {
         Ok(Ok(value)) => Ok(Json(value)),

@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import fault_trial
-from common import atomic, digest
+from common import atomic, digest, sha
 from test_timeline import evidence
 
 
@@ -149,8 +149,44 @@ def test_run_starts_observer_before_fault_and_unknown_submission_is_not_replayed
         else:
             assert fault_trial.run(path, output)["result"] == "PASS"
         assert popen.call_count == 2
+        probe_argv = popen.call_args_list[1].args[0]
+        assert Path(probe_argv[1]).name == "connection_facts.py" and probe_argv[2] == "probe"
         assert sum("--execute-fault" in argv for argv in commands) == 1
-        assert all(child.poll() is not None for child in children)
+    assert all(child.poll() is not None for child in children)
     with patch.object(fault_trial.subprocess, "Popen") as popen, patch.object(fault_trial, "collect", return_value={"result": "UNKNOWN"}):
         assert fault_trial.run(path, output, resume=True)["result"] == "UNKNOWN"
         popen.assert_not_called()
+
+
+def test_default_connection_fact_collection_keeps_read_fail_and_coverage_unknown(tmp_path):
+    from connection_facts import prepare
+    from test_fact_receipts import fixture
+    paths = fixture(tmp_path, fault=True, at=7000, gap=True)
+    prepare(tmp_path / "payload", 7, 3)
+    plan_path = tmp_path / "payload/payload-plan.json"
+    item = json.loads(plan_path.read_text())["existing"][0]
+    rows = [json.loads(line) for line in paths[2].read_text().splitlines()]
+    for row in rows:
+        if row.get("type") == "fact_observed":
+            row.update({k: item[k] for k in ("fact_id", "full_fact_sha256", "fact_bytes")})
+    sources = tmp_path / "collection"; sources.mkdir()
+    (sources / "receiver.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (sources / "fault.jsonl").write_bytes((tmp_path / "fault.jsonl").read_bytes())
+    trace = [{"type": "probe_start", "run_id": "run", "at_ms": 1000, "payload_plan_sha256": sha(plan_path)},
+             {"type": "request", "run_id": "run", "request_id": "r", "started_at_ms": 6200, "completed_at_ms": 8000, "fact_id": item["fact_id"]},
+             {"type": "probe_stop", "run_id": "run", "at_ms": 10000, "complete": True}]
+    (sources / "trace.jsonl").write_text("".join(json.dumps(r) + "\n" for r in trace))
+    release = [{"type": "release_start", "schema": "argus.input-release.v1", "boundary": "client_fact_prefix_transport_write"},
+               {"type": "input_release", "source": "client_tls_socket_write", "boundary": "client_fact_prefix_transport_write",
+                "request_id": "r", "at_ms": 6200, "completed_at_ms": 6250, "status": "OBSERVED",
+                **{k: item[k] for k in ("fact_id", "full_fact_sha256", "fact_bytes")}},
+               {"type": "release_stop", "complete": True}]
+    (tmp_path / "releases.jsonl").write_text("".join(json.dumps(dict(r, run_id="run", record_seq=i)) + "\n" for i, r in enumerate(release, 1)))
+    c = config(tmp_path, False)
+    c.update(receipt_context=str(paths[3]), probe={"payload_plan": str(plan_path)})
+    value = fault_trial.collect_fact_receipts(c, tmp_path, sources)
+    assert value["result"] == "FAIL" and value["coverage"]["result"] == "UNKNOWN"
+    assert value["post_bound"]["release_classification"]["post_fault_first_released"]["unique_facts"] == 1
+    assert value["post_bound"]["post_stop_condition_complete_fact_reads"] == 1
+    assert value["unadmitted_replacement"]["result"] == "UNKNOWN"
+    assert sha(tmp_path / value["path"]) == value["sha256"]

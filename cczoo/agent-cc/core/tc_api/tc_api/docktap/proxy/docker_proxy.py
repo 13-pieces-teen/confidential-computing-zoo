@@ -32,7 +32,7 @@ from .operation_log import (
 from .runtime_adapter import DEFAULT_RUNTIME_ENGINE, DockerRuntimeAdapter
 from .container_identity import bind_container_target
 from .. import config as _cfg
-from ..trucon_client import SUBMITTABLE_OPERATIONS, has_reusable_identity_token, has_active_delegation
+from ..trucon_client import LIFECYCLE_OPERATIONS, SUBMITTABLE_OPERATIONS, has_reusable_identity_token, has_active_delegation
 
 
 def _has_active_delegation_for_chain(chain_id: str) -> bool:
@@ -284,6 +284,30 @@ class DockerProxyServer:
                 except:
                     pass
         return None
+
+    @staticmethod
+    def _complete_lifecycle_response(response: bytes) -> bool:
+        """An incomplete/ambiguous HTTP result must leave the mutation fenced."""
+        header, separator, body = response.partition(b'\r\n\r\n')
+        if not separator:
+            return False
+        try:
+            lines = header.decode('ascii').split('\r\n')
+            status = int(lines[0].split(' ')[1])
+            if not 200 <= status <= 599:
+                return False
+            fields = [line.split(':', 1) for line in lines[1:]]
+            lengths = [int(value.strip()) for key, value in fields if key.lower() == 'content-length']
+            transfers = [value.strip().lower() for key, value in fields if key.lower() == 'transfer-encoding']
+            if lengths:
+                return not transfers and len(lengths) == 1 and lengths[0] >= 0 and len(body) == lengths[0]
+            if transfers:
+                # Lifecycle responses are normally fixed-size. Do not infer a
+                # result from an idle timeout in an arbitrary stream.
+                return False
+            return status in {204, 304} and not body
+        except (ValueError, IndexError, UnicodeDecodeError):
+            return False
 
     def _create_error_response(self, message: str) -> bytes:
         """Create HTTP error response"""
@@ -542,10 +566,26 @@ class DockerProxyServer:
                         client_socket.sendall(self._create_error_response("Full container identity is required for trusted logging"))
                         break
 
+                mutation_id = None
+                if self._trucon_committer is not None and operation in LIFECYCLE_OPERATIONS:
+                    try:
+                        mutation_id = self._trucon_committer.begin_mutation(op_record, operation,
+                            workload_id=self._extract_workload_id(request_data) if operation == 'create' else None,
+                            launch_id=self._extract_launch_id(request_data) if operation == 'create' else None)
+                    except Exception:
+                        logger.warning('Blocked Docker lifecycle mutation: durable reservation unavailable', exc_info=True)
+                        client_socket.sendall(self._create_error_response('Durable lifecycle reservation is required before Docker mutation'))
+                        break
+
+                from ...experiment_barrier import checkpoint
+                if mutation_id is not None:
+                    checkpoint('after_reserve', mutation_id=mutation_id, operation_type=operation)
                 docker_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 docker_sock.settimeout(30)
                 docker_sock.connect(self.docker_socket_path)
                 docker_sock.sendall(request_data)
+                if mutation_id is not None:
+                    checkpoint('after_forward', mutation_id=mutation_id, operation_type=operation)
                 if not is_streaming_endpoint(path):
                     docker_sock.shutdown(socket.SHUT_WR)
 
@@ -554,7 +594,18 @@ class DockerProxyServer:
 
                 if response:
                     logger.debug(f"Sent response: {len(response)} bytes buffered")
+                    if mutation_id is not None and not self._complete_lifecycle_response(response):
+                        client_socket.sendall(self._create_error_response('Docker result is unknown; mutation remains fenced, do not retry blindly'))
+                        break
                     enrich_from_response(op_record, response)
+                    if mutation_id is not None:
+                        try:
+                            self._trucon_committer.complete_mutation(mutation_id, op_record)
+                        except Exception:
+                            logger.warning('Docker result could not be durably acknowledged; mutation remains fenced', exc_info=True)
+                            client_socket.sendall(self._create_error_response('Docker result is not durably acknowledged; do not retry mutation blindly'))
+                            break
+                        checkpoint('after_result', mutation_id=mutation_id, operation_type=operation)
                     self.tracker.add(op_record)
                     log_operation_json(op_record)
 
@@ -569,7 +620,7 @@ class DockerProxyServer:
                             and 200 <= response_status < 400
                         )
 
-                        if op_type in SUBMITTABLE_OPERATIONS:
+                        if op_type in SUBMITTABLE_OPERATIONS and mutation_id is None:
                             workload_id = None
                             launch_id = None
                             if op_type == "create":

@@ -8,14 +8,18 @@ Receiver telemetry remains nonblocking and never controls the business service.
 import argparse
 from datetime import datetime, timezone
 import json
+import importlib.util
 from pathlib import Path
 import subprocess
 import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "core/spire/workload/scripts"))
-import remote_acceptance as acceptance
+# Keep the analysis helper separate from the installed deployment modules.
+# The server-side observer subsequently loads its verified experiment runtime.
+_spec = importlib.util.spec_from_file_location('argus_timeline_acceptance', ROOT / 'core/spire/workload/scripts/remote_acceptance.py')
+acceptance = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(acceptance)
 
 
 def relative(row, fault, *, at="at_ms", mono="monotonic_ns", uncertainty_ms=0, same_server=False):
@@ -190,6 +194,7 @@ def summarize(fault, receiver_rows, probe_rows, lifecycle_rows=(), *, bound_ms, 
                          "Positive post-bound observations survive incomplete coverage; zero observed bytes is not zero actual bytes."])
     # This is evidence analysis, not a claim that a remote experiment was run locally.
     result["evidence_status"] = "ANALYZED"
+    result['backend_availability'] = backend_availability(fault, lifecycle, result['entry_stop'], clock_uncertainty_ms)
     return result
 
 
@@ -222,10 +227,49 @@ def snapshot(deployment):
             "helper_active": helper.get("ActiveState") == "active", "helper_invocation": helper.get("InvocationID"),
             "entry_active": entry.get("ActiveState") == "active" and entry.get("MainPID", "0") != "0",
             "entry_stopped": entry.get("ActiveState") in ("inactive", "failed") and entry.get("MainPID") == "0",
-            "entry_state": entry.get("ActiveState"), "entry_pid": entry.get("MainPID")}
+             "entry_state": entry.get("ActiveState"), "entry_pid": entry.get("MainPID")}
 
 
-def observe(deployment, output, run_id, *, duration=60, interval=.25, stop_file=None, sample=snapshot):
+def backend_availability(fault, lifecycle, entry_stop, uncertainty):
+    """Report positive sampled liveness separately from reception/stop verdicts."""
+    result = {'result': 'UNKNOWN', 'after_fault_samples': 0, 'after_entry_stop_samples': 0,
+              'unknown_samples': 0,
+              'scope': 'original backend answered fixed local /health at sampled times; not uninterrupted memory availability'}
+    target = fault.get('target', {})
+    for row in lifecycle:
+        probe = row.get('backend_probe', {})
+        if row.get('run_id') != fault.get('run_id') or not probe:
+            continue
+        linked = all(target.get(key) and probe.get('target', {}).get(key) == target[key]
+                     for key in ('pid', 'start_time', 'boot_id', 'net_namespace', 'container_id', 'launch_id', 'listen_port'))
+        process = probe.get('process', {})
+        valid = (linked and probe.get('schema') == 'argus.backend-health.v1'
+                 and probe.get('result') == 'OBSERVED' and probe.get('health_ok') is True
+                 and probe.get('http_status') == 200 and probe.get('private_input_bytes') == 0
+                 and probe.get('route') == 'loopback_in_registered_netns'
+                 and all(str(process.get(key)) == str(target.get(key)) for key in ('pid', 'start_time', 'boot_id', 'net_namespace', 'listen_port'))
+                 and bool(process.get('listener_inodes')))
+        if not valid:
+            result['unknown_samples'] += 1
+            continue
+        start = relative({'at_ms': probe.get('started_at_ms')}, fault, uncertainty_ms=uncertainty)
+        end = relative({'at_ms': probe.get('completed_at_ms')}, fault, uncertainty_ms=uncertainty)
+        fault_end = relative({'at_ms': fault.get('completed_at_ms')}, fault, uncertainty_ms=uncertainty)
+        if not start or not end or not fault_end or start['upper_ms'] > end['upper_ms']:
+            result['unknown_samples'] += 1
+            continue
+        if start['lower_ms'] > fault_end['upper_ms']:
+            result['after_fault_samples'] += 1
+            result['result'] = 'OBSERVED'
+            result['last_observed'] = {'started_relative_ms': start, 'completed_relative_ms': end}
+            if entry_stop.get('status') == 'OBSERVED' and start['lower_ms'] > entry_stop['upper_ms']:
+                result['after_entry_stop_samples'] += 1
+    result['live_after_entry_stop'] = 'OBSERVED' if result['after_entry_stop_samples'] else 'UNKNOWN'
+    return result
+
+
+def observe(deployment, output, run_id, *, duration=60, interval=.25, stop_file=None, sample=snapshot,
+            backend_target=None, backend_sample=None):
     """One finite read-only process; optional stop-file ends it without signals."""
     if not 1 <= duration <= 3600 or not .05 <= interval <= 5:
         raise ValueError("observer duration [1,3600] and interval [.05,5] required")
@@ -244,12 +288,17 @@ def observe(deployment, output, run_id, *, duration=60, interval=.25, stop_file=
             try:
                 state = sample(deployment)
                 ended = acceptance.clocks()
+                if backend_target is not None:
+                    if backend_sample is None:
+                        from backend_probe import sample as backend_sample
+                    state['backend_probe'] = backend_sample(backend_target)
                 emit({"type": "lifecycle_sample", **ended, "sample_started_at_ms": started["at_ms"], **state})
                 if state["ready"]:
                     last_ready = started
                 if state["entry_active"]:
                     last_entry = started
-                if not healthy and state["ready"] and state["entry_active"] and state["helper_active"]:
+                backend_ok = backend_target is None or state.get('backend_probe', {}).get('result') == 'OBSERVED'
+                if not healthy and state["ready"] and state["entry_active"] and state["helper_active"] and backend_ok:
                     healthy = True
                     emit({"type": "observer_ready", **ended})
                 current_ready = state["ready"] and state["entry_active"] and state["helper_active"]
@@ -289,11 +338,17 @@ def main():
     p.add_argument("--duration", type=float, default=60)
     p.add_argument("--interval", type=float, default=.25)
     p.add_argument("--stop-file")
+    p.add_argument('--backend-probe', action='store_true', help='fixed trusted-local original-process /health observations; no private inputs')
     args = parser.parse_args()
     if args.command == "observe":
-        from workload import Deployment, protected_file
-        deployment = Deployment(json.loads(protected_file(args.config).read_text()))
-        observe(deployment, args.output, args.run_id, duration=args.duration, interval=args.interval, stop_file=args.stop_file)
+        from trusted_runtime import load
+        workload, _, config = load(args.config)
+        deployment = workload.Deployment(config)
+        target = None
+        if args.backend_probe:
+            target = json.loads(workload.run([deployment.bin / 'argus-workload', '-action', 'check', '-registration', deployment.target]))
+        observe(deployment, args.output, args.run_id, duration=args.duration, interval=args.interval,
+                stop_file=args.stop_file, backend_target=target)
     else:
         fault = acceptance.fault_checkpoint(args.fault)
         result = summarize(fault, acceptance.receiver_rows(args.receiver, fault["run_id"]), acceptance.probe_rows(args.trace, fault["run_id"]),

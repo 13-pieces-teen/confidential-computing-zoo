@@ -42,12 +42,14 @@ class ConnectionSession:
     def __init__(self, worker_id='direct'):
         self.worker_id, self.sequence = worker_id, 0
         self.conn, self.context, self.target, self.connection_id = None, None, None, None
+        self.peer_svid_serial = None
         self.next_reason = 'initial'
 
     def close(self, reason='previous_error'):
         if self.conn is not None:
             self.conn.close()
         self.conn = None
+        self.peer_svid_serial = None
         self.next_reason = reason
 
     def acquire(self, parsed, context, peer_id, timeout, prefix, row):
@@ -73,10 +75,14 @@ class ConnectionSession:
                 self.conn.connect()
                 row['connection_created'] = True
                 row['tls_session_reused'] = self.conn.sock.session_reused
-                uris = [v for k, v in self.conn.sock.getpeercert().get('subjectAltName', ()) if k == 'URI']
+                certificate = self.conn.sock.getpeercert()
+                uris = [v for k, v in certificate.get('subjectAltName', ()) if k == 'URI']
                 require(uris == [peer_id], 'unexpected peer SPIFFE identity')
+                serial = certificate.get('serialNumber')
+                self.peer_svid_serial = str(int(serial, 16)) if isinstance(serial, str) and re.fullmatch(r'[0-9A-Fa-f]+', serial) else None
                 row['peer_identity_verified'] = True
                 row['peer_spiffe_id'] = peer_id
+                row['peer_svid_serial'] = self.peer_svid_serial
                 # Do not let http.client silently open an unchecked replacement
                 # connection inside send(). Reconnect on the next scheduled call.
                 self.conn.auto_open = 0
@@ -86,7 +92,8 @@ class ConnectionSession:
                 row['tls_handshake_ms'] = getattr(self.conn, 'tls_handshake_ms', None)
         else:
             row.update(connection_id=self.connection_id, connection_reused=True,
-                       peer_identity_verified=True, peer_spiffe_id=peer_id, connect_reason='reused')
+                       peer_identity_verified=True, peer_spiffe_id=peer_id,
+                       peer_svid_serial=self.peer_svid_serial, connect_reason='reused')
             self.conn.sock.settimeout(timeout)
         return self.conn
 

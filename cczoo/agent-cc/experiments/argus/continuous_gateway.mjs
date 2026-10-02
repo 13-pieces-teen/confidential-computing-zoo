@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 const spec = JSON.parse(fs.readFileSync(0, 'utf8'));
 const hash = text => createHash('sha256').update(text).digest('hex');
 let transport;
+let inputRelease;
 try {
   const get = key => JSON.parse(execFileSync('openclaw', ['config','get',key,'--json'], {encoding:'utf8', stdio:['ignore','pipe','pipe']}));
   const installed = Object.values(get('plugins.installs')).map(p => p.installPath).filter(directory => {
@@ -20,6 +21,10 @@ try {
   if (!fs.existsSync(path.join(base,'dist/argus-spiffe/task-audit.mjs'))
       || !fs.readFileSync(path.join(base,'dist/plugin/tool-registration.js'),'utf8').includes('auditToolFactory(toolOrFactory)')
       || !fs.readFileSync(path.join(base,'dist/client.js'),'utf8').includes('auditCommit(result, sessionId)')) throw new Error('TASK_AUDIT_MISSING');
+  if ((spec.proposal_schema || spec.work_item_id)
+      && !fs.readFileSync(path.join(base,'dist/argus-spiffe/task-audit.mjs'),'utf8').includes('output_proposals:proposalReceipts(result)')) {
+    throw new Error('TYPED_PROPOSAL_AUDIT_MISSING');
+  }
   const {memoryOpenVikingConfigSchema} = await import(pathToFileURL(path.join(base,'dist/config.js')));
   const raw = get('plugins.entries.openviking.config'), cfg = memoryOpenVikingConfigSchema.parse(raw), toolConfig = get('tools');
   const {createSpiffeTransport} = await import(pathToFileURL(path.join(base,'dist/argus-spiffe/transport.mjs')));
@@ -55,8 +60,20 @@ try {
     const health = await response.json();
     if (!response.ok || health.auth_mode !== 'api_key' || health.role !== 'user'
         || health.account_id !== cfg.accountId || health.user_id !== cfg.userId) throw new Error('BUSINESS_IDENTITY_MISMATCH');
+    // Config observations do not establish the provider's effective sampling.
+    // Export only bounded scalar sampling fields, never arbitrary model params.
+    const samplingKeys=['temperature','topP','top_p','topK','top_k','seed'];
+    const samplingSources=[['agents.defaults.models[selected].params',agentsConfig.defaults?.models?.[configuredModel]?.params],
+      ['agents.list[selected].params',agentConfig?.params]];
+    const configuredSampling=samplingSources.map(([source,values])=>({source,values:Object.fromEntries(samplingKeys
+      .filter(k=>typeof values?.[k]==='number' && Number.isFinite(values[k])).map(k=>[k,values[k]]))}))
+      .filter(v=>Object.keys(v.values).length);
+    const samplingObservation={status:configuredSampling.length ? 'CONFIGURED_NOT_EFFECTIVE_VERIFIED' : 'PROVIDER_DEFAULT_UNVERIFIED',
+      configured_sources:configuredSampling,effective_parameters:'UNKNOWN',
+      scope:'read-only configured values; provider application and defaults are not attested'};
     result = {explicit_tools:true,config_sha256:hash(JSON.stringify({...raw,apiKey:'[REDACTED]',tools:toolConfig})),
       configured_model:configuredModel ?? null, model_config_sha256:hash(JSON.stringify(agentsConfig)),
+      sampling_observation:samplingObservation,
       adapter_sha256:hash(fs.readFileSync(path.join(base,'dist/argus-spiffe/task-audit.mjs')))};
   } else if (spec.action === 'seed') {
     await client.addSessionMessage(spec.ov_session_id,'user',[{type:'text',text:spec.text}],actor);
@@ -77,6 +94,12 @@ try {
     for (const item of found.memories ?? []) if (item.level === 2) memories.push({uri:item.uri,content:await client.read(item.uri,actor)});
     result = {memories};
   } else if (spec.action === 'agent') {
+    // Actual CLI submission boundary, separate from controller queue/intent and
+    // from transport, receiver, persistence or model-provider consumption.
+    inputRelease = {source:'gateway_agent_dispatch', boundary:'openclaw_cli_input',
+      task_id:spec.task_id, fact_id:spec.fact_id, work_item_id:spec.work_item_id ?? null,
+      session_key:spec.session_key, prompt_sha256:hash(spec.prompt), at_ms:Date.now(),
+      clock_domain:'gateway_host_realtime'};
     const rawResult = execFileSync('openclaw',['agent','--agent',spec.agent_id,'--session-key',spec.session_key,
       '--message',spec.prompt,'--timeout',String(spec.timeout_seconds),'--json'],
       {encoding:'utf8',timeout:(spec.timeout_seconds+20)*1000,maxBuffer:16*1024*1024,stdio:['ignore','pipe','pipe']});
@@ -86,9 +109,13 @@ try {
       gateway_run_id:response.runId,model:response.result.meta?.agentMeta?.model ?? null,
       provider:response.result.meta?.agentMeta?.provider ?? null,usage:response.result.meta?.agentMeta?.usage ?? null};
   } else throw new Error('INVALID_ACTION');
-  console.log(JSON.stringify({result:'OBSERVED',scope,...result}));
+  console.log(JSON.stringify({result:'OBSERVED',scope,...result,...(inputRelease ? {input_release:inputRelease} : {})}));
 } catch (error) {
-  const known = ['PINNED_PLUGIN_AMBIGUOUS','TASK_AUDIT_MISSING','CONTINUOUS_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','MODEL_CONFIGURATION_MISMATCH','GATEWAY_RESULT_INVALID','INVALID_ACTION'];
-  console.log(JSON.stringify({result:'UNKNOWN',code:known.includes(error.message) ? error.message : 'GATEWAY_IO_FAILED'}));
+  // These spawn errors mean the CLI never received its input. A running CLI's
+  // timeout/failure retains submission evidence; an outer Docker loss does not.
+  if (['ENOENT','EACCES'].includes(error.code)) inputRelease = undefined;
+  const known = ['PINNED_PLUGIN_AMBIGUOUS','TASK_AUDIT_MISSING','TYPED_PROPOSAL_AUDIT_MISSING','CONTINUOUS_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','MODEL_CONFIGURATION_MISMATCH','GATEWAY_RESULT_INVALID','INVALID_ACTION'];
+  console.log(JSON.stringify({result:'UNKNOWN',code:known.includes(error.message) ? error.message : 'GATEWAY_IO_FAILED',
+    ...(inputRelease ? {input_release:inputRelease} : {})}));
   process.exitCode = 1;
 } finally { transport?.close(); }

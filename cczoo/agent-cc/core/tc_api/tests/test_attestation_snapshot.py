@@ -11,6 +11,7 @@ from tc_api.trucon.routers import query
 def snapshot(tmp_path, monkeypatch):
     path = str(tmp_path / "queue.db")
     database.init_db(path)
+    monkeypatch.setattr(database, 'DB_PATH', path)
     with database.get_db_connection(path) as conn:
         for seq in (1, 2, 3):
             conn.execute("INSERT INTO commit_queue(record_id,chain_id,payload,status,log_id,mr_value,sequence_num,updated_at) VALUES(?,?,?,?,?,?,?,?)",
