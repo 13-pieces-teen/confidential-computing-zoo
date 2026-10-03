@@ -46,6 +46,16 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "audit mounts"):
             Deployment(c)
 
+    def test_provider_audit_mount_flag_only_in_receiver_audit_mode(self):
+        template = (ROOT / "systemd/argus-tdx-provider.service").read_text()
+        audit = alternative()
+        audit["receiver_audit"] = {"run_id": "trial-a", "mode": "on",
+                                   "image_config_digest": audit["approved"]["image_config_digest"]}
+        with_audit = Deployment(audit).render(template)
+        self.assertIn("--workload-audit-mount /run/argus-receiver/trial-a/data:/run/argus-audit", with_audit)
+        without_audit = Deployment(alternative()).render(template)
+        self.assertNotIn("--workload-audit-mount", without_audit)
+
     def test_exact_multiple_clients_reach_authz_without_aliasing_roles(self):
         c = alternative()
         first = c["identity"].pop("client_id")

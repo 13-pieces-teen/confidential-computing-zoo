@@ -145,7 +145,9 @@ fn bounded(path: impl AsRef<Path>, max: u64) -> Result<Vec<u8>> {
 // Restrict Docker mount destinations and keep declared configuration/executable
 // paths outside the writable data and /tmp paths. Guest root and Docker metadata
 // remain trusted; these checks do not measure writable data or process memory.
-fn validate_mounts(c: &Value, t: &Target, data_path: &Path) -> Result<()> {
+// `audit` optionally names the exact read-only bind mount the TC API adds in
+// receiver-audit mode (host receiver data directory -> /run/argus-audit).
+fn validate_mounts(c: &Value, t: &Target, data_path: &Path, audit: Option<(&str, &str)>) -> Result<()> {
     for key in ["config_path", "executable"] {
         let path = Path::new(&t[key]);
         if path.starts_with(data_path) || path.starts_with("/tmp") {
@@ -153,11 +155,20 @@ fn validate_mounts(c: &Value, t: &Target, data_path: &Path) -> Result<()> {
         }
     }
     let mounts = c["Mounts"].as_array().context("missing mounts")?;
+    let mut audit_seen = false;
     for mount in mounts {
         let dest = mount["Destination"].as_str().context("invalid mount")?;
+        let approved_audit = audit.map_or(false, |(source, destination)| {
+            dest == destination
+                && mount["Type"].as_str() == Some("bind")
+                && mount["Source"].as_str() == Some(source)
+                && mount["RW"] == false
+        });
+        audit_seen |= approved_audit;
         if dest != t["config_path"]
             && Path::new(dest) != data_path
             && !(dest == "/tmp" && mount["Type"] == "tmpfs")
+            && !approved_audit
         {
             bail!("unapproved workload mount");
         }
@@ -171,14 +182,17 @@ fn validate_mounts(c: &Value, t: &Target, data_path: &Path) -> Result<()> {
     {
         bail!("missing read-only configuration mount");
     }
+    if audit.is_some() && !audit_seen {
+        bail!("missing read-only receiver audit mount");
+    }
     Ok(())
 }
 #[cfg(not(target_os = "linux"))]
-pub fn load_and_check(_: &Path, _: &Path) -> Result<Target> {
+pub fn load_and_check(_: &Path, _: &Path, _: Option<(&str, &str)>) -> Result<Target> {
     bail!("Workload evidence requires Linux");
 }
 #[cfg(target_os = "linux")]
-pub fn load_and_check(path: &Path, data_path: &Path) -> Result<Target> {
+pub fn load_and_check(path: &Path, data_path: &Path, audit: Option<(&str, &str)>) -> Result<Target> {
     use std::{os::unix::fs::MetadataExt, process::Command};
     let meta = fs::symlink_metadata(path)?;
     if !meta.is_file() || meta.uid() != 0 || meta.mode() & 0o022 != 0 {
@@ -228,7 +242,7 @@ pub fn load_and_check(path: &Path, data_path: &Path) -> Result<Target> {
     if c["HostConfig"]["NetworkMode"] == "host" || c["HostConfig"]["PidMode"] == "host" {
         bail!("isolated container namespaces required");
     }
-    validate_mounts(c, &t, data_path)?;
+    validate_mounts(c, &t, data_path, audit)?;
     let pid = &t["pid"];
     let root = format!("/proc/{pid}");
     if fs::read_to_string("/proc/sys/kernel/random/boot_id")?.trim() != t["boot_id"] {
@@ -373,12 +387,46 @@ mod tests {
             {"Destination": "/var/lib/memory", "RW": true, "Type": "bind"},
             {"Destination": "/tmp", "RW": true, "Type": "tmpfs"}
         ]});
-        assert!(validate_mounts(&c, &t, Path::new("/var/lib/memory")).is_ok());
-        assert!(validate_mounts(&c, &t, Path::new("/var/lib/openviking")).is_err());
-        assert!(validate_mounts(&c, &t, Path::new("/usr/local")).is_err());
+        assert!(validate_mounts(&c, &t, Path::new("/var/lib/memory"), None).is_ok());
+        assert!(validate_mounts(&c, &t, Path::new("/var/lib/openviking"), None).is_err());
+        assert!(validate_mounts(&c, &t, Path::new("/usr/local"), None).is_err());
         let mut changed = c.clone();
         changed["Mounts"][0]["RW"] = Value::Bool(true);
-        assert!(validate_mounts(&changed, &t, Path::new("/var/lib/memory")).is_err());
+        assert!(validate_mounts(&changed, &t, Path::new("/var/lib/memory"), None).is_err());
+    }
+    #[test]
+    fn receiver_audit_mount_is_exact_read_only_and_bound() {
+        let v: Value = serde_json::from_str(include_str!(
+            "../../../../spire/workload/testdata/runtime-data-alternative.json"
+        ))
+        .unwrap();
+        let t: Target = serde_json::from_value(v["runtime_data"].clone()).unwrap();
+        let audit = ("/run/argus-receiver/p0-20261002t1521z/data", "/run/argus-audit");
+        let c = serde_json::json!({"Mounts": [
+            {"Destination": t["config_path"], "RW": false, "Type": "bind"},
+            {"Destination": "/var/lib/memory", "RW": true, "Type": "bind"},
+            {"Destination": audit.1, "RW": false, "Type": "bind", "Source": audit.0}
+        ]});
+        assert!(validate_mounts(&c, &t, Path::new("/var/lib/memory"), Some(audit)).is_ok());
+        // Without the approval the audit mount is rejected, and with the
+        // approval a missing audit mount is rejected too.
+        assert!(validate_mounts(&c, &t, Path::new("/var/lib/memory"), None).is_err());
+        let mut without = c.clone();
+        without["Mounts"].as_array_mut().unwrap().remove(2);
+        assert!(validate_mounts(&without, &t, Path::new("/var/lib/memory"), Some(audit)).is_err());
+        // Source, destination, type and read-only flag must all match exactly.
+        for (mut mutation, field, value) in [
+            (c.clone(), "Source", serde_json::json!("/run/argus-receiver/other/data")),
+            (c.clone(), "Destination", serde_json::json!("/run/elsewhere")),
+            (c.clone(), "Type", serde_json::json!("volume")),
+            (c.clone(), "RW", serde_json::json!(true)),
+        ] {
+            mutation["Mounts"][2][field] = value;
+            assert!(
+                validate_mounts(&mutation, &t, Path::new("/var/lib/memory"), Some(audit)).is_err(),
+                "mutated {field} must be rejected"
+            );
+        }
     }
     #[test]
     fn rejects_extra_fields_and_image_names() {

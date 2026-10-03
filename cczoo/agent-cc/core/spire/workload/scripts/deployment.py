@@ -177,6 +177,11 @@ class Deployment:
                 "CLIENT_ID": self.allowed_client_ids[0],
                 "CLIENT_ID_ARGS": " ".join("-client-id " + value for value in self.allowed_client_ids),
                 "WORKLOAD_ID": self.workload["id"], "DATA_PATH": self.workload["data_path"],
+                # The TC API adds this exact read-only bind mount in receiver-audit
+                # mode (workload_profile.audit_directory); the evidence provider only
+                # approves it when the launch configuration opted in.
+                "WORKLOAD_AUDIT_FLAGS": (" --workload-audit-mount /run/argus-receiver/%s/data:/run/argus-audit"
+                                         % self.receiver_audit["run_id"]) if self.receiver_audit is not None else "",
                 "TLS_PORT": str(self.workload["tls_port"]), "LISTEN_PORT": str(self.workload["listen_port"])}
 
     def render(self, text):

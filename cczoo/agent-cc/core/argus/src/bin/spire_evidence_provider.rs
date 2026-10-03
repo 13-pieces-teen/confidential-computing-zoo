@@ -54,6 +54,7 @@ struct Config {
     tsm_report_root: PathBuf,
     workload_registration_path: Option<PathBuf>,
     workload_data_path: Option<PathBuf>,
+    workload_audit_mount: Option<(String, String)>,
     trucon_socket_path: PathBuf,
 }
 
@@ -62,6 +63,7 @@ impl Config {
         let mut agent_id = None;
         let mut workload_registration_path = None;
         let mut workload_data_path = None;
+        let mut workload_audit_mount = None;
         let mut trucon_socket_path = PathBuf::from(workload::trucon::DEFAULT_SOCKET);
         let mut socket_path = PathBuf::from(DEFAULT_SOCKET_PATH);
         let mut tsm_report_root = PathBuf::from(DEFAULT_TSM_REPORT_ROOT);
@@ -82,6 +84,27 @@ impl Config {
                         args.next()
                             .ok_or_else(|| anyhow!("--socket-path requires a value"))?,
                     );
+                }
+                value if value == OsStr::new("--workload-audit-mount") => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| anyhow!("--workload-audit-mount requires a value"))?;
+                    let text = value.to_str().context("workload audit mount must be UTF-8")?;
+                    let (source, destination) = text
+                        .split_once(':')
+                        .ok_or_else(|| anyhow!("workload audit mount must be source:destination"))?;
+                    for part in [source, destination] {
+                        if !part.starts_with('/')
+                            || part.ends_with('/')
+                            || part
+                                .split('/')
+                                .skip(1)
+                                .any(|p| p.is_empty() || p == "." || p == "..")
+                        {
+                            bail!("workload audit mount paths must be clean absolute Linux directories");
+                        }
+                    }
+                    workload_audit_mount = Some((source.to_string(), destination.to_string()));
                 }
                 value if value == OsStr::new("--trucon-socket-path") => {
                     trucon_socket_path = PathBuf::from(
@@ -131,12 +154,16 @@ impl Config {
                 "--workload-registration-path and --workload-data-path must be configured together"
             );
         }
+        if workload_audit_mount.is_some() && workload_registration_path.is_none() {
+            bail!("--workload-audit-mount requires workload registration and data paths");
+        }
         Ok(Self {
             agent_id,
             socket_path,
             tsm_report_root,
             workload_registration_path,
             workload_data_path,
+            workload_audit_mount,
             trucon_socket_path,
         })
     }
@@ -200,7 +227,8 @@ struct AppState {
     quote_source: Arc<dyn QuoteSource>,
     workload_registration_path: Option<PathBuf>,
     workload_data_path: Option<PathBuf>,
-    observe: fn(&Path, &Path) -> Result<workload::Target>,
+    workload_audit_mount: Option<(String, String)>,
+    observe: fn(&Path, &Path, Option<(&str, &str)>) -> Result<workload::Target>,
     trucon_socket_path: PathBuf,
     snapshot: fn(&Path) -> Result<workload::trucon::Snapshot>,
     counters: Arc<QuoteCounters>,
@@ -346,6 +374,7 @@ fn router(agent_id: String, quote_source: Arc<dyn QuoteSource>) -> Router {
         quote_source,
         workload_registration_path: None,
         workload_data_path: None,
+        workload_audit_mount: None,
         observe: workload::load_and_check,
         trucon_socket_path: PathBuf::from(workload::trucon::DEFAULT_SOCKET),
         snapshot: workload::trucon::snapshot,
@@ -390,7 +419,7 @@ async fn workload_evidence_handler(
         let outcome = (|| -> Result<serde_json::Value> {
             let path = state.workload_registration_path.as_ref().context("workload endpoint disabled")?;
             let data_path = state.workload_data_path.as_ref().context("workload data path is not configured")?;
-            before = (state.observe)(&path, &data_path)?;
+            before = (state.observe)(&path, &data_path, state.workload_audit_mount.as_ref().map(|(s, d)| (s.as_str(), d.as_str())))?;
             if before["agent_id"] != state.agent_id || before["pid"] != request.pid.to_string() {
                 return Err(workload::trucon::HistoryFailure("TARGET_CHANGED").into());
             }
@@ -413,7 +442,7 @@ async fn workload_evidence_handler(
                 let quote_result = state.generate(1, &workload::report_data(&data)?);
                 quote_ms += at.elapsed().as_secs_f64() * 1000.0;
                 let quote = quote_result.context(workload::trucon::HistoryFailure("QUOTE_UNAVAILABLE"))?;
-                if (state.observe)(&path, &data_path)? != before {
+                if (state.observe)(&path, &data_path, state.workload_audit_mount.as_ref().map(|(s, d)| (s.as_str(), d.as_str())))? != before {
                     return Err(workload::trucon::HistoryFailure("TARGET_CHANGED").into());
                 }
                 let at = Instant::now();
@@ -526,6 +555,7 @@ async fn serve(config: Config) -> Result<()> {
         quote_source,
         workload_registration_path: config.workload_registration_path,
         workload_data_path: config.workload_data_path,
+        workload_audit_mount: config.workload_audit_mount,
         observe: workload::load_and_check,
         trucon_socket_path: config.trucon_socket_path,
         snapshot: workload::trucon::snapshot,
@@ -778,6 +808,7 @@ mod tests {
                 tsm_report_root: PathBuf::from(DEFAULT_TSM_REPORT_ROOT),
                 workload_registration_path: None,
                 workload_data_path: None,
+                workload_audit_mount: None,
                 trucon_socket_path: PathBuf::from(workload::trucon::DEFAULT_SOCKET),
             }
         );
@@ -867,6 +898,44 @@ mod tests {
         assert!(Config::parse(args(TEST_AGENT_ID).into_iter().take(4)).is_err());
     }
 
+    #[test]
+    fn workload_audit_mount_flag_is_exact_and_requires_workload_paths() {
+        let args = |id: &str| {
+            [
+                "--agent-id",
+                id,
+                "--workload-registration-path",
+                "/run/argus-workload/target.json",
+                "--workload-data-path",
+                "/var/lib/test-workload",
+            ]
+            .map(OsString::from)
+        };
+        let with_audit = |value: &str| {
+            let mut args = args(TEST_AGENT_ID).to_vec();
+            args.extend([OsString::from("--workload-audit-mount"), OsString::from(value)]);
+            args
+        };
+        let config = Config::parse(with_audit(
+            "/run/argus-receiver/trial-a/data:/run/argus-audit",
+        ))
+        .unwrap();
+        assert_eq!(
+            config.workload_audit_mount,
+            Some(("/run/argus-receiver/trial-a/data".into(), "/run/argus-audit".into()))
+        );
+        // Audit approval only applies to workload observation.
+        assert!(Config::parse([OsString::from("--agent-id"), OsString::from(TEST_AGENT_ID),
+                               OsString::from("--workload-audit-mount"),
+                               OsString::from("/run/x/data:/run/argus-audit")]).is_err());
+        // Source, destination and separator are validated exactly.
+        for value in ["relative:data:/run/argus-audit", "/run/x/data:", "/run/x/data",
+                      "/run/x/data:/run/argus-audit/", "/run/x//data:/run/argus-audit",
+                      "/run/x/data:/run/../argus-audit"] {
+            assert!(Config::parse(with_audit(value)).is_err(), "must reject {value}");
+        }
+    }
+
     struct TestRegistration(PathBuf);
     impl TestRegistration {
         fn new() -> Self {
@@ -897,7 +966,7 @@ mod tests {
     }
     // Only the runtime observation boundary is substituted. The handler still
     // validates the request, builds real REPORTDATA and compares both observations.
-    fn observe_fixture(path: &Path, _: &Path) -> Result<workload::Target> {
+    fn observe_fixture(path: &Path, _: &Path, _: Option<(&str, &str)>) -> Result<workload::Target> {
         Ok(serde_json::from_slice(&std::fs::read(path)?)?)
     }
     fn workload_app(registration: &TestRegistration, source: Arc<dyn QuoteSource>) -> Router {
@@ -907,6 +976,7 @@ mod tests {
             workload_registration_path: Some(registration.0.clone()),
             workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
             observe: observe_fixture,
+            workload_audit_mount: None,
             trucon_socket_path: PathBuf::from("/unused-test-socket"),
             snapshot: snapshot_fixture,
             counters: Arc::new(QuoteCounters::default()),
@@ -959,6 +1029,7 @@ mod tests {
             workload_registration_path: Some(registration.0.clone()),
             workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
             observe: observe_fixture,
+            workload_audit_mount: None,
             trucon_socket_path: history.0.clone(),
             snapshot: unavailable_snapshot,
             counters: Arc::new(QuoteCounters::default()),
@@ -1061,6 +1132,7 @@ mod tests {
             workload_registration_path: Some(registration.0.clone()),
             workload_data_path: Some(PathBuf::from("/var/lib/test-workload")),
             observe: observe_fixture,
+            workload_audit_mount: None,
             trucon_socket_path: PathBuf::from("/unused-test-socket"),
             snapshot: snapshot_fixture,
             counters: Arc::new(QuoteCounters::default()),
@@ -1071,7 +1143,7 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         assert!(source.report_data.lock().unwrap().is_none());
-        let mut t = observe_fixture(&registration.0, Path::new("/var/lib/test-workload")).unwrap();
+        let mut t = observe_fixture(&registration.0, Path::new("/var/lib/test-workload"), None).unwrap();
         t.insert("agent_id".into(), TEST_AGENT_ID.into());
         std::fs::write(&registration.0, serde_json::to_vec(&t).unwrap()).unwrap();
         let response = provider_router(state)
@@ -1084,7 +1156,7 @@ mod tests {
     struct ReplacingQuoteSource(PathBuf);
     impl QuoteSource for ReplacingQuoteSource {
         fn generate_quote(&self, _: &ReportData) -> Result<Vec<u8>, QuoteError> {
-            let mut t = observe_fixture(&self.0, Path::new("/var/lib/test-workload")).unwrap();
+            let mut t = observe_fixture(&self.0, Path::new("/var/lib/test-workload"), None).unwrap();
             t.insert("start_time".into(), "999999".into());
             std::fs::write(&self.0, serde_json::to_vec(&t).unwrap()).unwrap();
             Ok(vec![1])
