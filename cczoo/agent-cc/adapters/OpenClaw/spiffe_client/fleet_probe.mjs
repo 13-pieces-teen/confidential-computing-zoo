@@ -21,16 +21,22 @@ try {
   const {memoryOpenVikingConfigSchema} = await import(pathToFileURL(path.join(base, 'dist/config.js')));
   const cfg = memoryOpenVikingConfigSchema.parse(get('plugins.entries.openviking.config'));
   const native = await import(pathToFileURL(path.join(base, 'dist/argus-spiffe/transport.mjs')));
+  const {configuredApiKey, requireConfiguredScope} =
+    await import(pathToFileURL(path.join(base, 'dist/argus-spiffe/config-scope.mjs')));
   const {createSpiffeTransport, requestIdentity} = native;
   requestFailure = native.requestFailure;
   transport = createSpiffeTransport();
-  if (!cfg.apiKey || digest(cfg.apiKey) !== spec.key_sha256 || cfg.accountId !== spec.account_id || cfg.userId !== spec.user_id
-      || cfg.mode !== 'remote' || cfg.baseUrl.replace(/\/+$/, '') !== transport.config.origin
+  const key = configuredApiKey(cfg.apiKey, process.env.OPENCLAW_CONFIG_PATH);
+  requireConfiguredScope(
+    {key, accountId: cfg.accountId, userId: cfg.userId},
+    {key: process.env.OPENVIKING_API_KEY, accountId: spec.account_id, userId: spec.user_id},
+  );
+  if (digest(key) !== spec.key_sha256 || cfg.mode !== 'remote' || cfg.baseUrl.replace(/\/+$/, '') !== transport.config.origin
       || transport.config.clientSpiffeId !== spec.client_spiffe_id
       || transport.config.serverSpiffeId !== spec.server_spiffe_id
       || cfg.recallResources || cfg.recallTargetTypes.length !== 1 || cfg.recallTargetTypes[0] !== 'user') throw new Error('FLEET_SCOPE_MISMATCH');
   const headers = {'X-OpenViking-Account':spec.account_id, 'X-OpenViking-User':spec.user_id};
-  if (spec.key_mode !== 'missing') headers['X-API-Key'] = spec.key_mode === 'invalid' ? 'argus-invalid-synthetic-key' : cfg.apiKey;
+  if (spec.key_mode !== 'missing') headers['X-API-Key'] = spec.key_mode === 'invalid' ? 'argus-invalid-synthetic-key' : key;
   if (spec.forged_user) headers['X-OpenViking-User'] = spec.forged_user;
   let method = 'GET', route = spec.route, body;
   if (spec.query !== undefined) {

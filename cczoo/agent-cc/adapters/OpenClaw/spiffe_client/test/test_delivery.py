@@ -38,6 +38,7 @@ class DeliveryTests(unittest.TestCase):
                 self.assertNotIn('await fetch(', text)
                 self.assertNotIn('=> fetch(', text)
             self.assertIsNotNone(archive.getmember('package/dist/argus-spiffe/transport.mjs'))
+            self.assertIsNotNone(archive.getmember('package/dist/argus-spiffe/config-scope.mjs'))
 
     def test_health_or_another_session_cannot_pass_gateway_write_acceptance(self):
         verifier = module('verify_audit')

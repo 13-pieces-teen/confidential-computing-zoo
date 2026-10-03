@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {createSpiffeTransport} from './transport.mjs';
 import {runBusinessFlow} from './business-flow.mjs';
+import {configuredApiKey, requireConfiguredKey} from './config-scope.mjs';
 
 const [configPath, expectedBase, marker, agentId, sessionKey, captureAttempts, commitAttempts, mode] = process.argv.slice(2);
 let transport;
@@ -24,8 +25,8 @@ try {
   const scope = {origin: expectedBase, account_id: cfg.accountId, user_id: cfg.userId,
     actor_peer_id: actor, agent_id: agentId, session_key: sessionKey,
     client_spiffe_id: transport.config.clientSpiffeId, server_spiffe_id: transport.config.serverSpiffeId};
-  const key = cfg.apiKey;
-  if (!key || key !== process.env.OPENVIKING_API_KEY) throw new Error('API_KEY_SCOPE_MISMATCH');
+  const key = configuredApiKey(cfg.apiKey, configPath);
+  requireConfiguredKey(key, process.env.OPENVIKING_API_KEY);
   // Same parsed tenant configuration, actor and transport for every operation.
   const client = new OpenVikingClient(expectedBase, key, cfg.peer_prefix, 30000,
     cfg.accountId, cfg.userId, undefined, {transport});
