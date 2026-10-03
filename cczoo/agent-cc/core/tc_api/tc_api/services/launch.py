@@ -175,13 +175,33 @@ class LaunchServiceMixin:
             
         return base_name
 
-    def pull_image(self, tlog: TrustedLogAPI, record_id: str, image_url: str, openssl_key: str, target_dir: str, max_retries: int = 3, retry_delay: int = 5) -> bool:
+    def image_archive_refs(self, image_id: str, launch_pth: str, launch_id: Optional[str] = None, workload_id: Optional[str] = None):
+        """
+        Compute the docker-archive destination and the image reference it must
+        load as. Shared by the pull step (which may write the archive directly)
+        and the launch step (which consumes it), so both agree on the naming.
+        """
+        if image_id.startswith("oci:"):
+            local_tag = launch_id or workload_id or f"local-{uuid.uuid4().hex[:12]}"
+            loaded_image_ref = f"tc-api-{local_tag}:latest"
+        else:
+            loaded_image_ref = image_id if ':' in image_id else f"{image_id}:latest"
+        archive_name = loaded_image_ref.replace('/', '_').replace(':', '_')
+        archive_path = os.path.join(launch_pth, f"{archive_name}-image.tar")
+        archive_ref = f"docker-archive:{archive_path}:{loaded_image_ref}"
+        return loaded_image_ref, archive_path, archive_ref
+
+    def pull_image(self, tlog: TrustedLogAPI, record_id: str, image_url: str, openssl_key: str, target_dir: str, max_retries: int = 3, retry_delay: int = 5, dest_ref: Optional[str] = None) -> bool:
 
         source_ref = image_url
         if source_ref and ":" not in source_ref and os.path.isdir(source_ref):
             source_ref = f"oci:{source_ref}"
         source_ref = source_ref.replace("docker.io","docker:/")
-        dest_ref = os.path.join('oci:'+target_dir,'encrypted')
+        # Preserve the image config bytes for non-encrypted registry pulls by
+        # writing the docker-archive destination directly. The docker->oci copy
+        # deterministically rewrites the config JSON, which would change the
+        # loaded image config digest and fail the strict approval comparison.
+        dest_ref = dest_ref or os.path.join('oci:'+target_dir,'encrypted')
         insecure_local_registry = _is_insecure_local_registry_ref(source_ref)
 
         attempt = 0
@@ -344,34 +364,42 @@ class LaunchServiceMixin:
         dockercmd: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         attested_settings: Optional[Dict[str, Any]] = None,
+        pulled_archive_ref: Optional[str] = None,
     ):
         if attested_settings is None:
             attested_settings = workload_profile.profile_settings(metadata, workload_id)
         if attested_settings is not None and dockercmd:
             raise ValueError('attested profile does not accept dockercmd overrides')
-        image_dir = 'oci:' + os.path.join(launch_pth,'encrypted')
-        if image_id.startswith("oci:"):
-            local_tag = launch_id or workload_id or f"local-{uuid.uuid4().hex[:12]}"
-            loaded_image_ref = f"tc-api-{local_tag}:latest"
-        else:
-            loaded_image_ref = image_id if ':' in image_id else f"{image_id}:latest"
-        archive_name = loaded_image_ref.replace('/', '_').replace(':', '_')
-        archive_path = os.path.join(launch_pth, f"{archive_name}-image.tar")
-        archive_ref = f"docker-archive:{archive_path}:{loaded_image_ref}"
-        
+        loaded_image_ref, archive_path, archive_ref = self.image_archive_refs(
+            image_id, launch_pth, launch_id=launch_id, workload_id=workload_id)
+
         try:
-            cmd = [SKOPEO_CMD, "copy", image_dir, archive_ref]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-            
-            if res.returncode == 0:
-                logger.info(f"Success export {loaded_image_ref} archive.")
-                logger.debug(f"CMD: {' '.join(cmd)}")
-                tlog.add_entry(record_id, Entry(key="pullImage", value={"pullImage_cmd": " ".join(cmd), "pullImage_status": "success"}))
+            # When the pull step already wrote the docker-archive directly (no
+            # encrypted oci intermediate), there is nothing to export. The pull
+            # step must have produced exactly the archive this launch step expects.
+            if pulled_archive_ref is not None:
+                if pulled_archive_ref != archive_ref:
+                    raise ValueError(
+                        f"pulled archive {pulled_archive_ref} does not match expected archive {archive_ref}")
+                tlog.add_entry(record_id, Entry(key="export_skipped", value={
+                    "export_skipped": True,
+                    "reason": "pull_image wrote the docker-archive destination directly",
+                    "archive_ref": archive_ref,
+                }))
             else:
-                logger.info("Failed add image.")
-                logger.debug(f"CMD: {' '.join(cmd)}")
-                tlog.add_entry(record_id, Entry(key="pullImage_status", value="failed"))
-                return False
+                image_dir = 'oci:' + os.path.join(launch_pth,'encrypted')
+                cmd = [SKOPEO_CMD, "copy", image_dir, archive_ref]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+                if res.returncode == 0:
+                    logger.info(f"Success export {loaded_image_ref} archive.")
+                    logger.debug(f"CMD: {' '.join(cmd)}")
+                    tlog.add_entry(record_id, Entry(key="pullImage", value={"pullImage_cmd": " ".join(cmd), "pullImage_status": "success"}))
+                else:
+                    logger.info("Failed add image.")
+                    logger.debug(f"CMD: {' '.join(cmd)}")
+                    tlog.add_entry(record_id, Entry(key="pullImage_status", value="failed"))
+                    return False
 
             load_cmd = [DOCKER_CMD, "load", "-i", archive_path]
             load_res = subprocess.run(load_cmd, capture_output=True, text=True, timeout=600)

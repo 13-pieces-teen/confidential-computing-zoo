@@ -1001,12 +1001,29 @@ async def launch_container_async(
                 return
 
         log_proxy_configuration("Launch image pull")
+        # For plain (non-encrypted) registry pulls, write the docker-archive
+        # destination directly to preserve the image config bytes (the
+        # docker->oci copy deterministically rewrites them). Encrypted and oci
+        # sources keep the existing oci intermediate path.
+        pulled_archive_ref = None
+        if (
+            decryption_key is None
+            and (request.image_url or "").startswith("docker")
+            and not (request.image_id or "").startswith("oci:")
+        ):
+            pulled_archive_ref = docker_service.image_archive_refs(
+                request.image_id,
+                launch_path,
+                launch_id=launch_id,
+                workload_id=workload_id,
+            )[2]
         pull_success = docker_service.pull_image(
             tlog,
             record_id,
             image_url=request.image_url,
             target_dir=launch_path,
             openssl_key=decryption_key["opensslKey"] if decryption_key else None,
+            dest_ref=pulled_archive_ref,
         )
         if not pull_success:
             docker_service.update_launch_status(request.user_id, launch_id, "failed", error_message="Image pull failed")
@@ -1044,6 +1061,7 @@ async def launch_container_async(
             workload_id=workload_id,
             launch_id=launch_id,
             dockercmd=request.dockercmd,
+            pulled_archive_ref=pulled_archive_ref,
             **({"metadata": request.metadata, "attested_settings": attested_settings} if attested_settings is not None else {}),
         )
         tlog.add_entry(record_id, Entry(key="launch_instance_ids", value={"launch_instance_ids": instance_ids}))
