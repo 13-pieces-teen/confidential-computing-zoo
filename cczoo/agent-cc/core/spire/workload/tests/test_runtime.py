@@ -1,4 +1,5 @@
 """No hardware claims: exercise deployment rejection boundaries and policy rendering."""
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 import hashlib
@@ -285,6 +286,283 @@ class RuntimeContractTests(unittest.TestCase):
                 runtime.audit_entries(c, [good, good | replacement], required, target_id)
         with self.assertRaises(ValueError):
             runtime.audit_entries(c, [], required, target_id)
+
+
+class RemoteClientVerificationTests(unittest.TestCase):
+    def approved(self):
+        vector = json.loads((ROOT / "testdata/runtime-data.json").read_text())["runtime_data"]
+        return {k: vector[k] for k in ("policy_id", "image_config_digest", "config_digest", "executable")} | {
+            "mr_td": "1" * 96, "rtmr_0": "2" * 96, "rtmr_1": "3" * 96, "rtmr2_baseline": "4" * 96}
+
+    def config(self):
+        c = json.loads((ROOT / "config/environment.example.json").read_text())
+        c["approved"] = self.approved()
+        return c
+
+    def target(self):
+        vector = json.loads((ROOT / "testdata/runtime-data.json").read_text())["runtime_data"]
+        return {k: vector[k] for k in ("agent_id", "boot_id", "config_digest", "config_path", "container_id",
+                                       "executable", "image_config_digest", "launch_id", "listen_port", "pid",
+                                       "policy_id", "start_time", "workload_id")} | {"launch_id": "launch-1"}
+
+    def journal_rows(self, target, serial="123"):
+        fields = " ".join(f"{k}={target[k]}" for k in ("launch_id", "container_id", "pid", "start_time"))
+        fields += " policy=" + target["policy_id"]
+        return [json.dumps({"_SYSTEMD_UNIT": unit + ".service", "_SYSTEMD_INVOCATION_ID": "1" * 32,
+                            "_BOOT_ID": target["boot_id"].replace("-", ""),
+                            "MESSAGE": "2026/09/17 00:00:00 " + message})
+                for unit, message in (
+                    ("argus-helper", "workload subscription " + fields),
+                    ("argus-workload-agent", "workload EAR accepted " + fields + " nonce=" + "A" * 43 + " ear_sha256=" + "a" * 64),
+                    ("argus-helper", f"target SVID published serial={serial} expires=2026-09-17T01:00:00Z " + fields))]
+
+    def probe_setup(self):
+        c = self.config()
+        deployment = runtime.Deployment(c)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        records = Path(temporary.name) / "records"
+        records.mkdir()
+        target = self.target()
+        (records / "target.json").write_text(json.dumps(target))
+        (records / "launch-state.json").write_text(json.dumps({"run_id": "p0-test", "stage": "complete"}))
+        (records / "start.json").write_text(json.dumps({"started_at": "2026-09-17T00:00:00Z"}))
+        deployment.records = records
+        deployment.target = records / "target.json"
+        status_value = {"units": {}, "ready": True, "target_serial": "123", "helper_invocation_id": "1" * 32}
+
+        def command(argv, **kwargs):
+            if Path(argv[0]).name == "argus-workload":
+                return json.dumps(target)
+            return ""
+        with patch.object(runtime, "Deployment", return_value=deployment), \
+                patch.object(runtime, "status", return_value=dict(status_value)), \
+                patch.object(runtime, "protected_file", side_effect=Path), \
+                patch.object(runtime, "run", side_effect=command):
+            request = runtime.probe_request(c, window_seconds=600)
+        return c, deployment, records, target, status_value, request
+
+    def returned(self, request, deployment):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        directory = Path(temporary.name)
+        window_start = datetime.fromisoformat(request["not_before"])
+        checked_at = (window_start + timedelta(seconds=60)).isoformat()
+        output = {"checked_at": checked_at, "client_spiffe_id": deployment.allowed_client_ids[0],
+                  "server_spiffe_id": request["service_identity"], "server_serial": "123",
+                  "http_status": 200, "result": "PASS"}
+        (directory / "probe-output.json").write_text(json.dumps(output))
+        receipt = {"schema_version": 1, "probe_id": request["probe_id"], "run_id": request["run_id"],
+                   "collected_at": checked_at, "probe_output_sha256": "",
+                   "server_identity_seen": request["service_identity"]}
+        self.refresh(directory, output, receipt)
+        return directory, output, receipt
+
+    def refresh(self, directory, output, receipt):
+        (directory / "probe-output.json").write_text(json.dumps(output))
+        receipt["probe_output_sha256"] = hashlib.sha256((directory / "probe-output.json").read_bytes()).hexdigest()
+        (directory / "probe-receipt.json").write_text(json.dumps(receipt))
+        with (directory / "SHA256SUMS").open("w") as stream:
+            for name in ("probe-output.json", "probe-receipt.json"):
+                stream.write(hashlib.sha256((directory / name).read_bytes()).hexdigest() + "  " + name + "\n")
+
+    def run_probe_verify(self, deployment, records, target, status_value, request, directory, *, target_command=None):
+        def command(argv, **kwargs):
+            if Path(argv[0]).name == "argus-workload":
+                return json.dumps(target if target_command is None else target_command())
+            if argv[0] == "journalctl":
+                return "\n".join(self.journal_rows(target))
+            if argv[:2] == ["systemctl", "show"]:
+                return "1" * 32
+            return ""
+        with patch.object(runtime, "Deployment", return_value=deployment), \
+                patch.object(runtime, "status", return_value=dict(status_value)), \
+                patch.object(runtime, "protected_file", side_effect=Path), \
+                patch.object(runtime, "remote_check", return_value={}), \
+                patch.object(runtime, "run", side_effect=command):
+            return runtime.probe_verify(self.config(), request["probe_id"], str(directory))
+
+    def test_preflight_local_still_requires_client_files_remote_defers_them(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binaries = Path(directory)
+            for name in ("spiffe-helper", "argus-agent-config", "argus-workload", "spiffe-authz",
+                         "spiffe-mtls-probe", "argus-tdx-workloadattestor", "argus-spire-evidence-provider"):
+                (binaries / name).touch(mode=0o755)
+            c = self.config()
+            # Deterministic on any host: these credential files never exist here.
+            for k in ("client_cert", "client_key", "client_bundle"):
+                c[k] = str(binaries / ("missing-" + k + ".pem"))
+            target = self.target()
+            deployment = runtime.Deployment(c)
+            deployment.bin = binaries
+
+            def command(argv, **kwargs):
+                if Path(argv[0]).name == "spiffe-helper":
+                    return "0.11.0-argus.1"
+                if Path(argv[0]).name == "argus-workload":
+                    return json.dumps(target)
+                return ""
+
+            with patch.object(runtime, "Deployment", return_value=deployment), \
+                    patch.object(runtime.shutil, "which", return_value="available"), \
+                    patch.object(runtime, "binary_version", return_value="1.15.3"), \
+                    patch.object(runtime, "remote_check", return_value={}), \
+                    patch.object(runtime, "direct_trustee", return_value="PASS"), \
+                    patch.object(runtime, "run", side_effect=command), \
+                    patch.object(runtime.Path, "is_dir", return_value=True), \
+                    self.assertRaises(OSError):
+                runtime.preflight(c)
+            with patch.object(runtime, "Deployment", return_value=deployment), \
+                    patch.object(runtime.shutil, "which", return_value="available"), \
+                    patch.object(runtime, "binary_version", return_value="1.15.3"), \
+                    patch.object(runtime, "remote_check", return_value={}), \
+                    patch.object(runtime, "direct_trustee", return_value="PASS"), \
+                    patch.object(runtime, "protected_file", side_effect=Path), \
+                    patch.object(runtime, "run", side_effect=command), \
+                    patch.object(runtime.Path, "is_dir", return_value=True):
+                result = runtime.preflight(c, client_mode="remote")
+            self.assertEqual(result["client_credentials"], "REMOTE_CLIENT_VERIFICATION")
+
+    def test_probe_request_and_remote_verification_roundtrip(self):
+        c, deployment, records, target, status_value, request = self.probe_setup()
+        self.assertRegex(request["probe_id"], r"[0-9a-f]{32}")
+        self.assertEqual(request["client_verification"], "REMOTE_CLIENT_VERIFICATION")
+        self.assertEqual(request["service_identity"], c["identity"]["target_id"])
+        self.assertEqual(request["allowed_client_ids"], list(deployment.allowed_client_ids))
+        self.assertEqual(request["target_sha256"], hashlib.sha256((records / "target.json").read_bytes()).hexdigest())
+        self.assertEqual(request["instance"]["launch_id"], "launch-1")
+        self.assertEqual(request["target_serial"], "123")
+        self.assertEqual((records / ("probe-request-" + request["probe_id"] + ".json")).stat().st_mode & 0o777, 0o600)
+        directory, output, receipt = self.returned(request, deployment)
+        result = self.run_probe_verify(deployment, records, target, status_value, request, directory)
+        self.assertEqual(result["client_verification"], "REMOTE_CLIENT_VERIFICATION")
+        self.assertEqual(result["client_verification_label"], "远端客户端验证")
+        self.assertFalse(result["local_verify_executed"])
+        self.assertEqual(result["remote"]["server_serial"], "123")
+        self.assertEqual(result["target"], target)
+        self.assertTrue((records / ("probe-verify-" + request["probe_id"] + ".json")).is_file())
+
+    def test_probe_verify_never_passes_without_valid_remote_evidence(self):
+        c, deployment, records, target, status_value, request = self.probe_setup()
+        window_start = datetime.fromisoformat(request["not_before"])
+        empty = tempfile.TemporaryDirectory()
+        self.addCleanup(empty.cleanup)
+        cases = [("no returned artifacts", lambda: Path(empty.name), None, None, "lack SHA256SUMS")]
+
+        def digest_case():
+            directory, output, receipt = self.returned(request, deployment)
+            (directory / "SHA256SUMS").write_text("0" * 64 + "  probe-output.json\n" + "1" * 64 + "  probe-receipt.json\n")
+            return directory
+        cases.append(("digest mismatch", digest_case, None, None, "differs from its digest"))
+
+        def checked_at_case():
+            directory, output, receipt = self.returned(request, deployment)
+            output["checked_at"] = (window_start - timedelta(seconds=60)).isoformat()
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("checked_at outside window", checked_at_case, None, None, "checked_at is outside the agreed validation window"))
+
+        def collected_case():
+            directory, output, receipt = self.returned(request, deployment)
+            receipt["collected_at"] = (window_start - timedelta(seconds=60)).isoformat()
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("collection time outside window", collected_case, None, None, "collection time is outside"))
+
+        def receipt_bind_case():
+            directory, output, receipt = self.returned(request, deployment)
+            receipt["probe_id"] = "0" * 32
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("receipt does not bind", receipt_bind_case, None, None, "does not bind this probe request"))
+
+        def receipt_digest_case():
+            directory, output, receipt = self.returned(request, deployment)
+            receipt["probe_output_sha256"] = "0" * 64
+            (directory / "probe-receipt.json").write_text(json.dumps(receipt))
+            with (directory / "SHA256SUMS").open("w") as stream:
+                for name in ("probe-output.json", "probe-receipt.json"):
+                    stream.write(hashlib.sha256((directory / name).read_bytes()).hexdigest() + "  " + name + "\n")
+            return directory
+        cases.append(("receipt output digest differs", receipt_digest_case, None, None, "receipt output digest differs"))
+
+        def receipt_identity_case():
+            directory, output, receipt = self.returned(request, deployment)
+            receipt["server_identity_seen"] = "spiffe://argus.local/service/other"
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("receipt disagrees with tool output", receipt_identity_case, None, None, "disagrees with the tool output"))
+
+        def client_identity_case():
+            directory, output, receipt = self.returned(request, deployment)
+            output["client_spiffe_id"] = "spiffe://argus.local/agent/other"
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("client identity not allowed", client_identity_case, None, None, "outside the allowed client identities"))
+
+        def server_identity_case():
+            directory, output, receipt = self.returned(request, deployment)
+            output["server_spiffe_id"] = "spiffe://argus.local/service/other"
+            receipt["server_identity_seen"] = output["server_spiffe_id"]
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("wrong service identity", server_identity_case, None, None, "different service identity"))
+
+        def http_case():
+            directory, output, receipt = self.returned(request, deployment)
+            output["http_status"] = 500
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("HTTP result not successful", http_case, None, None, "not a successful response"))
+
+        def result_case():
+            directory, output, receipt = self.returned(request, deployment)
+            output["result"] = "FAIL"
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("tool did not report PASS", result_case, None, None, "did not report PASS"))
+
+        def serial_case():
+            directory, output, receipt = self.returned(request, deployment)
+            output["server_serial"] = "999"
+            self.refresh(directory, output, receipt)
+            return directory
+        cases.append(("peer serial mismatch", serial_case, None, None, "does not match the current target SVID"))
+
+        cases.append(("expired window", lambda: self.returned(request, deployment)[0],
+                      lambda r: {**r, "not_after": (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()},
+                      None, "window expired"))
+        cases.append(("SVID rotated in window", lambda: self.returned(request, deployment)[0], None,
+                      lambda s: s.update({"target_serial": "456"}), "rotated within the validation window"))
+        cases.append(("Helper invocation changed", lambda: self.returned(request, deployment)[0], None,
+                      lambda s: s.update({"helper_invocation_id": "2" * 32}), "Helper invocation changed"))
+        cases.append(("workload not ready", lambda: self.returned(request, deployment)[0], None,
+                      lambda s: s.update({"ready": False}), "not ready for remote verification"))
+        for name, build, request_mutation, status_mutation, expected in cases:
+            with self.subTest(case=name):
+                directory = build()
+                mutated = dict(request)
+                if request_mutation is not None:
+                    mutated = request_mutation(mutated)
+                (records / ("probe-request-" + request["probe_id"] + ".json")).write_text(json.dumps(mutated))
+                current_status = dict(status_value)
+                if status_mutation is not None:
+                    status_mutation(current_status)
+                with self.assertRaisesRegex(ValueError, expected):
+                    self.run_probe_verify(deployment, records, target, current_status, request, directory)
+
+    def test_probe_verify_rejects_instance_and_fact_changes_and_missing_request(self):
+        c, deployment, records, target, status_value, request = self.probe_setup()
+        directory, output, receipt = self.returned(request, deployment)
+        (records / "target.json").write_text(json.dumps(dict(target, pid="999")))
+        with self.assertRaisesRegex(ValueError, "target instance changed"):
+            self.run_probe_verify(deployment, records, target, status_value, request, directory)
+        (records / "target.json").write_text(json.dumps(target))
+        with self.assertRaisesRegex(ValueError, "instance facts changed"):
+            self.run_probe_verify(deployment, records, target, status_value, request, directory,
+                                  target_command=lambda: dict(target, pid="999"))
+        with self.assertRaises(OSError):
+            self.run_probe_verify(deployment, records, target, status_value, {**request, "probe_id": "f" * 32}, directory)
 
 
 if __name__ == "__main__":

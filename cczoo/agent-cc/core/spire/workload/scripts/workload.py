@@ -3,7 +3,7 @@
 import argparse
 from deployment import Deployment, PROFILE, SERVICE_UNITS, render_services
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import http.client
 import json
@@ -19,6 +19,7 @@ import subprocess
 import sys
 import time
 import tempfile
+import uuid
 from launch_state import execute as execute_launch, operation_lock, digest
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, ProxyHandler
@@ -297,7 +298,7 @@ def direct_trustee(c):
     return "HTTPS_AND_ATTESTATION_ROUTE_PASS"
 
 
-def preflight(c):
+def preflight(c, client_mode="local"):
     d = Deployment(c)
     baseline(c)
     for tool in ("docker", "nsenter", "systemctl", "openssl", "timeout"):
@@ -320,8 +321,17 @@ def preflight(c):
                 "config_path": d.workload["config_path"], "listen_port": str(d.workload["listen_port"])}
     if any(t[k] != value for k, value in expected.items()):
         raise ValueError("registered target differs from deployment identity/configuration")
-    for k in ("client_cert", "client_key", "client_bundle"):
-        protected_file(c[k])
+    # Remote client verification keeps the client SVID/key on the client host;
+    # every other target binding, version, Entry, Trustee, policy and readiness
+    # check remains. Local mode keeps the original strict credential checks.
+    if client_mode == "remote":
+        result["client_credentials"] = "REMOTE_CLIENT_VERIFICATION"
+    elif client_mode == "local":
+        for k in ("client_cert", "client_key", "client_bundle"):
+            protected_file(c[k])
+        result["client_credentials"] = "LOCAL_VERIFICATION"
+    else:
+        raise ValueError("client_mode must be local or remote")
     # Check existing Agent version too when this stack is already running.
     pid = run(["systemctl", "show", "argus-workload-agent", "--property=MainPID", "--value"], check=False)
     if pid.isdigit() and int(pid) > 0:
@@ -421,8 +431,8 @@ def register(c):
     return t
 
 
-def start(c):
-    record = preflight(c)
+def start(c, client_mode="local"):
+    record = preflight(c, client_mode)
     record["started_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     # Do not reuse a socket or Agent data directory owned by a running process.
     for name in ("spire-agent", "argus-spire-evidence-provider"):
@@ -561,11 +571,186 @@ def verify(c):
             "appraisal_log": str(d.records / "last-verify-journal.jsonl")}
 
 
+def parse_utc(value):
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("timestamp must carry an explicit UTC offset")
+    return parsed
+
+
+def file_sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+PROBE_OUTPUT_FIELDS = ("checked_at", "client_spiffe_id", "server_spiffe_id", "server_serial", "http_status", "result")
+
+
+def probe_request(c, window_seconds=1800):
+    """Issue a protected remote-client probe request bound to the current instance.
+
+    The client host executes the exact probe tool with live guest credentials and
+    returns non-secret artifacts. This does not execute or claim the local verify.
+    """
+    if not 300 <= window_seconds <= 86400:
+        raise ValueError("probe window must be between 300 and 86400 seconds")
+    d = Deployment(c)
+    s = status(c)
+    if not s["ready"]:
+        raise ValueError("remote probe request requires a ready target identity")
+    target = json.loads(run([d.bin / "argus-workload", "-action", "check", "-registration", d.target]))
+    state = d.records / "launch-state.json"
+    if state.is_file():
+        run_id = json.loads(protected_file(state).read_text()).get("run_id")
+    else:
+        run_id = json.loads(protected_file(d.run / "launch.json").read_text()).get("run_id")
+    if not isinstance(run_id, str) or not run_id:
+        raise ValueError("launch state does not provide the experiment run ID")
+    now = datetime.now(timezone.utc)
+    request = {
+        "schema_version": 1,
+        "client_verification": "REMOTE_CLIENT_VERIFICATION",
+        "probe_id": uuid.uuid4().hex,
+        "run_id": run_id,
+        "issued_at": now.isoformat(),
+        "not_before": now.isoformat(),
+        "not_after": (now + timedelta(seconds=window_seconds)).isoformat(),
+        "window_seconds": window_seconds,
+        "service_identity": d.identity["target_id"],
+        "business_url": c["business_url"],
+        "allowed_client_ids": list(d.allowed_client_ids),
+        "probe_tool": {
+            "name": "spiffe-mtls-probe",
+            "usage": "spiffe-mtls-probe -url <business_url> -cert <client live SVID> -key <client live key> -bundle <client trust bundle> -server-id <service_identity>",
+            "required_output_fields": list(PROBE_OUTPUT_FIELDS),
+        },
+        "return_artifacts": ["probe-output.json", "probe-receipt.json", "SHA256SUMS"],
+        "receipt_schema": {
+            "schema_version": 1, "probe_id": "<echo of request probe_id>", "run_id": "<echo of request run_id>",
+            "collected_at": "<ISO-8601 UTC inside the validation window>",
+            "probe_output_sha256": "<SHA-256 of probe-output.json>",
+            "server_identity_seen": "<server_spiffe_id from the tool output>",
+        },
+        "instance": {k: target[k] for k in ("launch_id", "container_id", "pid", "start_time", "boot_id",
+                                             "policy_id", "image_config_digest", "config_digest")},
+        "target_sha256": file_sha256(d.target),
+        "helper_invocation_id": s["helper_invocation_id"],
+        "target_serial": s["target_serial"],
+    }
+    path = d.records / ("probe-request-" + request["probe_id"] + ".json")
+    write_json(path, request)
+    path.chmod(0o600)
+    return request
+
+
+def probe_verify(c, probe_id, result_dir):
+    """Verify the non-secret probe artifacts returned by the remote client host.
+
+    A PASS here is explicitly REMOTE_CLIENT_VERIFICATION: no result, an expired
+    result, a wrong client/server identity, a wrong peer serial or a changed
+    instance never passes, and the local verify command is not claimed.
+    """
+    d = Deployment(c)
+    request_path = d.records / ("probe-request-" + probe_id + ".json")
+    request = json.loads(protected_file(request_path).read_text())
+    if request.get("schema_version") != 1 or request.get("probe_id") != probe_id or \
+            request.get("client_verification") != "REMOTE_CLIENT_VERIFICATION":
+        raise ValueError("probe request is not a valid remote-client verification request")
+    directory = Path(result_dir)
+    listed = {}
+    try:
+        lines = (directory / "SHA256SUMS").read_text().splitlines()
+    except OSError:
+        raise ValueError("returned probe artifacts lack SHA256SUMS")
+    for line in lines:
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._-]+)", line)
+        if not match:
+            raise ValueError("returned SHA256SUMS has an invalid entry")
+        if match[2] in listed:
+            raise ValueError("returned SHA256SUMS lists a file twice")
+        listed[match[2]] = match[1]
+    actual = {p.name: p for p in directory.iterdir() if p.is_file() and p.name != "SHA256SUMS"}
+    if set(listed) != set(actual):
+        raise ValueError("returned probe files do not match the digest manifest")
+    for name, digest in listed.items():
+        if file_sha256(actual[name]) != digest:
+            raise ValueError(f"returned probe file differs from its digest: {name}")
+    output = json.loads((directory / "probe-output.json").read_text())
+    receipt = json.loads((directory / "probe-receipt.json").read_text())
+    now = datetime.now(timezone.utc)
+    not_before, not_after = parse_utc(request["not_before"]), parse_utc(request["not_after"])
+    if now > not_after:
+        raise ValueError("remote probe validation window expired; issue a new probe-request and re-agree the window")
+    if not not_before <= parse_utc(output["checked_at"]) <= not_after:
+        raise ValueError("remote probe checked_at is outside the agreed validation window")
+    if not not_before <= parse_utc(receipt.get("collected_at", "")) <= not_after:
+        raise ValueError("remote probe collection time is outside the agreed validation window")
+    if receipt.get("schema_version") != 1 or receipt.get("probe_id") != probe_id or \
+            receipt.get("run_id") != request["run_id"]:
+        raise ValueError("remote probe receipt does not bind this probe request")
+    if receipt.get("probe_output_sha256") != file_sha256(directory / "probe-output.json"):
+        raise ValueError("remote probe receipt output digest differs")
+    if receipt.get("server_identity_seen") != output.get("server_spiffe_id"):
+        raise ValueError("remote probe receipt disagrees with the tool output")
+    if output.get("client_spiffe_id") not in request["allowed_client_ids"]:
+        raise ValueError("remote probe client identity is outside the allowed client identities")
+    if output.get("server_spiffe_id") != request["service_identity"]:
+        raise ValueError("remote probe observed a different service identity")
+    if not isinstance(output.get("http_status"), int) or not 200 <= output["http_status"] <= 299:
+        raise ValueError("remote probe HTTP result is not a successful response")
+    if output.get("result") != "PASS":
+        raise ValueError("remote probe tool did not report PASS")
+    s = status(c)
+    if not s["ready"]:
+        raise ValueError("workload is not ready for remote verification")
+    if s["helper_invocation_id"] != request["helper_invocation_id"]:
+        raise ValueError("Helper invocation changed since the probe request was issued")
+    if s["target_serial"] != request["target_serial"]:
+        raise ValueError("target SVID rotated within the validation window; agree a new window, do not adjust old results")
+    if output["server_serial"] != s["target_serial"]:
+        raise ValueError("remote probe peer serial does not match the current target SVID")
+    target = json.loads(run([d.bin / "argus-workload", "-action", "check", "-registration", d.target]))
+    if file_sha256(d.target) != request["target_sha256"]:
+        raise ValueError("target instance changed since the probe request was issued")
+    if any(target.get(k) != v for k, v in request["instance"].items()):
+        raise ValueError("target instance facts changed since the probe request was issued")
+    started = json.loads(protected_file(d.records / "start.json").read_text())["started_at"]
+    started_epoch = calendar.timegm(time.strptime(started, "%Y-%m-%dT%H:%M:%SZ"))
+    journal = run(["journalctl", "-u", "argus-tdx-provider", "-u", "argus-workload-agent", "-u", "argus-helper",
+                   "--since", f"@{started_epoch}", "--no-pager", "-o", "json"])
+    appraisal = correlated_appraisal(journal, target, output["server_serial"], s["helper_invocation_id"])
+    if helper_invocation() != s["helper_invocation_id"] or status(c) != s:
+        raise ValueError("workload changed during remote verification; retry with the current instance")
+    journal_path = d.records / ("probe-verify-journal-" + probe_id + ".jsonl")
+    journal_path.write_text(journal)
+    journal_path.chmod(0o600)
+    result = {"client_verification": "REMOTE_CLIENT_VERIFICATION",
+              "client_verification_label": "远端客户端验证",
+              "local_verify_executed": False,
+              "probe_id": probe_id, "run_id": request["run_id"],
+              "validation_window": {"not_before": request["not_before"], "not_after": request["not_after"]},
+              "remote": {k: output[k] for k in PROBE_OUTPUT_FIELDS},
+              "returned_artifacts": {"probe_output_sha256": file_sha256(directory / "probe-output.json"),
+                                     "probe_receipt_sha256": file_sha256(directory / "probe-receipt.json"),
+                                     "digest_manifest": "MATCH"},
+              "target": target, "server": remote_check(c), "appraisal": appraisal,
+              "helper_invocation_id": s["helper_invocation_id"],
+              "evidence_kind": "COMPANY_REAL_TDX_RUN",
+              "appraisal_log": str(journal_path),
+              "note": "远端客户端验证：客户端在 guest 内以实时凭据执行 spiffe-mtls-probe 并回传非秘密原件；本地 verify 未执行，本结果不声称等价于本地 verify。"}
+    write_json(d.records / ("probe-verify-" + probe_id + ".json"), result)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["render", "preflight", "launch", "resume-launch", "register", "start", "status", "stop", "verify", "manifest", "server-check", "apply-entries"])
+    parser.add_argument("action", choices=["render", "preflight", "launch", "resume-launch", "register", "start", "status", "stop", "verify", "manifest", "server-check", "apply-entries", "probe-request", "probe-verify"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--launch-id", help="known server operation ID; only valid with resume-launch")
+    parser.add_argument("--client-mode", choices=("local", "remote"), default="local",
+                        help="client verification mode for preflight/start; remote defers the business probe to the client host")
+    parser.add_argument("--probe-id", help="probe request ID; required with probe-verify")
+    parser.add_argument("--probe-result", help="directory holding returned probe-output.json, probe-receipt.json and SHA256SUMS; required with probe-verify")
+    parser.add_argument("--probe-window", type=int, default=1800, help="probe validation window in seconds; only valid with probe-request")
     args = parser.parse_args()
     if sys.platform != "linux" or os.geteuid() != 0:
         raise ValueError("run this lifecycle tool as root on the Linux company host")
@@ -573,9 +758,27 @@ def main():
     d = Deployment(c)
     if args.launch_id is not None and args.action != "resume-launch":
         parser.error("--launch-id requires resume-launch")
-    functions = {"render": render, "preflight": preflight, "launch": launch, "register": register, "start": start,
+    if args.client_mode == "remote" and args.action not in ("preflight", "start"):
+        parser.error("--client-mode remote is only valid with preflight or start; remote acceptance uses probe-request/probe-verify")
+    if args.action == "probe-request" and not 300 <= args.probe_window <= 86400:
+        parser.error("--probe-window must be in [300, 86400] seconds")
+    if args.action != "probe-request" and args.probe_window != 1800:
+        parser.error("--probe-window is only valid with probe-request")
+    if args.probe_id is not None and args.action != "probe-verify":
+        parser.error("--probe-id requires probe-verify")
+    if args.probe_result is not None and args.action != "probe-verify":
+        parser.error("--probe-result requires probe-verify")
+    if args.action == "probe-verify":
+        if args.probe_id is None or not re.fullmatch(r"[0-9a-f]{32}", args.probe_id):
+            parser.error("probe-verify requires --probe-id as 32 lowercase hex characters")
+        if args.probe_result is None:
+            parser.error("probe-verify requires --probe-result")
+    functions = {"render": render, "preflight": lambda c: preflight(c, args.client_mode),
+                 "launch": launch, "register": register, "start": lambda c: start(c, args.client_mode),
                  "status": status, "stop": stop, "verify": verify, "server-check": server_check,
                  "resume-launch": lambda c: resume_launch(c, args.launch_id),
+                 "probe-request": lambda c: probe_request(c, args.probe_window),
+                 "probe-verify": lambda c: probe_verify(c, args.probe_id, args.probe_result),
                  "manifest": runtime_manifest, "apply-entries": lambda c: server_check(c, apply=True)}
     if args.action in ("status", "server-check", "manifest"):
         result = functions[args.action](c)
