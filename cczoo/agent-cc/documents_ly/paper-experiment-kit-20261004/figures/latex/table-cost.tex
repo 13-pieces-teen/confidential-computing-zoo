@@ -1,0 +1,42 @@
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Supporting cost measurements. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Deliberate holds and offline verification are reported separately.}
+\label{tab:argus-cost}
+\textit{Normal access: outcomes and resources}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y@{}}
+\toprule
+\textbf{Mode} & \textbf{TLS} & \textbf{Valid / attempted} & \textbf{R / F / T / I} & \textbf{Valid requests/s} & \textbf{CPU (\% of one core)} & \textbf{RSS (MiB)} \\
+\midrule
+Full & New & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Full & Reuse & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Native & New & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Native & Reuse & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\medskip\textit{Full Argus: directly measured intervals}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y@{}}
+\toprule
+\textbf{Measured interval} & \textbf{Establishment (ms)} & \textbf{Recovery (ms)} \\
+\midrule
+Workload Quote & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Remote appraisal & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Identity delivery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Ingress readiness & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+First legal access & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Deliberate barrier hold & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\medskip\textit{Offline history processing}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y Y Y@{}}
+\toprule
+\textbf{History case} & \textbf{Source} & \textbf{Records} & \textbf{Bytes} & \textbf{Offline verification (ms)} \\
+\midrule
+Eligible recorded history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\smallskip\footnotesize Numeric summaries are median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Deliberate holds and offline timings remain separate from online processing cost; intervals are not summed.
+\end{table*}

@@ -1,0 +1,33 @@
+% Copy this bundle to argus-figures/ beside the manuscript main.tex.
+% Required packages: booktabs,tabularx,array,xcolor,graphicx.
+% Reuse an existing Y column definition, or add once in the preamble:
+% \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+% Input this file in the preamble; call the macros at the indicated sections.
+
+\newcommand{\ArgusAdmissionResults}{\input{argus-figures/latex/table-admission.tex}}
+\newcommand{\ArgusTaskResults}{\input{argus-figures/latex/table-task.tex}}
+\newcommand{\ArgusReuseCounts}{\input{argus-figures/latex/table-reuse.tex}}
+\newcommand{\ArgusSupportingCosts}{\input{argus-figures/latex/table-cost.tex}}
+
+\newcommand{\ArgusReceiverResults}{%
+\begin{figure*}[t]
+\centering
+\includegraphics[page=2,width=\textwidth]{argus-figures/argus-experiment-templates.pdf}
+\caption{Receipt control after binding and supervision failures. Panels (a) and (b) show per-run cumulative receipt of distinct facts first released after the fault. Panels (c) and (d) show ingress-closure delay and receipt at the observation end. Each dot is one run; hollow triangles denote right-censored closure times. Gaps indicate incomplete observation coverage.}
+\label{fig:argus-receiver-results}
+\ifdefined\Description\Description{Two receipt traces for targeted closure and watchdog ablations, followed by per-run closure delays and received-fact counts.}\fi
+\end{figure*}}
+
+\newcommand{\ArgusAccessCostResults}{%
+\begin{figure*}[t]
+\centering
+\includegraphics[page=4,width=\textwidth]{argus-figures/argus-experiment-templates.pdf}
+\caption{Normal-access cost under new and reused TLS connections. Dots are per-run p50 and p95 latencies for expected-allow requests with valid business responses; short horizontal lines show medians across runs. Both modes use the same API, data, permissions, and offered load. Supplementary Table~\ref{tab:argus-cost} reports request outcomes and resources.}
+\label{fig:argus-access-cost-results}
+\ifdefined\Description\Description{Two panels compare Full Argus and native SPIRE using per-run p50 and p95 latencies, separately for new and reused TLS connections.}\fi
+\end{figure*}}
+
+% Main text: 6.2 \ArgusAdmissionResults; 6.3 \ArgusReceiverResults;
+% 6.4 \ArgusTaskResults; 6.5 \ArgusAccessCostResults.
+% Supplement: \ArgusReuseCounts then \ArgusSupportingCosts.
+% Set supplementary table numbering in the supplement, not in these fragments.

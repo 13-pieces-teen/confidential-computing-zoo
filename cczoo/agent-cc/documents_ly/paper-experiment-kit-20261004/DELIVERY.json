@@ -1,0 +1,14 @@
+{
+  "kind": "paper_materials_only",
+  "created_utc": "2026-10-04T12:02:22.103403+00:00",
+  "branch": "codex/argus-paper-kit-20261004",
+  "base_commit": "a05614636308dd60796b1f4fd3c993d79fdb6e7b",
+  "runtime_code_changed": false,
+  "runtime_deployment_performed": false,
+  "e4_profile_adaptation": "verify or implement on IP2 current code separately",
+  "data_observations": 0,
+  "validation_tests_passed": 7,
+  "portable_render": "PASS",
+  "rendered_pdf_matches_reviewed_preview": true,
+  "files_sha256_normalization": "text files LF; binaries unchanged; Git archive checked before push"
+}

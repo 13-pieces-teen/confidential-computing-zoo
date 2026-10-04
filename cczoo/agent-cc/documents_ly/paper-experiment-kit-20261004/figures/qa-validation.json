@@ -1,0 +1,13 @@
+{
+  "artifact": "argus-experiment-templates.pdf",
+  "pdf_sha256": "709a8225a9691f11f0384e692c60d7b96f57d1e435a8f391b3ce1f897ab4bcc3",
+  "pdf_pages": 6,
+  "visual_review": "All six pages of the latest PDF rendered and inspected; no clipping or overlap observed.",
+  "data_validation": "PASS",
+  "validation_tests_passed": 7,
+  "observed_records": 0,
+  "synthetic_measurements_used": false,
+  "standalone_latex_compilation": "UNAVAILABLE",
+  "latex_diagnostic": "Unable to find standard directories for platform",
+  "pdf_generation": "PASS via Matplotlib, ReportLab and pypdf; independent of the LaTeX compiler"
+}

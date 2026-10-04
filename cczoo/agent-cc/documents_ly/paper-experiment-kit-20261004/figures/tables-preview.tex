@@ -1,0 +1,113 @@
+\documentclass[10pt]{article}
+\usepackage[margin=18mm]{geometry}
+\usepackage{booktabs,tabularx,array,xcolor,graphicx}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\begin{document}
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Admission across record states. Online TDX observations and offline policy diagnostics are reported separately. Counts retain unknown and unexecuted cases; the first rejecting layer identifies the responsible mechanism.}
+\label{tab:argus-admission}
+\textit{Online TDX comparison}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y@{}}
+\toprule
+\textbf{Lifecycle state} & \textbf{Full A/D/U} & \textbf{Native A/D/U} & \textbf{Business access Full / native} & \textbf{Current checks Full / native} & \textbf{First rejection Full / native} \\
+\midrule
+A. Legal admission & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+B. Record unconfirmed & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+C. Record confirmed & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\medskip\textit{Offline history diagnostics}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y@{}}
+\toprule
+\textbf{Policy case} & \textbf{Evidence source} & \textbf{Verifier decision} \\
+\midrule
+Eligible recorded history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\smallskip\footnotesize Planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Offline cases retain their evidence type.
+\end{table*}
+\clearpage
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Cross-session task continuation with Full Argus. Each row is a six-step task. Verified readback covers all confirmed original proposals; correct continuation and complete task success are separate outcomes. Both recovery intervals start at re-admission.}
+\label{tab:argus-task}
+\begin{tabularx}{\linewidth}{@{}l l c c c c c c Y Y Y Y@{}}
+\toprule
+\textbf{Pair} & \textbf{Condition} & \textbf{S1} & \textbf{S2} & \textbf{S3} & \textbf{S4} & \textbf{S5} & \textbf{S6} & \textbf{Readback k / K} & \textbf{Correct continuation} & \textbf{Complete task} & \textbf{Access / continue from re-admission (s)} \\
+\midrule
+1 & Healthy & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & N/A & \textcolor{gray}{TBD} & N/A \\
+1 & Recovery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+2 & Healthy & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & N/A & \textcolor{gray}{TBD} & N/A \\
+2 & Recovery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+3 & Healthy & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & N/A & \textcolor{gray}{TBD} & N/A \\
+3 & Recovery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}\par\smallskip\footnotesize C correct; X incorrect; R rejected; T timeout; U unknown; N not dispatched. k/K: verified readback / all confirmed proposals. TBD: data pending.
+\end{table*}
+\clearpage
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Identity reuse during healthy service windows. Quote generation, subscriptions, distinct SVIDs, and new admissions are counted separately within the reported observation window.}
+\label{tab:argus-reuse}
+\begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y Y@{}}
+\toprule
+\textbf{Mode} & \textbf{Window (s)} & \textbf{Node Quotes} & \textbf{Workload Quotes} & \textbf{Identity subscriptions} & \textbf{Node SVIDs} & \textbf{Workload SVIDs} & \textbf{New admissions} \\
+\midrule
+Full Argus & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Native SPIRE & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}\par\smallskip\footnotesize Counts refer to each actual healthy window. SVID counts use distinct certificate serials; Quote counts require attestation originals. TBD is not zero.
+\end{table*}
+\clearpage
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\caption{Supporting cost measurements. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Deliberate holds and offline verification are reported separately.}
+\label{tab:argus-cost}
+\textit{Normal access: outcomes and resources}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y@{}}
+\toprule
+\textbf{Mode} & \textbf{TLS} & \textbf{Valid / attempted} & \textbf{R / F / T / I} & \textbf{Valid requests/s} & \textbf{CPU (\% of one core)} & \textbf{RSS (MiB)} \\
+\midrule
+Full & New & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Full & Reuse & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Native & New & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Native & Reuse & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\medskip\textit{Full Argus: directly measured intervals}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y@{}}
+\toprule
+\textbf{Measured interval} & \textbf{Establishment (ms)} & \textbf{Recovery (ms)} \\
+\midrule
+Workload Quote & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Remote appraisal & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Identity delivery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Ingress readiness & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+First legal access & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Deliberate barrier hold & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\medskip\textit{Offline history processing}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}Y Y Y Y Y@{}}
+\toprule
+\textbf{History case} & \textbf{Source} & \textbf{Records} & \textbf{Bytes} & \textbf{Offline verification (ms)} \\
+\midrule
+Eligible recorded history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+\bottomrule
+\end{tabularx}
+\par\smallskip\footnotesize Numeric summaries are median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Deliberate holds and offline timings remain separate from online processing cost; intervals are not summed.
+\end{table*}
+\end{document}

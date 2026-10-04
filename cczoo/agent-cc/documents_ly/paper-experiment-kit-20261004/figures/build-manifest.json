@@ -1,0 +1,32 @@
+{
+  "status": "GENERATED",
+  "pdf_pages": 6,
+  "table_layout": [
+    {
+      "title": "Table A. Admission evidence",
+      "width_pt": 507.59999999999997,
+      "height_pt": 263.2
+    },
+    {
+      "title": "Table B. Agent task continuation",
+      "width_pt": 507.59999999999997,
+      "height_pt": 215.2
+    },
+    {
+      "title": "Table S1. Reuse and attestation",
+      "width_pt": 507.59999999999997,
+      "height_pt": 126.2
+    },
+    {
+      "title": "Table S2. Supporting cost evidence",
+      "width_pt": 507.59999999999997,
+      "height_pt": 448.29999999999995
+    }
+  ],
+  "data_sha256": "808d9f0b4d8d660d10030e4648d1c4dbef7ccc722c27e8f0c960585f2bd510f7",
+  "observed_records": 0,
+  "validation_errors": [],
+  "input_missing_values_render_as": "TBD",
+  "synthetic_measurements_used": false,
+  "pdf_sha256": "709a8225a9691f11f0384e692c60d7b96f57d1e435a8f391b3ce1f897ab4bcc3"
+}
