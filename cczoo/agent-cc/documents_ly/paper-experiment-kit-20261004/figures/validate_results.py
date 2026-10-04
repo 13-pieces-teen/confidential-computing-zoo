@@ -9,7 +9,9 @@ def validate(d):
     errors=[]
     def need(ok,msg):
         if not ok: errors.append(msg)
-    need(d.get('schema')=='argus.paper-figures.v1','unsupported schema')
+    need(d.get('schema')=='argus.paper-figures.v2','unsupported schema')
+    need(d.get('design',{}).get('evidence_mode')=='controlled_prototype',
+         'design: controlled_prototype evidence mode required')
     expected={
         'admission':{(p,a,s) for p in range(1,4) for a in ('full','native') for s in ('A','B','C')},
         'receiver':{(p,f,a) for p in range(1,4) for f,aa in (('config',('full','no_close')),('freeze',('full','no_watchdog'))) for a in aa},
@@ -29,14 +31,18 @@ def validate(d):
             label=f'{kind}[{i}]'
             status=r.get('status')
             need(status in STATUSES,label+': invalid status')
+            need(r.get('evidence_kind')==('offline' if kind=='history' else 'controlled_prototype'),
+                 label+': evidence kind mismatch; real TDX archives belong in TDX-ARCHIVE-INDEX.json')
             if status!='pending':
                 need(bool(r.get('run_id')) and bool(r.get('evidence_ref')),label+': run_id and evidence_ref required')
+                need(bool(r.get('environment_id')) and bool(r.get('runtime_revision')),
+                     label+': environment_id and runtime_revision required')
             for k,v in r.items():
                 if isinstance(v,(int,float)) and k not in ('pair',):
                     need(math.isfinite(v),label+': nonfinite '+k)
                     if k not in ('detected_s','closed_s'): need(v>=0,label+': negative '+k)
             if status=='pending':
-                meta={'pair','arm','stage','case','fault','condition','connection','status','run_id','evidence_ref','steps','trace'}
+                meta={'pair','arm','stage','case','fault','condition','connection','status','run_id','evidence_ref','steps','trace','evidence_kind','environment_id','runtime_revision'}
                 need(all(v is None for k,v in r.items() if k not in meta),label+': pending record contains observations')
                 need(not r.get('trace'),label+': pending record has trace')
                 need(all(s.get('outcome') is None and s.get('phase') is None and s.get('proposal_state') is None for s in r.get('steps',[])),label+': pending record has step observations')
@@ -92,6 +98,13 @@ def validate(d):
             if r.get('p95_ms') is not None:need(r.get('valid',0)>0,label+': percentiles need valid requests')
             if r.get('duration_s') is not None:need(r['duration_s']>0,label+': measurement window must be positive')
             if r.get('cpu_one_core_pct') is not None or r.get('rss_mib') is not None:need(bool(r.get('component_scope')),label+': resource component scope required')
+    for i,r in enumerate(d.get('reuse',[])):
+        need(not ({'node_quotes','workload_quotes'} & r.keys()),
+             f'reuse[{i}]: controlled backend requests must not be labelled hardware Quote counts')
+    for i,r in enumerate(d.get('stage_costs',[])):
+        need(r.get('stage') in ('evidence','appraisal','identity','ingress','first_access','deliberate_hold'),
+             f'stage_costs[{i}]: use software evidence stage, not hardware Quote timing')
+        need(r.get('phase') in ('admission','recovery'),f'stage_costs[{i}]: invalid phase')
     return errors
 
 if __name__=='__main__':

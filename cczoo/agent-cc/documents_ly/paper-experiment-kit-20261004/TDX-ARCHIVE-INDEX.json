@@ -1,0 +1,30 @@
+{
+  "schema": "argus.tdx-archive-index.v1",
+  "evidence_kind": "real_tdx_archive",
+  "merge_into_controlled_statistics": false,
+  "source": "user-provided closure receipts; hosts must recheck originals",
+  "records": [
+    {
+      "record_id": "p0-final-closure-20261003",
+      "reported_result": "PASS",
+      "verification_status": "pending_archive_recheck",
+      "runtime_revision": null,
+      "evidence_ref": "/root/argus-ip1-handoff/p0-20261002t1521z/p0-final-closure-20261003/",
+      "sha256": null,
+      "scope": "original P0/P0-D integration and permission checks"
+    },
+    {
+      "record_id": "41aaef740d1944f4a8718931b38e2783",
+      "reported_result": "CLOSED/PASS",
+      "verification_status": "pending_archive_recheck",
+      "runtime_revision": null,
+      "evidence_ref": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/",
+      "archive_sha256": "69b303512fb900060f9017538177c527fae4a08732fc0968a7ab4aaddfd87450",
+      "scope": "original A3 admission and correlated client access with original publication semantics"
+    }
+  ],
+  "excluded_from_completed_results": [
+    "old Full B/C not formed or not run",
+    "new guest bootstrap/kernel diagnostics"
+  ]
+}

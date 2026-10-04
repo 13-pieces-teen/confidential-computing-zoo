@@ -7,9 +7,9 @@
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Admission across record states. Online TDX observations and offline policy diagnostics are reported separately. Counts retain unknown and unexecuted cases; the first rejecting layer identifies the responsible mechanism.}
+\caption{Admission under controlled evidence availability. The prototype executes real admission, identity and ingress components; offline history diagnostics are separate. Counts retain unknown and unexecuted cases. This comparison does not measure Docker transaction recovery.}
 \label{tab:argus-admission}
-\textit{Online TDX comparison}\par\smallskip
+\textit{Controlled-prototype comparison}\par\smallskip
 \begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y@{}}
 \toprule
 \textbf{Lifecycle state} & \textbf{Full A/D/U} & \textbf{Native A/D/U} & \textbf{Business access Full / native} & \textbf{Current checks Full / native} & \textbf{First rejection Full / native} \\
@@ -29,14 +29,14 @@ Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
 \end{tabularx}
-\par\smallskip\footnotesize Planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Offline cases retain their evidence type.
+\par\smallskip\footnotesize Controlled prototype; planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Historical TDX integration is archived separately.
 \end{table*}
 \clearpage
 \begin{table*}[t]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Cross-session task continuation with Full Argus. Each row is a six-step task. Verified readback covers all confirmed original proposals; correct continuation and complete task success are separate outcomes. Both recovery intervals start at re-admission.}
+\caption{Cross-session task continuation in the controlled prototype with Full Argus. Each row is a six-step task. Verified readback covers all confirmed original proposals; correct continuation and complete task success are separate outcomes. Both recovery intervals start at re-admission.}
 \label{tab:argus-task}
 \begin{tabularx}{\linewidth}{@{}l l c c c c c c Y Y Y Y@{}}
 \toprule
@@ -56,23 +56,23 @@ Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Identity reuse during healthy service windows. Quote generation, subscriptions, distinct SVIDs, and new admissions are counted separately within the reported observation window.}
+\caption{Identity reuse in the controlled prototype. Evidence-backend requests, subscriptions, distinct SVIDs and new admissions are counted separately. Backend requests do not represent hardware Quote generation.}
 \label{tab:argus-reuse}
 \begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y Y@{}}
 \toprule
-\textbf{Mode} & \textbf{Window (s)} & \textbf{Node Quotes} & \textbf{Workload Quotes} & \textbf{Identity subscriptions} & \textbf{Node SVIDs} & \textbf{Workload SVIDs} & \textbf{New admissions} \\
+\textbf{Mode} & \textbf{Window (s)} & \textbf{Node evidence requests} & \textbf{Workload evidence requests} & \textbf{Identity subscriptions} & \textbf{Node SVIDs} & \textbf{Workload SVIDs} & \textbf{New admissions} \\
 \midrule
 Full Argus & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Native SPIRE & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
-\end{tabularx}\par\smallskip\footnotesize Counts refer to each actual healthy window. SVID counts use distinct certificate serials; Quote counts require attestation originals. TBD is not zero.
+\end{tabularx}\par\smallskip\footnotesize Controlled prototype: count evidence-backend requests and distinct SVID serials within each healthy window. These are not hardware Quote counts. TBD is not zero.
 \end{table*}
 \clearpage
 \begin{table*}[t]
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Supporting cost measurements. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Deliberate holds and offline verification are reported separately.}
+\caption{Software-path costs in the controlled prototype. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Experiment appraisal, deliberate holds and offline verification are reported separately.}
 \label{tab:argus-cost}
 \textit{Normal access: outcomes and resources}\par\smallskip
 \begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y@{}}
@@ -90,12 +90,12 @@ Native & Reuse & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray
 \toprule
 \textbf{Measured interval} & \textbf{Establishment (ms)} & \textbf{Recovery (ms)} \\
 \midrule
-Workload Quote & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
-Remote appraisal & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Evidence backend & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Experiment appraisal & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Identity delivery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Ingress readiness & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 First legal access & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
-Deliberate barrier hold & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Deliberate evidence hold & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
 \end{tabularx}
 \par\medskip\textit{Offline history processing}\par\smallskip
@@ -108,6 +108,6 @@ Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \t
 Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
 \end{tabularx}
-\par\smallskip\footnotesize Numeric summaries are median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Deliberate holds and offline timings remain separate from online processing cost; intervals are not summed.
+\par\smallskip\footnotesize Controlled software path: median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Experiment-backend costs do not estimate TDX/DCAP costs. Holds and offline timings are separate; intervals are not summed.
 \end{table*}
 \end{document}

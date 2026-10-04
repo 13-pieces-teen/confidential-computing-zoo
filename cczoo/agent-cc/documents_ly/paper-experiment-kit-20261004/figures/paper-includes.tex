@@ -13,7 +13,7 @@
 \begin{figure*}[t]
 \centering
 \includegraphics[page=2,width=\textwidth]{argus-figures/argus-experiment-templates.pdf}
-\caption{Receipt control after binding and supervision failures. Panels (a) and (b) show per-run cumulative receipt of distinct facts first released after the fault. Panels (c) and (d) show ingress-closure delay and receipt at the observation end. Each dot is one run; hollow triangles denote right-censored closure times. Gaps indicate incomplete observation coverage.}
+\caption{Receipt control after binding and supervision failures in the controlled prototype. Panels (a) and (b) show per-run cumulative receipt of distinct facts first released after the fault. Panels (c) and (d) show ingress-closure delay and receipt at the observation end. Each dot is one run; hollow triangles denote right-censored closure times. Gaps indicate incomplete observation coverage.}
 \label{fig:argus-receiver-results}
 \ifdefined\Description\Description{Two receipt traces for targeted closure and watchdog ablations, followed by per-run closure delays and received-fact counts.}\fi
 \end{figure*}}
@@ -22,7 +22,7 @@
 \begin{figure*}[t]
 \centering
 \includegraphics[page=4,width=\textwidth]{argus-figures/argus-experiment-templates.pdf}
-\caption{Normal-access cost under new and reused TLS connections. Dots are per-run p50 and p95 latencies for expected-allow requests with valid business responses; short horizontal lines show medians across runs. Both modes use the same API, data, permissions, and offered load. Supplementary Table~\ref{tab:argus-cost} reports request outcomes and resources.}
+\caption{Software-path cost under new and reused TLS connections in the controlled prototype. Dots are per-run p50 and p95 latencies for expected-allow requests with valid business responses; short horizontal lines show medians across runs. Both modes use the same API, data, permissions, and offered load. Supplementary Table~\ref{tab:argus-cost} reports request outcomes and resources.}
 \label{fig:argus-access-cost-results}
 \ifdefined\Description\Description{Two panels compare Full Argus and native SPIRE using per-run p50 and p95 latencies, separately for new and reused TLS connections.}\fi
 \end{figure*}}

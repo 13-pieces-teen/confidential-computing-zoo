@@ -2,9 +2,9 @@
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Admission across record states. Online TDX observations and offline policy diagnostics are reported separately. Counts retain unknown and unexecuted cases; the first rejecting layer identifies the responsible mechanism.}
+\caption{Admission under controlled evidence availability. The prototype executes real admission, identity and ingress components; offline history diagnostics are separate. Counts retain unknown and unexecuted cases. This comparison does not measure Docker transaction recovery.}
 \label{tab:argus-admission}
-\textit{Online TDX comparison}\par\smallskip
+\textit{Controlled-prototype comparison}\par\smallskip
 \begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y@{}}
 \toprule
 \textbf{Lifecycle state} & \textbf{Full A/D/U} & \textbf{Native A/D/U} & \textbf{Business access Full / native} & \textbf{Current checks Full / native} & \textbf{First rejection Full / native} \\
@@ -24,5 +24,5 @@ Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
 \end{tabularx}
-\par\smallskip\footnotesize Planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Offline cases retain their evidence type.
+\par\smallskip\footnotesize Controlled prototype; planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Historical TDX integration is archived separately.
 \end{table*}

@@ -1,14 +1,19 @@
 {
-  "kind": "paper_materials_only",
-  "created_utc": "2026-10-04T12:02:22.103403+00:00",
-  "branch": "codex/argus-paper-kit-20261004",
-  "base_commit": "a05614636308dd60796b1f4fd3c993d79fdb6e7b",
+  "kind": "controlled_experiment_plan_and_figure_tools",
+  "created_utc": "2026-10-04T14:22:13.604939+00:00",
+  "branch": "codex/argus-controlled-evaluation-20261004",
+  "base_commit": "fa615b1c2877a6ef253f197be5700a949c7e3430",
   "runtime_code_changed": false,
   "runtime_deployment_performed": false,
-  "e4_profile_adaptation": "verify or implement on IP2 current code separately",
+  "remote_controlled_backend": "TO_IMPLEMENT_AND_VALIDATE_ON_IP2",
+  "e4_profile_adaptation": "12b365ed and 66 passed reported by IP2; reuse after checking actual remote code",
+  "tdx_archive_claim_source": "user-provided P0/A3 receipts; originals to be rechecked by the hosts",
+  "feishu_update": "NOT_APPLIED",
+  "data_schema": "argus.paper-figures.v2",
   "data_observations": 0,
-  "validation_tests_passed": 7,
+  "validation_tests_passed": 13,
+  "seed_template_parity": "PASS",
   "portable_render": "PASS",
   "rendered_pdf_matches_reviewed_preview": true,
-  "files_sha256_normalization": "text files LF; binaries unchanged; Git archive checked before push"
+  "files_sha256_normalization": "text files LF; binaries unchanged; verify Git archive before push"
 }

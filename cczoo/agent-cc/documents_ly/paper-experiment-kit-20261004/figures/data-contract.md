@@ -1,6 +1,8 @@
 # 填数口径
 
-`results.json` 是唯一入口。它是已有原件的展示索引，保留 `run_id`、`evidence_ref`，不替代双机原件。不向其中写入 token、私钥、API key、真实业务私密上下文。
+`results.json` 采用 `argus.paper-figures.v2`，是已有原件的展示索引，不替代双机原件。不向其中写入 token、私钥、API key、真实业务私密上下文。
+
+每行包含 `evidence_kind`、`environment_id`、`runtime_revision`、`run_id`、`evidence_ref`。非 pending 行须填实际环境、运行版本及原件；未知/未运行也填写其状态说明来源。除 history 使用 `offline` 外，主统计固定为 `controlled_prototype`。P0/A3 填入上一级 `TDX-ARCHIVE-INDEX.json`，不能混进新统计。
 
 ## 状态与缺失
 
@@ -10,7 +12,7 @@
 
 ## admission / history
 
-`admission` 的 A/B/C 是合法准入、成功结果已保存而记录尚未确认、原操作确认后的独立准入。`decision` 为 ALLOW/DENY/UNKNOWN，`first_layer` 用 common/provider/evidence/remote/final 或实际明确层；未到达的后继阶段不标为 DENY。`business_access` 为 PASS/FAIL/UNKNOWN，`current_checks` 和 `record_state` 记录实测事实。
+`admission` 的 A/B/C 是有效证据下准入、受控发布端暂不提供确认记录、同一轨迹恢复记录可用后的独立准入；此处不执行未知 Docker 操作或声称事务恢复。`decision` 为 ALLOW/DENY/UNKNOWN，`first_layer` 用 common/provider/evidence/remote/final 或实际明确层；未到达的后继阶段不标为 DENY。`business_access` 为 PASS/FAIL/UNKNOWN，`current_checks` 和 `record_state` 记录实测事实。
 
 Table A 汇总每阶段各组的 A/D/U 计数和实际 k/3；未运行/未填写仍列出。`history` 是独立离线区，`source_kind` 明确 archive 或 signed_fixture；`verdict` 是该验证器的真实判定。更大系统的 Quote、新鲜度等外层检查不由一个离线历史案例代言。
 
@@ -38,7 +40,7 @@ Full 的 healthy/recovery 两条件，每条件三个完整六步任务。`steps
 
 资源 `cpu_one_core_pct` 以单核 100% 归一（可以超过 100%），`rss_mib` 为明确组件集合的实际 RSS 口径；`component_scope` 写清主机、进程/实例分段与聚合规则，避免把两机 PID 或共享页无解释地相加。完整样本之外不外推资源开销。
 
-`reuse` 填每组实际健康窗口长度和实际计数：node_quotes、workload_quotes、subscriptions、node_svids、workload_svids、new_admissions。SVID 字段是窗口内不同证书序列数；新 Quote 与换证分别计数。native 中没有定制 Workload Quote 是可记录的实测零，未采到数据则是 null。
+`reuse` 填每组实际健康窗口长度和实际计数：node_evidence_requests、workload_evidence_requests、subscriptions、node_svids、workload_svids、new_admissions。SVID 字段是窗口内不同证书序列数；实验后端调用与换证分别计数，不标成真实 Quote。native 没有定制 Workload 证据请求时可记录实测零，未采到数据则是 null。
 
 `stage_costs` 初始为空，有原件后追加：
 
@@ -47,12 +49,15 @@ Full 的 healthy/recovery 两条件，每条件三个完整六步任务。`steps
   "status": "recorded",
   "run_id": "原始运行标识",
   "evidence_ref": "原件索引与摘要",
+  "evidence_kind": "controlled_prototype",
+  "environment_id": "实际软件环境标识",
+  "runtime_revision": "实际运行提交与补丁摘要",
   "phase": "admission",
   "arm": "full",
-  "stage": "quote",
+  "stage": "evidence",
   "duration_ms": null,
   "environment": "实际主机、构建、操作标识"
 }
 ```
 
-该示例展示字段，不是一条有效数值样本。`phase` 为 admission/recovery，`stage` 为 quote/appraisal/identity/ingress/first_access/deliberate_hold。同一阶段的一组直接实测耗时作中位数与范围展示；不用分段 p95 相加。`deliberate_hold` 独立成行。离线历史耗时在 history 中填写 `verify_ms` 并提供条数/字节与执行主机；图表不将离线核验等同于在线准入总耗时。
+该示例展示字段，不是一条有效数值样本。evidence/appraisal 是实验签名后端及其真实校验耗时，不是硬件 Quote/DCAP 成本。`phase` 为 admission/recovery，`stage` 为 evidence/appraisal/identity/ingress/first_access/deliberate_hold。同一阶段的一组直接实测耗时作中位数与范围展示；不用分段 p95 相加。`deliberate_hold` 独立成行。离线历史耗时在 history 中填写 `verify_ms` 并提供条数/字节与执行主机；图表不将离线核验等同于在线准入总耗时。

@@ -1,5 +1,7 @@
 {
   "status": "GENERATED",
+  "evidence_mode": "controlled_prototype",
+  "schema": "argus.paper-figures.v2",
   "pdf_pages": 6,
   "table_layout": [
     {
@@ -13,9 +15,9 @@
       "height_pt": 215.2
     },
     {
-      "title": "Table S1. Reuse and attestation",
+      "title": "Table S1. Identity and evidence reuse",
       "width_pt": 507.59999999999997,
-      "height_pt": 126.2
+      "height_pt": 136.0
     },
     {
       "title": "Table S2. Supporting cost evidence",
@@ -23,10 +25,10 @@
       "height_pt": 448.29999999999995
     }
   ],
-  "data_sha256": "808d9f0b4d8d660d10030e4648d1c4dbef7ccc722c27e8f0c960585f2bd510f7",
+  "data_sha256": "f9dd89c81e8874e6257880f44b151f79ebdf0ca8dd9804ef71e73d0981deffa8",
   "observed_records": 0,
   "validation_errors": [],
   "input_missing_values_render_as": "TBD",
   "synthetic_measurements_used": false,
-  "pdf_sha256": "709a8225a9691f11f0384e692c60d7b96f57d1e435a8f391b3ce1f897ab4bcc3"
+  "pdf_sha256": "54c3304b665229dbc54ba10674259029b13dc50e6ac2cd3dca2b94b642be8ef2"
 }

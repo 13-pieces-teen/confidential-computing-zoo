@@ -33,4 +33,43 @@ class EvidenceTests(unittest.TestCase):
         r.update(status='recorded',run_id='TEST',evidence_ref='isolated test',closure_observation='RIGHT_CENSORED',closed_s=0,window_end_s=10)
         self.assertTrue(any('censored closure' in x for x in validate(d)))
 
+    def test_recorded_controlled_sample_is_accepted(self):
+        d=copy.deepcopy(BASE);r=d['admission'][0]
+        r.update(status='recorded',run_id='TEST',evidence_ref='isolated test',
+                 environment_id='TEST-LINUX',runtime_revision='TEST-REV',
+                 decision='ALLOW')
+        self.assertEqual(validate(d),[])
+
+    def test_environment_cannot_be_omitted(self):
+        d=copy.deepcopy(BASE);r=d['admission'][0]
+        r.update(status='recorded',run_id='TEST',evidence_ref='isolated test',decision='ALLOW')
+        self.assertTrue(any('environment_id and runtime_revision' in x for x in validate(d)))
+
+    def test_tdx_archive_cannot_enter_controlled_statistics(self):
+        d=copy.deepcopy(BASE);r=d['admission'][0]
+        r.update(status='recorded',run_id='TEST',evidence_ref='isolated test',
+                 environment_id='TDX-ARCHIVE',runtime_revision='TEST-REV',
+                 evidence_kind='real_tdx_archive',decision='ALLOW')
+        self.assertTrue(any('evidence kind mismatch' in x for x in validate(d)))
+
+    def test_software_requests_cannot_be_called_hardware_quotes(self):
+        d=copy.deepcopy(BASE);d['reuse'][0]['node_quotes']=None
+        self.assertTrue(any('hardware Quote counts' in x for x in validate(d)))
+
+    def test_software_stage_cannot_be_called_quote_timing(self):
+        d=copy.deepcopy(BASE)
+        d['stage_costs'].append(dict(status='recorded',run_id='TEST',evidence_ref='isolated test',
+            environment_id='TEST-LINUX',runtime_revision='TEST-REV',evidence_kind='controlled_prototype',
+            arm='full',phase='admission',stage='quote',duration_ms=1))
+        self.assertTrue(any('not hardware Quote timing' in x for x in validate(d)))
+
+    def test_offline_history_remains_a_separate_evidence_kind(self):
+        d=copy.deepcopy(BASE);r=d['history'][0]
+        r.update(status='recorded',run_id='TEST',evidence_ref='isolated test',
+                 environment_id='TEST-OFFLINE',runtime_revision='TEST-REV',
+                 source_kind='signed_fixture',verdict='ALLOW')
+        self.assertEqual(validate(d),[])
+        r['evidence_kind']='controlled_prototype'
+        self.assertTrue(any('evidence kind mismatch' in x for x in validate(d)))
+
 if __name__=='__main__':unittest.main()

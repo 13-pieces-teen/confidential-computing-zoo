@@ -81,7 +81,7 @@ def receipt_figure(d):
         if not found:pending(ax,'category',d['receiver'])
         else:ax.set_ylim(bottom=0)
         if key=='new_facts_read':ax.yaxis.set_major_locator(MaxNLocator(integer=True)) if found else None
-    fig.text(.09,.025,'Each dot: one run. Hollow triangle: closure right-censored at the observation end. Gaps break traces.',
+    fig.text(.09,.025,'Controlled prototype. Dots: runs; hollow triangles: right-censored closure. Gaps break traces.',
              fontsize=7,color='#48545F')
     return fig
 
@@ -107,13 +107,13 @@ def cost_figure(d):
         ax.set_title(title,loc='left',fontweight='bold',pad=8)
         ax.set_xticks([0,1],['Full Argus','Native SPIRE']);ax.set_xlim(-.5,1.5)
         if not found:pending(ax,'category',[r for r in d['cost'] if r['connection']==conn])
-    axs[0].set_ylabel('Valid-request latency (ms)')
+    axs[0].set_ylabel('Software request latency (ms)')
     if all_values:axs[0].set_ylim(bottom=0)
     fig.legend([Line2D([],[],marker='o',mfc='white',mec='#465361',lw=0),
                 Line2D([],[],marker='s',mfc='#465361',mec='#465361',lw=0)],
                ['Per-run p50','Per-run p95'],frameon=False,ncol=2,loc='upper center',
                bbox_to_anchor=(.54,1),fontsize=7.5,columnspacing=2)
-    fig.text(.09,.035,'Dots show individual runs; short lines show medians. Request outcomes and resources are in Table S2.',
+    fig.text(.09,.035,'Controlled software path. Dots: runs; lines: medians. Outcomes and resources: Table S2.',
              fontsize=7,color='#48545F')
     return fig
 

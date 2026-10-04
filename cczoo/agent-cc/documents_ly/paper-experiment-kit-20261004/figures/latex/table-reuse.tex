@@ -2,14 +2,14 @@
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Identity reuse during healthy service windows. Quote generation, subscriptions, distinct SVIDs, and new admissions are counted separately within the reported observation window.}
+\caption{Identity reuse in the controlled prototype. Evidence-backend requests, subscriptions, distinct SVIDs and new admissions are counted separately. Backend requests do not represent hardware Quote generation.}
 \label{tab:argus-reuse}
 \begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y Y@{}}
 \toprule
-\textbf{Mode} & \textbf{Window (s)} & \textbf{Node Quotes} & \textbf{Workload Quotes} & \textbf{Identity subscriptions} & \textbf{Node SVIDs} & \textbf{Workload SVIDs} & \textbf{New admissions} \\
+\textbf{Mode} & \textbf{Window (s)} & \textbf{Node evidence requests} & \textbf{Workload evidence requests} & \textbf{Identity subscriptions} & \textbf{Node SVIDs} & \textbf{Workload SVIDs} & \textbf{New admissions} \\
 \midrule
 Full Argus & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Native SPIRE & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
-\end{tabularx}\par\smallskip\footnotesize Counts refer to each actual healthy window. SVID counts use distinct certificate serials; Quote counts require attestation originals. TBD is not zero.
+\end{tabularx}\par\smallskip\footnotesize Controlled prototype: count evidence-backend requests and distinct SVID serials within each healthy window. These are not hardware Quote counts. TBD is not zero.
 \end{table*}

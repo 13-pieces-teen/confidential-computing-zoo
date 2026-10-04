@@ -8,7 +8,7 @@
 set -euo pipefail
 umask 077
 KIT_COMMIT='<用户提供的40位提交>'
-KIT_REF='refs/heads/codex/argus-paper-kit-20261004'
+KIT_REF='refs/heads/codex/argus-controlled-evaluation-20261004'
 KIT_PATH='cczoo/agent-cc/documents_ly/paper-experiment-kit-20261004'
 KIT_REMOTE='https://github.com/13-pieces-teen/confidential-computing-zoo.git'
 

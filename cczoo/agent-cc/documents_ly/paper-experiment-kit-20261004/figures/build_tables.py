@@ -18,10 +18,10 @@ HSTYLE=ParagraphStyle('head',parent=PSTYLE,fontName='Times-Bold')
 NOTE=ParagraphStyle('note',parent=PSTYLE,fontSize=7,leading=9,textColor=colors.HexColor('#4D5B66'))
 TITLE=ParagraphStyle('title',parent=PSTYLE,fontName='Times-Bold',fontSize=10,leading=12)
 CAPTIONS={
- 'admission':'Admission across record states. Online TDX observations and offline policy diagnostics are reported separately. Counts retain unknown and unexecuted cases; the first rejecting layer identifies the responsible mechanism.',
- 'task':'Cross-session task continuation with Full Argus. Each row is a six-step task. Verified readback covers all confirmed original proposals; correct continuation and complete task success are separate outcomes. Both recovery intervals start at re-admission.',
- 'reuse':'Identity reuse during healthy service windows. Quote generation, subscriptions, distinct SVIDs, and new admissions are counted separately within the reported observation window.',
- 'cost':'Supporting cost measurements. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Deliberate holds and offline verification are reported separately.'
+ 'admission':'Admission under controlled evidence availability. The prototype executes real admission, identity and ingress components; offline history diagnostics are separate. Counts retain unknown and unexecuted cases. This comparison does not measure Docker transaction recovery.',
+ 'task':'Cross-session task continuation in the controlled prototype with Full Argus. Each row is a six-step task. Verified readback covers all confirmed original proposals; correct continuation and complete task success are separate outcomes. Both recovery intervals start at re-admission.',
+ 'reuse':'Identity reuse in the controlled prototype. Evidence-backend requests, subscriptions, distinct SVIDs and new admissions are counted separately. Backend requests do not represent hardware Quote generation.',
+ 'cost':'Software-path costs in the controlled prototype. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Experiment appraisal, deliberate holds and offline verification are reported separately.'
 }
 OUTCOME={'CORRECT':'C','INCORRECT':'X','REJECTED':'R','TIMEOUT':'T','UNKNOWN':'U','NOT_DISPATCHED':'N'}
 
@@ -93,15 +93,15 @@ def tables(d):
         if all(r['status']=='pending' for r in f+n):rejection='TBD'
         rows.append([desc,counts(f),counts(n),access,checks,rejection])
     heads=['Lifecycle state','Full\nA/D/U','Native\nA/D/U','Business access\nFull / native','Current checks\nFull / native','First rejection\nFull / native']
-    blocks=flow_section('Online TDX comparison',heads,rows,[90,76,76,84,63,CW-389],7.8)
-    text=[r'\textit{Online TDX comparison}\par\smallskip',latex_table(heads,rows)]
+    blocks=flow_section('Controlled-prototype comparison',heads,rows,[90,76,76,84,63,CW-389],7.8)
+    text=[r'\textit{Controlled-prototype comparison}\par\smallskip',latex_table(heads,rows)]
     history=[]
     names={'legal_history':'Eligible recorded history','unrelated_activity':'Permitted unrelated history','ineligible_launch':'Ineligible launch history'}
     for r in d['history']:
         history.append([names[r['case']],rv(r,'source_kind'),rv(r,'verdict')])
     hs=['Policy case','Evidence source','Verifier decision']
     blocks+=flow_section('Offline history diagnostics',hs,history,[CW*.48,CW*.30,CW*.22])
-    note='Planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Offline cases retain their evidence type.'
+    note='Controlled prototype; planned n=3 paired runs per mode. A/D/U = allow/deny/unknown. TBD = data pending. Historical TDX integration is archived separately.'
     blocks+=[Paragraph(note,NOTE)]
     text += [r'\par\medskip\textit{Offline history diagnostics}\par\smallskip',latex_table(hs,history),r'\par\smallskip\footnotesize '+latex_escape(note)]
     pages.append(('Table A. Admission evidence',blocks));tex.append(('admission','\n'.join(text)))
@@ -121,15 +121,15 @@ def tables(d):
         for x in range(2,8):
             if row[x] in palette:t.setStyle(TableStyle([('BACKGROUND',(x,y),(x,y),colors.HexColor(palette[row[x]]))]))
     note='C correct; X incorrect; R rejected; T timeout; U unknown; N not dispatched. k/K: verified readback / all confirmed proposals. TBD: data pending.'
-    pages.append(('Table B. Agent task continuation',[t,Spacer(1,8),Paragraph(note,NOTE),Spacer(1,4),Paragraph('One row per complete task; all six planned steps remain visible. The two recovery intervals share a start and are not added.',NOTE)]))
+    pages.append(('Table B. Agent task continuation',[t,Spacer(1,8),Paragraph(note,NOTE),Spacer(1,4),Paragraph('Controlled prototype with real memory operations. One row per task; all six steps remain visible. Recovery intervals share a start and are not added.',NOTE)]))
     tex.append(('task',latex_table(hs,rows,True)+r'\par\smallskip\footnotesize '+latex_escape(note)))
 
     rows=[]
     for r in d['reuse']:
-        rows.append(['Full Argus' if r['arm']=='full' else 'Native SPIRE',*[rv(r,k) for k in ('window_s','node_quotes','workload_quotes','subscriptions','node_svids','workload_svids','new_admissions')]])
-    hs=['Mode','Window\n(s)','Node\nQuotes','Workload\nQuotes','Identity\nsubscriptions','Node\nSVIDs','Workload\nSVIDs','New\nadmissions']
-    note='Counts refer to each actual healthy window. SVID counts use distinct certificate serials; Quote counts require attestation originals. TBD is not zero.'
-    pages.append(('Table S1. Reuse and attestation',[make_table(hs,rows,[84]+[(CW-84)/7]*7),Spacer(1,8),Paragraph(note,NOTE)]))
+        rows.append(['Full Argus' if r['arm']=='full' else 'Native SPIRE',*[rv(r,k) for k in ('window_s','node_evidence_requests','workload_evidence_requests','subscriptions','node_svids','workload_svids','new_admissions')]])
+    hs=['Mode','Window\n(s)','Node\nevidence\nrequests','Workload\nevidence\nrequests','Identity\nsubscriptions','Node\nSVIDs','Workload\nSVIDs','New\nadmissions']
+    note='Controlled prototype: count evidence-backend requests and distinct SVID serials within each healthy window. These are not hardware Quote counts. TBD is not zero.'
+    pages.append(('Table S1. Identity and evidence reuse',[make_table(hs,rows,[84]+[(CW-84)/7]*7),Spacer(1,8),Paragraph(note,NOTE)]))
     tex.append(('reuse',latex_table(hs,rows)+r'\par\smallskip\footnotesize '+latex_escape(note)))
 
     rows=[]
@@ -151,7 +151,7 @@ def tables(d):
     blocks=flow_section('Normal access: outcomes and resources',hs,rows,[40,35,65,65,100,95,CW-400],7.6)
     texts=[r'\textit{Normal access: outcomes and resources}\par\smallskip',latex_table(hs,rows)]
     srows=[]
-    for stage,title in [('quote','Workload Quote'),('appraisal','Remote appraisal'),('identity','Identity delivery'),('ingress','Ingress readiness'),('first_access','First legal access'),('deliberate_hold','Deliberate barrier hold')]:
+    for stage,title in [('evidence','Evidence backend'),('appraisal','Experiment appraisal'),('identity','Identity delivery'),('ingress','Ingress readiness'),('first_access','First legal access'),('deliberate_hold','Deliberate evidence hold')]:
         cols=[]
         for phase in ('admission','recovery'):
             planned=[r for r in d['stage_costs'] if r.get('phase')==phase and r.get('stage')==stage and r.get('arm')=='full']
@@ -167,7 +167,7 @@ def tables(d):
     hh=['History case','Source','Records','Bytes','Offline verification (ms)']
     blocks+=flow_section('Offline history processing',hh,hrows,[CW*.33,CW*.19,CW*.13,CW*.13,CW*.22],7.6)
     texts += [r'\par\medskip\textit{Offline history processing}\par\smallskip',latex_table(hh,hrows)]
-    note='Numeric summaries are median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Deliberate holds and offline timings remain separate from online processing cost; intervals are not summed.'
+    note='Controlled software path: median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Experiment-backend costs do not estimate TDX/DCAP costs. Holds and offline timings are separate; intervals are not summed.'
     blocks+=[Paragraph(note,NOTE)]
     texts += [r'\par\smallskip\footnotesize '+latex_escape(note)]
     pages.append(('Table S2. Supporting cost evidence',blocks));tex.append(('cost','\n'.join(texts)))
@@ -175,7 +175,7 @@ def tables(d):
 
 def write_pages(pages,path):
     c=canvas.Canvas(str(path),pagesize=(W,200))
-    c.setTitle('Argus experimental table templates')
+    c.setTitle('Argus controlled-prototype table templates')
     layout=[]
     for title,blocks in pages:
         flows=[Paragraph(escape(title),TITLE),Spacer(1,8),*blocks]
@@ -201,7 +201,7 @@ def main():
     reader=PdfReader(a.plots/'tables.pdf');plots=PdfReader(a.plots/'plots.pdf')
     writer=PdfWriter()
     for page in (reader.pages[0],plots.pages[0],reader.pages[1],plots.pages[1],reader.pages[2],reader.pages[3]):writer.add_page(page)
-    writer.add_metadata({'/Title':'Argus - experimental figures and tables (unfilled templates)',
+    writer.add_metadata({'/Title':'Argus - controlled-prototype figures and tables (unfilled templates)',
                          '/Subject':'Observed data only; templates contain no synthetic measurements'})
     final=a.out/'argus-experiment-templates.pdf'
     with final.open('wb') as f:writer.write(f)
@@ -215,7 +215,7 @@ def main():
                         r'\begin{document}'])
     preview=preamble+'\n'+('\n\\clearpage\n'.join(fragments))+'\n\\end{document}\n'
     (a.out/'tables-preview.tex').write_text(preview,encoding='utf-8')
-    report={'status':'GENERATED','pdf_pages':6,'table_layout':layout,'data_sha256':hashlib.sha256(a.data.read_bytes()).hexdigest(),
+    report={'status':'GENERATED','evidence_mode':'controlled_prototype','schema':d['schema'],'pdf_pages':6,'table_layout':layout,'data_sha256':hashlib.sha256(a.data.read_bytes()).hexdigest(),
             'observed_records':sum(r['status']!='pending' for kind in ('admission','history','receiver','tasks','cost','reuse','stage_costs') for r in d[kind]),
             'validation_errors':errors,'input_missing_values_render_as':'TBD','synthetic_measurements_used':False,
             'pdf_sha256':hashlib.sha256(final.read_bytes()).hexdigest()}

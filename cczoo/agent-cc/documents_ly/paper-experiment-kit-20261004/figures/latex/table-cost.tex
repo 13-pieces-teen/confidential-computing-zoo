@@ -2,7 +2,7 @@
 \centering
 \scriptsize
 \setlength{\tabcolsep}{3pt}
-\caption{Supporting cost measurements. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Deliberate holds and offline verification are reported separately.}
+\caption{Software-path costs in the controlled prototype. Request outcomes accompany latency, resources use a declared component scope, and stage timings retain their original operation identifiers. Experiment appraisal, deliberate holds and offline verification are reported separately.}
 \label{tab:argus-cost}
 \textit{Normal access: outcomes and resources}\par\smallskip
 \begin{tabularx}{\linewidth}{@{}Y Y Y Y Y Y Y@{}}
@@ -20,12 +20,12 @@ Native & Reuse & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray
 \toprule
 \textbf{Measured interval} & \textbf{Establishment (ms)} & \textbf{Recovery (ms)} \\
 \midrule
-Workload Quote & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
-Remote appraisal & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Evidence backend & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Experiment appraisal & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Identity delivery & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 Ingress readiness & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 First legal access & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
-Deliberate barrier hold & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
+Deliberate evidence hold & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
 \end{tabularx}
 \par\medskip\textit{Offline history processing}\par\smallskip
@@ -38,5 +38,5 @@ Permitted unrelated history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \t
 Ineligible launch history & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} & \textcolor{gray}{TBD} \\
 \bottomrule
 \end{tabularx}
-\par\smallskip\footnotesize Numeric summaries are median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Deliberate holds and offline timings remain separate from online processing cost; intervals are not summed.
+\par\smallskip\footnotesize Controlled software path: median [min, max] of observed runs. R/F/T/I = rejected/failed/timed out/invalid. Experiment-backend costs do not estimate TDX/DCAP costs. Holds and offline timings are separate; intervals are not summed.
 \end{table*}

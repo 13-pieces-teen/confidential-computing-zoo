@@ -1,8 +1,9 @@
 {
-  "schema": "argus.paper-figures.v1",
+  "schema": "argus.paper-figures.v2",
   "design": {
-    "version": "2026-10-04-reframe",
-    "paper_revision": 2356,
+    "version": "2026-10-04-controlled-v2",
+    "evidence_mode": "controlled_prototype",
+    "paper_sync": "NOT_APPLIED",
     "planned_pairs": 3,
     "task_steps": 6,
     "purpose": "unfilled manuscript templates"
@@ -19,7 +20,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -32,7 +36,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -45,7 +52,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -58,7 +68,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -71,7 +84,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -84,7 +100,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -97,7 +116,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -110,7 +132,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -123,7 +148,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -136,7 +164,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -149,7 +180,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -162,7 +196,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -175,7 +212,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -188,7 +228,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -201,7 +244,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -214,7 +260,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -227,7 +276,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -240,7 +292,10 @@
       "first_layer": null,
       "business_access": null,
       "current_checks": null,
-      "record_state": null
+      "record_state": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     }
   ],
   "history": [
@@ -253,7 +308,10 @@
       "verdict": null,
       "record_count": null,
       "record_bytes": null,
-      "verify_ms": null
+      "verify_ms": null,
+      "evidence_kind": "offline",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -264,7 +322,10 @@
       "verdict": null,
       "record_count": null,
       "record_bytes": null,
-      "verify_ms": null
+      "verify_ms": null,
+      "evidence_kind": "offline",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -275,7 +336,10 @@
       "verdict": null,
       "record_count": null,
       "record_bytes": null,
-      "verify_ms": null
+      "verify_ms": null,
+      "evidence_kind": "offline",
+      "environment_id": null,
+      "runtime_revision": null
     }
   ],
   "receiver": [
@@ -295,7 +359,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -313,7 +380,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -331,7 +401,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -349,7 +422,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -367,7 +443,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -385,7 +464,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -403,7 +485,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -421,7 +506,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -439,7 +527,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -457,7 +548,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -475,7 +569,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -493,7 +590,10 @@
       "new_facts_read": null,
       "late_pre_fault_facts": null,
       "ambiguous_facts": null,
-      "trace": []
+      "trace": [],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     }
   ],
   "tasks": [
@@ -547,7 +647,10 @@
           "phase": null,
           "proposal_state": null
         }
-      ]
+      ],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -599,7 +702,10 @@
           "phase": null,
           "proposal_state": null
         }
-      ]
+      ],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -651,7 +757,10 @@
           "phase": null,
           "proposal_state": null
         }
-      ]
+      ],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -703,7 +812,10 @@
           "phase": null,
           "proposal_state": null
         }
-      ]
+      ],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -755,7 +867,10 @@
           "phase": null,
           "proposal_state": null
         }
-      ]
+      ],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -807,7 +922,10 @@
           "phase": null,
           "proposal_state": null
         }
-      ]
+      ],
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     }
   ],
   "cost": [
@@ -829,7 +947,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -849,7 +970,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -869,7 +993,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -889,7 +1016,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -909,7 +1039,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -929,7 +1062,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -949,7 +1085,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -969,7 +1108,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -989,7 +1131,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -1009,7 +1154,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -1029,7 +1177,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     },
     {
       "status": "pending",
@@ -1049,7 +1200,10 @@
       "duration_s": null,
       "cpu_one_core_pct": null,
       "rss_mib": null,
-      "component_scope": null
+      "component_scope": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null
     }
   ],
   "reuse": [
@@ -1059,12 +1213,15 @@
       "evidence_ref": null,
       "arm": "full",
       "window_s": null,
-      "node_quotes": null,
-      "workload_quotes": null,
       "subscriptions": null,
       "node_svids": null,
       "workload_svids": null,
-      "new_admissions": null
+      "new_admissions": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null,
+      "node_evidence_requests": null,
+      "workload_evidence_requests": null
     },
     {
       "status": "pending",
@@ -1072,12 +1229,15 @@
       "evidence_ref": null,
       "arm": "native",
       "window_s": null,
-      "node_quotes": null,
-      "workload_quotes": null,
       "subscriptions": null,
       "node_svids": null,
       "workload_svids": null,
-      "new_admissions": null
+      "new_admissions": null,
+      "evidence_kind": "controlled_prototype",
+      "environment_id": null,
+      "runtime_revision": null,
+      "node_evidence_requests": null,
+      "workload_evidence_requests": null
     }
   ],
   "stage_costs": []
