@@ -334,3 +334,16 @@ s0-reality/probe-business-round-3.json	/secure/paper-minimal-20261009/s0-reality
 s0-reality/probe-round-1.json	/secure/paper-minimal-20261009/s0-reality/probe-round-1.json	verbatim
 s0-reality/probe-round-2.json	/secure/paper-minimal-20261009/s0-reality/probe-round-2.json	verbatim
 s0-reality/probe-round-3.json	/secure/paper-minimal-20261009/s0-reality/probe-round-3.json	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/ADDENDUM-1-NEGATIVE-CHECK-REFINEMENT.md	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/ADDENDUM-1-NEGATIVE-CHECK-REFINEMENT.md	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/gateway.log	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/gateway.log	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/IP1-P0D-SF-RECALL-EXACTNESS-20261003.md	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/IP1-P0D-SF-RECALL-EXACTNESS-20261003.md	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/negative-response.json	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/negative-response.json	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/recall-response.json	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/recall-response.json	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/result.json	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/result.json	verbatim
+p0/ip1-p0d-sf-recall-exactness-20261003/run.json	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/ip1-p0d-sf-recall-exactness-20261003/run.json	verbatim
+p0/negative-probes-20261003T1000Z.json	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/p0/negative-probes-20261003T1000Z.json	verbatim
+PROVENANCE-AND-EXCLUSIONS.md	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/PROVENANCE-AND-EXCLUSIONS.md	export-time-documentation
+s1/S1-CORRECTION-ADDENDUM.md	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/s1/S1-CORRECTION-ADDENDUM.md	export-time-documentation
+s1/s1-recompute-output.txt	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/s1/s1-recompute-output.txt	export-time-documentation
+s1/s1_recompute.py	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/s1/s1_recompute.py	export-time-tool
+SUMMARY.md	/root/paper-final-20261009/paper-final-evidence-20261009t0849z/SUMMARY.md	export-time-documentation

@@ -1,0 +1,11 @@
+{
+  "result": "FAIL",
+  "code": "ANSWER_FAILED",
+  "exit_code": 1,
+  "processing_stage": "processing",
+  "session_id": "018cbfba-e2d4-4fa9-8cee-92251407e132",
+  "task_id": "476dd721-d00b-40b4-bccf-58d3f4436b7f",
+  "resume_available": true,
+  "openclaw_tdx_remote_attestation": "NOT_RUN",
+  "scope": "real Gateway business + mTLS + fresh-session recall"
+}

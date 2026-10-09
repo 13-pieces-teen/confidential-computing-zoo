@@ -1,0 +1,100 @@
+{
+  "run_id": "p0-20261002t1521z",
+  "observed_at": "2026-10-03T09:05:00Z",
+  "method": "container transport direct-call probes (fleet_probe.mjs equivalent semantics; fleet_probe.mjs itself cannot run: plugins.installs absent from openclaw.json 2026.7.1 + config get redacts apiKey) + spiffe-mtls-probe for wrong_identity",
+  "probes": {
+    "invalid_key": {
+      "health": {
+        "http_status": 200,
+        "body_identity_fields": "NONE (auth_mode=api_key only)",
+        "verdict": "negative observation: pinned /health returns 200 for invalid key with no identity fields (documented behavior)"
+      },
+      "system_status": {
+        "http_status": 401,
+        "code": "UNAUTHENTICATED",
+        "message": "Invalid API Key",
+        "verdict": "PASS (denial)"
+      },
+      "sessions_get": {
+        "http_status": 401,
+        "code": "UNAUTHENTICATED",
+        "message": "Invalid API Key",
+        "verdict": "PASS (denial)"
+      }
+    },
+    "missing_key": {
+      "health": {
+        "http_status": 200,
+        "body_identity_fields": "NONE",
+        "verdict": "negative observation"
+      },
+      "system_status": {
+        "http_status": 401,
+        "code": "UNAUTHENTICATED",
+        "message": "Missing API Key when resolving identity.",
+        "verdict": "PASS (denial)"
+      },
+      "sessions_get": {
+        "http_status": 401,
+        "code": "UNAUTHENTICATED",
+        "message": "Missing API Key when resolving identity.",
+        "verdict": "PASS (denial)"
+      }
+    },
+    "forged_headers": {
+      "forged_user_p0-c-negative_on_business_key": {
+        "health": {
+          "http_status": 200,
+          "resolved_user_id": "p0-c-business",
+          "verdict": "PASS: forged X-OpenViking-User ignored in api_key mode"
+        },
+        "system_status": {
+          "http_status": 200,
+          "context_user": "p0-c-business",
+          "verdict": "PASS: context user remains caller"
+        }
+      }
+    },
+    "wrong_identity": {
+      "tool": "spiffe-mtls-probe with production SVID generation-2961206624 (client_spiffe_id=spiffe://argus.local/agent/openclaw, NOT in allowed_client_ids)",
+      "url": "https://10.0.2.2:1944/health",
+      "result": "business HTTP 403",
+      "verdict": "PASS (denial)"
+    },
+    "direct_backend": {
+      "10.0.2.2:1933": {
+        "result": "connection refused",
+        "verdict": "negative observation (no direct backend reachability)"
+      },
+      "172.31.28.53:1933": {
+        "result": "timeout (curl RC=124)",
+        "verdict": "UNKNOWN (timeout recorded as-is)"
+      }
+    },
+    "cross_user": {
+      "status": "PASS (3/3)",
+      "observed_at": "2026-10-03T09:5xZ",
+      "precondition": "six-stage write committed business session memory-store-1791020379719-1r85p2 (stage-4 write turn, backend task 29b6804f completed) and memory-store-1791019790493-m8el9r (stage-3)",
+      "negative_key": "p0-c-negative (sha256 8e58bf13c1... per IP2 SHA256SUMS)",
+      "probes": {
+        "sessions_list": {
+          "route": "GET /api/v1/sessions",
+          "result": "[] empty — business sessions not visible to negative identity",
+          "verdict": "PASS (isolation)"
+        },
+        "direct_business_session": {
+          "route": "GET /api/v1/sessions/memory-store-1791020379719-1r85p2",
+          "http_status": 404,
+          "body_code": "NOT_FOUND",
+          "verdict": "PASS (no cross-user session access)"
+        },
+        "recall_search_business_fact": {
+          "route": "POST /api/v1/search/find",
+          "query": "项目 ARGUS-DUAL-TDVM-E2E-20261003T092939Z-8159 的校验码是什么",
+          "result": "only negative user's own generic memory structure (viking://user/p0-c-negative/**); business fact NOT returned",
+          "verdict": "PASS (memory search scoped to caller user)"
+        }
+      }
+    }
+  }
+}

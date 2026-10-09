@@ -1,0 +1,9 @@
+{
+  "run_id": "p0-20261002t1521z-sf-a1",
+  "marker": "ARGUS-DUAL-TDVM-E2E-p0-20261002t1521z-sf-a1",
+  "session_key": "argus-dual-tdvm-e2e-p0-20261002t1521z-sf-a1",
+  "agent_id": "main",
+  "started_at": "2026-10-03T13:12:46Z",
+  "fact_generation": "random",
+  "fact_seed_sha256": null
+}

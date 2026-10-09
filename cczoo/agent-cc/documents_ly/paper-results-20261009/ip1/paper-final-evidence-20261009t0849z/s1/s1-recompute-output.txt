@@ -1,0 +1,46 @@
+total rows: 186 warmup: 6 measurement: 180
+measurement outcomes: {'success': 155, 'unknown': 25}
+non-success breakdown (error_class, http_status, submission_state):
+   19 ('ValueError', 'None', 'not_attempted')
+   6 ('RemoteDisconnected', 'None', 'unknown')
+distinct peer serials: 7
+success memory_result: {'nonempty': 155}
+non-success rows inside collect window [+-20s]: 19 of 25
+in-window non-success error_class: {'ValueError': 16, 'RemoteDisconnected': 3}
+out-of-window non-success error_class: {'ValueError': 3, 'RemoteDisconnected': 3}
+out-of-window rows (idx, started_at_ms, error_class, http_status, submission_state):
+  row 8 1791531472347 ValueError None not_attempted 
+  row 22 1791531542347 RemoteDisconnected None unknown 
+  row 39 1791531627347 ValueError None not_attempted 
+  row 54 1791531702347 RemoteDisconnected None unknown 
+  row 70 1791531782347 ValueError None not_attempted 
+  row 82 1791531842347 RemoteDisconnected None unknown 
+final trailing non-success episode length: 13 first row idx: 174
+   row 174 started_at_ms 1791532302347 error_class ValueError
+   row 175 started_at_ms 1791532307347 error_class ValueError
+   row 176 started_at_ms 1791532312347 error_class ValueError
+   row 177 started_at_ms 1791532317347 error_class ValueError
+   row 178 started_at_ms 1791532322347 error_class ValueError
+   row 179 started_at_ms 1791532327347 error_class ValueError
+   row 180 started_at_ms 1791532332347 error_class ValueError
+   row 181 started_at_ms 1791532337347 error_class ValueError
+   row 182 started_at_ms 1791532342347 error_class ValueError
+   row 183 started_at_ms 1791532347347 error_class ValueError
+   row 184 started_at_ms 1791532352347 error_class ValueError
+   row 185 started_at_ms 1791532357347 error_class ValueError
+   row 186 started_at_ms 1791532362347 error_class ValueError
+short non-success episodes (<=2 rows, i.e. blips): 12 [[8], [22], [39], [54], [70], [82], [100], [112], [131], [140], [161], [169]]
+success http_status: {'200': 155}
+in-window RemoteDisconnected rows:
+   row 112 started_at_ms 1791531992347 submission_state unknown error_message 
+   row 140 started_at_ms 1791532132347 submission_state unknown error_message 
+   row 169 started_at_ms 1791532277347 submission_state unknown error_message 
+in-window blip rows (idx, error_class, started_at_ms):
+   row 100 ValueError 1791531932347 not_attempted
+   row 112 RemoteDisconnected 1791531992347 unknown
+   row 131 ValueError 1791532087347 not_attempted
+   row 140 RemoteDisconnected 1791532132347 unknown
+   row 161 ValueError 1791532237347 not_attempted
+   row 169 RemoteDisconnected 1791532277347 unknown
+reconnect flags (all rows): {False: 169, True: 17}
+connect reasons (non-reused): {'previous_error': 12, 'credentials_rotated': 5}

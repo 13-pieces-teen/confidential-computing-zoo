@@ -95,3 +95,15 @@ IP2. Batch id `argus-paper-minimal-20261009t0718z-01`, S1 run id
 
 No secrets are exported (api-key files and private fixtures stay in protected
 directories on the host). Mapping in `MANIFEST.tsv`.
+
+## paper-final-evidence-20261009t0849z (final pre-paper verification, added 2026-10-09)
+
+Final pre-paper supplement, IP1 side: P0 permission negatives original
+(3af191ef…) and the complete real Agent recall originals (run / recall-response
+/ result / negative-response / gateway.log / report / addendum) exported
+verbatim; recall-session-key.txt excluded (secret, stays in protected
+location). S1 addendum recomputed from the frozen requests.jsonl (19 ValueError
+pre-submit, 6 RemoteDisconnected delivery-unknown, final 13 without in-window
+recovery; peer serials corrected to 7; original FAIL/UNKNOWN untouched).
+Conditional new recall: SKIP (old originals sufficient). Provenance, exclusions
+and prep-era statement pointers in the package; mapping in MANIFEST.tsv.
