@@ -107,3 +107,15 @@ pre-submit, 6 RemoteDisconnected delivery-unknown, final 13 without in-window
 recovery; peer serials corrected to 7; original FAIL/UNKNOWN untouched).
 Conditional new recall: SKIP (old originals sufficient). Provenance, exclusions
 and prep-era statement pointers in the package; mapping in MANIFEST.tsv.
+
+## paper-final-e2-client-originals-20261009t0932z (E2 client originals addendum, added 2026-10-09)
+
+Reply to IP2's paper-final materials request: E2 r4 client originals delivered
+verbatim — trace.jsonl (eb5ccb26…, the client probe trace: probe_start/probe_stop,
+386 request, 47 response_chunk; fact/body hashes only), releases.jsonl,
+lifecycle-live.jsonl, receiver-status.json. Same bytes already exported at
+e2/runs/r4/ since 8936abaa; receiver.jsonl excluded by rule. P0 originals list
+and recall recoverability report were delivered in
+paper-final-evidence-20261009t0849z (713b1519); this commit also fixes that
+batch's MANIFEST.tsv rows to ip1-relative export paths. No experiments rerun,
+no service changes.
