@@ -1,0 +1,20 @@
+{
+  "schema": "argus.paper-minimal.s0-probe.v1",
+  "round": 1,
+  "observed_at": "2026-10-09T07:16:33.%fZ",
+  "leg_a_mtls_health": {
+    "rc": 1,
+    "out": null,
+    "err": "Traceback (most recent call last):\n  File \"<stdin>\", line 32, in <module>\n  File \"<stdin>\", line 6, in go\nFileNotFoundError: [Errno 2] No such file or directory: '/run/argus-openclaw/instances/paper01"
+  },
+  "leg_b1_sessions_identity": {
+    "rc": 1,
+    "out": null,
+    "err": "<anonymous_script>:1\n\\\\route\\:\\/api/v1/sessions\\\\\n^\n\nSyntaxError: Unexpected token '\\', \"\\\\route\\:\\\"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at file:///home/node/e1-probe.mjs:8:19\n   "
+  },
+  "leg_b2_search_find": {
+    "rc": 1,
+    "out": null,
+    "err": "<anonymous_script>:1\n\\\\query\\:\\ARGUS-DUAL-TDVM-E2E-p0-20261002t1521z-sf-a1\\\\\n^\n\nSyntaxError: Unexpected token '\\', \"\\\\query\\:\\\"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at file:///home"
+  }
+}

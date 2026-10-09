@@ -1,0 +1,78 @@
+{
+  "schema": "argus.paper-minimal.existing-evidence-index.v1",
+  "batch_id": "argus-paper-minimal-<UTC>-01 (pending IP2 RUN_PLAN)",
+  "materials": {
+    "git_commit": "b471a34b73e4f8490fa633b7ea3bcfb510756d39",
+    "repo": "https://github.com/13-pieces-teen/confidential-computing-zoo.git",
+    "branch": "docs/argus-minimal-experiments-20261009",
+    "sha256sums_verified": true
+  },
+  "s0_recovered": {
+    "p0_permission_negatives": {
+      "path": "/root/argus-ip1-handoff/p0-20261002t1521z/p0d-six-stage-20261003/negative-probes-20261003T1000Z.json",
+      "sha256": "3af191ef80cc5866a999fe5d606898191ee03a57740beaa9b4afe0da81b1d5db",
+      "run_id": "p0-20261002t1521z",
+      "observed_at": "2026-10-03T09:05:00Z",
+      "user_scope": "instance paper01full, client cea379df, agent 0792eff1..., client_spiffe spiffe://argus.local/agent/openclaw/experiment/paper01/full",
+      "tool_baseline": "a0561463+P0-C fixes (guest scripts from /root/argus-stage2-20261003), openclaw 2026.7.1",
+      "method": "container transport direct-call probes (fleet_probe.mjs semantic equivalent)",
+      "results": {
+        "invalid_key": {
+          "system_status": "401 UNAUTHENTICATED PASS(denial)",
+          "sessions_get": "401 UNAUTHENTICATED PASS(denial)",
+          "health": "200 no identity fields (documented negative observation)"
+        },
+        "missing_key": {
+          "system_status": "401 UNAUTHENTICATED PASS(denial)",
+          "sessions_get": "401 UNAUTHENTICATED PASS(denial)",
+          "health": "200 no identity fields (documented negative observation)"
+        },
+        "wrong_identity": {
+          "tool": "spiffe-mtls-probe production SVID",
+          "url": "https://10.0.2.2:1944/health",
+          "result": "business HTTP 403 PASS(denial)"
+        },
+        "cross_user": {
+          "status": "PASS 3/3",
+          "negative_key": "p0-c-negative",
+          "negative_key_sha256_prefix": "8e58bf13c1..."
+        },
+        "direct_backend": {
+          "10.0.2.2:1933": "connection refused (negative observation)",
+          "172.31.28.53:1933": "timeout RC=124 UNKNOWN"
+        }
+      },
+      "overall": "negative probes 7/7 PASS (per SUMMARY.md sha 5f9b35360a5aafc4eb180e9fd276681fe881f0fe8c8dd26c324d697b2343ae83)"
+    },
+    "p0_real_agent_recall": {
+      "dir": "/root/argus-ip1-handoff/p0-20261002t1521z/ip1-p0d-sf-recall-exactness-20261003/",
+      "report_sha256": "17f6c651bf2ced6e8abdfbefdfeb793c65efbbd03107b48d9f3b9946e4493436",
+      "run_id": "p0-20261002t1521z",
+      "tool_baseline": "0c9f72a1 (verified installed)",
+      "backend": "siliconflow DeepSeek-V3.2 + enable_thinking",
+      "execution": "3 fresh real-gateway recall sessions (new session keys); 1 transient rate-limit, recovered",
+      "positives": "4 real samples, fact fully present in answer (leading sentences vary); sample-3 full text in recall-response.json",
+      "audit": "PASS each round: fact digest in recall/output_fact_hashes, input_fact_hashes empty, transport mTLS serials+generation complete",
+      "negatives": "2/3 exact UNKNOWN; 3rd verbose UNKNOWN intercepted by ANSWER_FAILED (addendum: require UNKNOWN present AND no ARGUS_FACT_[0-9A-F]{32} token)",
+      "files": {
+        "run.json": "e40f608dcf474fffd3d7f9d7b873e9a77c151e69b5b5e97b6cd86d6b4052d771",
+        "recall-response.json": "f70d787253866f720d5bda0b36e40d4eb639bdc3ce825428670f6214dc4a12d8",
+        "recall-session-key.txt": "858066374ab42fbe77ce50758898674fd5848c6800c9783300255021d6b8239a",
+        "result.json": "77d548a89b5173bc19e2c2d8fa89bc3acdfc8d3a076ecfc275e19338d11cf81b",
+        "negative-response.json": "ea8c434067115258efb79d9fa6ad9fd74c598cbbee4e70ea4ddff31e5f50ef33",
+        "gateway.log": "8c80fd7f2e5b388b2e80ce6f5216f39dc4d9c80f0c6935fa72008a05d42940c0"
+      }
+    }
+  },
+  "s0_conclusions": {
+    "s2_authorization": "SKIP - P0 permission negatives available (7/7, above)",
+    "s3_agent_recall": "SKIP - P0 real OpenClaw recall originals available (3 real sessions, audits complete, above)"
+  },
+  "results_branch": {
+    "name": "codex/argus-results-ip1-20261009",
+    "remote": "fork (github.com/13-pieces-teen/confidential-computing-zoo.git)",
+    "head": "8936abaa",
+    "purpose": "IP1 paper-results dataset export for offline analysis (2026-10-09)",
+    "note": "this batch's non-secret evidence will be committed here per IP1-PROMPT"
+  }
+}

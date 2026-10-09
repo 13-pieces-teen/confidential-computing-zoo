@@ -1,0 +1,76 @@
+{
+  "schema": "argus.paper-minimal.clock.v1",
+  "measured_at": "2026-10-09T07:25:41Z",
+  "method": "guest-local midpoint vs nginx Date header over mTLS https://10.0.2.2:1944/health",
+  "n": 10,
+  "offset_mean_s": 15.4269,
+  "offset_sd_s": 0.3075,
+  "offset_min_s": 15.0136,
+  "offset_max_s": 15.919,
+  "rtt_mean_s": 0.0998,
+  "date_header_resolution_s": 1.0,
+  "conservative_bound_ms": 20000,
+  "note": "guest clock BEHIND IP2 (server) by ~15.4s; bound = absmax+2sd+resolution+rtt rounded up",
+  "samples": [
+    {
+      "local_mid": 1791530699.6898,
+      "server": 1791530715.0,
+      "offset_s": 15.3102,
+      "rtt_s": 0.0905
+    },
+    {
+      "local_mid": 1791530703.8384,
+      "server": 1791530719.0,
+      "offset_s": 15.1616,
+      "rtt_s": 0.0935
+    },
+    {
+      "local_mid": 1791530707.9864,
+      "server": 1791530723.0,
+      "offset_s": 15.0136,
+      "rtt_s": 0.0975
+    },
+    {
+      "local_mid": 1791530712.1366,
+      "server": 1791530728.0,
+      "offset_s": 15.8634,
+      "rtt_s": 0.0977
+    },
+    {
+      "local_mid": 1791530716.2867,
+      "server": 1791530732.0,
+      "offset_s": 15.7133,
+      "rtt_s": 0.0972
+    },
+    {
+      "local_mid": 1791530720.4373,
+      "server": 1791530736.0,
+      "offset_s": 15.5627,
+      "rtt_s": 0.0951
+    },
+    {
+      "local_mid": 1791530724.591,
+      "server": 1791530740.0,
+      "offset_s": 15.409,
+      "rtt_s": 0.1078
+    },
+    {
+      "local_mid": 1791530728.7631,
+      "server": 1791530744.0,
+      "offset_s": 15.2369,
+      "rtt_s": 0.1044
+    },
+    {
+      "local_mid": 1791530732.9211,
+      "server": 1791530748.0,
+      "offset_s": 15.0789,
+      "rtt_s": 0.1077
+    },
+    {
+      "local_mid": 1791530737.081,
+      "server": 1791530753.0,
+      "offset_s": 15.919,
+      "rtt_s": 0.1069
+    }
+  ]
+}

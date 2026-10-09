@@ -72,3 +72,26 @@ argv_sha256 values and digests are preserved verbatim. Redaction rules R1–R3
 (seed redaction with sha256, excluded credential files, allowlisted public
 material) are documented in `REDACTION.md`; originals-to-export mapping in
 `MANIFEST.tsv`.
+
+## paper-minimal-20261009 (minimal supplement batch, added 2026-10-09)
+
+Minimal supplement batch per materials at commit
+`b471a34b73e4f8490fa633b7ea3bcfb510756d39` (branch
+`docs/argus-minimal-experiments-20261009`, read-only). IP1-side client
+originals only; the IP2-side observation/collect and joint SUMMARY live with
+IP2. Batch id `argus-paper-minimal-20261009t0718z-01`, S1 run id
+`…-rotation`.
+
+- `existing-evidence-index.json` — S0 recovery of P0 authorization negatives
+  (7/7) and real Agent-recall originals with paths and SHAs; S2/S3 SKIP
+  rulings with citations.
+- `s0-reality/` — the three pre-window probe rounds (identity/search legs) on
+  the live paper02/full service.
+- `rotation/…-rotation/` — complete frozen S1 client output: requests.jsonl
+  (155 success / 25 unknown rotation-race, all non-empty), load-result.json,
+  per-client c1/ originals, frozen load-config.json, body.json,
+  clock-measurement.json, load-fleet log + tool SHAs. End-side coverage
+  insufficient ~105 s: frozen, recorded, not re-run.
+
+No secrets are exported (api-key files and private fixtures stay in protected
+directories on the host). Mapping in `MANIFEST.tsv`.

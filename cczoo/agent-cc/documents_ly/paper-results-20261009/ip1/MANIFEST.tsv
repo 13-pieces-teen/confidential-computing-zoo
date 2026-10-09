@@ -318,3 +318,19 @@ scripts/as-run/continuous_work_item.py	/home/ying_liu/confidential-computing-zoo
 scripts/as-run/locomo_run.py	/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/locomo_run.py	verbatim-as-run-working-tree
 scripts/as-run/step.py	/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/step.py	verbatim-as-run-working-tree
 scripts/export-tools/generate-e4-csvs.py	written at export time	export-time-tool
+existing-evidence-index.json	/secure/paper-minimal-20261009/existing-evidence-index.json	verbatim
+README.md	/secure/paper-minimal-20261009/README.md	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/body.json	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/body.json	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/c1/load-result.json	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/c1/load-result.json	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/c1/requests.jsonl	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/c1/requests.jsonl	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/clock-measurement.json	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/clock-measurement.json	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/load-config.json	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/load-config.json	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/load-fleet.log-and-tool-sha.txt	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/load-fleet.log-and-tool-sha.txt	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/load-result.json	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/load-result.json	verbatim
+rotation/argus-paper-minimal-20261009t0718z-01-rotation/requests.jsonl	/secure/paper-minimal-20261009/rotation/argus-paper-minimal-20261009t0718z-01-rotation/requests.jsonl	verbatim
+s0-reality/probe-business-round-1.json	/secure/paper-minimal-20261009/s0-reality/probe-business-round-1.json	verbatim
+s0-reality/probe-business-round-2.json	/secure/paper-minimal-20261009/s0-reality/probe-business-round-2.json	verbatim
+s0-reality/probe-business-round-3.json	/secure/paper-minimal-20261009/s0-reality/probe-business-round-3.json	verbatim
+s0-reality/probe-round-1.json	/secure/paper-minimal-20261009/s0-reality/probe-round-1.json	verbatim
+s0-reality/probe-round-2.json	/secure/paper-minimal-20261009/s0-reality/probe-round-2.json	verbatim
+s0-reality/probe-round-3.json	/secure/paper-minimal-20261009/s0-reality/probe-round-3.json	verbatim

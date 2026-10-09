@@ -1,0 +1,182 @@
+{
+  "success": 155,
+  "rejected": 0,
+  "timeout": 0,
+  "unknown": 25,
+  "overload": 0,
+  "connection_mode": "reuse",
+  "workload_kind": "memory_query",
+  "n_requests": 180,
+  "n_success_latency": 155,
+  "p50_ms": 112.02824441716075,
+  "p95_ms": 257.6609055511653,
+  "p99_ms": 350.75522751547464,
+  "api_goodput_rps": 0.17222222222222222,
+  "definition": "expected HTTP response completed inside measurement window; not Agent task correctness",
+  "memory_nonempty_goodput_rps": 0.17222222222222222,
+  "memory_empty": 0,
+  "memory_unknown": 0,
+  "connection_attempts": 17,
+  "connections_created": 17,
+  "requests_reusing_connection": 144,
+  "reconnect_attempts": 17,
+  "connection_reuse_fraction": 0.8,
+  "tcp_connect_p50_ms": 0.3257161006331444,
+  "tcp_connect_p50_ms_samples": 17,
+  "tls_handshake_p50_ms": 51.400665659457445,
+  "tls_handshake_p50_ms_samples": 17,
+  "connect_p50_ms": 52.03039385378361,
+  "connect_p50_ms_samples": 17,
+  "api_p95_ms": 194.8738032951951,
+  "api_p95_ms_samples": 161,
+  "schema": "argus.load-fleet.v1",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "attempt": 1,
+  "clients": 1,
+  "per_client": [
+    {
+      "success": 155,
+      "rejected": 0,
+      "timeout": 0,
+      "unknown": 25,
+      "overload": 0,
+      "connection_mode": "reuse",
+      "workload_kind": "memory_query",
+      "n_requests": 180,
+      "n_success_latency": 155,
+      "p50_ms": 112.02824441716075,
+      "p95_ms": 257.6609055511653,
+      "p99_ms": 350.75522751547464,
+      "api_goodput_rps": 0.17222222222222222,
+      "definition": "expected HTTP response completed inside measurement window; not Agent task correctness",
+      "memory_nonempty_goodput_rps": 0.17222222222222222,
+      "memory_empty": 0,
+      "memory_unknown": 0,
+      "connection_attempts": 17,
+      "connections_created": 17,
+      "requests_reusing_connection": 144,
+      "reconnect_attempts": 17,
+      "connection_reuse_fraction": 0.8,
+      "tcp_connect_p50_ms": 0.3257161006331444,
+      "tcp_connect_p50_ms_samples": 17,
+      "tls_handshake_p50_ms": 51.400665659457445,
+      "tls_handshake_p50_ms_samples": 17,
+      "connect_p50_ms": 52.03039385378361,
+      "connect_p50_ms_samples": 17,
+      "api_p95_ms": 194.8738032951951,
+      "api_p95_ms_samples": 161,
+      "schema": "argus.load.v1",
+      "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+      "measurement_seconds": 900,
+      "warmup_seconds": 30,
+      "rate": 0.2,
+      "measurement_started_at_ms": 1791531467347,
+      "measurement_ended_at_ms": 1791532367347,
+      "max_concurrency": 2,
+      "server_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+      "connections": {
+        "connection_attempts": 17,
+        "connections_created": 17,
+        "requests_reusing_connection": 144,
+        "reconnect_attempts": 17,
+        "observed_connection_ids": 18,
+        "initialization_connections": 1,
+        "reconnect_reasons": {
+          "credentials_rotated": 5,
+          "previous_error": 12
+        },
+        "tcp_connect_ms": {
+          "n": 17,
+          "p50": 0.3257161006331444,
+          "p95": 0.5308152176439762
+        },
+        "tls_handshake_ms": {
+          "n": 17,
+          "p50": 51.400665659457445,
+          "p95": 99.68742700293654
+        },
+        "connect_ms": {
+          "n": 17,
+          "p50": 52.03039385378361,
+          "p95": 100.04858970642084
+        },
+        "api_ms": {
+          "n": 161,
+          "p50": 111.30695510655642,
+          "p95": 194.8738032951951
+        }
+      },
+      "measurement_complete": true,
+      "scheduled_requests": 186,
+      "collector_error_classes": [],
+      "requests_sha256": "e07bb7707c8bcae02d32a508c2c7391a77fb599dcd7a4953c06bd1b6fb72f9f4",
+      "result": "PASS",
+      "memory_results": {
+        "nonempty": 155,
+        "empty": 0,
+        "unknown": 0
+      }
+    }
+  ],
+  "measurement_seconds": 900,
+  "connections": {
+    "connection_attempts": 17,
+    "connections_created": 17,
+    "requests_reusing_connection": 144,
+    "reconnect_attempts": 17,
+    "observed_connection_ids": 18,
+    "initialization_connections": 1,
+    "reconnect_reasons": {
+      "credentials_rotated": 5,
+      "previous_error": 12
+    },
+    "tcp_connect_ms": {
+      "n": 17,
+      "p50": 0.3257161006331444,
+      "p95": 0.5308152176439762
+    },
+    "tls_handshake_ms": {
+      "n": 17,
+      "p50": 51.400665659457445,
+      "p95": 99.68742700293654
+    },
+    "connect_ms": {
+      "n": 17,
+      "p50": 52.03039385378361,
+      "p95": 100.04858970642084
+    },
+    "api_ms": {
+      "n": 161,
+      "p50": 111.30695510655642,
+      "p95": 194.8738032951951
+    }
+  },
+  "server_ids": [
+    "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+  ],
+  "measurement_started_at_ms": 1791531467347,
+  "measurement_ended_at_ms": 1791532367347,
+  "measurement_complete": true,
+  "requests_sha256": "f490611c2c8ab75dce4dc093188dc3d8db7faa5fffd2f2f0908145b429a4c6c0",
+  "result": "PASS",
+  "memory_results": {
+    "nonempty": 155,
+    "empty": 0,
+    "unknown": 0
+  }
+}
+===TOOLS===
+c6cac6a54de021d01d42007ea62c80685182afae37eb598a75014b62df84ce1e  /root/argus-paper-minimal/tool/analysis.py
+806e74509d18c8a09a8b5b48ba47715bbd5c73026d0ba1dacc6927cc863c81ac  /root/argus-paper-minimal/tool/client_material.py
+b9b6542ac6a5ccab1079d667ba5408150c4751a2111f2cb0bc54b88fc875bad8  /root/argus-paper-minimal/tool/common.py
+eedc7ef9ab0185ff8bef4a5f37642a9c0c4d0cf627c142063007d52f8cf585ed  /root/argus-paper-minimal/tool/load.py
+b9b330bf29f755dd30922d1ecd99e19d011519735a72e2480ad94dd26b34568b  /root/argus-paper-minimal/tool/load_fleet.py
+ab9055b51cdd4be0b8c435acdf97ab4d7c96b30caaa48d8be863f52609c5aa55  /root/argus-paper-minimal/tool/locomo.py
+a2268d3937d6b7324922baf6d5c526efec03f3d8fca6db3deedc2f38ce01a945  /root/argus-paper-minimal/tool/locomo_analysis.py
+806e74509d18c8a09a8b5b48ba47715bbd5c73026d0ba1dacc6927cc863c81ac  /root/argus-paper-minimal/tool/client_material.py
+a2268d3937d6b7324922baf6d5c526efec03f3d8fca6db3deedc2f38ce01a945  /root/argus-paper-minimal/tool/locomo_analysis.py
+ab9055b51cdd4be0b8c435acdf97ab4d7c96b30caaa48d8be863f52609c5aa55  /root/argus-paper-minimal/tool/locomo.py
+b9b330bf29f755dd30922d1ecd99e19d011519735a72e2480ad94dd26b34568b  /root/argus-paper-minimal/tool/load_fleet.py
+b9b6542ac6a5ccab1079d667ba5408150c4751a2111f2cb0bc54b88fc875bad8  /root/argus-paper-minimal/tool/common.py
+c6cac6a54de021d01d42007ea62c80685182afae37eb598a75014b62df84ce1e  /root/argus-paper-minimal/tool/analysis.py
+eedc7ef9ab0185ff8bef4a5f37642a9c0c4d0cf627c142063007d52f8cf585ed  /root/argus-paper-minimal/tool/load.py

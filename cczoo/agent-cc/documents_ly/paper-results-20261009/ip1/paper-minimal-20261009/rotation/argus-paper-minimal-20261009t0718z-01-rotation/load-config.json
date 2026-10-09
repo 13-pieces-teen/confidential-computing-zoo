@@ -1,0 +1,21 @@
+{
+  "frozen": true,
+  "rate": 0.2,
+  "connection_mode": "reuse",
+  "concurrency_per_client": 2,
+  "warmup_seconds": 30,
+  "measurement_seconds": 900,
+  "timeout_seconds": 10,
+  "workload_kind": "memory_query",
+  "instances": [
+    {
+      "name": "c1",
+      "url": "https://10.0.2.2:1944/api/v1/search/find",
+      "credentials_dir": "/run/argus-openclaw/instances/paper01full/credentials",
+      "client_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+      "server_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+      "api_key_file": "/root/argus-paper-minimal/s1/api-key.protected",
+      "body_file": "/root/argus-paper-minimal/s1/body.json"
+    }
+  ]
+}

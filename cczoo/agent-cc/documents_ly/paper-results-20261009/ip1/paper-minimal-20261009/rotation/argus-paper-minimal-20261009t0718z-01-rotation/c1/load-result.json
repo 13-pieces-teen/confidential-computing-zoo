@@ -1,0 +1,83 @@
+{
+  "api_goodput_rps": 0.17222222222222222,
+  "api_p95_ms": 194.8738032951951,
+  "api_p95_ms_samples": 161,
+  "collector_error_classes": [],
+  "connect_p50_ms": 52.03039385378361,
+  "connect_p50_ms_samples": 17,
+  "connection_attempts": 17,
+  "connection_mode": "reuse",
+  "connection_reuse_fraction": 0.8,
+  "connections": {
+    "api_ms": {
+      "n": 161,
+      "p50": 111.30695510655642,
+      "p95": 194.8738032951951
+    },
+    "connect_ms": {
+      "n": 17,
+      "p50": 52.03039385378361,
+      "p95": 100.04858970642084
+    },
+    "connection_attempts": 17,
+    "connections_created": 17,
+    "initialization_connections": 1,
+    "observed_connection_ids": 18,
+    "reconnect_attempts": 17,
+    "reconnect_reasons": {
+      "credentials_rotated": 5,
+      "previous_error": 12
+    },
+    "requests_reusing_connection": 144,
+    "tcp_connect_ms": {
+      "n": 17,
+      "p50": 0.3257161006331444,
+      "p95": 0.5308152176439762
+    },
+    "tls_handshake_ms": {
+      "n": 17,
+      "p50": 51.400665659457445,
+      "p95": 99.68742700293654
+    }
+  },
+  "connections_created": 17,
+  "definition": "expected HTTP response completed inside measurement window; not Agent task correctness",
+  "max_concurrency": 2,
+  "measurement_complete": true,
+  "measurement_ended_at_ms": 1791532367347,
+  "measurement_seconds": 900,
+  "measurement_started_at_ms": 1791531467347,
+  "memory_empty": 0,
+  "memory_nonempty_goodput_rps": 0.17222222222222222,
+  "memory_results": {
+    "empty": 0,
+    "nonempty": 155,
+    "unknown": 0
+  },
+  "memory_unknown": 0,
+  "n_requests": 180,
+  "n_success_latency": 155,
+  "overload": 0,
+  "p50_ms": 112.02824441716075,
+  "p95_ms": 257.6609055511653,
+  "p99_ms": 350.75522751547464,
+  "rate": 0.2,
+  "reconnect_attempts": 17,
+  "rejected": 0,
+  "requests_reusing_connection": 144,
+  "requests_sha256": "e07bb7707c8bcae02d32a508c2c7391a77fb599dcd7a4953c06bd1b6fb72f9f4",
+  "result": "PASS",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "scheduled_requests": 186,
+  "schema": "argus.load.v1",
+  "server_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+  "success": 155,
+  "tcp_connect_p50_ms": 0.3257161006331444,
+  "tcp_connect_p50_ms_samples": 17,
+  "timeout": 0,
+  "tls_handshake_p50_ms": 51.400665659457445,
+  "tls_handshake_p50_ms_samples": 17,
+  "unknown": 25,
+  "warmup_seconds": 30,
+  "workload_kind": "memory_query"
+}

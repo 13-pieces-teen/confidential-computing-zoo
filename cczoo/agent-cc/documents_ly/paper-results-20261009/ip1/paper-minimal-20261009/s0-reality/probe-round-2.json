@@ -1,0 +1,29 @@
+{
+  "schema": "argus.paper-minimal.s0-probe.v1",
+  "round": 2,
+  "observed_at": "2026-10-09T07:16:42.%fZ",
+  "leg_a_mtls_health": {
+    "rc": 0,
+    "out": {
+      "gen": "generation-3835663037",
+      "serial": "ac5190e10f3efc2508f4b7aa826ea11d",
+      "client_svid_san": "X509v3 Subject Alternative Name: \n    URI:spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+      "peer_cert": "serial=B2943F72A2EADB58E7E1BF69F976EDB9\nX509v3 Subject Alternative Name: \n    URI:spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+      "tls": "ok",
+      "http_status": 200,
+      "body_bytes": 71,
+      "body_head": "{\"status\":\"ok\",\"healthy\":true,\"version\":\"v0.4.8\",\"auth_mode\":\"api_key\"}"
+    },
+    "err": ""
+  },
+  "leg_b1_sessions_identity": {
+    "rc": 1,
+    "out": null,
+    "err": "<anonymous_script>:1\n\\\\route\\:\\/api/v1/sessions\\\\\n^\n\nSyntaxError: Unexpected token '\\', \"\\\\route\\:\\\"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at file:///home/node/e1-probe.mjs:8:19\n   "
+  },
+  "leg_b2_search_find": {
+    "rc": 1,
+    "out": null,
+    "err": "<anonymous_script>:1\n\\\\query\\:\\ARGUS-DUAL-TDVM-E2E-p0-20261002t1521z-sf-a1\\\\\n^\n\nSyntaxError: Unexpected token '\\', \"\\\\query\\:\\\"... is not valid JSON\n    at JSON.parse (<anonymous>)\n    at file:///home"
+  }
+}
