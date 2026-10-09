@@ -1,0 +1,4 @@
+from IP2 side (ssh root@115.190.62.46 via proxy-dmz.intel.com:912, 2026-10-07T07:36Z):
+  nc -zv -w3 172.31.28.53 1943 -> Agent-CC [172.31.28.53] 1943 (?) : Connection refused
+  ip -br a: eth0 UP 172.31.28.53/20
+=> IP2 host itself has no listener on 1943; probe ECONNRESET originates there.

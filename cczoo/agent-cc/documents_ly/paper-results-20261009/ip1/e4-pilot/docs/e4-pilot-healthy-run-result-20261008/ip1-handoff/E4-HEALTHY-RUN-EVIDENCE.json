@@ -1,0 +1,166 @@
+{
+ "schema": "argus.e4.healthy-run-evidence.v1",
+ "run_id": "e4p1-3d00004a2a939c240ce5883134fbdbae",
+ "operation_id": "f09728c153934b2ebbdb1982049f9bc0",
+ "output_dir": "/secure/e4-pilot/runs/e4p1-3d00004a2a939c240ce5883134fbdbae",
+ "condition": "no_fault",
+ "configuration_sha256": "f4336b4e62f12cd0a22f3603be662065f34813b94d3da107bf24b9b040032ce1",
+ "manifest_sha256": "371b5fe91628ff204a5e16df80838e81aa541c9eaa2c32e48fda0c08a5c90ac0",
+ "protocol_digest": "8d88ab185faacfe31cc5d6c6c1ed3f467a4f9e5cd330edcbf4d4121d16a5be84",
+ "paired_recovery_protocol_digest_match": true,
+ "result": "PASS",
+ "exit_code": 0,
+ "measurement_complete": true,
+ "phase": "complete",
+ "completed_at": "2026-10-08T17:07:55.103Z",
+ "initialization": {
+  "ov_session_id": "ea4fce10-2a76-4df0-6f74-a2839f452abe",
+  "confirmed": true,
+  "status": "confirmed",
+  "created_by": {
+   "account_id": "argus-eval",
+   "user_id": "e4p1-healthy"
+  },
+  "created_at": "2026-10-08T16:59:01.648Z",
+  "commit_count": 1,
+  "task_status": "completed",
+  "task_id": "ae3776ac-0439-4130-8d15-f2ea5965c03d",
+  "client_wait_poll_status": "timeout",
+  "memories_extracted": {
+   "memory_write": 2,
+   "total": 2
+  },
+  "archive": {
+   "servable": true,
+   "archive_id": "archive_001",
+   "abstract": "# Working Memory",
+   "seed_text_observed": true,
+   "context_stats": {
+    "failedArchives": 0,
+    "totalArchives": 1
+   }
+  },
+  "find": {
+   "query": "Private project 3810aa3987aa work_item_id=trip-1220dc39059cb4eeea6d5f13 行程规则 routes initial_constraints",
+   "events_memories": [
+    {
+     "name": "行程工作项规则确认.md",
+     "hits": {
+      "project_id": true,
+      "normal_code": false,
+      "review_code": false,
+      "threshold_cents": false
+     }
+    },
+    {
+     "name": "行程规则数据提供.md",
+     "hits": {
+      "project_id": false,
+      "normal_code": true,
+      "review_code": true,
+      "threshold_cents": true
+     }
+    }
+   ],
+   "collective_four_value_hit": true,
+   "probe": "manual gateway find probe (same procedure as recovery run)"
+  }
+ },
+ "window": {
+  "started_at": "2026-10-08T17:00:55.102Z",
+  "duration_s": 420,
+  "steps": {
+   "total": 6,
+   "offered": 6,
+   "dispatched": 1,
+   "completed_window": true
+  },
+  "step_counts": {
+   "PASS": 0,
+   "FAIL": 5,
+   "UNKNOWN": 1,
+   "NOT_RUN": 0
+  },
+  "counts_evidence_scope": "execution_window_not_task_or_receipt_success"
+ },
+ "steps_detail": {
+  "s00": {
+   "phase": "normal",
+   "dispatched": true,
+   "answer_at": "2026-10-08T17:03:04.871Z",
+   "deadline_at": "2026-10-08T17:02:55.102Z",
+   "deadline_missed": true,
+   "terminal_reason": "DEADLINE_MISSED",
+   "verdict": "FAIL"
+  },
+  "s01": {
+   "phase": "normal",
+   "verdict": "UNKNOWN",
+   "reason": "prerequisite_unknown (s00 committed=UNKNOWN)"
+  },
+  "s02": {
+   "phase": "pause",
+   "verdict": "FAIL",
+   "reason": "prerequisite_uncommitted"
+  },
+  "s03": {
+   "phase": "pause",
+   "verdict": "FAIL",
+   "reason": "prerequisite_uncommitted"
+  },
+  "s04": {
+   "phase": "recovery",
+   "verdict": "FAIL",
+   "reason": "prerequisite_uncommitted"
+  },
+  "s05": {
+   "phase": "recovery",
+   "verdict": "FAIL",
+   "reason": "prerequisite_uncommitted"
+  }
+ },
+ "controls": {
+  "no_control_sent_this_round": true,
+  "fault": {
+   "at_s": 120,
+   "planned_at": "2026-10-08T17:02:55.102Z",
+   "started_at": "2026-10-08T17:02:55.129Z",
+   "completed_at": "2026-10-08T17:02:55.129Z",
+   "returncode": 0,
+   "status": "no_fault",
+   "argv": [],
+   "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "argv_sha256_equals_empty_array": true
+  },
+  "recovery": {
+   "at_s": 240,
+   "planned_at": "2026-10-08T17:04:55.102Z",
+   "started_at": "2026-10-08T17:04:55.140Z",
+   "completed_at": "2026-10-08T17:04:55.142Z",
+   "returncode": 0,
+   "status": "no_fault",
+   "argv": [],
+   "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "argv_sha256_equals_empty_array": true
+  }
+ },
+ "model_observations": {
+  "e4c1": {
+   "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+   "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f"
+  }
+ },
+ "transient_note": {
+  "first_preflight_attempt_failed_at": "2026-10-08T16:56:47Z",
+  "code": "GATEWAY_PROCESS_UNAVAILABLE",
+  "cause": "runner environment missing DOCKER_HOST (guest docker not targeted); a second guard-level abort lacked ARGUS_RUN_ID/ARGUS_OPERATION_ID env",
+  "business_writes_in_failed_attempts": 0,
+  "rerun_performed_single_execution": true,
+  "same_operation_id": true
+ },
+ "preservation": {
+  "recovery_sessions_untouched": true,
+  "gateway_recovery_identity_backup": "openclaw.json.e4p1-recovery.bak (in container)",
+  "healthy_session_fresh_user": "e4p1-healthy"
+ }
+}

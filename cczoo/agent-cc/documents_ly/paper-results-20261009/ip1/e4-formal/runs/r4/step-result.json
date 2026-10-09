@@ -1,0 +1,14 @@
+{
+  "attempt": 1,
+  "evidence_scope": "continuous_execution_only; task_and_receipt_axes_separate",
+  "exit_code": 0,
+  "measurement_complete": true,
+  "native_result": "PASS",
+  "operation_id": "9854e9fac72d40e597e14190fca4c9b1",
+  "result": "PASS",
+  "run_id": "e4p1-cd119c89ea1d8995ffb995b87b6ed3dc",
+  "schema": "argus.step.v1",
+  "source": "continuous/result.json",
+  "source_sha256": "586a2e6f7c62cf0d5e8587a74669d2960e400643fd7973a5e262787793617e16",
+  "tool": "continuous"
+}

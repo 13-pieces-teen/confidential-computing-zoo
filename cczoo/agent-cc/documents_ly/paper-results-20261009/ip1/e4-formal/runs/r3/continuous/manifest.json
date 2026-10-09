@@ -1,0 +1,173 @@
+{
+  "block_id": "continuous-n1-s102",
+  "condition": "no_fault",
+  "configuration_sha256": "8e5c8675b2d610e7c27a80a6d668bb8e53e894411cb1f885770af5904637ee31",
+  "facts": [
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "1c4d04f01744b80755a597d9f2bf409d",
+      "fact_index": 0,
+      "fact_sha256": "5268244108a895d1bd078118cb49b3420dca837f66e9bf52473b22b6392b943d",
+      "full_fact_sha256": "5268244108a895d1bd078118cb49b3420dca837f66e9bf52473b22b6392b943d",
+      "phase": "normal",
+      "predecessor": null,
+      "proposal_sha256": "88b8954f186583d0b2851c725387eb819402fe07009ebdafbd9d49c67ad70410",
+      "release_offset_s": 0,
+      "step_id": "s00",
+      "task_id": "s00",
+      "work_item_id": "trip-40fb7c2322d066a9c4e2a161"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "fa5f4a6979b1008490f22e59627d557f",
+      "fact_index": 1,
+      "fact_sha256": "e598ab3daa6e77b1f13e0e107782cc2c92d568bf80b6f1c4777cc09b2e792ab8",
+      "full_fact_sha256": "e598ab3daa6e77b1f13e0e107782cc2c92d568bf80b6f1c4777cc09b2e792ab8",
+      "phase": "normal",
+      "predecessor": "s00",
+      "proposal_sha256": "e2abab72b99ec6f5b1dc31c6326eca829b4e43ab6a8f90dc261d56a3b6726b28",
+      "release_offset_s": 90,
+      "step_id": "s01",
+      "task_id": "s01",
+      "work_item_id": "trip-40fb7c2322d066a9c4e2a161"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "892c1f8372e2e18d83e6eb543f544e34",
+      "fact_index": 2,
+      "fact_sha256": "7ffb4ee24b4dbe002574b371b9fb89944f81e771758110a1f5ed73405538da45",
+      "full_fact_sha256": "7ffb4ee24b4dbe002574b371b9fb89944f81e771758110a1f5ed73405538da45",
+      "phase": "pause",
+      "predecessor": "s01",
+      "proposal_sha256": "311617a99b7fb0cb8d65b068e081576197f0619a4f0df217224de171716ceb3d",
+      "release_offset_s": 180,
+      "step_id": "s02",
+      "task_id": "s02",
+      "work_item_id": "trip-40fb7c2322d066a9c4e2a161"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "76e77ee0336c30708ef81e7f4a64e6d2",
+      "fact_index": 3,
+      "fact_sha256": "8956ea11e9adc5f0f5399f76747b9106ad1b3098920b11874e66677facf7e440",
+      "full_fact_sha256": "8956ea11e9adc5f0f5399f76747b9106ad1b3098920b11874e66677facf7e440",
+      "phase": "pause",
+      "predecessor": "s02",
+      "proposal_sha256": "b4d0f619c2392870f3294a9be6194a68f6ef6cad664db72cc5f5b8947ea29de2",
+      "release_offset_s": 270,
+      "step_id": "s03",
+      "task_id": "s03",
+      "work_item_id": "trip-40fb7c2322d066a9c4e2a161"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_travel_minutes",
+      "fact_bytes": 229,
+      "fact_id": "d192cb8c6d6d3c14c52f78816dd5fb8f",
+      "fact_index": 4,
+      "fact_sha256": "a1c142148d5466348aa7e47a5e0d0419f78b943acdc33b6731afd7e8b1c16796",
+      "full_fact_sha256": "a1c142148d5466348aa7e47a5e0d0419f78b943acdc33b6731afd7e8b1c16796",
+      "phase": "recovery",
+      "predecessor": "s03",
+      "proposal_sha256": "09a4b381aa10a45cf534ad8ddc5e3803b06a0794270bf9279af2e34997b061b6",
+      "release_offset_s": 360,
+      "step_id": "s04",
+      "task_id": "s04",
+      "work_item_id": "trip-40fb7c2322d066a9c4e2a161"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "min_indoor_stops",
+      "fact_bytes": 229,
+      "fact_id": "15bfc4b4b23bed01271312543ff75c15",
+      "fact_index": 5,
+      "fact_sha256": "ef375c3de2562c40b4d6d6f1d7ed51c0f01d494994e71aac74c6db035b768283",
+      "full_fact_sha256": "ef375c3de2562c40b4d6d6f1d7ed51c0f01d494994e71aac74c6db035b768283",
+      "phase": "recovery",
+      "predecessor": "s04",
+      "proposal_sha256": "23988694c3217d67024c110e82182f885de62817f0c5d7f67189d88a1228d64a",
+      "release_offset_s": 450,
+      "step_id": "s05",
+      "task_id": "s05",
+      "work_item_id": "trip-40fb7c2322d066a9c4e2a161"
+    }
+  ],
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "fixture_sha256": "cb066c6d1d9fc924e6a249a52c382423d1c98a32d7e7da099b41091cd99174b2",
+  "group": "full_argus",
+  "operation_id": "863256d8999147af80164615591b7e29",
+  "protocol": {
+    "clients": 1,
+    "constraint_keys": [
+      "budget_cents",
+      "max_walk_minutes",
+      "max_travel_minutes",
+      "min_indoor_stops"
+    ],
+    "continuity_scope": "persistent_memory_across_fresh_agent_sessions",
+    "dag": [
+      {
+        "index": 0,
+        "phase": "normal",
+        "predecessor": null
+      },
+      {
+        "index": 1,
+        "phase": "normal",
+        "predecessor": "s00"
+      },
+      {
+        "index": 2,
+        "phase": "pause",
+        "predecessor": "s01"
+      },
+      {
+        "index": 3,
+        "phase": "pause",
+        "predecessor": "s02"
+      },
+      {
+        "index": 4,
+        "phase": "recovery",
+        "predecessor": "s03"
+      },
+      {
+        "index": 5,
+        "phase": "recovery",
+        "predecessor": "s04"
+      }
+    ],
+    "dependency_policy": "all_confirmed_prior_proposals; all_successors_block_unresolved_writes",
+    "max_concurrency": 1,
+    "model_settings": {
+      "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+    },
+    "proposal_schema": "argus.proposal.v1",
+    "qa_timeout_seconds": 180,
+    "queue_limit": 1,
+    "scenario": "work-item-v1",
+    "schedule": {
+      "deadline_s": 180,
+      "frozen": true,
+      "release_interval_s": 90,
+      "stop_budget_s": 10
+    },
+    "steps_per_client": 6,
+    "task_retries": 0,
+    "tool_mode": "explicit_memory_recall_store"
+  },
+  "protocol_hash": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+  "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c",
+  "scenario": "work-item-v1",
+  "schema": "argus.continuous-manifest.v1",
+  "structure_hash": "0831ccaf348fdb0aa619f25b93f5a60bfe90600143eca59d92381e0a741b2dc8"
+}

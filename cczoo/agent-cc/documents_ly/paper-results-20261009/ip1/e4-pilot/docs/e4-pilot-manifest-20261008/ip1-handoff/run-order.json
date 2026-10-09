@@ -1,0 +1,36 @@
+{
+  "note": "Deploy the selected run's users/Gateway config before run --run-id; preserve volume only within that run.",
+  "remote_acceptance": "NOT_RUN",
+  "runs": [
+    {
+      "block_id": "continuous-n1-s1",
+      "case": "continuous",
+      "condition": "fault",
+      "continuous_config": "/secure/e4-pilot/full-1-recovery.json",
+      "experiment": "E4",
+      "fault_kind": "helper-freeze",
+      "fault_scope": "shared_service",
+      "group": "full_argus",
+      "planned_tasks": 6,
+      "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+      "scale": 1,
+      "scenario": "work-item-v1",
+      "seed": 1
+    },
+    {
+      "block_id": "continuous-n1-s1",
+      "case": "continuous",
+      "condition": "no_fault",
+      "continuous_config": "/secure/e4-pilot/full-1-healthy.json",
+      "experiment": "E4",
+      "fault_kind": "helper-freeze",
+      "fault_scope": "shared_service",
+      "group": "full_argus",
+      "planned_tasks": 6,
+      "run_id": "e4p1-3d00004a2a939c240ce5883134fbdbae",
+      "scale": 1,
+      "scenario": "work-item-v1",
+      "seed": 1
+    }
+  ]
+}

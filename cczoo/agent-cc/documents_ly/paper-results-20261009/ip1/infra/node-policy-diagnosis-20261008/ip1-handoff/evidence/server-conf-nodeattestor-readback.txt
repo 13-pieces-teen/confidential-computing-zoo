@@ -1,0 +1,20 @@
+  NodeAttestor "argus_tdx" {
+    plugin_data {
+      agent_id                   = "spiffe://argus.local/spire/agent/argus_tdx/openviking-node"
+      slot_owner_key_sha256      = "be8570d79b444c272b579f1fb5a4ca69f625bc9561b1b1683942786958efff58"
+      trustee_url                = "https://trustee.argus.local:8443"
+      trustee_ca_path            = "/etc/argus-trustee/tls-ca.pem"
+      trustee_server_name        = "trustee.argus.local"
+      ear_public_key_path        = "/etc/argus-trustee/ear-signing-public.pem"
+      ear_expected_issuer        = "https://trustee.argus.local"
+      ear_expected_profile       = "tag:github.com,2024:confidential-containers/Trustee"
+      policy_id                  = "argus-node-poc-ignore-tcb-20261003-01"
+      challenge_ttl              = "30s"
+      trustee_timeout            = "15s"
+      max_quote_bytes            = 4194304
+      max_trustee_response_bytes = 1048576
+    }
+
+    plugin_cmd      = "/opt/argus-workload/bin/argus-tdx-nodeattestor-server"
+    plugin_checksum = "183e098c38255fc3f1ed846a3e6d0218849ff2f79db14d556b9970eeba0c1ede"
+  }

@@ -1,0 +1,4 @@
+now=07:40:15Z left=-80s
+ABORT: window too short (need ~135s)
+
+[exited with code 1]

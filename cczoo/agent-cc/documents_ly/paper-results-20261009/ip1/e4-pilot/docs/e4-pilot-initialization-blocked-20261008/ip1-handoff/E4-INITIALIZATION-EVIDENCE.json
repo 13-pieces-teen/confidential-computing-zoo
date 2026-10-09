@@ -1,0 +1,52 @@
+{
+  "schema": "argus.e4.initialization-evidence.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "client_id": "e4c1",
+  "account_id": "argus-eval",
+  "user_id": "e4p1-recovery",
+  "ov_session_id": "0693418d-66a3-8888-4340-ef89d64583a9",
+  "seed_at_ms": 1791463085000,
+  "seed_commit": {
+    "status": "timeout",
+    "archived": true,
+    "task_id": "942702c6-88ee-46dc-b786-1598f182d135",
+    "archive_uri": "viking://user/e4p1-recovery/sessions/0693418d-66a3-8888-4340-ef89d64583a9/history/archive_001"
+  },
+  "first_reconcile_failed_at_ms": 1791463134509,
+  "first_reconcile": {"result": "UNKNOWN", "code": "GATEWAY_IO_FAILED", "cause": "Archive archive_001 not found"},
+  "extraction_task": {
+    "task_id": "942702c6-88ee-46dc-b786-1598f182d135",
+    "status": "completed",
+    "updated_at_iso": "2026-10-08T12:43:47Z",
+    "result": {
+      "memories_extracted": {"memory_write": 2},
+      "token_usage": {"llm": {"prompt_tokens": 33596, "completion_tokens": 6986, "total_tokens": 40582}, "embedding": {"total_tokens": 5120}}
+    }
+  },
+  "session_after_completion": {
+    "commit_count": 1,
+    "memories_extracted": {"total": 2, "memory_write": 2}
+  },
+  "find_probe": {
+    "query": "Private project c432b91016c8",
+    "target": "viking://user/memories",
+    "level": 2,
+    "limit": 20,
+    "returned": 11,
+    "memories_containing_rule_values": 0
+  },
+  "memory_diff": {
+    "uri": "viking://user/e4p1-recovery/sessions/0693418d-66a3-8888-4340-ef89d64583a9/history/archive_001/memory_diff.json",
+    "sha256": "00d2a41ef409d761cca702d41fbee64e88e32f4d4699c8083641ead16fb53635",
+    "bytes": 10193,
+    "adds": 11,
+    "updates": 0,
+    "deletes": 0
+  },
+  "rule_values_required_by_confirm": {
+    "project_id": "c432b91016c8",
+    "normal_code": "1b9a4aed6b20",
+    "review_code": "d4fcdf6d6876",
+    "threshold_cents": "30000"
+  }
+}

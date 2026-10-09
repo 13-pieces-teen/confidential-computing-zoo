@@ -1,0 +1,38 @@
+{
+  "run_id": "paper-20261004t145835z",
+  "event": "helper-freeze",
+  "ssh_host": "argus-ip2",
+  "server_python": "python3",
+  "server_receiver_package": "/opt/argus-audit",
+  "server_remote_acceptance": "/opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py",
+  "server_deployment": "/etc/argus-experiments/paper02/full_argus/environment.json",
+  "fault_file": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r1-retry1/fault.jsonl",
+  "receiver_file": "/var/lib/argus-receiver/paper-20261004t145835z/receiver.jsonl",
+  "collector_control": "/run/argus-receiver/paper-20261004t145835z/control/collector.sock",
+  "readiness": "transport",
+  "baseline_budget_s": 60,
+  "bound_ms": 10000,
+  "clock_uncertainty_ms": 20,
+  "timeline": {
+    "server_tool": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/timeline.py",
+    "output": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r1-retry1/lifecycle.jsonl",
+    "stop_file": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r1-retry1/lifecycle.stop",
+    "interval": 0.25,
+    "backend_probe": true
+  },
+  "probe": {
+    "url": "https://127.0.0.1:1944/api/v1/search/find",
+    "cert": "/root/argus-e2-ip1/credentials/generation-3339583392/svid.pem",
+    "key": "/root/argus-e2-ip1/credentials/generation-3339583392/key.pem",
+    "bundle": "/root/argus-e2-ip1/credentials/generation-3339583392/bundle.pem",
+    "client_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+    "server_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+    "method": "POST",
+    "inflight": true,
+    "payload_plan": "/root/argus-e2-ip1/payloads/payload-plan.json",
+    "api_key_env": "ARGUS_SYNTHETIC_USER_KEY",
+    "duration": 60,
+    "interval": 0.25,
+    "timeout": 2
+  }
+}

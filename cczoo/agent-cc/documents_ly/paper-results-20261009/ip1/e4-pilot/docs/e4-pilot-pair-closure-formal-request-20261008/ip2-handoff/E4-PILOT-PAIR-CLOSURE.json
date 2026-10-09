@@ -1,0 +1,67 @@
+{
+  "schema": "argus.e4.pilot-pair-closure.v1",
+  "status": "PILOT_PAIR_CONFIRMED_FORMAL_MANIFEST_REQUIRED",
+  "issued_at": "2026-10-08T17:15:01Z",
+  "profile": "argus-recovery-work-item-v1",
+  "protocol_digest": "8d88ab185faacfe31cc5d6c6c1ed3f467a4f9e5cd330edcbf4d4121d16a5be84",
+  "model_freeze": {
+    "provider_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+    "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f"
+  },
+  "pilot_timing": {
+    "release_interval_s": 60,
+    "deadline_s": 120,
+    "qa_timeout_seconds": 120,
+    "stop_budget_s": 10,
+    "window_s": 420
+  },
+  "formal_timing_recommendation": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "qa_timeout_seconds": 180,
+    "stop_budget_s": 10,
+    "fault_at_s": 180,
+    "recovery_at_s": 360,
+    "window_s": 630,
+    "reason": "healthy pilot first answer arrived at window+129.769s, beyond the 120s pilot deadline; preserve the 2x/4x control schedule while providing measured response margin"
+  },
+  "recovery_pilot": {
+    "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+    "operation_id": "e19ba82ccc2f4dbfaa0b576e998b8396",
+    "native_result": "PASS",
+    "measurement_complete": true,
+    "step_counts": {
+      "PASS": 0,
+      "FAIL": 4,
+      "UNKNOWN": 2,
+      "NOT_RUN": 0
+    },
+    "receiver_requests": 25,
+    "receiver_coverage": "COMPLETE_WITHIN_EXPERIMENT_INTERVALS",
+    "receiver_finalization": "intervals_only"
+  },
+  "healthy_pilot": {
+    "run_id": "e4p1-3d00004a2a939c240ce5883134fbdbae",
+    "operation_id": "f09728c153934b2ebbdb1982049f9bc0",
+    "native_result": "PASS",
+    "measurement_complete": true,
+    "no_control_sent": true,
+    "step_counts": {
+      "PASS": 0,
+      "FAIL": 5,
+      "UNKNOWN": 1,
+      "NOT_RUN": 0
+    },
+    "receiver_requests": 26,
+    "receiver_coverage_intervals": 1671,
+    "receiver_coverage": "COMPLETE_WITHIN_EXPERIMENT_INTERVALS",
+    "receiver_finalization": "intervals_only"
+  },
+  "formal_seeds": [
+    101,
+    102,
+    103
+  ],
+  "formal_runs_required": 6,
+  "formal_start_gate": "IP1 generated manifest and protected configuration summaries, followed by per-run IP2 preflight"
+}

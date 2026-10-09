@@ -1,0 +1,21 @@
+{
+  "schema": "argus.ip1-current-health-snapshot.v1",
+  "taken_at": "2026-10-04T03:32:01Z",
+  "scope": "read-only, post-break, separate from A3 historical conclusions",
+  "ip1": {
+    "argus-spire-server.service": "active running, PID 4161698",
+    "argus-trustee.service": "active running, PID 1870180",
+    "argus-trustee-workload-gateway.service": "active running",
+    "argus-spire-firewall.service": "active exited",
+    "e1r2-journal-spire/trustee/nginx": "active running",
+    "e1r2-snap-nginx/trustee": "active running",
+    "note": "no service was restarted, reconfigured, or touched"
+  },
+  "guest": {
+    "sampler_pid_54146": "exited (bounded window self-stop; loop_end seq=54 at 19:49:56.961Z)",
+    "rotation_watchers_19494_34078": "running (evidence collection only; no service mutation)",
+    "evidence_files": "probe.jsonl (453182 B, through 19:49Z), rotation-watch.jsonl (through 03:30Z)"
+  },
+  "ip2_reference": "IP2 A3-CLOSURE-RECEIPT.md readiness snapshot (03:27:56Z): Full units active, container healthy PID 1716593, ready=true",
+  "boundaries": "no B/C/native/Docker; Docktap delegation del-13a8012059de expired 22:35:09Z Oct 3 (IP2-side B/C precondition)"
+}

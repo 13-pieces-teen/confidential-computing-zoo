@@ -1,0 +1,81 @@
+{
+  "schema": "argus.e4.recovery-run-evidence.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "operation_id": "e19ba82ccc2f4dbfaa0b576e998b8396",
+  "output_dir": "/secure/e4-pilot/runs/e4p1-d6771e94005b51df0fd60a23ba981087-g2",
+  "initialization_generation": 2,
+  "configuration_sha256": "4bb4c452da3dd9d66c802a30c1eaf49aad0802f6546eb9e7ba5fe453b6f3d9a9",
+  "manifest_sha256": "95314fdaf2a780d0beb783377eb35229db37e8f42e2a0207f97284d5b70548b1",
+  "result": "PASS",
+  "exit_code": 0,
+  "measurement_complete": true,
+  "phase": "complete",
+  "completed_at": "2026-10-08T15:25:35.038Z",
+  "initialization": {
+    "ov_session_id": "6005b877-ec4a-5441-a2a1-6eb70c1cfd7c",
+    "confirmed": true,
+    "status": "confirmed",
+    "policy_readback": {"self": {"enabled": true}, "peer": {"enabled": true}, "memory_types": ["events"]},
+    "policy_readback_omits_working_memory": true,
+    "commit_count": 1,
+    "task_status": "completed",
+    "memories_extracted": {"total": 2, "memory_write": 1, "memory_edit": 1},
+    "archive": {"servable": true, "abstract": "# Working Memory", "seed_text_observed": true},
+    "find": {
+      "query": "Private project c432b91016c8 work_item_id=trip-e7bbe45c452f5933c08b98c7 行程规则 routes initial_constraints",
+      "events_memories": [
+        {"name": "行程规划规则确认.md", "hits": {"project_id": true, "normal_code": false, "review_code": false, "threshold_cents": false}},
+        {"name": "行程规则示例提供.md", "hits": {"project_id": false, "normal_code": true, "review_code": true, "threshold_cents": true}}
+      ],
+      "collective_four_value_hit": true
+    }
+  },
+  "window": {
+    "started_at": "2026-10-08T15:18:35.037Z",
+    "duration_s": 420,
+    "steps": {"total": 6, "completed": 6},
+    "step_counts": {"PASS": 0, "FAIL": 4, "UNKNOWN": 2, "NOT_RUN": 0},
+    "counts_evidence_scope": "execution_window_not_task_or_receipt_success"
+  },
+  "controls": {
+    "fault": {
+      "planned_at": "2026-10-08T15:20:35.037Z",
+      "started_at": "2026-10-08T15:20:35.052Z",
+      "completed_at": "2026-10-08T15:20:36.124Z",
+      "returncode": 0,
+      "status": "completed",
+      "argv_sha256": "b0f4d271bdce19b39a31251af24304e1f24477805c0ba6278c8dff1edad01030",
+      "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json"
+    },
+    "recovery": {
+      "planned_at": "2026-10-08T15:22:35.037Z",
+      "started_at": "2026-10-08T15:22:35.069Z",
+      "completed_at": "2026-10-08T15:22:41.706Z",
+      "returncode": 0,
+      "status": "completed",
+      "argv_sha256": "06123d651d427888a43a844e773034d3424f5561dce46509a9ced31e901cd415",
+      "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json"
+    }
+  },
+  "model_observations": {
+    "e4c1": {
+      "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+      "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f"
+    }
+  },
+  "transient_note": {
+    "first_launch_preflight_failed_at": "2026-10-08T15:04:22Z",
+    "code": "GATEWAY_IO_FAILED",
+    "cause": "credential-rotation transient window",
+    "seed_writes_in_failed_attempt": 0,
+    "rerun_performed_single_fresh_initialization_write": true,
+    "same_operation_id": true
+  },
+  "preservation": {
+    "blocked_dir_preserved": true,
+    "retry1_g1_dir_preserved": true,
+    "session_0693418d_untouched": true,
+    "session_ed03a5dc_untouched": true,
+    "healthy_run_still_staged_not_ready": true
+  }
+}

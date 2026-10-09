@@ -1,0 +1,18 @@
+{
+  "schema": "argus.e4.extraction-diff-summary.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "extracted_at": "2026-10-08T12:43:47.578148Z",
+  "adds": [
+    {"uri_tail": "cases/行程规划约束应用.md", "memory_type": "cases", "len": 760, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "preferences/user/行程规划数据处理.md", "memory_type": "preferences", "len": 238, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "trajectories/行程约束验证_20261008123816.md", "memory_type": "trajectories", "len": 1022, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "trajectories/候选路线筛选_20261008123816.md", "memory_type": "trajectories", "len": 1154, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "trajectories/最低成本路线选择_20261008123816.md", "memory_type": "trajectories", "len": 921, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "trajectories/无可行路线报告_20261008123816.md", "memory_type": "trajectories", "len": 854, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "experiences/行程约束验证.md", "memory_type": "experiences", "len": 356, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "experiences/候选路线筛选.md", "memory_type": "experiences", "len": 548, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "experiences/提案与事实保留.md", "memory_type": "experiences", "len": 295, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "experiences/行程约束应用与路线选择.md", "memory_type": "experiences", "len": 795, "pid": false, "nc": false, "rc": false, "th": false},
+    {"uri_tail": "experiences/无可行路线报告.md", "memory_type": "experiences", "len": 446, "pid": false, "nc": false, "rc": false, "th": false}
+  ]
+}

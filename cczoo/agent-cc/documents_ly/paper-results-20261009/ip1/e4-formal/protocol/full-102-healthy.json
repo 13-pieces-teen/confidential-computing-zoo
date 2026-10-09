@@ -1,0 +1,52 @@
+{
+  "schema": "argus.continuous.v1",
+  "scenario": "work-item-v1",
+  "block_id": "continuous-n1-s102",
+  "group": "full_argus",
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "mode": "formal",
+  "structure_seed": 102,
+  "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+  },
+  "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+  },
+  "qa_timeout_seconds": 180,
+  "max_concurrency": 1,
+  "queue_limit": 1,
+  "task_retries": 0,
+  "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c",
+  "condition": "no_fault",
+  "initialization_generation": 1,
+  "bindings": [
+    {
+      "client_id": "e4c1",
+      "container": "argus-oc-paper01full",
+      "docker_user": "21001:21001",
+      "config_path": "/home/node/.openclaw/openclaw.json",
+      "agent_id": "main",
+      "account_id": "argus-eval",
+      "user_id": "e4p1-s102-healthy",
+      "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+      "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+  ],
+  "controls": {
+    "fault": {
+      "at_s": 180,
+      "timeout_s": 120,
+      "argv": []
+    },
+    "recovery": {
+      "at_s": 360,
+      "timeout_s": 120,
+      "argv": []
+    }
+  },
+  "secret_seed": "REDACTED:R1:sha256=731caa8e598c0b207ec642f21aafef0a1cd1794ab9896dc870b4c2b110ea4446"
+}

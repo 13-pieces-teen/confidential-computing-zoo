@@ -1,0 +1,28 @@
+{
+  "schema": "argus.e4.recovery-closure.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "result": "CONFIRMED",
+  "target": {
+    "launch_id": "launch-99533a9",
+    "container_id": "1a20331937bef36bb213281396c1f3bdce9d899a09d0fbd14089d37f57de186d",
+    "pid": 512035,
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e"
+  },
+  "window_requests": {
+    "pre_fault": 4,
+    "fault_hold": 5,
+    "recovery_transition": 0,
+    "post_recovery": 16
+  },
+  "window_coverage_intervals_complete": true,
+  "fault_sha256": "9d745e5ee41bb44d5900b2cdaa0f5e422f4fa5c60fbaceb2c1c003feb089147b",
+  "recovery_sha256": "cde875029f74b9284f8b89c7b5f49457f8688bcb4112105041a627ec757c3683",
+  "receiver_sha256": "38c7703c2c4dbd212bf25c73985f6bea52ad1310b538e2686b836cccd444f01a",
+  "binding_sha256": "6074f9c92e88b60efa27d7b55fdf361edbd3ce1749bc92ae35ce082a721e40cc",
+  "window_correlation_sha256": "ea9a736e6ee96d1584b787aabd4e619101725da8a58594fdbdfa3050246c9938",
+  "receiver_finalized": true,
+  "receiver_stop_coverage": "intervals_only",
+  "final_unknown_tail_preserved": true,
+  "healthy_run_id": "e4p1-3d00004a2a939c240ce5883134fbdbae",
+  "healthy_launch_status": "AWAITING_FRESH_OIDC"
+}

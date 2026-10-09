@@ -1,0 +1,50 @@
+=== chain start 2026-10-08T08:05:44Z ===
+sync#1 gen=generation-1120892263 left=158s 2026-10-08T08:05:45Z
+sync#2 gen=generation-1120892263 left=146s 2026-10-08T08:05:57Z
+sync#3 gen=generation-2137105275 left=294s 2026-10-08T08:06:09Z
+=== arm attempt 1 2026-10-08T08:06:09Z ===
+{
+  "after": {
+    "ax-paper02-full-helper.service": {
+      "active": "active",
+      "invocation_id": "6547fd4eed6448e19cbb18f1bf8dec7c",
+      "main_pid": 417674,
+      "restarts": 0
+    },
+    "ax-paper02-full-nginx.service": {
+      "active": "active",
+      "invocation_id": "23dc4e2ceeb74fdabe8235c00256ac5e",
+      "main_pid": 417737,
+      "restarts": 0
+    }
+  },
+  "alternate_helper_config_sha256": "e0572a6f79b52903ade77ff3092067d6313b5dffc7a7ab168dec46e37f795970",
+  "armed_at": "2026-10-08T08:06:14.637485+00:00",
+  "before": {
+    "ax-paper02-full-helper.service": {
+      "active": "active",
+      "invocation_id": "0b774a857fc547689bcab6107acbc673",
+      "main_pid": 409803,
+      "restarts": 0
+    },
+    "ax-paper02-full-nginx.service": {
+      "active": "active",
+      "invocation_id": "c0cc5a0c02f14ed786326adf8371a5cb",
+      "main_pid": 409892,
+      "restarts": 0
+    }
+  },
+  "credential_loaded_at_arm": {
+    "not_after": "Oct  8 08:09:55 2026 GMT",
+    "serial": "A3DB11F66C25B68AEF513765D2E6D535"
+  },
+  "events": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold-standing-events.jsonl",
+  "hook_sha256": "b00d0430b9063ce3a212345e1e12dfcf2d97db4f4989cc27e68c255338895eba",
+  "nginx_config_sha256": "b5dcb9f7f71ce1ec9cfb0019bf20235449485dcbe5ca1d7c7aa56940bff4efe8",
+  "normal_helper_config_sha256": "8d8e2f3328b83fdc348fdbfbda42b0d6586c1cc790162c0e43418a9680541326",
+  "owner": "99578d09d92036ac452c8e89fe992a40",
+  "receipt": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold-standing.json",
+  "schema": "argus.e2.helper-publish-hold.v1",
+  "state": "armed"
+}
+arm refused (state=armed, ready=false); waiting for next server publication

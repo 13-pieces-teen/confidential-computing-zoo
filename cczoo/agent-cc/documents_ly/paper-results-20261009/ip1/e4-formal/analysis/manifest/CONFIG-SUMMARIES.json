@@ -1,0 +1,404 @@
+{
+ "101-recovery": {
+  "config_path": "/secure/e4-formal/full-101-recovery.json",
+  "output_dir": "/secure/e4-formal/runs/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2",
+  "config": {
+   "schema": "argus.continuous.v1",
+   "scenario": "work-item-v1",
+   "block_id": "continuous-n1-s101",
+   "group": "full_argus",
+   "fault_kind": "helper-freeze",
+   "fault_scope": "shared_service",
+   "mode": "formal",
+   "structure_seed": 101,
+   "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+   },
+   "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+   },
+   "qa_timeout_seconds": 180,
+   "max_concurrency": 1,
+   "queue_limit": 1,
+   "task_retries": 0,
+   "run_id": "e4p1-eeacfeaf71560d84a0c8168b7a2c20b2",
+   "condition": "fault",
+   "initialization_generation": 1,
+   "bindings": [
+    {
+     "client_id": "e4c1",
+     "container": "argus-oc-paper01full",
+     "docker_user": "21001:21001",
+     "config_path": "/home/node/.openclaw/openclaw.json",
+     "agent_id": "main",
+     "account_id": "argus-eval",
+     "user_id": "e4p1-s101-recovery",
+     "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+     "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+   ],
+   "controls": {
+    "fault": {
+     "at_s": 180,
+     "timeout_s": 120,
+     "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "argus-ip2",
+      "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json --event helper-freeze --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/fault.jsonl --execute-fault --hold-recovery"
+     ]
+    },
+    "recovery": {
+     "at_s": 360,
+     "timeout_s": 120,
+     "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "argus-ip2",
+      "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json --fault /var/lib/argus-receiver/{run_id}/fault.jsonl --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/recovery.jsonl"
+     ]
+    }
+   }
+  },
+  "secret_seed_sha256": "fca4cbf99ad7bc2f57231baf6a0b053cb0435e879c264d18c317d37fd77e2579",
+  "secret_seed_retained_only_in_protected_config": true
+ },
+ "101-healthy": {
+  "config_path": "/secure/e4-formal/full-101-healthy.json",
+  "output_dir": "/secure/e4-formal/runs/e4p1-861c0d0a872e0831d93271cd6292aa98",
+  "config": {
+   "schema": "argus.continuous.v1",
+   "scenario": "work-item-v1",
+   "block_id": "continuous-n1-s101",
+   "group": "full_argus",
+   "fault_kind": "helper-freeze",
+   "fault_scope": "shared_service",
+   "mode": "formal",
+   "structure_seed": 101,
+   "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+   },
+   "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+   },
+   "qa_timeout_seconds": 180,
+   "max_concurrency": 1,
+   "queue_limit": 1,
+   "task_retries": 0,
+   "run_id": "e4p1-861c0d0a872e0831d93271cd6292aa98",
+   "condition": "no_fault",
+   "initialization_generation": 1,
+   "bindings": [
+    {
+     "client_id": "e4c1",
+     "container": "argus-oc-paper01full",
+     "docker_user": "21001:21001",
+     "config_path": "/home/node/.openclaw/openclaw.json",
+     "agent_id": "main",
+     "account_id": "argus-eval",
+     "user_id": "e4p1-s101-healthy",
+     "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+     "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+   ],
+   "controls": {
+    "fault": {
+     "at_s": 180,
+     "timeout_s": 120,
+     "argv": []
+    },
+    "recovery": {
+     "at_s": 360,
+     "timeout_s": 120,
+     "argv": []
+    }
+   }
+  },
+  "secret_seed_sha256": "d89071f6522639fc4e4c26e9784e84f708ccf5d2ca1a59d77927ca4a29eca672",
+  "secret_seed_retained_only_in_protected_config": true
+ },
+ "102-healthy": {
+  "config_path": "/secure/e4-formal/full-102-healthy.json",
+  "output_dir": "/secure/e4-formal/runs/e4p1-94e9cd04e6e58ab00041228fadf8da5c",
+  "config": {
+   "schema": "argus.continuous.v1",
+   "scenario": "work-item-v1",
+   "block_id": "continuous-n1-s102",
+   "group": "full_argus",
+   "fault_kind": "helper-freeze",
+   "fault_scope": "shared_service",
+   "mode": "formal",
+   "structure_seed": 102,
+   "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+   },
+   "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+   },
+   "qa_timeout_seconds": 180,
+   "max_concurrency": 1,
+   "queue_limit": 1,
+   "task_retries": 0,
+   "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c",
+   "condition": "no_fault",
+   "initialization_generation": 1,
+   "bindings": [
+    {
+     "client_id": "e4c1",
+     "container": "argus-oc-paper01full",
+     "docker_user": "21001:21001",
+     "config_path": "/home/node/.openclaw/openclaw.json",
+     "agent_id": "main",
+     "account_id": "argus-eval",
+     "user_id": "e4p1-s102-healthy",
+     "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+     "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+   ],
+   "controls": {
+    "fault": {
+     "at_s": 180,
+     "timeout_s": 120,
+     "argv": []
+    },
+    "recovery": {
+     "at_s": 360,
+     "timeout_s": 120,
+     "argv": []
+    }
+   }
+  },
+  "secret_seed_sha256": "731caa8e598c0b207ec642f21aafef0a1cd1794ab9896dc870b4c2b110ea4446",
+  "secret_seed_retained_only_in_protected_config": true
+ },
+ "102-recovery": {
+  "config_path": "/secure/e4-formal/full-102-recovery.json",
+  "output_dir": "/secure/e4-formal/runs/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc",
+  "config": {
+   "schema": "argus.continuous.v1",
+   "scenario": "work-item-v1",
+   "block_id": "continuous-n1-s102",
+   "group": "full_argus",
+   "fault_kind": "helper-freeze",
+   "fault_scope": "shared_service",
+   "mode": "formal",
+   "structure_seed": 102,
+   "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+   },
+   "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+   },
+   "qa_timeout_seconds": 180,
+   "max_concurrency": 1,
+   "queue_limit": 1,
+   "task_retries": 0,
+   "run_id": "e4p1-cd119c89ea1d8995ffb995b87b6ed3dc",
+   "condition": "fault",
+   "initialization_generation": 1,
+   "bindings": [
+    {
+     "client_id": "e4c1",
+     "container": "argus-oc-paper01full",
+     "docker_user": "21001:21001",
+     "config_path": "/home/node/.openclaw/openclaw.json",
+     "agent_id": "main",
+     "account_id": "argus-eval",
+     "user_id": "e4p1-s102-recovery",
+     "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+     "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+   ],
+   "controls": {
+    "fault": {
+     "at_s": 180,
+     "timeout_s": 120,
+     "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "argus-ip2",
+      "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json --event helper-freeze --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/fault.jsonl --execute-fault --hold-recovery"
+     ]
+    },
+    "recovery": {
+     "at_s": 360,
+     "timeout_s": 120,
+     "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "argus-ip2",
+      "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json --fault /var/lib/argus-receiver/{run_id}/fault.jsonl --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/recovery.jsonl"
+     ]
+    }
+   }
+  },
+  "secret_seed_sha256": "af94843b3a3e2f77d45036b959c5fdcd222b858b77b8b208f100d2067415c79a",
+  "secret_seed_retained_only_in_protected_config": true
+ },
+ "103-recovery": {
+  "config_path": "/secure/e4-formal/full-103-recovery.json",
+  "output_dir": "/secure/e4-formal/runs/e4p1-7998d97419ea05161cc33525d2b1b3c3",
+  "config": {
+   "schema": "argus.continuous.v1",
+   "scenario": "work-item-v1",
+   "block_id": "continuous-n1-s103",
+   "group": "full_argus",
+   "fault_kind": "helper-freeze",
+   "fault_scope": "shared_service",
+   "mode": "formal",
+   "structure_seed": 103,
+   "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+   },
+   "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+   },
+   "qa_timeout_seconds": 180,
+   "max_concurrency": 1,
+   "queue_limit": 1,
+   "task_retries": 0,
+   "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3",
+   "condition": "fault",
+   "initialization_generation": 1,
+   "bindings": [
+    {
+     "client_id": "e4c1",
+     "container": "argus-oc-paper01full",
+     "docker_user": "21001:21001",
+     "config_path": "/home/node/.openclaw/openclaw.json",
+     "agent_id": "main",
+     "account_id": "argus-eval",
+     "user_id": "e4p1-s103-recovery",
+     "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+     "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+   ],
+   "controls": {
+    "fault": {
+     "at_s": 180,
+     "timeout_s": 120,
+     "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "argus-ip2",
+      "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json --event helper-freeze --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/fault.jsonl --execute-fault --hold-recovery"
+     ]
+    },
+    "recovery": {
+     "at_s": 360,
+     "timeout_s": 120,
+     "argv": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "StrictHostKeyChecking=yes",
+      "-o",
+      "ConnectTimeout=10",
+      "argus-ip2",
+      "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json --fault /var/lib/argus-receiver/{run_id}/fault.jsonl --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/recovery.jsonl"
+     ]
+    }
+   }
+  },
+  "secret_seed_sha256": "640549c6f74f173da4ac3412a84a7c4b6921ad634e83c6d2ba1eb25721fc17a2",
+  "secret_seed_retained_only_in_protected_config": true
+ },
+ "103-healthy": {
+  "config_path": "/secure/e4-formal/full-103-healthy.json",
+  "output_dir": "/secure/e4-formal/runs/e4p1-a719364175d67653b560bf1b386f8539",
+  "config": {
+   "schema": "argus.continuous.v1",
+   "scenario": "work-item-v1",
+   "block_id": "continuous-n1-s103",
+   "group": "full_argus",
+   "fault_kind": "helper-freeze",
+   "fault_scope": "shared_service",
+   "mode": "formal",
+   "structure_seed": 103,
+   "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+   },
+   "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+   },
+   "qa_timeout_seconds": 180,
+   "max_concurrency": 1,
+   "queue_limit": 1,
+   "task_retries": 0,
+   "run_id": "e4p1-a719364175d67653b560bf1b386f8539",
+   "condition": "no_fault",
+   "initialization_generation": 1,
+   "bindings": [
+    {
+     "client_id": "e4c1",
+     "container": "argus-oc-paper01full",
+     "docker_user": "21001:21001",
+     "config_path": "/home/node/.openclaw/openclaw.json",
+     "agent_id": "main",
+     "account_id": "argus-eval",
+     "user_id": "e4p1-s103-healthy",
+     "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+     "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+   ],
+   "controls": {
+    "fault": {
+     "at_s": 180,
+     "timeout_s": 120,
+     "argv": []
+    },
+    "recovery": {
+     "at_s": 360,
+     "timeout_s": 120,
+     "argv": []
+    }
+   }
+  },
+  "secret_seed_sha256": "25863d46961fc2c38ce00913a0e42f37375629d96a29d047983a288a5bae2d2d",
+  "secret_seed_retained_only_in_protected_config": true
+ }
+}

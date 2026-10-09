@@ -1,0 +1,48 @@
+{
+  "schema": "argus.e4.pilot-contract.v1",
+  "status": "WAITING_FOR_IP1_GENERATED_MANIFEST",
+  "profile": "argus-recovery-work-item-v1",
+  "scenario": "work-item-v1",
+  "groups": ["full_argus"],
+  "conditions": {
+    "healthy": "no_fault",
+    "recovery": "fault"
+  },
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "pilot_seeds": [1],
+  "formal_seeds_after_pilot_freeze": [101, 102, 103],
+  "clients_per_run": 1,
+  "steps_per_run": 6,
+  "steps_per_phase": 2,
+  "fault_offset": "2 * release_interval_s",
+  "recovery_offset": "4 * release_interval_s",
+  "pilot_runs": 2,
+  "formal_runs_after_freeze": 6,
+  "ip1_must_deliver_before_ip2_preflight": [
+    "generated suite.json and run-order.json",
+    "actual healthy and recovery run IDs from the manifest",
+    "both protected per-run continuous configuration summaries",
+    "actual pinned provider/model name",
+    "actual Gateway container, docker user, config path, agent ID, and client SPIFFE ID",
+    "distinct ordinary account/user IDs for both runs",
+    "distinct private secret seeds retained only in protected IP1 configs",
+    "pilot schedule values and deadlines",
+    "proposed strict-SSH fault and legal-recovery argv arrays for the recovery run"
+  ],
+  "ip2_will_prepare_after_manifest": [
+    "fresh least-privilege private user/key for each run",
+    "per-run receiver binding and immutable output using the existing audit socket mount",
+    "owner-verified helper-freeze fault and timed legal-recovery paths",
+    "per-run service, admission, readiness, lifecycle, and receiver evidence directories",
+    "server-side preflight receipts for healthy and recovery runs"
+  ],
+  "prohibited": [
+    "reuse E2 user, receiver output, or fault receipt",
+    "run formal seeds before both engineering pilots complete and timing/model are frozen",
+    "use legacy Full/native four-condition profile",
+    "rerun P0/A3",
+    "create a new launch or Docker operation before the selected pilot run requires and records it",
+    "inject a fault outside the IP1 E4 fixed schedule"
+  ]
+}

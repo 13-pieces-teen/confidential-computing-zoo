@@ -1,0 +1,16 @@
+{"at_ms": 1791485967783, "client_id": "e4c1", "event": "preflight_failed", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c"}
+{"at_ms": 1791486320926, "event": "window_started", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c"}
+{"at_ms": 1791486320927, "client_id": "e4c1", "event": "offered", "fact_id": "1c4d04f01744b80755a597d9f2bf409d", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s00"}
+{"at_ms": 1791486320932, "client_id": "e4c1", "event": "input_dispatch_intent", "fact_id": "1c4d04f01744b80755a597d9f2bf409d", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "task_id": "s00"}
+{"at_ms": 1791486410953, "client_id": "e4c1", "event": "offered", "fact_id": "fa5f4a6979b1008490f22e59627d557f", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s01"}
+{"at_ms": 1791486311053, "boundary": "openclaw_cli_input", "client_id": "e4c1", "clock_domain": "gateway_host_realtime", "event": "input_released", "fact_id": "1c4d04f01744b80755a597d9f2bf409d", "prompt_sha256": "5268e0f023f8719fac93fc39a2e6a4b14f6f227125ee2489be808cc1d4b70350", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "session_key": "argus-e4:e4p1-94e9cd04e6e58ab00041228fadf8da5c:e4c1:s00:1", "source": "gateway_agent_dispatch", "task_id": "s00", "work_item_id": "trip-40fb7c2322d066a9c4e2a161"}
+{"at_ms": 1791486439045, "attempted": "UNKNOWN", "client_id": "e4c1", "committed": "UNKNOWN", "confirmed_predecessors_recalled": true, "confirmed_proposals_recalled": true, "deadline_missed": false, "decision_committed": false, "event": "task_observed", "full_fact_sent": "UNKNOWN", "gateway_error": null, "gateway_outcome": "OBSERVED", "local_blocked_requests": 0, "proposal_persisted": "UNKNOWN", "reason": "ANSWER_INCORRECT", "recalled": false, "request_ids": [], "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s00", "store_tool_failed": false, "task_result": "FAIL", "tool_call_count": 0, "tool_events": [], "transport_evidence": [], "write_attempted": "UNKNOWN", "write_outcome": "UNKNOWN"}
+{"at_ms": 1791486500940, "event": "fault_started", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c"}
+{"at_ms": 1791486500942, "event": "fault_observed", "returncode": 0, "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "status": "no_fault"}
+{"at_ms": 1791486500944, "client_id": "e4c1", "event": "offered", "fact_id": "892c1f8372e2e18d83e6eb543f544e34", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s02"}
+{"at_ms": 1791486590971, "client_id": "e4c1", "event": "offered", "fact_id": "76e77ee0336c30708ef81e7f4a64e6d2", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s03"}
+{"at_ms": 1791486680949, "client_id": "e4c1", "event": "offered", "fact_id": "d192cb8c6d6d3c14c52f78816dd5fb8f", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s04"}
+{"at_ms": 1791486680951, "event": "recovery_started", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c"}
+{"at_ms": 1791486680952, "event": "recovery_observed", "returncode": 0, "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "status": "no_fault"}
+{"at_ms": 1791486770974, "client_id": "e4c1", "event": "offered", "fact_id": "15bfc4b4b23bed01271312543ff75c15", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c", "step_id": "s05"}
+{"at_ms": 1791486950928, "event": "window_completed", "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c"}

@@ -1,0 +1,6 @@
+Oct 08 09:01:08 cwf-bkc restful-as[2027945]: 2026-10-08T01:01:08.786571Z  INFO attestation{request_id=a3969d22-9079-4064-a63b-2a984329866c}: restful_as::restful: Attestation API called.
+Oct 08 09:01:12 cwf-bkc restful-as[2027945]: 2026-10-08T01:01:12.442024Z  INFO attestation{request_id=a3969d22-9079-4064-a63b-2a984329866c}:Intel TDX: verifier::tdx: Quote DCAP check succeeded.
+Oct 08 09:01:12 cwf-bkc restful-as[2027945]: 2026-10-08T01:01:12.442046Z  INFO attestation{request_id=a3969d22-9079-4064-a63b-2a984329866c}:Intel TDX: verifier::tdx: MRCONFIGID check succeeded.
+Oct 08 09:01:12 cwf-bkc restful-as[2027945]: 2026-10-08T01:01:12.442050Z  WARN attestation{request_id=a3969d22-9079-4064-a63b-2a984329866c}:Intel TDX: verifier::tdx: No Eventlog included inside the TDX evidence.
+Oct 08 09:01:12 cwf-bkc restful-as[2027945]: 2026-10-08T01:01:12.442072Z  INFO attestation{request_id=a3969d22-9079-4064-a63b-2a984329866c}: attestation_service: Verifier/endorsement check passed. tee=Tdx tee_class="cpu"
+Oct 08 09:01:12 cwf-bkc restful-as[2027945]: 2026-10-08T01:01:12.442951Z  INFO attestation{request_id=a3969d22-9079-4064-a63b-2a984329866c}: restful_as::restful: AttestationEvaluate succeeded.

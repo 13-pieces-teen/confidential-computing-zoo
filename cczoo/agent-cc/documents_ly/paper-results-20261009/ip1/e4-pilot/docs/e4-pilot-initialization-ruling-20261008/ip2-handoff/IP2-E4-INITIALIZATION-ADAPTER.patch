@@ -1,0 +1,108 @@
+diff --git a/cczoo/agent-cc/experiments/argus/continuous.py b/cczoo/agent-cc/experiments/argus/continuous.py
+index 2fd8bf3a..6048316c 100644
+--- a/cczoo/agent-cc/experiments/argus/continuous.py
++++ b/cczoo/agent-cc/experiments/argus/continuous.py
+@@ -95,6 +95,9 @@ def configuration(path):
+         elif c.get('mode', 'pilot') == 'formal':
+             require(item['argv'], 'formal fault runs need explicit fault and recovery commands')
+     c.setdefault('structure_seed', 0)
++    c.setdefault('initialization_generation', 0)
++    require(type(c['initialization_generation']) is int and c['initialization_generation'] >= 0,
++            'initialization_generation must be a nonnegative integer')
+     c.setdefault('model_settings', {})
+     require(isinstance(c['model_settings'],dict) and set(c['model_settings']) <= {'model'},
+             'model_settings supports the configured model only; sampling parameters are not verified')
+@@ -412,7 +415,8 @@ def reconcile_initialization(gateway, binding, rule, previous):
+     archive = (commit.get('archive_uri') or '').rstrip('/').split('/')[-1] or None
+     inspection = gateway.call(binding,'inspect',ov_session_id=rule['ov_session_id'],
+                               extraction_task_id=commit.get('task_id'),archive_id=archive)
+-    found = gateway.call(binding,'find',query='Private project '+rule['project_id'])
++    found = gateway.call(binding,'find',query=rule.get('initialization_query') or
++                         'Private project '+rule['project_id'])
+     task = inspection.get('task') or {}
+     counts = (task.get('result') or {}).get('memories_extracted') or commit.get('memories_extracted') or {}
+     extracted = isinstance(counts,dict) and bool(counts) and all(type(v) is int and v>=0 for v in counts.values()) and sum(counts.values())>0
+@@ -593,7 +597,8 @@ def execute(config_path, output, action='run', gateway=None):
+             if not previous:
+                 previous = {'status':'submission_unknown','ov_session_id':rule['ov_session_id']}
+                 state['initialization'][key] = previous; save()
+-                observed = gateway.call(binding,'seed',ov_session_id=rule['ov_session_id'],text=rule['text'])
++                observed = gateway.call(binding,'seed',ov_session_id=rule['ov_session_id'],text=rule['text'],
++                                        memory_policy=rule.get('memory_policy'))
+                 previous['observation'] = observed; save()
+             confirmed = reconcile_initialization(gateway,binding,rule,previous); save()
+             if not confirmed:
+diff --git a/cczoo/agent-cc/experiments/argus/continuous_gateway.mjs b/cczoo/agent-cc/experiments/argus/continuous_gateway.mjs
+index f3d21ab7..530a2502 100644
+--- a/cczoo/agent-cc/experiments/argus/continuous_gateway.mjs
++++ b/cczoo/agent-cc/experiments/argus/continuous_gateway.mjs
+@@ -76,6 +76,17 @@ try {
+       sampling_observation:samplingObservation,
+       adapter_sha256:hash(fs.readFileSync(path.join(base,'dist/argus-spiffe/task-audit.mjs')))};
+   } else if (spec.action === 'seed') {
++    if (spec.memory_policy) {
++      const headers = {'X-API-Key':cfg.apiKey,'X-OpenViking-Account':cfg.accountId,
++        'X-OpenViking-User':cfg.userId,'X-OpenViking-Actor-Peer':actor,'Content-Type':'application/json'};
++      const response = await transport(new URL('/api/v1/sessions',cfg.baseUrl),{
++        method:'POST',headers,body:JSON.stringify({session_id:spec.ov_session_id,memory_policy:spec.memory_policy})
++      });
++      const created = await response.json();
++      if (!response.ok || created.status !== 'ok' || created.result?.session_id !== spec.ov_session_id) {
++        throw new Error('SESSION_CREATE_FAILED');
++      }
++    }
+     await client.addSessionMessage(spec.ov_session_id,'user',[{type:'text',text:spec.text}],actor);
+     const commit = await client.commitSession(spec.ov_session_id,{wait:true,agentId:actor,keepRecentCount:0});
+     result = {commit,ov_session_id:spec.ov_session_id};
+@@ -114,7 +125,7 @@ try {
+   // These spawn errors mean the CLI never received its input. A running CLI's
+   // timeout/failure retains submission evidence; an outer Docker loss does not.
+   if (['ENOENT','EACCES'].includes(error.code)) inputRelease = undefined;
+-  const known = ['PINNED_PLUGIN_AMBIGUOUS','TASK_AUDIT_MISSING','TYPED_PROPOSAL_AUDIT_MISSING','CONTINUOUS_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','MODEL_CONFIGURATION_MISMATCH','GATEWAY_RESULT_INVALID','INVALID_ACTION'];
++  const known = ['PINNED_PLUGIN_AMBIGUOUS','TASK_AUDIT_MISSING','TYPED_PROPOSAL_AUDIT_MISSING','CONTINUOUS_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','MODEL_CONFIGURATION_MISMATCH','SESSION_CREATE_FAILED','GATEWAY_RESULT_INVALID','INVALID_ACTION'];
+   console.log(JSON.stringify({result:'UNKNOWN',code:known.includes(error.message) ? error.message : 'GATEWAY_IO_FAILED',
+     ...(inputRelease ? {input_release:inputRelease} : {})}));
+   process.exitCode = 1;
+diff --git a/cczoo/agent-cc/experiments/argus/continuous_work_item.py b/cczoo/agent-cc/experiments/argus/continuous_work_item.py
+index 3b8a485b..6a15da04 100644
+--- a/cczoo/agent-cc/experiments/argus/continuous_work_item.py
++++ b/cczoo/agent-cc/experiments/argus/continuous_work_item.py
+@@ -81,10 +81,16 @@ def make_fixture(c, secret_seed):
+                       {'route_code': token(client + '/indoor', 12), 'cost_cents': 12000,
+                        'walk_minutes': 20, 'travel_minutes': 60, 'indoor_stops': 2,
+                        'stops': ['博物馆', '美术馆']}]}
++        generation = c.get('initialization_generation', 0)
++        seed_name = client + '/trip/seed' + (f'/retry-{generation}' if generation else '')
+         rule = {'client_id': client, 'project_id': project, 'work_item_id': work_item,
+                 'normal_code': policy['routes'][0]['route_code'],
+                 'review_code': policy['unavailable_code'], 'threshold_cents': 30000,
+-                'ov_session_id': str(uuid.UUID(token(client + '/trip/seed', 32)))}
++                'ov_session_id': str(uuid.UUID(token(seed_name, 32))),
++                'memory_policy': {'self': {'enabled': True}, 'peer': {'enabled': True},
++                                  'memory_types': ['events'], 'working_memory': {'enabled': False}},
++                'initialization_query': ('Private project ' + project + ' work_item_id=' + work_item +
++                                         ' 行程规则 routes initial_constraints')}
+         rule['text'] = ('Private project ' + project + ': 此行程工作项按步骤顺序应用所有已确认提案；'
+                         '未确认的写入不能当作已生效，也不能重发。以全部有效约束选择最低成本可行路线；'
+                         '没有满足全部约束的候选时报告 NO_FEASIBLE_ITINERARY。完整保留每条 ARGUS_PROPOSAL_V1 '
+diff --git a/cczoo/agent-cc/experiments/argus/tests/test_continuous.py b/cczoo/agent-cc/experiments/argus/tests/test_continuous.py
+index eb884d71..4be08861 100644
+--- a/cczoo/agent-cc/experiments/argus/tests/test_continuous.py
++++ b/cczoo/agent-cc/experiments/argus/tests/test_continuous.py
+@@ -157,6 +157,16 @@ class ContinuousTest(unittest.TestCase):
+         self.assertEqual(one['protocol_hash'],two['protocol_hash'])
+         self.assertNotEqual(one['structure_hash'],two['structure_hash'])
+ 
++    def test_work_item_retry_uses_events_policy_and_fresh_seed_session(self):
++        value=config(); value['scenario']='work-item-v1'; value['initialization_generation']=0
++        atomic(self.path,value); first=make_fixture(configuration(self.path),'a'*64)
++        value['initialization_generation']=1
++        atomic(self.path,value); second=make_fixture(configuration(self.path),'a'*64)
++        self.assertNotEqual(first['rules'][0]['ov_session_id'],second['rules'][0]['ov_session_id'])
++        self.assertEqual(second['rules'][0]['memory_policy']['memory_types'],['events'])
++        self.assertIn(second['rules'][0]['project_id'],second['rules'][0]['initialization_query'])
++        self.assertIn(second['rules'][0]['work_item_id'],second['rules'][0]['initialization_query'])
++
+     def test_releases_continue_when_agent_fails_and_keep_all_deadlines(self):
+         value=config(); value['schedule']={'release_interval_s':0.003,'deadline_s':0.025,'stop_budget_s':0.001}
+         value['qa_timeout_seconds']=1; atomic(self.path,value)

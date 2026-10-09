@@ -1,0 +1,21 @@
+--- a/experiments/argus/continuous_work_item.py
++++ b/experiments/argus/continuous_work_item.py
+@@ -88,7 +88,7 @@
+                 'review_code': policy['unavailable_code'], 'threshold_cents': 30000,
+                 'ov_session_id': str(uuid.UUID(token(seed_name, 32))),
+                 'memory_policy': {'self': {'enabled': True}, 'peer': {'enabled': True},
+-                                  'memory_types': ['events'], 'working_memory': {'enabled': False}},
++                                  'memory_types': ['events'], 'working_memory': {'enabled': True}},
+                 'initialization_query': ('Private project ' + project + ' work_item_id=' + work_item +
+                                          ' 行程规则 routes initial_constraints')}
+         rule['text'] = ('Private project ' + project + ': 此行程工作项按步骤顺序应用所有已确认提案；'
+--- a/experiments/argus/tests/test_continuous.py
++++ b/experiments/argus/tests/test_continuous.py
+@@ -164,6 +164,7 @@
+         atomic(self.path,value); second=make_fixture(configuration(self.path),'a'*64)
+         self.assertNotEqual(first['rules'][0]['ov_session_id'],second['rules'][0]['ov_session_id'])
+         self.assertEqual(second['rules'][0]['memory_policy']['memory_types'],['events'])
++        self.assertTrue(second['rules'][0]['memory_policy']['working_memory']['enabled'])
+         self.assertIn(second['rules'][0]['project_id'],second['rules'][0]['initialization_query'])
+         self.assertIn(second['rules'][0]['work_item_id'],second['rules'][0]['initialization_query'])
+ 

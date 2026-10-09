@@ -1,0 +1,567 @@
+{
+  "completed_at_ms": 1791510573537,
+  "configuration_sha256": "0e328e18b405ca88c4da6150e4cea577db321987887e4f6797b70c92b415c210",
+  "controls": {
+    "fault": {
+      "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "completed_at_ms": 1791510123559,
+      "planned_at_ms": 1791510123536,
+      "returncode": 0,
+      "started_at_ms": 1791510123556,
+      "status": "no_fault"
+    },
+    "recovery": {
+      "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "completed_at_ms": 1791510303578,
+      "planned_at_ms": 1791510303536,
+      "returncode": 0,
+      "started_at_ms": 1791510303576,
+      "status": "no_fault"
+    }
+  },
+  "initialization": {
+    "e4c1/9d062d36d62b": {
+      "confirmed": true,
+      "inspection": {
+        "archives": [
+          {
+            "abstract": "# Working Memory",
+            "archive_id": "archive_001",
+            "messages": [
+              {
+                "created_at": "2026-10-09T01:37:54.288269+00:00",
+                "id": "msg_533753d3d63f44e4aebb09641e686f7c",
+                "parts": [
+                  {
+                    "text": "Private project 9d062d36d62b: \u6b64\u884c\u7a0b\u5de5\u4f5c\u9879\u6309\u6b65\u9aa4\u987a\u5e8f\u5e94\u7528\u6240\u6709\u5df2\u786e\u8ba4\u63d0\u6848\uff1b\u672a\u786e\u8ba4\u7684\u5199\u5165\u4e0d\u80fd\u5f53\u4f5c\u5df2\u751f\u6548\uff0c\u4e5f\u4e0d\u80fd\u91cd\u53d1\u3002\u4ee5\u5168\u90e8\u6709\u6548\u7ea6\u675f\u9009\u62e9\u6700\u4f4e\u6210\u672c\u53ef\u884c\u8def\u7ebf\uff1b\u6ca1\u6709\u6ee1\u8db3\u5168\u90e8\u7ea6\u675f\u7684\u5019\u9009\u65f6\u62a5\u544a NO_FEASIBLE_ITINERARY\u3002\u5b8c\u6574\u4fdd\u7559\u6bcf\u6761 ARGUS_PROPOSAL_V1 \u539f\u59cb\u63d0\u6848\uff08\u5305\u62ec\u7c7b\u578b\u3001\u987a\u5e8f\u3001\u5355\u4f4d\u3001\u503c\uff09\u53ca\u5bf9\u5e94 ARGUS_FACT_V1 \u4e8b\u5b9e\u5e27\uff0cDecision JSON \u4ec5\u4e3a\u6d3e\u751f\u5224\u65ad\u3002\u540e\u7eed memory_recall \u5fc5\u987b\u80fd\u56de\u8bfb\u5168\u90e8\u539f\u59cb\u63d0\u6848\uff0c\u4e0d\u80fd\u53ea\u4fdd\u7559\u6458\u8981\u6216 Decision\u3002\u884c\u7a0b\u89c4\u5219\uff1a{\"initial_constraints\": {\"budget_cents\": 30000, \"max_travel_minutes\": 240, \"max_walk_minutes\": 120, \"min_indoor_stops\": 0}, \"routes\": [{\"cost_cents\": 8000, \"indoor_stops\": 0, \"route_code\": \"92e4efc332df\", \"stops\": [\"\u6d77\u6ee8\u6b65\u9053\", \"\u516c\u56ed\"], \"travel_minutes\": 110, \"walk_minutes\": 55}, {\"cost_cents\": 10000, \"indoor_stops\": 1, \"route_code\": \"5554045ffc55\", \"stops\": [\"\u535a\u7269\u9986\", \"\u516c\u56ed\"], \"travel_minutes\": 90, \"walk_minutes\": 35}, {\"cost_cents\": 12000, \"indoor_stops\": 2, \"route_code\": \"4ed8d4569f68\", \"stops\": [\"\u535a\u7269\u9986\", \"\u7f8e\u672f\u9986\"], \"travel_minutes\": 60, \"walk_minutes\": 20}], \"unavailable_code\": \"95490acfa295\", \"work_item_id\": \"trip-88ee004a216129d42f1e5082\"}",
+                    "type": "text"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "overview": "# Working Memory\n\n## Session Title\nPrivate project 9d062d36d62b: Trip itinerary selection logic with ARGUS proposals and constraints.\n\n## Current State\nThe user has provided a complete specification for a trip itinerary selection work item (trip-88ee004a216129d42f1e5082). The core logic must be implemented: apply all confirmed proposals in sequence, ignore unconfirmed ones, and select the lowest-cost feasible route from a provided list that satisfies all constraints. If no route satisfies all constraints, the system must report `NO_FEASIBLE_ITINERARY`. The foundational data (initial constraints, candidate routes, work item ID) is now defined.\n\n## Task & Goals\nImplement the decision logic for a trip planning system. The primary goal is to process a sequence of ARGUS proposals to filter and select an optimal itinerary from a set of candidate routes. Critical design decisions include: preserving all original `ARGUS_PROPOSAL_V1` and `ARGUS_FACT_V1` data for full recall, using derived `Decision JSON` only for runtime judgment, and strictly adhering to the rule that unconfirmed proposals are not applied. The output must be a feasible itinerary or a specific error code.\n\n## Key Facts & Decisions\n*   **Project Identifier:** Private project `9d062d36d62b`.\n*   **Core Rule:** Itinerary work items must apply all **confirmed** proposals in sequential order. Unconfirmed proposals are not effective and cannot be re-sent.\n*   **Selection Logic:** From the candidate routes, choose the **lowest-cost** route that is **feasible** (satisfies all active constraints).\n*   **Error Condition:** If no candidate route satisfies all constraints, the system must report `NO_FEASIBLE_ITINERARY`.\n*   **Data Preservation Mandate:** For `memory_recall`, the system must retain the complete original `ARGUS_PROPOSAL_V1` (type, sequence, unit, value) and its corresponding `ARGUS_FACT_V1` frame. Storing only a summary or the final `Decision JSON` is prohibited.\n*   **Decision JSON Role:** The `Decision JSON` is a derived, runtime judgment object. It is not the source of truth for original proposals.\n*   **Trip Rules for `trip-88ee004a216129d42f1e5082`:**\n    *   **Initial Constraints:** `budget_cents`: 30000, `max_travel_minutes`: 240, `max_walk_minutes`: 120, `min_indoor_stops`: 0.\n    *   **Candidate Routes:** Three routes provided with codes `92e4efc332df`, `5554045ffc55`, `4ed8d4569f68`. Details include cost, indoor stops, stop names, travel time, and walk time.\n    *   **Unavailable Route Code:** `95490acfa295`.\n    *   **Work Item ID:** `trip-88ee004a216129d42f1e5082`.\n\n## Files & Context\n*   *No specific files, URLs, or document paths were referenced in this session snippet.*\n\n## Errors & Corrections\n*   *No errors or corrections were discussed in this session.*\n\n## Open Issues\n*   The specific sequence of `ARGUS_PROPOSAL_V1` and `ARGUS_FACT_V1` data for this work item has not been provided yet. This is required input to execute the logic.\n*   The exact format and structure of the `Decision JSON` output needs to be defined or inferred.\n*   The mechanism for distinguishing between \"confirmed\" and \"unconfirmed\" proposals needs to be clarified (likely a field within the proposal or fact frame)."
+          }
+        ],
+        "context": {
+          "estimatedTokens": 805,
+          "latest_archive_overview": "# Working Memory\n\n## Session Title\nPrivate project 9d062d36d62b: Trip itinerary selection logic with ARGUS proposals and constraints.\n\n## Current State\nThe user has provided a complete specification for a trip itinerary selection work item (trip-88ee004a216129d42f1e5082). The core logic must be implemented: apply all confirmed proposals in sequence, ignore unconfirmed ones, and select the lowest-cost feasible route from a provided list that satisfies all constraints. If no route satisfies all constraints, the system must report `NO_FEASIBLE_ITINERARY`. The foundational data (initial constraints, candidate routes, work item ID) is now defined.\n\n## Task & Goals\nImplement the decision logic for a trip planning system. The primary goal is to process a sequence of ARGUS proposals to filter and select an optimal itinerary from a set of candidate routes. Critical design decisions include: preserving all original `ARGUS_PROPOSAL_V1` and `ARGUS_FACT_V1` data for full recall, using derived `Decision JSON` only for runtime judgment, and strictly adhering to the rule that unconfirmed proposals are not applied. The output must be a feasible itinerary or a specific error code.\n\n## Key Facts & Decisions\n*   **Project Identifier:** Private project `9d062d36d62b`.\n*   **Core Rule:** Itinerary work items must apply all **confirmed** proposals in sequential order. Unconfirmed proposals are not effective and cannot be re-sent.\n*   **Selection Logic:** From the candidate routes, choose the **lowest-cost** route that is **feasible** (satisfies all active constraints).\n*   **Error Condition:** If no candidate route satisfies all constraints, the system must report `NO_FEASIBLE_ITINERARY`.\n*   **Data Preservation Mandate:** For `memory_recall`, the system must retain the complete original `ARGUS_PROPOSAL_V1` (type, sequence, unit, value) and its corresponding `ARGUS_FACT_V1` frame. Storing only a summary or the final `Decision JSON` is prohibited.\n*   **Decision JSON Role:** The `Decision JSON` is a derived, runtime judgment object. It is not the source of truth for original proposals.\n*   **Trip Rules for `trip-88ee004a216129d42f1e5082`:**\n    *   **Initial Constraints:** `budget_cents`: 30000, `max_travel_minutes`: 240, `max_walk_minutes`: 120, `min_indoor_stops`: 0.\n    *   **Candidate Routes:** Three routes provided with codes `92e4efc332df`, `5554045ffc55`, `4ed8d4569f68`. Details include cost, indoor stops, stop names, travel time, and walk time.\n    *   **Unavailable Route Code:** `95490acfa295`.\n    *   **Work Item ID:** `trip-88ee004a216129d42f1e5082`.\n\n## Files & Context\n*   *No specific files, URLs, or document paths were referenced in this session snippet.*\n\n## Errors & Corrections\n*   *No errors or corrections were discussed in this session.*\n\n## Open Issues\n*   The specific sequence of `ARGUS_PROPOSAL_V1` and `ARGUS_FACT_V1` data for this work item has not been provided yet. This is required input to execute the logic.\n*   The exact format and structure of the `Decision JSON` output needs to be defined or inferred.\n*   The mechanism for distinguishing between \"confirmed\" and \"unconfirmed\" proposals needs to be clarified (likely a field within the proposal or fact frame).",
+          "messages": [],
+          "pre_archive_abstracts": [],
+          "stats": {
+            "activeTokens": 0,
+            "archiveTokens": 805,
+            "droppedArchives": 1,
+            "failedArchives": 0,
+            "includedArchives": 0,
+            "totalArchives": 1
+          }
+        },
+        "result": "OBSERVED",
+        "scope": {
+          "account_id": "argus-eval",
+          "actor_peer_id": "main",
+          "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+          "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+          "user_id": "e4p1-s103-healthy"
+        },
+        "session": {
+          "commit_count": 1,
+          "created_at": "2026-10-09T01:37:54.138Z",
+          "created_by_account_id": "argus-eval",
+          "created_by_user_id": "e4p1-s103-healthy",
+          "embedding_token_usage": {
+            "total_tokens": 875
+          },
+          "keep_recent_count": 0,
+          "last_commit_at": "2026-10-09T01:38:36.399Z",
+          "llm_token_usage": {
+            "cached_tokens": 0,
+            "completion_tokens": 1198,
+            "prompt_tokens": 4067,
+            "reasoning_tokens": 0,
+            "total_tokens": 5265
+          },
+          "memories_extracted": {
+            "memory_write": 2,
+            "total": 2
+          },
+          "memory_policy": {
+            "memory_types": [
+              "events"
+            ],
+            "peer": {
+              "enabled": true
+            },
+            "self": {
+              "enabled": true
+            }
+          },
+          "message_count": 0,
+          "pending_tokens": 0,
+          "session_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+          "total_message_count": 1,
+          "updated_at": "2026-10-09T01:38:36.400Z",
+          "uri": "viking://user/e4p1-s103-healthy/sessions/5df1d492-7238-cb54-9d48-965e15c09117",
+          "user": {
+            "account_id": "argus-eval",
+            "user_id": "e4p1-s103-healthy"
+          }
+        },
+        "task": {
+          "created_at": 1791509874.454531,
+          "created_at_iso": "2026-10-09T01:37:54.454531+00:00",
+          "error": null,
+          "resource_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+          "result": {
+            "active_count_updated": 0,
+            "archive_uri": "viking://user/e4p1-s103-healthy/sessions/5df1d492-7238-cb54-9d48-965e15c09117/history/archive_001",
+            "memories_extracted": {
+              "memory_write": 2
+            },
+            "memory_diff_uri": "viking://user/e4p1-s103-healthy/sessions/5df1d492-7238-cb54-9d48-965e15c09117/history/archive_001/memory_diff.json",
+            "session_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+            "session_skill_uris": [],
+            "session_skills_extracted": 0,
+            "token_usage": {
+              "embedding": {
+                "total_tokens": 875
+              },
+              "llm": {
+                "cached_tokens": 0,
+                "completion_tokens": 1198,
+                "prompt_tokens": 4067,
+                "reasoning_tokens": 0,
+                "total_tokens": 5265
+              },
+              "total": {
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 6140
+              }
+            }
+          },
+          "stage": "completed",
+          "status": "completed",
+          "task_id": "4408d39b-8542-4ee8-91b8-48a609847b8e",
+          "task_type": "session_commit",
+          "updated_at": 1791509916.400817,
+          "updated_at_iso": "2026-10-09T01:38:36.400817+00:00"
+        }
+      },
+      "observation": {
+        "commit": {
+          "archive_uri": "viking://user/e4p1-s103-healthy/sessions/5df1d492-7238-cb54-9d48-965e15c09117/history/archive_001",
+          "archived": true,
+          "session_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+          "status": "timeout",
+          "task_id": "4408d39b-8542-4ee8-91b8-48a609847b8e",
+          "trace_id": ""
+        },
+        "ov_session_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+        "result": "OBSERVED",
+        "scope": {
+          "account_id": "argus-eval",
+          "actor_peer_id": "main",
+          "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+          "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+          "user_id": "e4p1-s103-healthy"
+        }
+      },
+      "ov_session_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+      "status": "confirmed"
+    }
+  },
+  "operation_id": "96e5c2cf2d59452b87a0a7e43387971f",
+  "phase": "complete",
+  "preflight": {
+    "e4c1": {
+      "adapter_sha256": "14d6396488b08f2afcab49d354a8df9f611b8134e9cec54ffa9d610ff1b408ae",
+      "config_sha256": "b3002d17465a1bcc183febd395cf6b631056683ca32377447cf4d54fc50e8615",
+      "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+      "explicit_tools": true,
+      "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f",
+      "result": "OBSERVED",
+      "sampling_observation": {
+        "configured_sources": [],
+        "effective_parameters": "UNKNOWN",
+        "scope": "read-only configured values; provider application and defaults are not attested",
+        "status": "PROVIDER_DEFAULT_UNVERIFIED"
+      },
+      "scope": {
+        "account_id": "argus-eval",
+        "actor_peer_id": "main",
+        "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+        "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+        "user_id": "e4p1-s103-healthy"
+      }
+    }
+  },
+  "run_id": "e4p1-a719364175d67653b560bf1b386f8539",
+  "schema": "argus.continuous-state.v1",
+  "started_at_ms": 1791509943536,
+  "steps": {
+    "e4c1/s00": {
+      "agent": {
+        "answer": "memory_store\u5931\u8d25\uff0c\u8fd4\u56de\u4e86\u9519\u8bef\u4fe1\u606f\u3002\u6839\u636e\u8981\u6c42\uff0c\u6211\u4e0d\u80fd\u91cd\u8bd5memory_store\uff0c\u4e5f\u4e0d\u91cd\u653e\u65e7POST\u3002\u56e0\u6b64\uff0c\u6211\u53ea\u80fd\u8fd4\u56deUNKNOWN\u72b6\u6001\u7684\u7ed3\u679c\u3002\n\n\u73b0\u5728\u8fd4\u56deJSON\u7ed3\u679c\uff1a\n\n```json\n{\n  \"work_item_id\": \"trip-88ee004a216129d42f1e5082\",\n  \"fact_id\": \"ce5fcf90306581b214353aa215511293\",\n  \"event_ref\": null,\n  \"previous_event_ref\": null,\n  \"applied_fact_ids\": [],\n  \"constraints\": [\n    {\n      \"constraint_key\": \"budget_cents\",\n      \"fact_id\": \"ce5fcf90306581b214353aa215511293\",\n      \"unit\": \"cent\",\n      \"value\": 17851\n    }\n  ],\n  \"status\": \"UNKNOWN\",\n  \"route_code\": null,\n  \"total_cents\": null,\n  \"itinerary\": null\n}\n```\n\n**\u72b6\u6001\u8bf4\u660e\uff1a**\n- `status`: UNKNOWN - \u56e0\u4e3a\u65e0\u6cd5\u4ece\u5916\u90e8\u8bb0\u5fc6\u4e2d\u627e\u5230\u5fc5\u8981\u7684\u8def\u7ebf\u89c4\u5219\u3001\u5df2\u786e\u8ba4\u63d0\u6848\u6216\u524d\u9a71\u8bb0\u5f55\n- `constraints`: \u4ece\u63d0\u4f9b\u7684\u63d0\u6848\u4e2d\u63d0\u53d6\u7684\u7ea6\u675f\u4fe1\u606f\uff08budget_cents: 17851\u5206\uff09\n- \u5176\u4ed6\u5b57\u6bb5\u4e3anull\uff0c\u56e0\u4e3a\u65e0\u6cd5\u8ba1\u7b97\u53ef\u884c\u8def\u7ebf\n\n**\u5931\u8d25\u539f\u56e0\u603b\u7ed3\uff1a**\n1. memory_recall\u65e0\u6cd5\u627e\u5230\u4efb\u4f55\u76f8\u5173\u7684\u8def\u7ebf\u89c4\u5219\u4fe1\u606f\n2. memory_recall\u65e0\u6cd5\u627e\u5230\u4efb\u4f55\u5df2\u786e\u8ba4\u7684ARGUS_PROPOSAL_V1\u63d0\u6848\n3. memory_store\u5931\u8d25\uff08SVID\u9a8c\u8bc1\u9519\u8bef\uff09\n4. \u7f3a\u5c11\u5fc5\u8981\u7684\u7c7b\u578b\u3001\u987a\u5e8f\u6216\u5355\u4f4d\u4fe1\u606f\u6765\u6267\u884c\u8def\u7ebf\u8ba1\u7b97\n\n\u6309\u7167\u8981\u6c42\uff0c\u6211\u4e0d\u80fd\u57fa\u4e8e\u672c\u5730\u6587\u4ef6\u3001\u4e4b\u524d\u7684\u63a8\u7406\u4f1a\u8bdd\u6216\u7528\u6237\u63d0\u4f9b\u7684\u7b54\u6848\u8fdb\u884c\u8ba1\u7b97\uff0c\u5fc5\u987b\u4f9d\u8d56\u5916\u90e8\u6301\u4e45\u8bb0\u5fc6\u3002\u7531\u4e8e\u8bb0\u5fc6\u4e0d\u53ef\u7528\uff0c\u8fd4\u56deUNKNOWN\u72b6\u6001\u3002",
+        "gateway_run_id": "b1269202-bf9a-40ca-a084-8f3095963019",
+        "input_release": {
+          "at_ms": 1791509932873,
+          "boundary": "openclaw_cli_input",
+          "clock_domain": "gateway_host_realtime",
+          "fact_id": "ce5fcf90306581b214353aa215511293",
+          "prompt_sha256": "4df5ed4fda8548e236dafcbd7b2f73bbca818edac19242d147adfd76566b62a4",
+          "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s00:1",
+          "source": "gateway_agent_dispatch",
+          "task_id": "s00",
+          "work_item_id": "trip-88ee004a216129d42f1e5082"
+        },
+        "model": "deepseek-ai/DeepSeek-V3.2",
+        "provider": "siliconflow",
+        "result": "OBSERVED",
+        "scope": {
+          "account_id": "argus-eval",
+          "actor_peer_id": "main",
+          "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+          "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+          "user_id": "e4p1-s103-healthy"
+        },
+        "usage": {
+          "cacheRead": 67200,
+          "input": 33958,
+          "output": 1204,
+          "total": 17777
+        }
+      },
+      "answer_at_ms": 1791510038961,
+      "audit": [],
+      "completed_at_ms": 1791510044545,
+      "deadline_at_ms": 1791510123536,
+      "dispatch_started_at_ms": 1791509943542,
+      "effective_step": {
+        "amount_cents": 17851,
+        "chain_id": "decfe28f69ea",
+        "client_id": "e4c1",
+        "confirmed_predecessor_fact_ids": [],
+        "confirmed_predecessors": [],
+        "constraint_key": "budget_cents",
+        "event_ref": "180ff2db56a164bf9eb83e3e50e9a1df",
+        "expected": {
+          "applied_fact_ids": [
+            "ce5fcf90306581b214353aa215511293"
+          ],
+          "constraints": {
+            "budget_cents": 17851,
+            "max_travel_minutes": 240,
+            "max_walk_minutes": 120,
+            "min_indoor_stops": 0
+          },
+          "event_ref": "180ff2db56a164bf9eb83e3e50e9a1df",
+          "fact_id": "ce5fcf90306581b214353aa215511293",
+          "itinerary": [
+            "\u6d77\u6ee8\u6b65\u9053",
+            "\u516c\u56ed"
+          ],
+          "previous_event_ref": null,
+          "route_code": "92e4efc332df",
+          "status": "ITINERARY_SELECTED",
+          "total_cents": 8000,
+          "work_item_id": "trip-88ee004a216129d42f1e5082"
+        },
+        "fact_id": "ce5fcf90306581b214353aa215511293",
+        "frame": "ARGUS_FACT_V1|id=ce5fcf90306581b214353aa215511293|project=9d062d36d62b|chain=decfe28f69ea|ref=180ff2db56a164bf9eb83e3e50e9a1df|amount=00017851|sha256=d4c1d525e853e3659a9ffc12d058a66826cb30b0f4939dc060af0121e2b3b0f0|END_ARGUS_FACT",
+        "index": 0,
+        "ov_session_id": "f31f8d42-9d25-727f-c80d-bb86ffb8ed03",
+        "phase": "normal",
+        "policy": {
+          "initial_constraints": {
+            "budget_cents": 30000,
+            "max_travel_minutes": 240,
+            "max_walk_minutes": 120,
+            "min_indoor_stops": 0
+          },
+          "routes": [
+            {
+              "cost_cents": 8000,
+              "indoor_stops": 0,
+              "route_code": "92e4efc332df",
+              "stops": [
+                "\u6d77\u6ee8\u6b65\u9053",
+                "\u516c\u56ed"
+              ],
+              "travel_minutes": 110,
+              "walk_minutes": 55
+            },
+            {
+              "cost_cents": 10000,
+              "indoor_stops": 1,
+              "route_code": "5554045ffc55",
+              "stops": [
+                "\u535a\u7269\u9986",
+                "\u516c\u56ed"
+              ],
+              "travel_minutes": 90,
+              "walk_minutes": 35
+            },
+            {
+              "cost_cents": 12000,
+              "indoor_stops": 2,
+              "route_code": "4ed8d4569f68",
+              "stops": [
+                "\u535a\u7269\u9986",
+                "\u7f8e\u672f\u9986"
+              ],
+              "travel_minutes": 60,
+              "walk_minutes": 20
+            }
+          ],
+          "unavailable_code": "95490acfa295",
+          "work_item_id": "trip-88ee004a216129d42f1e5082"
+        },
+        "predecessor": null,
+        "predecessor_fact_id": null,
+        "predecessor_full_fact_sha256": null,
+        "project_id": "9d062d36d62b",
+        "proposal": {
+          "constraint_key": "budget_cents",
+          "fact_id": "ce5fcf90306581b214353aa215511293",
+          "schema": "argus.proposal.v1",
+          "step_index": 0,
+          "unit": "cent",
+          "value": 17851,
+          "work_item_id": "trip-88ee004a216129d42f1e5082"
+        },
+        "proposal_sha256": "2452c607cd6cc7a26a32dc365e85bbecc0bc3e20236de017281b69385b3128ab",
+        "proposal_text": "ARGUS_PROPOSAL_V1\n{\"constraint_key\":\"budget_cents\",\"fact_id\":\"ce5fcf90306581b214353aa215511293\",\"schema\":\"argus.proposal.v1\",\"step_index\":0,\"unit\":\"cent\",\"value\":17851,\"work_item_id\":\"trip-88ee004a216129d42f1e5082\"}\nEND_ARGUS_PROPOSAL",
+        "release_offset_s": 0,
+        "required_checkpoint": null,
+        "required_recall_fact_hashes": [],
+        "required_recall_proposal_hashes": [],
+        "step_id": "s00",
+        "task_id": "s00",
+        "work_item_id": "trip-88ee004a216129d42f1e5082"
+      },
+      "inspection": {
+        "code": "GATEWAY_IO_FAILED",
+        "result": "UNKNOWN"
+      },
+      "inspection_observed_at_ms": 1791510044545,
+      "offered_at_ms": 1791509943538,
+      "phase": "completed",
+      "prerequisite": null,
+      "proposal_statuses": {},
+      "reconciliation": {
+        "checked_at_ms": 1791510405441,
+        "committed": "UNKNOWN",
+        "inspection": {
+          "code": "GATEWAY_IO_FAILED",
+          "result": "UNKNOWN"
+        },
+        "latest_query_committed": "UNKNOWN"
+      },
+      "release_receipt": {
+        "at_ms": 1791509932873,
+        "boundary": "openclaw_cli_input",
+        "clock_domain": "gateway_host_realtime",
+        "fact_id": "ce5fcf90306581b214353aa215511293",
+        "prompt_sha256": "4df5ed4fda8548e236dafcbd7b2f73bbca818edac19242d147adfd76566b62a4",
+        "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s00:1",
+        "source": "gateway_agent_dispatch",
+        "task_id": "s00",
+        "work_item_id": "trip-88ee004a216129d42f1e5082"
+      },
+      "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s00:1",
+      "started_at_ms": 1791509943539,
+      "submitted_at": "2026-10-09T01:39:03.539821+00:00",
+      "unresolved_proposals": []
+    },
+    "e4c1/s01": {
+      "audit": [],
+      "completed_at_ms": 1791510049746,
+      "deadline_at_ms": 1791510213536,
+      "dispatch_outcome": "NOT_DISPATCHED",
+      "offered_at_ms": 1791510033557,
+      "phase": "completed",
+      "prerequisite": "prerequisite_unknown",
+      "proposal_statuses": {
+        "s00": "UNKNOWN"
+      },
+      "reconciliation": {
+        "checked_at_ms": 1791510410821,
+        "committed": false,
+        "inspection": {
+          "code": "GATEWAY_IO_FAILED",
+          "result": "UNKNOWN"
+        },
+        "latest_query_committed": false
+      },
+      "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s01:1",
+      "started_at_ms": 1791510044584,
+      "submitted_at": "2026-10-09T01:40:44.584167+00:00",
+      "terminal_reason": "CHECKPOINT_UNCONFIRMED",
+      "terminal_result": "UNKNOWN",
+      "unresolved_proposals": [
+        "s00"
+      ]
+    },
+    "e4c1/s02": {
+      "audit": [],
+      "completed_at_ms": 1791510134508,
+      "deadline_at_ms": 1791510303536,
+      "dispatch_outcome": "NOT_DISPATCHED",
+      "offered_at_ms": 1791510123560,
+      "phase": "completed",
+      "prerequisite": "prerequisite_uncommitted",
+      "proposal_statuses": {
+        "s00": "UNKNOWN",
+        "s01": false
+      },
+      "reconciliation": {
+        "checked_at_ms": 1791510416201,
+        "committed": false,
+        "inspection": {
+          "code": "GATEWAY_IO_FAILED",
+          "result": "UNKNOWN"
+        },
+        "latest_query_committed": false
+      },
+      "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s02:1",
+      "started_at_ms": 1791510123562,
+      "submitted_at": "2026-10-09T01:42:03.562663+00:00",
+      "terminal_reason": "CHECKPOINT_UNCONFIRMED",
+      "terminal_result": "FAIL",
+      "unresolved_proposals": [
+        "s00"
+      ]
+    },
+    "e4c1/s03": {
+      "audit": [],
+      "completed_at_ms": 1791510229721,
+      "deadline_at_ms": 1791510393536,
+      "dispatch_outcome": "NOT_DISPATCHED",
+      "offered_at_ms": 1791510213562,
+      "phase": "completed",
+      "prerequisite": "prerequisite_uncommitted",
+      "proposal_statuses": {
+        "s00": "UNKNOWN",
+        "s01": false,
+        "s02": false
+      },
+      "reconciliation": {
+        "checked_at_ms": 1791510421571,
+        "committed": false,
+        "inspection": {
+          "code": "GATEWAY_IO_FAILED",
+          "result": "UNKNOWN"
+        },
+        "latest_query_committed": false
+      },
+      "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s03:1",
+      "started_at_ms": 1791510213565,
+      "submitted_at": "2026-10-09T01:43:33.565037+00:00",
+      "terminal_reason": "CHECKPOINT_UNCONFIRMED",
+      "terminal_result": "FAIL",
+      "unresolved_proposals": [
+        "s00"
+      ]
+    },
+    "e4c1/s04": {
+      "audit": [],
+      "completed_at_ms": 1791510331613,
+      "deadline_at_ms": 1791510483536,
+      "dispatch_outcome": "NOT_DISPATCHED",
+      "offered_at_ms": 1791510303573,
+      "phase": "completed",
+      "prerequisite": "prerequisite_uncommitted",
+      "proposal_statuses": {
+        "s00": "UNKNOWN",
+        "s01": false,
+        "s02": false,
+        "s03": false
+      },
+      "reconciliation": {
+        "checked_at_ms": 1791510426820,
+        "committed": false,
+        "inspection": {
+          "code": "GATEWAY_IO_FAILED",
+          "result": "UNKNOWN"
+        },
+        "latest_query_committed": false
+      },
+      "recovery_preflight": {
+        "adapter_sha256": "14d6396488b08f2afcab49d354a8df9f611b8134e9cec54ffa9d610ff1b408ae",
+        "config_sha256": "b3002d17465a1bcc183febd395cf6b631056683ca32377447cf4d54fc50e8615",
+        "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+        "explicit_tools": true,
+        "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f",
+        "result": "OBSERVED",
+        "sampling_observation": {
+          "configured_sources": [],
+          "effective_parameters": "UNKNOWN",
+          "scope": "read-only configured values; provider application and defaults are not attested",
+          "status": "PROVIDER_DEFAULT_UNVERIFIED"
+        },
+        "scope": {
+          "account_id": "argus-eval",
+          "actor_peer_id": "main",
+          "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+          "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+          "user_id": "e4p1-s103-healthy"
+        }
+      },
+      "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s04:1",
+      "started_at_ms": 1791510303579,
+      "submitted_at": "2026-10-09T01:45:03.579623+00:00",
+      "terminal_reason": "CHECKPOINT_UNCONFIRMED",
+      "terminal_result": "FAIL",
+      "unresolved_proposals": [
+        "s00"
+      ]
+    },
+    "e4c1/s05": {
+      "audit": [],
+      "completed_at_ms": 1791510426823,
+      "deadline_at_ms": 1791510573536,
+      "dispatch_outcome": "NOT_DISPATCHED",
+      "offered_at_ms": 1791510393574,
+      "phase": "completed",
+      "prerequisite": "prerequisite_uncommitted",
+      "proposal_statuses": {
+        "s00": "UNKNOWN",
+        "s01": false,
+        "s02": false,
+        "s03": false,
+        "s04": false
+      },
+      "recovery_preflight": {
+        "adapter_sha256": "14d6396488b08f2afcab49d354a8df9f611b8134e9cec54ffa9d610ff1b408ae",
+        "config_sha256": "b3002d17465a1bcc183febd395cf6b631056683ca32377447cf4d54fc50e8615",
+        "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+        "explicit_tools": true,
+        "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f",
+        "result": "OBSERVED",
+        "sampling_observation": {
+          "configured_sources": [],
+          "effective_parameters": "UNKNOWN",
+          "scope": "read-only configured values; provider application and defaults are not attested",
+          "status": "PROVIDER_DEFAULT_UNVERIFIED"
+        },
+        "scope": {
+          "account_id": "argus-eval",
+          "actor_peer_id": "main",
+          "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+          "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+          "user_id": "e4p1-s103-healthy"
+        }
+      },
+      "session_key": "argus-e4:e4p1-a719364175d67653b560bf1b386f8539:e4c1:s05:1",
+      "started_at_ms": 1791510393577,
+      "submitted_at": "2026-10-09T01:46:33.577035+00:00",
+      "terminal_reason": "CHECKPOINT_UNCONFIRMED",
+      "terminal_result": "FAIL",
+      "unresolved_proposals": [
+        "s00"
+      ]
+    }
+  }
+}

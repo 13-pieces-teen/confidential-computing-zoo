@@ -1,0 +1,160 @@
+{
+ "schema": "argus.e4.formal-run-evidence.v1",
+ "run_id": "e4p1-a719364175d67653b560bf1b386f8539",
+ "operation_id": "96e5c2cf2d59452b87a0a7e43387971f",
+ "output_dir": "/secure/e4-formal/runs/e4p1-a719364175d67653b560bf1b386f8539",
+ "initialization_generation": 1,
+ "configuration_sha256": "0e328e18b405ca88c4da6150e4cea577db321987887e4f6797b70c92b415c210",
+ "manifest_sha256": "c5f00f15a27cc364b59245ca7bff05389df0dafc020e8b28af221ed762f90d6d",
+ "result": "PASS",
+ "exit_code": 0,
+ "measurement_complete": true,
+ "phase": "complete",
+ "completed_at": "2026-10-09T01:49:33.537Z",
+ "initialization": {
+  "ov_session_id": "5df1d492-7238-cb54-9d48-965e15c09117",
+  "confirmed": true,
+  "status": "confirmed",
+  "memory_policy": {
+   "memory_types": [
+    "events"
+   ],
+   "peer": {
+    "enabled": true
+   },
+   "self": {
+    "enabled": true
+   },
+   "working_memory": {
+    "enabled": true
+   }
+  },
+  "commit_count": 1,
+  "task_status": "completed",
+  "memories_extracted": {
+   "memory_write": 2
+  },
+  "archive": {
+   "servable": true,
+   "abstract": "# Working Memory",
+   "archive_id": "archive_001",
+   "seed_text_observed": true,
+   "failed_archives": "not_reported"
+  },
+  "find": {
+   "query": "Private project 9d062d36d62b work_item_id=trip-88ee004a216129d42f1e5082 行程规则 routes initial_constraints",
+   "events_memories": [
+    {
+     "name": "行程规划规则确认.md",
+     "hits": {
+      "project_id": true,
+      "normal_code": false,
+      "review_code": false,
+      "threshold_cents": false
+     }
+    },
+    {
+     "name": "行程约束与候选路线提供.md",
+     "hits": {
+      "project_id": false,
+      "normal_code": true,
+      "review_code": true,
+      "threshold_cents": true
+     }
+    }
+   ],
+   "collective_four_value_hit": true
+  }
+ },
+ "window": {
+  "started_at": "2026-10-09T01:39:03.536Z",
+  "duration_s": 630,
+  "steps": {
+   "total": 6,
+   "completed": 6
+  },
+  "step_counts": {
+   "PASS": 0,
+   "FAIL": 5,
+   "UNKNOWN": 1,
+   "NOT_RUN": 0
+  },
+  "counts_evidence_scope": "execution_window_not_task_or_receipt_success",
+  "offered_tasks": 6,
+  "attempted_tasks": 0,
+  "planned_tasks": 6
+ },
+ "step_outcomes": [
+  {
+   "step_id": "s00",
+   "reason": "ANSWER_INCORRECT",
+   "answer_at_ms": 1791510038961,
+   "completed_at_ms": 1791510038961
+  },
+  {
+   "step_id": "s01",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791510049746
+  },
+  {
+   "step_id": "s02",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791510134508
+  },
+  {
+   "step_id": "s03",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791510229721
+  },
+  {
+   "step_id": "s04",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791510331613
+  },
+  {
+   "step_id": "s05",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791510426823
+  }
+ ],
+ "controls": {
+  "fault": {
+   "planned_at": "2026-10-09T01:42:03.536Z",
+   "started_at": "2026-10-09T01:42:03.556Z",
+   "completed_at": "2026-10-09T01:42:03.559Z",
+   "returncode": 0,
+   "status": "no_fault",
+   "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "tail": null
+  },
+  "recovery": {
+   "planned_at": "2026-10-09T01:45:03.536Z",
+   "started_at": "2026-10-09T01:45:03.576Z",
+   "completed_at": "2026-10-09T01:45:03.578Z",
+   "returncode": 0,
+   "status": "no_fault",
+   "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "tail": null
+  }
+ },
+ "model_observations": {
+  "e4c1": {
+   "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+   "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f",
+   "sampling_observation": {
+    "configured_sources": [],
+    "effective_parameters": "UNKNOWN",
+    "scope": "read-only configured values; provider application and defaults are not attested",
+    "status": "PROVIDER_DEFAULT_UNVERIFIED"
+   }
+  }
+ },
+ "protocol_digest": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+ "receipt_result": "UNKNOWN",
+ "evidence_scope": "execution_window_not_task_or_receipt_success"
+}

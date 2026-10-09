@@ -1,0 +1,4 @@
+headers_sent +0.0s
+chunk0_sent +0.0s
+body_complete +10.0s
+response_received +10.1s bytes=425

@@ -1,0 +1,43 @@
+{
+  "config_digest": "01e2534606ee1d10595d087c52fa2396f3ee8e316265fbbddd48f52a0379a8ae",
+  "first_body_read": {
+    "at_ms": 1791448211627,
+    "chunk_seq": 1,
+    "collector_id": "ddd3c58ac2ae4f32ba96947251fba339",
+    "instance_id": "bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c",
+    "launch_id": "launch-8708838",
+    "message_type": "http.request",
+    "monotonic_ns": 1229516736737689,
+    "more_body": true,
+    "phase": "body_read",
+    "process": {
+      "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+      "cgroup_sha256": "5690928adfc4fbaeb021bd64d9c35f986fbe75ee30e8c6c550d7cf28345339fa",
+      "pid": 248534,
+      "pid_namespace": "pid:[4026532655]",
+      "start_time": "120971181",
+      "uid": 0
+    },
+    "provenance": "kernel_process_and_deployment",
+    "received_at_ms": 1791448211627,
+    "received_body_bytes": 264,
+    "received_monotonic_ns": 1229516737142343,
+    "record_seq": 162141,
+    "request_id": "56561dc1-9eef-4c8d-9767-930e02901fa4",
+    "run_id": "paper-20261004t145835z",
+    "schema_version": 2,
+    "source_id": "062ee1d478ee46e6a9da7d7663e34666",
+    "source_seq": 83755,
+    "stream_id": "6e98e45c67904142a21ed9aa314382a1",
+    "type": "received"
+  },
+  "lifecycle": {
+    "exit_code": 0,
+    "healthy_baseline": true,
+    "status": "COMPLETED"
+  },
+  "phase": "observing",
+  "probe_pid": 3000061,
+  "result": "UNKNOWN",
+  "run_id": "paper-20261004t145835z"
+}

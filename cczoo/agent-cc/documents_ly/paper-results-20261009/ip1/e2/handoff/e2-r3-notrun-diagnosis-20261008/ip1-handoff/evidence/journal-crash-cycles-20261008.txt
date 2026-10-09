@@ -1,0 +1,465 @@
+Oct 08 14:47:19.927006 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:19 [notice] 250619#250619: signal 1 (SIGHUP) received from 369788, reconfiguring
+Oct 08 14:47:19.927006 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:19 [notice] 250619#250619: reconfiguring
+Oct 08 14:47:19.932813 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:19 [notice] 250619#250619: using the "epoll" event method
+Oct 08 14:47:19.932894 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:19 [notice] 250619#250619: start worker processes
+Oct 08 14:47:19.933040 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:19 [notice] 250619#250619: start worker process 369789
+Oct 08 14:47:20.033153 Agent-CC nginx-hook.sh[369011]: 2026/10/08 14:47:20 [notice] 369011#369011: gracefully shutting down
+Oct 08 14:47:20.033153 Agent-CC nginx-hook.sh[369011]: 2026/10/08 14:47:20 [notice] 369011#369011: exiting
+Oct 08 14:47:20.033439 Agent-CC nginx-hook.sh[369011]: 2026/10/08 14:47:20 [notice] 369011#369011: exit
+Oct 08 14:47:20.033886 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:20 [notice] 250619#250619: signal 17 (SIGCHLD) received from 369011
+Oct 08 14:47:20.033925 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:20 [notice] 250619#250619: worker process 369011 exited with code 0
+Oct 08 14:47:20.033958 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:47:20 [notice] 250619#250619: signal 29 (SIGIO) received
+Oct 08 14:48:01.895079 Agent-CC systemd[1]: Reloading ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:48:01.897399 Agent-CC systemd[1]: Reloaded ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:48:01.907229 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:01 [info] 369789#369789: *1196 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.008771 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1197 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.110673 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1198 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.212020 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1199 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.313983 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1200 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.415783 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1201 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.517513 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1202 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.618959 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1203 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.720759 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1204 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.822432 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1205 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:02.924203 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:02 [info] 369789#369789: *1206 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.025757 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1207 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.127489 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1208 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.229038 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1209 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.330755 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1210 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.432517 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1211 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.533936 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1212 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.635676 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1213 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.737381 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1214 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.839028 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1215 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:03.940756 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:03 [info] 369789#369789: *1216 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.042511 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1217 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.143966 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1218 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.245613 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1219 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.347354 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1220 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.448925 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1221 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.550592 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1222 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.652026 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1223 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.753916 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1224 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.855583 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1225 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.957466 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:04 [info] 369789#369789: *1226 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:04.966942 Agent-CC spiffe-helper[250451]: 2026/10/08 14:48:04 workload subscription ended launch_id=launch-8708838 subscription_id=ae8e145c97804c39a9d475f9fa8e2469
+Oct 08 14:48:05.021401 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:05 [notice] 369789#369789: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:48:05.021491 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:48:05 [notice] 250619#250619: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:48:05.021450 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:48:05.021868 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:05 [info] 369789#369789: epoll_wait() failed (4: Interrupted system call)
+Oct 08 14:48:05.021868 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:05 [notice] 369789#369789: exiting
+Oct 08 14:48:05.021868 Agent-CC nginx-hook.sh[369789]: 2026/10/08 14:48:05 [notice] 369789#369789: exit
+Oct 08 14:48:05.022175 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:48:05 [notice] 250619#250619: signal 17 (SIGCHLD) received from 369789
+Oct 08 14:48:05.022210 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:48:05 [notice] 250619#250619: worker process 369789 exited with code 0
+Oct 08 14:48:05.022260 Agent-CC nginx-hook.sh[250619]: 2026/10/08 14:48:05 [notice] 250619#250619: exit
+Oct 08 14:48:05.023199 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 14:48:05.023420 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:48:05.034061 Agent-CC spiffe-helper[250451]: time="2026-10-08T14:48:05+08:00" level=error msg="Error starting spiffe-helper" error="NGINX publish hook: exit status 1: Traceback (most recent call last):\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 54, in <module>\n    main()\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 50, in main\n    hook(json.loads(protected_file(args.config).read_text()), args.action)\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 23, in hook\n    run([*namespace, d.bin / \"spiffe-mtls-probe\", \"-tls-only\", \"-url\", f\"https://127.0.0.1:{d.workload['tls_port']}\",\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/workload.py\", line 34, in run\n    raise RuntimeError(f\"{Path(argv[0]).name} failed ({r.returncode}): {r.stderr.strip()}\")\nRuntimeError: nsenter failed (1): NGINX did not load the published certificate\n" system=spiffe-helper
+Oct 08 14:48:05.035155 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 14:48:05.157614 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'exit-code'.
+Oct 08 14:48:10.162792 Agent-CC systemd[1]: ax-paper02-full-helper.service: Scheduled restart job, restart counter is at 1.
+Oct 08 14:48:10.162950 Agent-CC systemd[1]: Stopped ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:48:10.164004 Agent-CC systemd[1]: Starting ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 14:48:10.168394 Agent-CC argus-workload[371068]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:48:10.169380 Agent-CC systemd[1]: Started ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:48:10.175200 Agent-CC spiffe-helper[371074]: time="2026-10-08T14:48:10+08:00" level=info msg="Using configuration file: \"/etc/argus-experiments/paper02/full_argus/helper.conf\"" system=spiffe-helper
+Oct 08 14:48:10.208363 Agent-CC spiffe-helper[371074]: 2026/10/08 14:48:10 workload subscription launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=8aa9732059bc4ec1be4e300a23b68a00
+Oct 08 14:48:13.915404 Agent-CC systemd[1]: Starting ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:48:13.919327 Agent-CC argus-workload[371836]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:48:13.920120 Agent-CC systemd[1]: Started ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:48:13.981877 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:48:13 [notice] 371842#371842: using the "epoll" event method
+Oct 08 14:48:13.981877 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:48:13 [notice] 371842#371842: nginx/1.22.1
+Oct 08 14:48:13.981877 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:48:13 [notice] 371842#371842: OS: Linux 5.15.120.ve.6-tdxg.3-amd64
+Oct 08 14:48:13.981877 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:48:13 [notice] 371842#371842: getrlimit(RLIMIT_NOFILE): 1024:524288
+Oct 08 14:48:13.982210 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:48:13 [notice] 371842#371842: start worker processes
+Oct 08 14:48:13.982210 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:48:13 [notice] 371842#371842: start worker process 371855
+Oct 08 14:48:14.030965 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:14 [info] 371855#371855: *2 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:48:14.038625 Agent-CC spiffe-helper[371074]: 2026/10/08 14:48:14 target SVID published serial=258981269043248530386283881738127979194 expires=2026-10-08T06:53:01Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=8aa9732059bc4ec1be4e300a23b68a00
+Oct 08 14:48:14.302516 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:14 [info] 371855#371855: *3 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:14.729771 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:14 [info] 371855#371855: *8 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:15.159777 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:15 [info] 371855#371855: *15 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:15.589891 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:15 [info] 371855#371855: *20 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:16.009418 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:16 [info] 371855#371855: *25 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:16.429727 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:16 [info] 371855#371855: *30 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:16.849745 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:16 [info] 371855#371855: *35 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:17.269674 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:17 [info] 371855#371855: *40 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:17.676535 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:17 [info] 371855#371855: *45 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:18.099691 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:18 [info] 371855#371855: *48 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:18.520443 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:18 [info] 371855#371855: *55 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:18.939753 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:18 [info] 371855#371855: *60 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:19.359794 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:19 [info] 371855#371855: *65 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:19.790121 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:19 [info] 371855#371855: *70 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:20.209919 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:20 [info] 371855#371855: *75 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:20.629658 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:20 [info] 371855#371855: *80 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:21.036168 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:21 [info] 371855#371855: *85 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:21.459494 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:21 [info] 371855#371855: *88 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:21.879657 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:21 [info] 371855#371855: *95 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:22.300150 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:22 [info] 371855#371855: *100 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:22.750080 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:22 [info] 371855#371855: *105 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:23.170960 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:23 [info] 371855#371855: *110 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:23.696485 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:23 [info] 371855#371855: *115 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:24.176537 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:24 [info] 371855#371855: *120 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:24.609960 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:24 [info] 371855#371855: *125 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:25.056442 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:25 [info] 371855#371855: *130 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:25.489739 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:25 [info] 371855#371855: *135 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:25.896676 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:25 [info] 371855#371855: *140 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:26.323125 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:26 [info] 371855#371855: *145 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:26.739805 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:26 [info] 371855#371855: *152 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:27.159881 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:27 [info] 371855#371855: *157 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:27.580190 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:27 [info] 371855#371855: *162 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:27.999880 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:27 [info] 371855#371855: *167 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:28.420012 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:28 [info] 371855#371855: *172 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:28.841025 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:28 [info] 371855#371855: *177 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:29.271051 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:29 [info] 371855#371855: *182 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:29.689972 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:29 [info] 371855#371855: *187 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:30.120034 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:30 [info] 371855#371855: *192 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:30.539872 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:30 [info] 371855#371855: *197 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:30.969830 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:30 [info] 371855#371855: *202 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:31.401877 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:31 [info] 371855#371855: *207 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:31.820117 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:31 [info] 371855#371855: *212 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:32.240050 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:32 [info] 371855#371855: *217 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:32.660508 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:32 [info] 371855#371855: *222 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:33.080024 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:33 [info] 371855#371855: *227 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:33.500899 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:33 [info] 371855#371855: *232 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:33.920643 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:33 [info] 371855#371855: *237 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:34.340017 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:34 [info] 371855#371855: *242 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:34.760040 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:34 [info] 371855#371855: *247 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:35.190190 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:35 [info] 371855#371855: *252 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:35.609944 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:35 [info] 371855#371855: *257 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:36.039933 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:36 [info] 371855#371855: *262 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:36.460000 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:36 [info] 371855#371855: *267 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:36.891671 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:36 [info] 371855#371855: *272 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:37.309668 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:37 [info] 371855#371855: *277 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:37.730208 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:37 [info] 371855#371855: *282 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:38.149883 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:38 [info] 371855#371855: *287 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:38.570062 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:38 [info] 371855#371855: *292 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:38.999820 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:38 [info] 371855#371855: *297 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:39.420524 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:39 [info] 371855#371855: *302 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:39.840422 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:39 [info] 371855#371855: *307 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:40.275739 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:40 [info] 371855#371855: *312 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:40.690027 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:40 [info] 371855#371855: *317 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:41.110199 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:41 [info] 371855#371855: *322 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:41.539982 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:41 [info] 371855#371855: *327 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:41.959724 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:41 [info] 371855#371855: *332 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:42.380375 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:42 [info] 371855#371855: *337 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:42.800323 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:42 [info] 371855#371855: *342 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:43.220417 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:43 [info] 371855#371855: *347 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:43.639980 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:43 [info] 371855#371855: *352 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:44.060106 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:44 [info] 371855#371855: *357 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:44.466888 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:44 [info] 371855#371855: *362 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:44.889984 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:44 [info] 371855#371855: *365 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:45.310476 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:45 [info] 371855#371855: *372 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:45.729927 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:45 [info] 371855#371855: *377 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:46.191685 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:46 [info] 371855#371855: *382 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:46.611429 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:46 [info] 371855#371855: *387 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:47.109964 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:47 [info] 371855#371855: *392 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:47.562503 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:47 [info] 371855#371855: *397 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:47.980346 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:47 [info] 371855#371855: *402 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:48.403969 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:48 [info] 371855#371855: *407 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:48.820519 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:48 [info] 371855#371855: *414 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:49.240240 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:49 [info] 371855#371855: *419 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:49.660207 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:49 [info] 371855#371855: *424 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:50.080426 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:50 [info] 371855#371855: *429 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:50.499970 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:50 [info] 371855#371855: *434 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:50.920611 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:50 [info] 371855#371855: *439 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:51.339906 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:51 [info] 371855#371855: *444 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:51.747041 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:51 [info] 371855#371855: *449 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:52.170353 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:52 [info] 371855#371855: *452 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:52.589887 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:52 [info] 371855#371855: *459 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:53.020035 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:53 [info] 371855#371855: *464 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:53.440099 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:53 [info] 371855#371855: *469 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:53.860623 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:53 [info] 371855#371855: *474 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:54.360322 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:54 [info] 371855#371855: *479 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:54.806633 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:54 [info] 371855#371855: *484 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:55.217099 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:55 [info] 371855#371855: *489 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:55.622355 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:55 [info] 371855#371855: *494 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:56.057445 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:56 [info] 371855#371855: *499 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:56.480393 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:56 [info] 371855#371855: *504 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:56.900756 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:56 [info] 371855#371855: *511 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:57.404648 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:57 [info] 371855#371855: *516 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:57.880321 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:57 [info] 371855#371855: *521 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:58.300445 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:58 [info] 371855#371855: *526 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:58.737366 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:58 [info] 371855#371855: *531 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:59.160257 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:59 [info] 371855#371855: *536 client 172.31.28.53 closed keepalive connection
+Oct 08 14:48:59.585833 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:48:59 [info] 371855#371855: *543 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:00.019712 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:00 [info] 371855#371855: *548 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:00.433603 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:00 [info] 371855#371855: *553 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:00.880564 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:00 [info] 371855#371855: *558 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:01.300620 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:01 [info] 371855#371855: *563 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:01.713519 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:01 [info] 371855#371855: *568 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:02.144050 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:02 [info] 371855#371855: *573 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:02.560615 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:02 [info] 371855#371855: *578 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:02.984004 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:02 [info] 371855#371855: *583 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:03.402651 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:03 [info] 371855#371855: *590 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:03.820664 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:03 [info] 371855#371855: *595 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:04.240107 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:04 [info] 371855#371855: *600 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:04.660442 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:04 [info] 371855#371855: *605 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:05.082385 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:05 [info] 371855#371855: *610 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:05.500199 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:05 [info] 371855#371855: *615 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:05.920572 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:05 [info] 371855#371855: *620 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:06.340380 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:06 [info] 371855#371855: *625 client 172.31.28.53 closed keepalive connection
+Oct 08 14:49:06.567881 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:49:06 [info] 371855#371855: *1 client 172.31.28.53 closed keepalive connection
+Oct 08 14:50:20.515837 Agent-CC systemd[1]: Reloading ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:50:20.516977 Agent-CC systemd[1]: Reloaded ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:50:20.525758 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:20 [info] 371855#371855: *628 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:20.627782 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:20 [info] 371855#371855: *629 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:20.729651 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:20 [info] 371855#371855: *630 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:20.831377 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:20 [info] 371855#371855: *631 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:20.932936 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:20 [info] 371855#371855: *632 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.034634 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *633 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.136527 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *634 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.238160 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *635 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.339620 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *636 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.441578 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *637 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.542989 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *638 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.644598 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *639 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.746334 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *640 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.848135 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *641 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:21.949918 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:21 [info] 371855#371855: *642 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.051766 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *643 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.153430 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *644 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.254944 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *645 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.356649 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *646 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.458376 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *647 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.560137 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *648 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.661598 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *649 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.763346 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *650 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.865239 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *651 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:22.966845 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:22 [info] 371855#371855: *652 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.068717 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: *653 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.170421 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: *654 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.272198 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: *655 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.373609 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: *656 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.475467 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: *657 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.576983 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: *658 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:23.586914 Agent-CC spiffe-helper[371074]: 2026/10/08 14:50:23 workload subscription ended launch_id=launch-8708838 subscription_id=8aa9732059bc4ec1be4e300a23b68a00
+Oct 08 14:50:23.641133 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:50:23 [notice] 371842#371842: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:50:23.641376 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [notice] 371855#371855: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:50:23.641376 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [info] 371855#371855: epoll_wait() failed (4: Interrupted system call)
+Oct 08 14:50:23.641376 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [notice] 371855#371855: exiting
+Oct 08 14:50:23.641376 Agent-CC nginx-hook.sh[371855]: 2026/10/08 14:50:23 [notice] 371855#371855: exit
+Oct 08 14:50:23.641283 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:50:23.641896 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:50:23 [notice] 371842#371842: signal 17 (SIGCHLD) received from 371855
+Oct 08 14:50:23.641986 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:50:23 [notice] 371842#371842: worker process 371855 exited with code 0
+Oct 08 14:50:23.641986 Agent-CC nginx-hook.sh[371842]: 2026/10/08 14:50:23 [notice] 371842#371842: exit
+Oct 08 14:50:23.642802 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 14:50:23.643015 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:50:23.653557 Agent-CC spiffe-helper[371074]: time="2026-10-08T14:50:23+08:00" level=error msg="Error starting spiffe-helper" error="NGINX publish hook: exit status 1: Traceback (most recent call last):\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 54, in <module>\n    main()\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 50, in main\n    hook(json.loads(protected_file(args.config).read_text()), args.action)\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 23, in hook\n    run([*namespace, d.bin / \"spiffe-mtls-probe\", \"-tls-only\", \"-url\", f\"https://127.0.0.1:{d.workload['tls_port']}\",\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/workload.py\", line 34, in run\n    raise RuntimeError(f\"{Path(argv[0]).name} failed ({r.returncode}): {r.stderr.strip()}\")\nRuntimeError: nsenter failed (1): NGINX did not load the published certificate\n" system=spiffe-helper
+Oct 08 14:50:23.654629 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 14:50:23.777560 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'exit-code'.
+Oct 08 14:50:28.913001 Agent-CC systemd[1]: ax-paper02-full-helper.service: Scheduled restart job, restart counter is at 2.
+Oct 08 14:50:28.913299 Agent-CC systemd[1]: Stopped ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:50:28.914469 Agent-CC systemd[1]: Starting ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 14:50:28.918629 Agent-CC argus-workload[373407]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:50:28.919578 Agent-CC systemd[1]: Started ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:50:28.923784 Agent-CC spiffe-helper[373413]: time="2026-10-08T14:50:28+08:00" level=info msg="Using configuration file: \"/etc/argus-experiments/paper02/full_argus/helper.conf\"" system=spiffe-helper
+Oct 08 14:50:28.951335 Agent-CC spiffe-helper[373413]: 2026/10/08 14:50:28 workload subscription launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=377c33b7ab8f439f87304df8d1f592a1
+Oct 08 14:50:31.889741 Agent-CC systemd[1]: Starting ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:50:31.893609 Agent-CC argus-workload[373481]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:50:31.894436 Agent-CC systemd[1]: Started ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:50:31.956857 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:50:31 [notice] 373487#373487: using the "epoll" event method
+Oct 08 14:50:31.957166 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:50:31 [notice] 373487#373487: nginx/1.22.1
+Oct 08 14:50:31.957166 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:50:31 [notice] 373487#373487: OS: Linux 5.15.120.ve.6-tdxg.3-amd64
+Oct 08 14:50:31.957166 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:50:31 [notice] 373487#373487: getrlimit(RLIMIT_NOFILE): 1024:524288
+Oct 08 14:50:31.957166 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:50:31 [notice] 373487#373487: start worker processes
+Oct 08 14:50:31.957166 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:50:31 [notice] 373487#373487: start worker process 373500
+Oct 08 14:50:32.005332 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:50:32 [info] 373500#373500: *1 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:50:32.013423 Agent-CC spiffe-helper[373413]: 2026/10/08 14:50:32 target SVID published serial=168746150458291580947073886171007733400 expires=2026-10-08T06:55:20Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=377c33b7ab8f439f87304df8d1f592a1
+Oct 08 14:52:34.528975 Agent-CC systemd[1]: Reloading ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:52:34.529991 Agent-CC systemd[1]: Reloaded ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:52:34.539388 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:34 [info] 373500#373500: *2 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:34.641152 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:34 [info] 373500#373500: *3 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:34.742647 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:34 [info] 373500#373500: *4 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:34.844344 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:34 [info] 373500#373500: *5 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:34.946145 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:34 [info] 373500#373500: *6 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.047802 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *7 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.149901 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *8 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.251648 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *9 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.353416 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *10 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.455111 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *11 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.556636 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *12 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.658286 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *13 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.760053 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *14 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.861479 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *15 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:35.963253 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:35 [info] 373500#373500: *16 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.064998 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *17 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.166617 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *18 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.268425 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *19 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.370107 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *20 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.471605 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *21 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.572961 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *22 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.675413 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *23 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.776791 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *24 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.878441 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *25 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:36.980218 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:36 [info] 373500#373500: *26 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.081580 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: *27 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.182957 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: *28 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.284611 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: *29 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.386361 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: *30 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.487999 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: *31 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.589644 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: *32 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:37.599266 Agent-CC spiffe-helper[373413]: 2026/10/08 14:52:37 workload subscription ended launch_id=launch-8708838 subscription_id=377c33b7ab8f439f87304df8d1f592a1
+Oct 08 14:52:37.652651 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [notice] 373500#373500: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:52:37.652739 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:52:37 [notice] 373487#373487: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:52:37.652912 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [info] 373500#373500: epoll_wait() failed (4: Interrupted system call)
+Oct 08 14:52:37.652912 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [notice] 373500#373500: exiting
+Oct 08 14:52:37.652912 Agent-CC nginx-hook.sh[373500]: 2026/10/08 14:52:37 [notice] 373500#373500: exit
+Oct 08 14:52:37.652749 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:52:37.653462 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:52:37 [notice] 373487#373487: signal 17 (SIGCHLD) received from 373500
+Oct 08 14:52:37.653553 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:52:37 [notice] 373487#373487: worker process 373500 exited with code 0
+Oct 08 14:52:37.653553 Agent-CC nginx-hook.sh[373487]: 2026/10/08 14:52:37 [notice] 373487#373487: exit
+Oct 08 14:52:37.654363 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 14:52:37.654565 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:52:37.665380 Agent-CC spiffe-helper[373413]: time="2026-10-08T14:52:37+08:00" level=error msg="Error starting spiffe-helper" error="NGINX publish hook: exit status 1: Traceback (most recent call last):\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 54, in <module>\n    main()\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 50, in main\n    hook(json.loads(protected_file(args.config).read_text()), args.action)\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 23, in hook\n    run([*namespace, d.bin / \"spiffe-mtls-probe\", \"-tls-only\", \"-url\", f\"https://127.0.0.1:{d.workload['tls_port']}\",\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/workload.py\", line 34, in run\n    raise RuntimeError(f\"{Path(argv[0]).name} failed ({r.returncode}): {r.stderr.strip()}\")\nRuntimeError: nsenter failed (1): NGINX did not load the published certificate\n" system=spiffe-helper
+Oct 08 14:52:37.666354 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 14:52:37.791508 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'exit-code'.
+Oct 08 14:52:42.912876 Agent-CC systemd[1]: ax-paper02-full-helper.service: Scheduled restart job, restart counter is at 3.
+Oct 08 14:52:42.913045 Agent-CC systemd[1]: Stopped ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:52:42.914249 Agent-CC systemd[1]: Starting ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 14:52:42.918575 Agent-CC argus-workload[374262]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:52:42.919438 Agent-CC systemd[1]: Started ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:52:42.923450 Agent-CC spiffe-helper[374268]: time="2026-10-08T14:52:42+08:00" level=info msg="Using configuration file: \"/etc/argus-experiments/paper02/full_argus/helper.conf\"" system=spiffe-helper
+Oct 08 14:52:42.951664 Agent-CC spiffe-helper[374268]: 2026/10/08 14:52:42 workload subscription launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=135e3868c115411ba288c3682f61f8f8
+Oct 08 14:52:46.181514 Agent-CC systemd[1]: Starting ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:52:46.185152 Agent-CC argus-workload[374325]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:52:46.185902 Agent-CC systemd[1]: Started ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:52:46.247813 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:52:46 [notice] 374331#374331: using the "epoll" event method
+Oct 08 14:52:46.247813 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:52:46 [notice] 374331#374331: nginx/1.22.1
+Oct 08 14:52:46.247813 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:52:46 [notice] 374331#374331: OS: Linux 5.15.120.ve.6-tdxg.3-amd64
+Oct 08 14:52:46.247813 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:52:46 [notice] 374331#374331: getrlimit(RLIMIT_NOFILE): 1024:524288
+Oct 08 14:52:46.247813 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:52:46 [notice] 374331#374331: start worker processes
+Oct 08 14:52:46.248179 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:52:46 [notice] 374331#374331: start worker process 374344
+Oct 08 14:52:46.297923 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:52:46 [info] 374344#374344: *1 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:52:46.307032 Agent-CC spiffe-helper[374268]: 2026/10/08 14:52:46 target SVID published serial=117467466487807701389452927199081327387 expires=2026-10-08T06:57:34Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=135e3868c115411ba288c3682f61f8f8
+Oct 08 14:55:02.823395 Agent-CC systemd[1]: Reloading ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:55:02.824493 Agent-CC systemd[1]: Reloaded ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:55:02.833574 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:02 [info] 374344#374344: *2 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:02.935156 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:02 [info] 374344#374344: *3 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.036757 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *4 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.138628 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *5 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.240394 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *6 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.342198 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *7 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.443458 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *8 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.545079 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *9 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.646850 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *10 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.748593 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *11 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.849933 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *12 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:03.951488 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:03 [info] 374344#374344: *13 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.053400 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *14 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.155060 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *15 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.256617 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *16 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.358389 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *17 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.460168 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *18 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.561731 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *19 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.663438 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *20 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.765323 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *21 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.867006 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *22 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:04.968712 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:04 [info] 374344#374344: *23 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.070581 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *24 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.172065 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *25 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.273620 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *26 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.375518 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *27 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.477260 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *28 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.579041 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *29 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.680718 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *30 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.782562 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *31 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.884624 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: *32 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:05.894165 Agent-CC spiffe-helper[374268]: 2026/10/08 14:55:05 workload subscription ended launch_id=launch-8708838 subscription_id=135e3868c115411ba288c3682f61f8f8
+Oct 08 14:55:05.947869 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [notice] 374344#374344: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:55:05.947959 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:55:05 [notice] 374331#374331: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:55:05.947950 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:55:05.948422 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [info] 374344#374344: epoll_wait() failed (4: Interrupted system call)
+Oct 08 14:55:05.948422 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [notice] 374344#374344: exiting
+Oct 08 14:55:05.948422 Agent-CC nginx-hook.sh[374344]: 2026/10/08 14:55:05 [notice] 374344#374344: exit
+Oct 08 14:55:05.948649 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:55:05 [notice] 374331#374331: signal 17 (SIGCHLD) received from 374344
+Oct 08 14:55:05.948726 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:55:05 [notice] 374331#374331: worker process 374344 exited with code 0
+Oct 08 14:55:05.948726 Agent-CC nginx-hook.sh[374331]: 2026/10/08 14:55:05 [notice] 374331#374331: exit
+Oct 08 14:55:05.949547 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 14:55:05.949719 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:55:05.960206 Agent-CC spiffe-helper[374268]: time="2026-10-08T14:55:05+08:00" level=error msg="Error starting spiffe-helper" error="NGINX publish hook: exit status 1: Traceback (most recent call last):\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 54, in <module>\n    main()\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 50, in main\n    hook(json.loads(protected_file(args.config).read_text()), args.action)\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 23, in hook\n    run([*namespace, d.bin / \"spiffe-mtls-probe\", \"-tls-only\", \"-url\", f\"https://127.0.0.1:{d.workload['tls_port']}\",\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/workload.py\", line 34, in run\n    raise RuntimeError(f\"{Path(argv[0]).name} failed ({r.returncode}): {r.stderr.strip()}\")\nRuntimeError: nsenter failed (1): NGINX did not load the published certificate\n" system=spiffe-helper
+Oct 08 14:55:05.961224 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 14:55:06.084992 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'exit-code'.
+Oct 08 14:55:11.162891 Agent-CC systemd[1]: ax-paper02-full-helper.service: Scheduled restart job, restart counter is at 4.
+Oct 08 14:55:11.163109 Agent-CC systemd[1]: Stopped ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:55:11.164184 Agent-CC systemd[1]: Starting ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 14:55:11.168380 Agent-CC argus-workload[376159]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:55:11.169212 Agent-CC systemd[1]: Started ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:55:11.173424 Agent-CC spiffe-helper[376165]: time="2026-10-08T14:55:11+08:00" level=info msg="Using configuration file: \"/etc/argus-experiments/paper02/full_argus/helper.conf\"" system=spiffe-helper
+Oct 08 14:55:11.200631 Agent-CC spiffe-helper[376165]: 2026/10/08 14:55:11 workload subscription launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=57142c76ff2741d4ace47f0ace3cd59d
+Oct 08 14:55:15.138852 Agent-CC systemd[1]: Starting ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:55:15.142667 Agent-CC argus-workload[376286]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:55:15.143550 Agent-CC systemd[1]: Started ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:55:15.206003 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:55:15 [notice] 376292#376292: using the "epoll" event method
+Oct 08 14:55:15.206003 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:55:15 [notice] 376292#376292: nginx/1.22.1
+Oct 08 14:55:15.206367 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:55:15 [notice] 376292#376292: OS: Linux 5.15.120.ve.6-tdxg.3-amd64
+Oct 08 14:55:15.206367 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:55:15 [notice] 376292#376292: getrlimit(RLIMIT_NOFILE): 1024:524288
+Oct 08 14:55:15.206367 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:55:15 [notice] 376292#376292: start worker processes
+Oct 08 14:55:15.206367 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:55:15 [notice] 376292#376292: start worker process 376307
+Oct 08 14:55:15.255333 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:55:15 [info] 376307#376307: *1 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:55:15.263797 Agent-CC spiffe-helper[376165]: 2026/10/08 14:55:15 target SVID published serial=140950148686274770476314046745321319657 expires=2026-10-08T07:00:02Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=57142c76ff2741d4ace47f0ace3cd59d
+Oct 08 14:57:20.582992 Agent-CC systemd[1]: Reloading ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:57:20.584135 Agent-CC systemd[1]: Reloaded ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:57:20.593048 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:20 [info] 376307#376307: *2 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:20.694983 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:20 [info] 376307#376307: *3 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:20.796667 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:20 [info] 376307#376307: *4 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:20.898446 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:20 [info] 376307#376307: *5 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:20.999998 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:20 [info] 376307#376307: *6 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.101682 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *7 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.203464 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *8 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.305165 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *9 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.406752 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *10 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.508405 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *11 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.610081 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *12 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.711644 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *13 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.813474 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *14 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:21.914969 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:21 [info] 376307#376307: *15 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.016646 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *16 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.118357 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *17 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.220038 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *18 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.321634 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *19 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.423333 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *20 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.525223 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *21 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.626630 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *22 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.728398 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *23 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.829986 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *24 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:22.931624 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:22 [info] 376307#376307: *25 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.033474 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *26 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.135317 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *27 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.236635 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *28 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.338495 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *29 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.440148 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *30 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.542129 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *31 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.643904 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: *32 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:23.654855 Agent-CC spiffe-helper[376165]: 2026/10/08 14:57:23 workload subscription ended launch_id=launch-8708838 subscription_id=57142c76ff2741d4ace47f0ace3cd59d
+Oct 08 14:57:23.708675 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [notice] 376307#376307: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:57:23.708817 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:57:23 [notice] 376292#376292: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 14:57:23.708764 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:57:23.709269 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [info] 376307#376307: epoll_wait() failed (4: Interrupted system call)
+Oct 08 14:57:23.709269 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [notice] 376307#376307: exiting
+Oct 08 14:57:23.709269 Agent-CC nginx-hook.sh[376307]: 2026/10/08 14:57:23 [notice] 376307#376307: exit
+Oct 08 14:57:23.709515 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:57:23 [notice] 376292#376292: signal 17 (SIGCHLD) received from 376307
+Oct 08 14:57:23.709596 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:57:23 [notice] 376292#376292: worker process 376307 exited with code 0
+Oct 08 14:57:23.709596 Agent-CC nginx-hook.sh[376292]: 2026/10/08 14:57:23 [notice] 376292#376292: exit
+Oct 08 14:57:23.710358 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 14:57:23.710526 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:57:23.721171 Agent-CC spiffe-helper[376165]: time="2026-10-08T14:57:23+08:00" level=error msg="Error starting spiffe-helper" error="NGINX publish hook: exit status 1: Traceback (most recent call last):\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 54, in <module>\n    main()\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 50, in main\n    hook(json.loads(protected_file(args.config).read_text()), args.action)\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/nginx-hook.py\", line 23, in hook\n    run([*namespace, d.bin / \"spiffe-mtls-probe\", \"-tls-only\", \"-url\", f\"https://127.0.0.1:{d.workload['tls_port']}\",\n  File \"/opt/argus-experiments/paper02/full_argus/payload/scripts/workload.py\", line 34, in run\n    raise RuntimeError(f\"{Path(argv[0]).name} failed ({r.returncode}): {r.stderr.strip()}\")\nRuntimeError: nsenter failed (1): NGINX did not load the published certificate\n" system=spiffe-helper
+Oct 08 14:57:23.722245 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 14:57:23.846781 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'exit-code'.
+Oct 08 14:57:28.913026 Agent-CC systemd[1]: ax-paper02-full-helper.service: Scheduled restart job, restart counter is at 5.
+Oct 08 14:57:28.913280 Agent-CC systemd[1]: Stopped ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:57:28.914420 Agent-CC systemd[1]: Starting ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 14:57:28.919032 Agent-CC argus-workload[378289]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:57:28.919924 Agent-CC systemd[1]: Started ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 14:57:28.923998 Agent-CC spiffe-helper[378295]: time="2026-10-08T14:57:28+08:00" level=info msg="Using configuration file: \"/etc/argus-experiments/paper02/full_argus/helper.conf\"" system=spiffe-helper
+Oct 08 14:57:28.952274 Agent-CC spiffe-helper[378295]: 2026/10/08 14:57:28 workload subscription launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=46bcc360e419444490ee18b0d545f647
+Oct 08 14:57:34.177586 Agent-CC systemd[1]: Starting ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 14:57:34.183613 Agent-CC argus-workload[378402]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 14:57:34.185255 Agent-CC systemd[1]: Started ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 14:57:34.262841 Agent-CC nginx-hook.sh[378406]: 2026/10/08 14:57:34 [notice] 378406#378406: using the "epoll" event method
+Oct 08 14:57:34.262841 Agent-CC nginx-hook.sh[378406]: 2026/10/08 14:57:34 [notice] 378406#378406: nginx/1.22.1
+Oct 08 14:57:34.262841 Agent-CC nginx-hook.sh[378406]: 2026/10/08 14:57:34 [notice] 378406#378406: OS: Linux 5.15.120.ve.6-tdxg.3-amd64
+Oct 08 14:57:34.262841 Agent-CC nginx-hook.sh[378406]: 2026/10/08 14:57:34 [notice] 378406#378406: getrlimit(RLIMIT_NOFILE): 1024:524288
+Oct 08 14:57:34.263333 Agent-CC nginx-hook.sh[378406]: 2026/10/08 14:57:34 [notice] 378406#378406: start worker processes
+Oct 08 14:57:34.263333 Agent-CC nginx-hook.sh[378406]: 2026/10/08 14:57:34 [notice] 378406#378406: start worker process 378420
+Oct 08 14:57:34.305137 Agent-CC nginx-hook.sh[378420]: 2026/10/08 14:57:34 [info] 378420#378420: *1 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 14:57:34.314801 Agent-CC spiffe-helper[378295]: 2026/10/08 14:57:34 target SVID published serial=293540392638569566626812188301077283820 expires=2026-10-08T07:02:20Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=46bcc360e419444490ee18b0d545f647

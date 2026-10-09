@@ -1,0 +1,7 @@
+2026-10-03T18:47:02+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:02.056648Z  INFO attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}: restful_as::restful: Attestation API called.
+2026-10-03T18:47:02+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:02.071428Z  INFO attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}:Intel TDX: verifier::tdx: Quote DCAP check succeeded.
+2026-10-03T18:47:02+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:02.071443Z  INFO attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}:Intel TDX: verifier::tdx: MRCONFIGID check succeeded.
+2026-10-03T18:47:02+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:02.071447Z  WARN attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}:Intel TDX: verifier::tdx: No Eventlog included inside the TDX evidence.
+2026-10-03T18:47:07+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:07.418248Z  INFO attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}: attestation_service: Verifier/endorsement check passed. tee=Tdx tee_class="cpu"
+2026-10-03T18:47:07+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:07.419519Z  INFO attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}:Regorus: policy_engine::policy::rego: No claim data.policy.extensions found in policy.
+2026-10-03T18:47:07+0000 cwf-bkc restful-as[1870180]: 2026-10-03T18:47:07.419760Z  INFO attestation{request_id=540b6596-dd45-4b72-b53d-6d43d4320a90}: restful_as::restful: AttestationEvaluate succeeded.

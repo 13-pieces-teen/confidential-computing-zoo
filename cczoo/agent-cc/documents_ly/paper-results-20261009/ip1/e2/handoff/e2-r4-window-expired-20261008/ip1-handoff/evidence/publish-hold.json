@@ -1,0 +1,44 @@
+{
+  "after": {
+    "ax-paper02-full-helper.service": {
+      "active": "active",
+      "invocation_id": "85b024d1b48647689036982dc35f4312",
+      "main_pid": 395102,
+      "restarts": 0
+    },
+    "ax-paper02-full-nginx.service": {
+      "active": "active",
+      "invocation_id": "380f7f6e4da8465d952af775edb7856b",
+      "main_pid": 395184,
+      "restarts": 0
+    }
+  },
+  "alternate_helper_config_sha256": "e0572a6f79b52903ade77ff3092067d6313b5dffc7a7ab168dec46e37f795970",
+  "armed_at": "2026-10-08T07:23:25.426947+00:00",
+  "before": {
+    "ax-paper02-full-helper.service": {
+      "active": "active",
+      "invocation_id": "6eba2119d08844d587b8173fbb837b3b",
+      "main_pid": 390803,
+      "restarts": 0
+    },
+    "ax-paper02-full-nginx.service": {
+      "active": "active",
+      "invocation_id": "8bbf9e6eae6b4276a545b6cf298750f9",
+      "main_pid": 390912,
+      "restarts": 0
+    }
+  },
+  "credential_loaded_at_arm": {
+    "not_after": "Oct  8 07:26:35 2026 GMT",
+    "serial": "EF9A3639AA43CB601EB8681EE4CBC3E2"
+  },
+  "events": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold-events.jsonl",
+  "hook_sha256": "b00d0430b9063ce3a212345e1e12dfcf2d97db4f4989cc27e68c255338895eba",
+  "nginx_config_sha256": "b5dcb9f7f71ce1ec9cfb0019bf20235449485dcbe5ca1d7c7aa56940bff4efe8",
+  "normal_helper_config_sha256": "8d8e2f3328b83fdc348fdbfbda42b0d6586c1cc790162c0e43418a9680541326",
+  "owner": "3dd389dccf4df848ca895b5b488bac27",
+  "receipt": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold.json",
+  "schema": "argus.e2.helper-publish-hold.v1",
+  "state": "armed"
+}

@@ -1,0 +1,7 @@
+{
+  "error_class": null,
+  "exit_code": 0,
+  "stage": "remote-command",
+  "stderr_limit_bytes": 16384,
+  "stderr_tail": ""
+}

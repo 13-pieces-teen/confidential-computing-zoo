@@ -1,0 +1,153 @@
+{
+ "attempt_id": "diag-20261003T190751Z",
+ "business_probe_rc": 0,
+ "business_probe_record": {
+  "client_serial": "C2EA629A103A2A34B5EFA1791ED12010",
+  "client_uri": "spiffe://argus.local/agent/openclaw/experiment/paper01/full",
+  "gateway_search": {
+   "application_status": "ok",
+   "at_ms": 1791054484072,
+   "body_sha256": "dd4d2e1f12f603650b1d8883ce409a72d1641d23b38843ac0315def23febe209",
+   "bytes": 3247,
+   "checked_at": "2026-10-03T19:08:04.072Z",
+   "client_serial": "C2EA629A103A2A34B5EFA1791ED12010",
+   "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper01/full",
+   "component": "argus-openclaw-spiffe",
+   "contains_fact": true,
+   "event": "response_headers",
+   "generation": "generation-1384170031",
+   "headers_ms": 313.80155299999933,
+   "http_status": 200,
+   "items": [
+    {
+     "level": 2,
+     "uri": "viking://user/p0-c-business/memories/entities/software_project/argus_dual_tdvm_e2e_p0_20261002t1521z_sf_a1.md"
+    },
+    {
+     "level": 2,
+     "uri": "viking://user/p0-c-business/memories/entities/software_project/argus_dual_tdvm_e2e.md"
+    },
+    {
+     "level": 0,
+     "uri": "viking://user/p0-c-business/memories/.abstract.md"
+    },
+    {
+     "level": 1,
+     "uri": "viking://user/p0-c-business/.overview.md"
+    },
+    {
+     "level": 0,
+     "uri": "viking://user/p0-c-business/peers/.abstract.md"
+    },
+    {
+     "level": 0,
+     "uri": "viking://user/p0-c-business/resources/.abstract.md"
+    },
+    {
+     "level": 1,
+     "uri": "viking://resources/.overview.md"
+    },
+    {
+     "level": 0,
+     "uri": "viking://user/p0-c-business/privacy/.abstract.md"
+    },
+    {
+     "level": 0,
+     "uri": "viking://user/p0-c-business/skills/.abstract.md"
+    }
+   ],
+   "method": "POST",
+   "path": "/api/v1/search/find",
+   "phase": "response_headers",
+   "request_id": "e3824707-91c9-48f6-a9f5-2161e6052e8e",
+   "result": "OBSERVED",
+   "route": "/api/v1/search/find",
+   "server_serial": "B187E902CCD8250BDBFA1648364EB216",
+   "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper01/full",
+   "started_at_ms": 1791054483758
+  },
+  "gateway_sessions": {
+   "application_status": "ok",
+   "at_ms": 1791054477998,
+   "body_sha256": "5ef26f3f3e9926ec4d885d8bb6787e4177b49a08b61842eb92a0cace739abafe",
+   "bytes": 1903,
+   "checked_at": "2026-10-03T19:07:57.998Z",
+   "client_serial": "C2EA629A103A2A34B5EFA1791ED12010",
+   "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper01/full",
+   "component": "argus-openclaw-spiffe",
+   "contains_fact": false,
+   "event": "response_headers",
+   "generation": "generation-1384170031",
+   "headers_ms": 138.36309299999994,
+   "http_status": 200,
+   "identity": {},
+   "items": [
+    {
+     "uri": "viking://user/p0-c-business/sessions/018cbfba-e2d4-4fa9-8cee-92251407e132"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/233e0174-2405-412f-a4d9-60a03c68334b"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/244f3903-e206-4cd8-8028-dbeecd31488f"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/736fc4a8-62c5-4c29-bb80-6ff078ab1f0e"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/85ae17cd-012f-4589-b13c-6e1bdabe84d5"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/87e360e7-3bc3-451a-82e3-45b37274b404"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/97374aa7-00de-4689-8cad-3ef3a5d14c16"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/b123ab08-8a87-40d8-bbd2-2abbc11c7877"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/memory-store-1791030930542-admitted"
+    },
+    {
+     "uri": "viking://user/p0-c-business/sessions/memory-store-1791031073070-replay"
+    }
+   ],
+   "method": "GET",
+   "path": "/api/v1/sessions",
+   "phase": "response_headers",
+   "request_id": "cf3a9a27-b60e-4bbb-934a-b968eb7361e3",
+   "result": "OBSERVED",
+   "route": "/api/v1/sessions",
+   "server_serial": "B187E902CCD8250BDBFA1648364EB216",
+   "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper01/full",
+   "started_at_ms": 1791054477859
+  },
+  "generation": "generation-1384170031",
+  "label": "e1-full-20261004-A-diag-20261003T190751Z",
+  "mtls_health": {
+   "body_bytes": 71,
+   "body_head": "{\"status\":\"ok\",\"healthy\":true,\"version\":\"v0.4.8\",\"auth_mode\":\"api_key\"}",
+   "http_status": 200,
+   "peer_cert": "serial=B187E902CCD8250BDBFA1648364EB216\nX509v3 Subject Alternative Name: \n    URI:spiffe://argus.local/service/openviking-cmem/experiment/paper01/full",
+   "tls": "ok"
+  },
+  "observed_at": "2026-10-03T19:07:51.879Z",
+  "schema": "argus.e1-business-probe.v1"
+ },
+ "live_credential": {
+  "generation": "generation-1384170031",
+  "not_after": "Oct  3 19:11:07 2026 GMT",
+  "serial": "C2EA629A103A2A34B5EFA1791ED12010"
+ },
+ "observed_at": "2026-10-03T19:07:51.809Z",
+ "run_id": "e1-full-20261004",
+ "schema": "argus.e1-checkpoint-probe.v1",
+ "stage": "A",
+ "target": {
+  "boot_id": "a4517df8-1f61-4e8c-96e5-59df5524b966",
+  "pid": 4191273,
+  "pid_namespace": "pid:[4026532361]",
+  "start_time": "208809818"
+ }
+}

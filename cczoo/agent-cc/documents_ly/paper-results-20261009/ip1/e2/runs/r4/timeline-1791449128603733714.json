@@ -1,0 +1,152 @@
+{
+  "application_reads": {
+    "absence_claim": "limited to complete source coverage; last sample does not prove future closure",
+    "coverage": [
+      {
+        "instance_id": "bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c",
+        "observed_to_ms": 53419.372634,
+        "source_id": "062ee1d478ee46e6a9da7d7663e34666",
+        "status": "COMPLETE",
+        "unknown_intervals_ms": []
+      }
+    ],
+    "last_observed_read": {
+      "clock": "same_host_monotonic",
+      "lower_ms": 4612.61082,
+      "upper_ms": 4612.61082
+    },
+    "observation_end_ms": 51410,
+    "observed_bytes": 13645,
+    "observed_events": 54,
+    "post_bound": {
+      "ambiguous_bytes": 0,
+      "bytes": 0,
+      "requests": 0
+    },
+    "post_bound_verdict": "PASS",
+    "post_fault": {
+      "ambiguous_bytes": 0,
+      "bytes": 4795,
+      "requests": 18
+    }
+  },
+  "assessment": {
+    "inflight_delivery": "PASS",
+    "reason": null,
+    "receiver_delivery": "PASS",
+    "result": "PASS",
+    "traffic": "PASS"
+  },
+  "backend_availability": {
+    "after_entry_stop_samples": 163,
+    "after_fault_samples": 180,
+    "last_observed": {
+      "completed_relative_ms": {
+        "clock": "wall_with_uncertainty",
+        "lower_ms": 54606,
+        "upper_ms": 54646
+      },
+      "started_relative_ms": {
+        "clock": "wall_with_uncertainty",
+        "lower_ms": 54557,
+        "upper_ms": 54597
+      }
+    },
+    "live_after_entry_stop": "OBSERVED",
+    "result": "OBSERVED",
+    "scope": "original backend answered fixed local /health at sampled times; not uninterrupted memory availability",
+    "unknown_samples": 0
+  },
+  "bound_ms": 10000,
+  "client_reads": {
+    "business_responses": {
+      "last_observed_read": {
+        "clock": "wall_with_uncertainty",
+        "lower_ms": 4807,
+        "upper_ms": 4847
+      },
+      "observed_bytes": 18348,
+      "observed_events": 47,
+      "post_bound": {
+        "ambiguous_bytes": 0,
+        "bytes": 0,
+        "requests": 0
+      },
+      "post_fault": {
+        "ambiguous_bytes": 0,
+        "bytes": 7028,
+        "requests": 18
+      }
+    },
+    "client_response_ambiguous_bytes": 0,
+    "client_response_delivery": "PASS",
+    "client_response_non_success_observed_bytes": 0,
+    "client_response_post_bound_bytes": 0,
+    "client_response_scope": "successful business response or synthetic marker at client HTTP reads; error responses counted separately",
+    "last_observed_read": {
+      "clock": "wall_with_uncertainty",
+      "lower_ms": 4807,
+      "upper_ms": 4847
+    },
+    "observed_bytes": 18348,
+    "observed_events": 47,
+    "post_bound": {
+      "ambiguous_bytes": 0,
+      "bytes": 0,
+      "requests": 0
+    },
+    "post_fault": {
+      "ambiguous_bytes": 0,
+      "bytes": 7028,
+      "requests": 18
+    }
+  },
+  "clock_uncertainty_ms": 20,
+  "close_after_detection": {
+    "lower_ms": -615.0567179999998,
+    "note": "negative lower bounds mean polling/clock intervals overlap",
+    "status": "OBSERVED",
+    "upper_ms": 313.8103779999992
+  },
+  "detection": {
+    "boundary": "readiness_withdrawal_or_expiry",
+    "clock": "same_host_monotonic",
+    "lower_ms": 4831.708177,
+    "source": "read_only_readiness_and_systemctl_poll",
+    "status": "OBSERVED",
+    "timing": "poll_interval",
+    "upper_ms": 5145.518555
+  },
+  "entry_stop": {
+    "boundary": "systemd_unit_inactive_no_main_pid",
+    "clock": "same_host_monotonic",
+    "lower_ms": 4530.461837,
+    "source": "read_only_readiness_and_systemctl_poll",
+    "status": "OBSERVED",
+    "timing": "poll_interval",
+    "upper_ms": 5145.518555
+  },
+  "evidence_status": "ANALYZED",
+  "fault_command_completion": {
+    "clock": "same_host_monotonic",
+    "lower_ms": 4.5415,
+    "upper_ms": 4.5415
+  },
+  "lifecycle_observation": "COMPLETE",
+  "notes": [
+    "Times are relative to fault-command invocation; completion brackets injection execution.",
+    "Readiness withdrawal is a detection proxy; systemd stop is separate from last application read.",
+    "Positive post-bound observations survive incomplete coverage; zero observed bytes is not zero actual bytes."
+  ],
+  "run_id": "paper-20261004t145835z",
+  "schema": "argus.lifecycle-timeline.v1",
+  "scope": "measured application/client read boundaries, not model use or plaintext revocation",
+  "source_directory": "collection-1791449011297925174",
+  "sources_sha256": {
+    "fault.jsonl": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63",
+    "lifecycle.jsonl": "9b83b38ceae9806090de243fdef8c02410055eb12ff4883ed9464252bf37c4a8",
+    "receiver.jsonl": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186",
+    "trace.jsonl": "eb5ccb264e32beeee5d55a4da23624805d631d62ba09a9a25fb1d3510024605e"
+  },
+  "tdx_appraisal": "NOT_ASSESSED"
+}

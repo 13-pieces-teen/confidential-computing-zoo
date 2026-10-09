@@ -1,0 +1,13 @@
+{
+  "schema": "argus.e4.launch-consumer-state.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "status": "CONSUMER_READY",
+  "token_path": "/root/argus-ip1-handoff/e4-pilot-launch-token-20261008/ip1-handoff/e4p1-recovery-oidc.token",
+  "receipt_path": "/var/lib/argus-receiver/e4p1-d6771e94005b51df0fd60a23ba981087/deployment.jsonl",
+  "old_container": "bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c",
+  "old_container_state": "running",
+  "old_target_registration": "stopped",
+  "docktap_mutation_created": false,
+  "staged_receiver_run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "minimum_token_seconds_remaining": 45
+}

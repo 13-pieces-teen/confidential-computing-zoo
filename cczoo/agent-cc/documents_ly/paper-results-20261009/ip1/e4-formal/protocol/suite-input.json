@@ -1,0 +1,42 @@
+{
+ "experiment_id": "e4p1",
+ "profile": "argus-recovery-work-item-v1",
+ "cases": [
+  "continuous"
+ ],
+ "mode": "formal",
+ "fault_kind": "helper-freeze",
+ "fault_scope": "shared_service",
+ "groups": [
+  "full_argus"
+ ],
+ "conditions": [
+  "fault",
+  "no_fault"
+ ],
+ "seeds": [
+  101,
+  102,
+  103
+ ],
+ "run_timeout_s": 1200,
+ "variant_outputs": {
+  "full_argus": "/secure/variants/full_argus"
+ },
+ "continuous_configs": {
+  "full_argus": {
+   "101": {
+    "fault": "/secure/e4-formal/full-101-recovery.json",
+    "no_fault": "/secure/e4-formal/full-101-healthy.json"
+   },
+   "102": {
+    "fault": "/secure/e4-formal/full-102-recovery.json",
+    "no_fault": "/secure/e4-formal/full-102-healthy.json"
+   },
+   "103": {
+    "fault": "/secure/e4-formal/full-103-recovery.json",
+    "no_fault": "/secure/e4-formal/full-103-healthy.json"
+   }
+  }
+ }
+}

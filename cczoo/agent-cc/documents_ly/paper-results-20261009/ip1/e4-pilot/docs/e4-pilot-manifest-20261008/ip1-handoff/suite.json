@@ -1,0 +1,94 @@
+{
+  "arms": {
+    "full_argus": {
+      "artifacts": [
+        "/secure/variants/full_argus/variant.json"
+      ],
+      "identity_namespace": "/experiment/e4p1/full",
+      "registration_namespace": "/experiment/e4p1/full",
+      "state_dir": "/var/log/argus-experiments/paper02/full_argus",
+      "variant_output": "/secure/variants/full_argus"
+    }
+  },
+  "artifacts": [
+    "/secure/variants/full_argus/variant.json",
+    "/secure/e4-pilot/full-1-recovery.json",
+    "/secure/e4-pilot/full-1-healthy.json"
+  ],
+  "capture_mode": "pilot",
+  "cases": [
+    {
+      "conditions": [
+        "fault",
+        "no_fault"
+      ],
+      "experiment": "E4",
+      "fault_kind": "helper-freeze",
+      "fault_scope": "shared_service",
+      "name": "continuous",
+      "operations": [
+        {
+          "argv": [
+            "python3",
+            "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/step.py",
+            "continuous",
+            "run",
+            "--config",
+            "{continuous_config}",
+            "--output",
+            "{run_dir}",
+            "--timeout",
+            "870"
+          ],
+          "id": "continuous",
+          "kind": "mutation",
+          "operation_id_file": "continuous/operation-id.json",
+          "result": "step-result.json",
+          "resume_argv": [
+            "python3",
+            "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/step.py",
+            "continuous",
+            "resume",
+            "--config",
+            "{continuous_config}",
+            "--output",
+            "{run_dir}",
+            "--timeout",
+            "870"
+          ],
+          "role": "client",
+          "timeout_s": 900,
+          "verdict_field": "result"
+        }
+      ],
+      "planned_tasks": 6,
+      "scenario": "work-item-v1"
+    }
+  ],
+  "continuous_inputs": {
+    "full_argus:1:1:fault": "/secure/e4-pilot/full-1-recovery.json",
+    "full_argus:1:1:no_fault": "/secure/e4-pilot/full-1-healthy.json"
+  },
+  "continuous_protocols": {
+    "1": "804baae50af98c9adb34bfd68a82a68d578f42fa18039bc108302f7a923ea3fb"
+  },
+  "experiment_id": "e4p1",
+  "groups": [
+    "full_argus"
+  ],
+  "local_continuous_fault": "NOT_RUN",
+  "policy": {
+    "can_reattest": false,
+    "source": "unchanged approved server artifact"
+  },
+  "profile": "argus-recovery-work-item-v1",
+  "scales": [
+    1
+  ],
+  "schema": "argus.experiment.v1",
+  "scope": "private_user_memories",
+  "secrets": {},
+  "seeds": [
+    1
+  ]
+}

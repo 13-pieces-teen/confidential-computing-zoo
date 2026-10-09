@@ -1,0 +1,47 @@
+{
+  "configuration_sha256": "13d380b60f175fd0be89817189a1263dd3d95a1ffee86d9261d49e3dd30aebb9",
+  "controls": {},
+  "initialization": {
+    "e4c1/fe96eba346f1": {
+      "confirmed": false,
+      "inspection": {
+        "code": "GATEWAY_IO_FAILED",
+        "result": "UNKNOWN"
+      },
+      "observation": {
+        "code": "GATEWAY_IO_FAILED",
+        "result": "UNKNOWN"
+      },
+      "ov_session_id": "89b0b7eb-0a73-6583-8f04-48f251690048",
+      "status": "submission_unknown"
+    }
+  },
+  "operation_id": "6bd58b2c32524239922cf4c50e0c46af",
+  "phase": "initializing",
+  "preflight": {
+    "e4c1": {
+      "adapter_sha256": "14d6396488b08f2afcab49d354a8df9f611b8134e9cec54ffa9d610ff1b408ae",
+      "config_sha256": "e2da9600b2212896c612faed5ad107beece1924ed9d74e781c65a287ebf8ce2a",
+      "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+      "explicit_tools": true,
+      "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f",
+      "result": "OBSERVED",
+      "sampling_observation": {
+        "configured_sources": [],
+        "effective_parameters": "UNKNOWN",
+        "scope": "read-only configured values; provider application and defaults are not attested",
+        "status": "PROVIDER_DEFAULT_UNVERIFIED"
+      },
+      "scope": {
+        "account_id": "argus-eval",
+        "actor_peer_id": "main",
+        "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+        "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+        "user_id": "e4p1-s103-recovery"
+      }
+    }
+  },
+  "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3",
+  "schema": "argus.continuous-state.v1",
+  "steps": {}
+}

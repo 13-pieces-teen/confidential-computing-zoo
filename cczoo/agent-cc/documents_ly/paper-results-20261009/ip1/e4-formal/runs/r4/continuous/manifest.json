@@ -1,0 +1,173 @@
+{
+  "block_id": "continuous-n1-s102",
+  "condition": "fault",
+  "configuration_sha256": "8c3fff61254038003ad7aa258e00417a135ba604233e7dcb4dd20ff995631e96",
+  "facts": [
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "5a923d36b7bde05bc9fcd1eea0e632ef",
+      "fact_index": 0,
+      "fact_sha256": "62f1826ee604556ca01da3a9cef321af3659efc7dda5d48e0bc54a6624d44581",
+      "full_fact_sha256": "62f1826ee604556ca01da3a9cef321af3659efc7dda5d48e0bc54a6624d44581",
+      "phase": "normal",
+      "predecessor": null,
+      "proposal_sha256": "850f73a56f2a246f976f768cf8eae07602537575fd8f441fe6be78572fe3eb6f",
+      "release_offset_s": 0,
+      "step_id": "s00",
+      "task_id": "s00",
+      "work_item_id": "trip-409c4c56aac96833a548d572"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "9c076ec42ee3ea2250ab88899ae2e45d",
+      "fact_index": 1,
+      "fact_sha256": "4df9785d9f1cc1f2a8f2b25a3460e820a7992f3198155027723192c39a625547",
+      "full_fact_sha256": "4df9785d9f1cc1f2a8f2b25a3460e820a7992f3198155027723192c39a625547",
+      "phase": "normal",
+      "predecessor": "s00",
+      "proposal_sha256": "24cb649e2ef6b03207f162458f6d5b00f4d7f084da992a83dd2b6b89ea162179",
+      "release_offset_s": 90,
+      "step_id": "s01",
+      "task_id": "s01",
+      "work_item_id": "trip-409c4c56aac96833a548d572"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "ae73412cd1006140f38ac6218bab699d",
+      "fact_index": 2,
+      "fact_sha256": "e4df0cb170917d611a7291ab4693c8b1007a449c0e8c623fb6ccc8b1db8a6117",
+      "full_fact_sha256": "e4df0cb170917d611a7291ab4693c8b1007a449c0e8c623fb6ccc8b1db8a6117",
+      "phase": "pause",
+      "predecessor": "s01",
+      "proposal_sha256": "e9c6ca55da76f8cd50c2a8972f2059816b997b5ab5e06d637525793aed483c98",
+      "release_offset_s": 180,
+      "step_id": "s02",
+      "task_id": "s02",
+      "work_item_id": "trip-409c4c56aac96833a548d572"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "9c7da46134c49ba52c462394590ed4ca",
+      "fact_index": 3,
+      "fact_sha256": "a70a7ee205efc32f9141c1f061ec0a1f7dfb07241fdd23a0484f8aec8784d794",
+      "full_fact_sha256": "a70a7ee205efc32f9141c1f061ec0a1f7dfb07241fdd23a0484f8aec8784d794",
+      "phase": "pause",
+      "predecessor": "s02",
+      "proposal_sha256": "3a01a46c52fc5d334514c7106805802cb696d2bd617921256bfc7defe5cf6f0c",
+      "release_offset_s": 270,
+      "step_id": "s03",
+      "task_id": "s03",
+      "work_item_id": "trip-409c4c56aac96833a548d572"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_travel_minutes",
+      "fact_bytes": 229,
+      "fact_id": "fb8c33ef7b9ee3ce891d2d0415628fcc",
+      "fact_index": 4,
+      "fact_sha256": "10af57170f4ae71e316e62f6be297278cd58b1e6199ac76e3b93dd903881ad11",
+      "full_fact_sha256": "10af57170f4ae71e316e62f6be297278cd58b1e6199ac76e3b93dd903881ad11",
+      "phase": "recovery",
+      "predecessor": "s03",
+      "proposal_sha256": "32b9aa7b2c8ffedae512f386b06687012f82c93fa4d3e9865e7a4c6364c53ebd",
+      "release_offset_s": 360,
+      "step_id": "s04",
+      "task_id": "s04",
+      "work_item_id": "trip-409c4c56aac96833a548d572"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "min_indoor_stops",
+      "fact_bytes": 229,
+      "fact_id": "a4797aa327d88724bae9d7e8f2c2e824",
+      "fact_index": 5,
+      "fact_sha256": "3c914f912528d1c30a56c7cbe4170a0913e7a9ec1d75f371034a935c0a579bb8",
+      "full_fact_sha256": "3c914f912528d1c30a56c7cbe4170a0913e7a9ec1d75f371034a935c0a579bb8",
+      "phase": "recovery",
+      "predecessor": "s04",
+      "proposal_sha256": "19376131f2869cd961579a9f4f8a5213f718747bc5a12bb55659f56c6ce58ff5",
+      "release_offset_s": 450,
+      "step_id": "s05",
+      "task_id": "s05",
+      "work_item_id": "trip-409c4c56aac96833a548d572"
+    }
+  ],
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "fixture_sha256": "4584782368382332c90c13c5d5ee6f737e8d60518baba13a2e4995ec0da4a04f",
+  "group": "full_argus",
+  "operation_id": "9854e9fac72d40e597e14190fca4c9b1",
+  "protocol": {
+    "clients": 1,
+    "constraint_keys": [
+      "budget_cents",
+      "max_walk_minutes",
+      "max_travel_minutes",
+      "min_indoor_stops"
+    ],
+    "continuity_scope": "persistent_memory_across_fresh_agent_sessions",
+    "dag": [
+      {
+        "index": 0,
+        "phase": "normal",
+        "predecessor": null
+      },
+      {
+        "index": 1,
+        "phase": "normal",
+        "predecessor": "s00"
+      },
+      {
+        "index": 2,
+        "phase": "pause",
+        "predecessor": "s01"
+      },
+      {
+        "index": 3,
+        "phase": "pause",
+        "predecessor": "s02"
+      },
+      {
+        "index": 4,
+        "phase": "recovery",
+        "predecessor": "s03"
+      },
+      {
+        "index": 5,
+        "phase": "recovery",
+        "predecessor": "s04"
+      }
+    ],
+    "dependency_policy": "all_confirmed_prior_proposals; all_successors_block_unresolved_writes",
+    "max_concurrency": 1,
+    "model_settings": {
+      "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+    },
+    "proposal_schema": "argus.proposal.v1",
+    "qa_timeout_seconds": 180,
+    "queue_limit": 1,
+    "scenario": "work-item-v1",
+    "schedule": {
+      "deadline_s": 180,
+      "frozen": true,
+      "release_interval_s": 90,
+      "stop_budget_s": 10
+    },
+    "steps_per_client": 6,
+    "task_retries": 0,
+    "tool_mode": "explicit_memory_recall_store"
+  },
+  "protocol_hash": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+  "run_id": "e4p1-cd119c89ea1d8995ffb995b87b6ed3dc",
+  "scenario": "work-item-v1",
+  "schema": "argus.continuous-manifest.v1",
+  "structure_hash": "0831ccaf348fdb0aa619f25b93f5a60bfe90600143eca59d92381e0a741b2dc8"
+}

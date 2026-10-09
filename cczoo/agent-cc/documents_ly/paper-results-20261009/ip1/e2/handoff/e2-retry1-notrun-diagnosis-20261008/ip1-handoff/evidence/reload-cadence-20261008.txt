@@ -1,0 +1,48 @@
+E2 retry1 root cause #2 evidence: helper publish -> nginx reload cadence
+collected 2026-10-08 ~06:12Z-06:26Z, IP1 observer on IP2 paper02 stack.
+
+Configuration facts
+- helper.conf broker section: publish_hook = nginx-hook.sh
+  -> nginx -t -> systemctl reload nginx unit (per publish; reload/exec/stop
+  also wired). Container: dreamy_blackwell (bf089150...), app pid 248534,
+  nginx master 250619, worker_processes 1, worker_shutdown_timeout 5s.
+- Credential publication interval ~140s (measured from consecutive
+  publications in the durable journal).
+
+Measured cadence (publications observed via worker pid churn / journal)
+  06:12:29Z  publish  -> worker 350624 -> 352443
+  06:14:49Z  publish  -> worker 352443 -> 354056
+  delta = 140s
+
+Back-extrapolation (140s steps backwards from 06:12:29Z, assuming stable
+cadence; drift of a few seconds per period accumulates):
+  06:12:29Z  06:10:09Z  06:07:49Z  06:05:29Z  06:03:09Z
+  06:00:49Z  05:58:29Z  05:56:09Z  05:53:49Z  05:51:29Z
+  05:49:09Z  05:46:49Z   <-- inside retry1 window
+
+retry1 timeline (durable journal + client trace)
+  05:46:23.495Z  inflight stream_start (client, 644876dd)
+  05:46:23.610Z  inflight request_enter (record_seq 80673)
+  05:46:24.018Z  request-2 5edbdeae request_enter (80683)   [client-bug kill:
+  05:46:24.019Z  request-2 body_read 0B http.disconnect (80685)  conn.close()
+  05:46:44.866Z  inflight chunk 12 body_read 264B (81211)   after local
+  05:46:46.367Z  inflight chunk 13 body_read 0B http.disconnect (81250)  ResponseNotReady]
+  05:46:46.368Z  inflight request_end (81251)
+  05:46:52.58Z   client TLS error (stream +29.1s)
+
+Interpretation
+- The inflight disconnect at 05:46:46.37Z sits ~0.4s before the extrapolated
+  reload at 05:46:49Z (well within cadence drift), and the client TLS close at
+  05:46:52.6Z lands exactly one worker_shutdown_timeout (5s) after the server
+  dropped the stream. That drain signature is specific to an nginx reload;
+  no other component in the path (mTLS nginx -> ReceiverAudit middleware ->
+  uvicorn) closes established streams that way.
+- Request-2's disconnect 22s earlier (05:46:24Z, +0.5s) has a different
+  signature (0.5s after enter, right when the client aborts locally after
+  ResponseNotReady) and is attributed to root cause #1.
+
+Non-reload sanity checks (same window family)
+- 40s slow-chunked discriminator 7a94f078: 32/32 chunks, body_read chunk 32
+  more_body=false at enter+39.999s, request_end +40.2s, 66 records, no
+  disconnect -> proxy_read_timeout 30s is NOT the killer.
+- curl keep-alive reuse: Content-Length 391 + connection reuse OK.

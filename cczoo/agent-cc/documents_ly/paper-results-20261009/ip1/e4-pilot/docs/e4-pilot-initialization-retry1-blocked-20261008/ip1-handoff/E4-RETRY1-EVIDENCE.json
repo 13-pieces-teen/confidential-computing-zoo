@@ -1,0 +1,101 @@
+{
+  "schema": "argus.e4.initialization-retry1-evidence.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "operation_id": "bd7bb0058e134591862acb6f990a3a1a",
+  "output_dir": "/secure/e4-pilot/runs/e4p1-d6771e94005b51df0fd60a23ba981087-g1",
+  "initialization_generation": 1,
+  "execution": {
+    "started_at": "2026-10-08T14:10:05Z",
+    "preflight": "PASS",
+    "commit_at": "2026-10-08T14:10:39Z",
+    "extraction_completed_at": "2026-10-08T14:12:09Z",
+    "ended_at": "2026-10-08T14:21:35Z",
+    "phase_at_end": "initializing",
+    "confirmed": false,
+    "steps": 0,
+    "step_rc": 1,
+    "window_started": false,
+    "fault_or_recovery_control_invoked": false,
+    "seed_writes_after_commit": 0
+  },
+  "fresh_session": {
+    "ov_session_id": "ed03a5dc-7b97-a888-4a10-4b3015c11813",
+    "distinct_from_blocked_session": true,
+    "policy_readback": {
+      "self": {"enabled": true},
+      "peer": {"enabled": true},
+      "working_memory": {"enabled": false},
+      "memory_types": ["events"]
+    },
+    "commit_count": 1,
+    "commit": {
+      "status": "timeout",
+      "note": "known single-getTask-failure poll break; extraction continued server-side",
+      "archived": true,
+      "archive_uri": "viking://user/e4p1-recovery/sessions/ed03a5dc-7b97-a888-4a10-4b3015c11813/history/archive_001",
+      "task_id": "ccb82c14-e7c9-4e1d-a81c-994f73017e7d"
+    },
+    "task": {
+      "status": "completed",
+      "stage": "completed",
+      "error": null,
+      "updated_at": "2026-10-08T14:12:09Z",
+      "memories_extracted": {"memory_write": 2},
+      "session_skills_extracted": 0,
+      "memory_diff_uri": "viking://user/e4p1-recovery/sessions/ed03a5dc-7b97-a888-4a10-4b3015c11813/history/archive_001/memory_diff.json"
+    }
+  },
+  "find_leg": {
+    "query": "Private project c432b91016c8 work_item_id=trip-e7bbe45c452f5933c08b98c7 行程规则 routes initial_constraints",
+    "memories_returned": 13,
+    "new_event_memories": [
+      {
+        "uri": "viking://user/e4p1-recovery/memories/events/2026/10/08/行程规划规则确认.md",
+        "hits": {"project_id": true, "normal_code": false, "review_code": false, "threshold_cents": false, "work_item_id": false}
+      },
+      {
+        "uri": "viking://user/e4p1-recovery/memories/events/2026/10/08/行程约束与候选路线发布.md",
+        "hits": {"project_id": false, "normal_code": true, "review_code": true, "threshold_cents": true, "work_item_id": true}
+      }
+    ],
+    "collective_four_value_hit": true
+  },
+  "archive_leg": {
+    "get_session_archive": {
+      "session_id": "ed03a5dc-7b97-a888-4a10-4b3015c11813",
+      "archive_id": "archive_001",
+      "result": "NOT_FOUND",
+      "error": "OpenViking request failed [NOT_FOUND]: Archive archive_001 not found"
+    },
+    "raw_archive_dir_listing": [
+      {"uri": ".../history/archive_001/messages.jsonl", "size": 1442, "modTime": "2026-10-08T14:10:39Z"},
+      {"uri": ".../history/archive_001/memory_diff.json", "size": 3406, "modTime": "2026-10-08T14:12:09Z"}
+    ],
+    "seed_text_present_in_raw_messages": true,
+    "context_stats": {"totalArchives": 1, "includedArchives": 0, "droppedArchives": 0, "failedArchives": 1, "activeTokens": 0, "archiveTokens": 0},
+    "latest_archive_overview": "",
+    "history_abstract": "Directory abstract is not ready",
+    "reconcile_attempts": "14:12Z - 14:21Z every 15s, all GATEWAY_IO_FAILED, budget 600s exhausted"
+  },
+  "contrast_blocked_session": {
+    "ov_session_id": "0693418d-66a3-8888-4340-ef89d64583a9",
+    "memory_policy_readback": null,
+    "get_session_archive": {
+      "archive_id": "archive_001",
+      "result": "OK",
+      "abstract": "# Working Memory",
+      "overview_head": "Private project c432b91016c8: Trip itinerary selection logic and data retention rules.",
+      "messages_present": true,
+      "seed_text_present": true,
+      "assembled_at": "2026-10-08T12:43:47Z"
+    }
+  },
+  "hypothesis": "The servable archive object is the working-memory archive; the approved policy's working_memory.enabled=false leads to failedArchives=1 and an unservable archive_001, making the unchanged gate's archive-observation leg unpassable.",
+  "preservation": {
+    "blocked_output_dir": "/secure/e4-pilot/runs/e4p1-d6771e94005b51df0fd60a23ba981087/ (untouched)",
+    "retry1_output_dir": "/secure/e4-pilot/runs/e4p1-d6771e94005b51df0fd60a23ba981087-g1/ (preserved)",
+    "blocked_session_0693418d_preserved": true,
+    "fresh_session_ed03a5dc_preserved": true,
+    "no_seed_write_without_new_ruling": true
+  }
+}

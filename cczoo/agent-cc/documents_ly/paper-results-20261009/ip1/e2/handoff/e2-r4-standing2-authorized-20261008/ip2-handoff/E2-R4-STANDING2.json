@@ -1,0 +1,21 @@
+{
+  "schema": "argus.e2.ip2-standing-arm.v1",
+  "status": "AUTHORIZED",
+  "authorization": "standing2",
+  "trial_id": "e2-full-helper-freeze-20261008-r4",
+  "run_id": "paper-20261004t145835z",
+  "event": "helper-freeze",
+  "arm_command": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e2_helper_publish_hold.py arm --receipt /var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold-standing2.json",
+  "receipt": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold-standing2.json",
+  "events": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/publish-hold-standing2-events.jsonl",
+  "controller_sha256": "30b151a853f367cf9f4d7015cb3d73ebcd846f6ad32f1767fda928742a2e8f6b",
+  "hook_sha256": "b00d0430b9063ce3a212345e1e12dfcf2d97db4f4989cc27e68c255338895eba",
+  "coordinator_python": "python3.11",
+  "client_minimum_remaining_seconds_before_arm": 150,
+  "server_minimum_remaining_seconds_enforced_by_arm": 180,
+  "relay_required_after_successful_arm": false,
+  "fault_file": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/fault.jsonl",
+  "previous_successful_arm_released": true,
+  "coordinator_started_so_far": false,
+  "fault_injected_so_far": false
+}

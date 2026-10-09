@@ -1,0 +1,173 @@
+{
+  "block_id": "continuous-n1-s103",
+  "condition": "no_fault",
+  "configuration_sha256": "0e328e18b405ca88c4da6150e4cea577db321987887e4f6797b70c92b415c210",
+  "facts": [
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "ce5fcf90306581b214353aa215511293",
+      "fact_index": 0,
+      "fact_sha256": "e9e45308b667bc159a9f8bca63bacee79f2381e05013063cf296469634aa282c",
+      "full_fact_sha256": "e9e45308b667bc159a9f8bca63bacee79f2381e05013063cf296469634aa282c",
+      "phase": "normal",
+      "predecessor": null,
+      "proposal_sha256": "2452c607cd6cc7a26a32dc365e85bbecc0bc3e20236de017281b69385b3128ab",
+      "release_offset_s": 0,
+      "step_id": "s00",
+      "task_id": "s00",
+      "work_item_id": "trip-88ee004a216129d42f1e5082"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "5c8f9430ab9ac6ea7a68c1ab71f523a0",
+      "fact_index": 1,
+      "fact_sha256": "0554b0de6016d7c97526159d9ec6ecdd97cf55a2587c129902c54c15c452fb25",
+      "full_fact_sha256": "0554b0de6016d7c97526159d9ec6ecdd97cf55a2587c129902c54c15c452fb25",
+      "phase": "normal",
+      "predecessor": "s00",
+      "proposal_sha256": "a9f4988933000ba83a64b699072f544c64c23f1b768b6a9a61f6325e6fb9b706",
+      "release_offset_s": 90,
+      "step_id": "s01",
+      "task_id": "s01",
+      "work_item_id": "trip-88ee004a216129d42f1e5082"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "696376c2dafbfd7dec05ebb3357d4cca",
+      "fact_index": 2,
+      "fact_sha256": "72cde48f100a9e403d3b79caacd0e748693066aeeb966a1ce23c2d1c969ed7ef",
+      "full_fact_sha256": "72cde48f100a9e403d3b79caacd0e748693066aeeb966a1ce23c2d1c969ed7ef",
+      "phase": "pause",
+      "predecessor": "s01",
+      "proposal_sha256": "0bcce6f231f06d89d8a6d399306cf11202618091ec37f68e65f1648b600867e6",
+      "release_offset_s": 180,
+      "step_id": "s02",
+      "task_id": "s02",
+      "work_item_id": "trip-88ee004a216129d42f1e5082"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "f6d6ad35f4011a717590e5adbdc6f11d",
+      "fact_index": 3,
+      "fact_sha256": "79bc97802363a6e0ab0e33d00c2344a604f8fe27acbf60ec9653f3b908652d62",
+      "full_fact_sha256": "79bc97802363a6e0ab0e33d00c2344a604f8fe27acbf60ec9653f3b908652d62",
+      "phase": "pause",
+      "predecessor": "s02",
+      "proposal_sha256": "96a05d29a3f2d1e7c5f2351b85e1b1ec966f8eda9412cc166fbe52db4f045eb3",
+      "release_offset_s": 270,
+      "step_id": "s03",
+      "task_id": "s03",
+      "work_item_id": "trip-88ee004a216129d42f1e5082"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_travel_minutes",
+      "fact_bytes": 229,
+      "fact_id": "e6a9d503404e1959f23b868a76f83aa7",
+      "fact_index": 4,
+      "fact_sha256": "c02daac564bf50e5293cb7690b28209d319a711a544a92b9fb910d6a15547820",
+      "full_fact_sha256": "c02daac564bf50e5293cb7690b28209d319a711a544a92b9fb910d6a15547820",
+      "phase": "recovery",
+      "predecessor": "s03",
+      "proposal_sha256": "16171ec47a5325aa5649cf8f05a557d7b1460f27b241dc7439947f9d12a336d6",
+      "release_offset_s": 360,
+      "step_id": "s04",
+      "task_id": "s04",
+      "work_item_id": "trip-88ee004a216129d42f1e5082"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "min_indoor_stops",
+      "fact_bytes": 229,
+      "fact_id": "2be2a97d6a65d563ae4efd377e62160d",
+      "fact_index": 5,
+      "fact_sha256": "6dd3b5a4767a74cc1333db1f271b2df649ffcb7f33dade29c974af3a682ab736",
+      "full_fact_sha256": "6dd3b5a4767a74cc1333db1f271b2df649ffcb7f33dade29c974af3a682ab736",
+      "phase": "recovery",
+      "predecessor": "s04",
+      "proposal_sha256": "a9809b5f64a73e1918cab03702eaf4c69cc2c6f3ab1b38e6550bc2c998c93c8a",
+      "release_offset_s": 450,
+      "step_id": "s05",
+      "task_id": "s05",
+      "work_item_id": "trip-88ee004a216129d42f1e5082"
+    }
+  ],
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "fixture_sha256": "3d0475b968cfda1abaf870377c2138c8dfe0c6ae4c953d796c2569f729f2279e",
+  "group": "full_argus",
+  "operation_id": "96e5c2cf2d59452b87a0a7e43387971f",
+  "protocol": {
+    "clients": 1,
+    "constraint_keys": [
+      "budget_cents",
+      "max_walk_minutes",
+      "max_travel_minutes",
+      "min_indoor_stops"
+    ],
+    "continuity_scope": "persistent_memory_across_fresh_agent_sessions",
+    "dag": [
+      {
+        "index": 0,
+        "phase": "normal",
+        "predecessor": null
+      },
+      {
+        "index": 1,
+        "phase": "normal",
+        "predecessor": "s00"
+      },
+      {
+        "index": 2,
+        "phase": "pause",
+        "predecessor": "s01"
+      },
+      {
+        "index": 3,
+        "phase": "pause",
+        "predecessor": "s02"
+      },
+      {
+        "index": 4,
+        "phase": "recovery",
+        "predecessor": "s03"
+      },
+      {
+        "index": 5,
+        "phase": "recovery",
+        "predecessor": "s04"
+      }
+    ],
+    "dependency_policy": "all_confirmed_prior_proposals; all_successors_block_unresolved_writes",
+    "max_concurrency": 1,
+    "model_settings": {
+      "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+    },
+    "proposal_schema": "argus.proposal.v1",
+    "qa_timeout_seconds": 180,
+    "queue_limit": 1,
+    "scenario": "work-item-v1",
+    "schedule": {
+      "deadline_s": 180,
+      "frozen": true,
+      "release_interval_s": 90,
+      "stop_budget_s": 10
+    },
+    "steps_per_client": 6,
+    "task_retries": 0,
+    "tool_mode": "explicit_memory_recall_store"
+  },
+  "protocol_hash": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+  "run_id": "e4p1-a719364175d67653b560bf1b386f8539",
+  "scenario": "work-item-v1",
+  "schema": "argus.continuous-manifest.v1",
+  "structure_hash": "720af35617467d2abd2bb7c3e64d50854dbffe1824c1cacc2a66c42b1d658e2d"
+}

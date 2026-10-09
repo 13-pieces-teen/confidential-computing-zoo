@@ -1,0 +1,11 @@
+{
+ "rekor_url": "https://rekor.sigstore.dev",
+ "rekor_public_key_path": "/etc/argus-trucon/93b9ed13/rekor-public-key.pem",
+ "sigstore_trusted_root_path": "/etc/argus-trucon/93b9ed13/sigstore-trusted-root.json",
+ "signer_identity": "77741887+13-pieces-teen@users.noreply.github.com",
+ "signer_issuer": "https://github.com/login/oauth",
+ "allowed_baseline_rtmr": [
+  "50a599711d0c8f4a30023011f0a7232076d1e9bcb05f5c2245c1d725b56ffb9f49ed3384390b89e6fbd46b9c7c26c6b5"
+ ],
+ "https_proxy": "http://proxy-dmz.intel.com:912"
+}

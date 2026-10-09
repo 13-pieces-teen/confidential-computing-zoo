@@ -1,0 +1,147 @@
+Found 12 entries
+Entry ID                : e9baf44f-a1e8-459c-b053-7f41162816ec
+SPIFFE ID               : spiffe://argus.local/agent/openclaw
+Parent ID               : spiffe://argus.local/spire/agent/x509pop/0792eff142e7acb0ab7e5360e690f662b9bb4ae4
+Revision                : 1
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : docker:image_config_digest:sha256:71d3a51dca069dee52bf8c00c1794c5a99a8410bcc87bd457a7be308795833a0
+Selector                : docker:label:org.argus.workload:openclaw
+Selector                : unix:path:/usr/local/bin/node
+Selector                : unix:uid:1000
+DisableX509SvidPrefetch : true
+
+Entry ID                : cea379df-9ae6-4e4d-9447-bd9cd42226fd
+SPIFFE ID               : spiffe://argus.local/agent/openclaw/experiment/paper01/full
+Parent ID               : spiffe://argus.local/spire/agent/x509pop/0792eff142e7acb0ab7e5360e690f662b9bb4ae4
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : docker:image_config_digest:sha256:71d3a51dca069dee52bf8c00c1794c5a99a8410bcc87bd457a7be308795833a0
+Selector                : docker:label:org.argus.instance:paper01full
+Selector                : docker:label:org.argus.workload:openclaw
+Selector                : unix:path:/usr/local/bin/node
+Selector                : unix:uid:21001
+DisableX509SvidPrefetch : true
+
+Entry ID                : c5397769-78d3-4fe2-8c6c-dfd23842b7b3
+SPIFFE ID               : spiffe://argus.local/agent/openclaw/experiment/paper01/native
+Parent ID               : spiffe://argus.local/spire/agent/x509pop/0792eff142e7acb0ab7e5360e690f662b9bb4ae4
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : docker:image_config_digest:sha256:71d3a51dca069dee52bf8c00c1794c5a99a8410bcc87bd457a7be308795833a0
+Selector                : docker:label:org.argus.instance:paper01native
+Selector                : docker:label:org.argus.workload:openclaw
+Selector                : unix:path:/usr/local/bin/node
+Selector                : unix:uid:21001
+DisableX509SvidPrefetch : true
+
+Entry ID                : 5f75fa03-13ab-4f59-a0cd-942c02378e2c
+SPIFFE ID               : spiffe://argus.local/agent/openclaw/experiment/paper02/full
+Parent ID               : spiffe://argus.local/spire/agent/x509pop/0792eff142e7acb0ab7e5360e690f662b9bb4ae4
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : docker:image_config_digest:sha256:71d3a51dca069dee52bf8c00c1794c5a99a8410bcc87bd457a7be308795833a0
+Selector                : docker:label:org.argus.instance:paper02full
+Selector                : docker:label:org.argus.workload:openclaw
+Selector                : unix:path:/usr/local/bin/node
+Selector                : unix:uid:21001
+DisableX509SvidPrefetch : true
+
+Entry ID                : a92ef7d3-78fe-4d62-aaa3-43495eb08026
+SPIFFE ID               : spiffe://argus.local/agent/openclaw/experiment/paper02/native
+Parent ID               : spiffe://argus.local/spire/agent/x509pop/0792eff142e7acb0ab7e5360e690f662b9bb4ae4
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : docker:image_config_digest:sha256:71d3a51dca069dee52bf8c00c1794c5a99a8410bcc87bd457a7be308795833a0
+Selector                : docker:label:org.argus.instance:paper02native
+Selector                : docker:label:org.argus.workload:openclaw
+Selector                : unix:path:/usr/local/bin/node
+Selector                : unix:uid:21001
+DisableX509SvidPrefetch : true
+
+Entry ID                : 7abe485a-dfd8-4e0c-bf7e-b89ae039ea64
+SPIFFE ID               : spiffe://argus.local/infra/openclaw-helper
+Parent ID               : spiffe://argus.local/spire/agent/x509pop/0792eff142e7acb0ab7e5360e690f662b9bb4ae4
+Revision                : 3
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : unix:path:/opt/argus-workload/bin/spiffe-client-credentials
+Selector                : unix:sha256:8e37ec9278a5719d3db30b0c08e25f076081f24e9bc4467f308e3889a6433deb
+Selector                : unix:uid:0
+
+Entry ID                : 36938751-c6ee-43cc-b497-61748584b2a2
+SPIFFE ID               : spiffe://argus.local/infra/openviking-helper
+Parent ID               : spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Revision                : 1
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : unix:path:/opt/argus-workload/bin/spiffe-helper
+Selector                : unix:sha256:2d9c949fff97acee5df4485daaddfe0df0b1811c12316b79cac606a4d91070ac
+Selector                : unix:uid:0
+
+Entry ID                : fadd18c2-509d-4c29-9937-6e01b15345ad
+SPIFFE ID               : spiffe://argus.local/infra/openviking-helper/experiment/paper02/full
+Parent ID               : spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Revision                : 1
+X509-SVID TTL           : default
+JWT-SVID TTL            : default
+Selector                : unix:path:/opt/argus-experiments/paper02/full_argus/payload/bin/spiffe-helper
+Selector                : unix:sha256:c62a4495140e85353d14417fffc0c9ee3c9b2e9633877d3a03aa539e397adefe
+Selector                : unix:uid:0
+DisableX509SvidPrefetch : true
+
+Entry ID                : 653fe17e-9c69-4931-805e-36fe18a7c399
+SPIFFE ID               : spiffe://argus.local/infra/openviking-helper/experiment/paper02/native
+Parent ID               : spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Revision                : 1
+X509-SVID TTL           : default
+JWT-SVID TTL            : default
+Selector                : unix:path:/opt/argus-experiments/paper02/native_spire_guarded/payload/bin/spiffe-helper
+Selector                : unix:sha256:c62a4495140e85353d14417fffc0c9ee3c9b2e9633877d3a03aa539e397adefe
+Selector                : unix:uid:0
+DisableX509SvidPrefetch : true
+
+Entry ID                : e9e00f9d-928f-45f5-ae05-7c8459956c1c
+SPIFFE ID               : spiffe://argus.local/service/openviking-cmem
+Parent ID               : spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : argus_tdx:agent_id:spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Selector                : argus_tdx:config_digest:sha256:15b0ce483cad9f42a5ec3e08d8c623956a340d1b5989f25b65352868f9a28bac
+Selector                : argus_tdx:image_config_digest:sha256:60b69b7bcabd83c718cc8635a5a0055e55c5131bd20ccfc214a95952100d14a8
+Selector                : argus_tdx:policy:argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01
+Selector                : argus_tdx:verified:true
+Selector                : argus_tdx:workload_id:openviking-cmem
+DisableX509SvidPrefetch : true
+
+Entry ID                : 7d2f3367-05e4-4b1d-b93f-14fd115cb0bb
+SPIFFE ID               : spiffe://argus.local/service/openviking-cmem/experiment/paper02/full
+Parent ID               : spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : argus_tdx:agent_id:spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Selector                : argus_tdx:config_digest:sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1
+Selector                : argus_tdx:image_config_digest:sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3
+Selector                : argus_tdx:policy:argus-workload-openviking-paper02-20261004-01
+Selector                : argus_tdx:verified:true
+Selector                : argus_tdx:workload_id:openviking-cmem
+DisableX509SvidPrefetch : true
+
+Entry ID                : 003f0642-7648-49ff-b791-dda9f567cdd4
+SPIFFE ID               : spiffe://argus.local/service/openviking-cmem/experiment/paper02/native
+Parent ID               : spiffe://argus.local/spire/agent/argus_tdx/openviking-node
+Revision                : 0
+X509-SVID TTL           : 300
+JWT-SVID TTL            : default
+Selector                : docker:image_config_digest:sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3
+Selector                : docker:label:io.trucon.workload-id:openviking-cmem
+Selector                : unix:path:/usr/local/bin/python3.13
+Selector                : unix:uid:0
+DisableX509SvidPrefetch : true
+

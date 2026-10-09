@@ -1,0 +1,16 @@
+{"at_ms": 1791489464813, "client_id": "e4c1", "event": "preflight_failed", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3"}
+{"at_ms": 1791489608747, "event": "window_started", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3"}
+{"at_ms": 1791489608748, "client_id": "e4c1", "event": "offered", "fact_id": "646677ec27dc4d5ddc339f2bb9b38a6b", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s00"}
+{"at_ms": 1791489608752, "client_id": "e4c1", "event": "input_dispatch_intent", "fact_id": "646677ec27dc4d5ddc339f2bb9b38a6b", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "task_id": "s00"}
+{"at_ms": 1791489698769, "client_id": "e4c1", "event": "offered", "fact_id": "ac3b96acf50b622be7e3b1033265f858", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s01"}
+{"at_ms": 1791489598768, "boundary": "openclaw_cli_input", "client_id": "e4c1", "clock_domain": "gateway_host_realtime", "event": "input_released", "fact_id": "646677ec27dc4d5ddc339f2bb9b38a6b", "prompt_sha256": "a4c9954b3e28d99a38fd22d847ede9448214b1c7cd2e05f91b7103436d296a87", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "session_key": "argus-e4:e4p1-7998d97419ea05161cc33525d2b1b3c3:e4c1:s00:1", "source": "gateway_agent_dispatch", "task_id": "s00", "work_item_id": "trip-50c08e5a5c0ff1c76bee5e19"}
+{"at_ms": 1791489759948, "attempted": "UNKNOWN", "client_id": "e4c1", "committed": "UNKNOWN", "confirmed_predecessors_recalled": true, "confirmed_proposals_recalled": true, "deadline_missed": false, "decision_committed": false, "event": "task_observed", "full_fact_sent": "UNKNOWN", "gateway_error": null, "gateway_outcome": "OBSERVED", "local_blocked_requests": 0, "proposal_persisted": "UNKNOWN", "reason": "ANSWER_INCORRECT", "recalled": false, "request_ids": [], "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s00", "store_tool_failed": false, "task_result": "FAIL", "tool_call_count": 0, "tool_events": [], "transport_evidence": [], "write_attempted": "UNKNOWN", "write_outcome": "UNKNOWN"}
+{"at_ms": 1791489788793, "event": "fault_started", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3"}
+{"at_ms": 1791489788797, "client_id": "e4c1", "event": "offered", "fact_id": "1cd50a336844fe21ad426283ba80c89a", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s02"}
+{"at_ms": 1791489789916, "event": "fault_observed", "returncode": 0, "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "status": "completed"}
+{"at_ms": 1791489878757, "client_id": "e4c1", "event": "offered", "fact_id": "c929af69e94b7ad2400144379cfe0e18", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s03"}
+{"at_ms": 1791489968765, "client_id": "e4c1", "event": "offered", "fact_id": "3279f91e9a8f0c5c3ff31fb906253df5", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s04"}
+{"at_ms": 1791489968767, "event": "recovery_started", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3"}
+{"at_ms": 1791489981123, "event": "recovery_observed", "returncode": 0, "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "status": "completed"}
+{"at_ms": 1791490058775, "client_id": "e4c1", "event": "offered", "fact_id": "045276ae8b7efe4f38ce3c8eaf1f5910", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3", "step_id": "s05"}
+{"at_ms": 1791490238749, "event": "window_completed", "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3"}

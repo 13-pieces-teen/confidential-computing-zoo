@@ -1,0 +1,12 @@
+{
+ "schema": "argus.ip1-clock-skew.v1",
+ "measured_at": "2026-10-03T19:53:33Z",
+ "method": "date -u +%s.%N executed on IP1, guest(ssh), IP2(ssh) in one span",
+ "ip1_before": 1791057212.5826554,
+ "guest": 1791057205.554898,
+ "guest_skew_s_vs_ip1": -7.028,
+ "ip2_measured": 1791057213.6801794,
+ "ip2_skew_approx_s_vs_ip1": 0.1,
+ "ip2_skew_validation": "trustee API called 19:44:48.937Z (IP1) vs provider quote at_ms 19:44:48.822Z (IP2) => IP2 ~ IP1-0.115s",
+ "note": "guest clock ~7.0s behind IP1; all probe at_ms/started_at shifted +7.0s for real-time correlation; per-leg match with IP2 nginx access log <=0.6s across 54 legs"
+}

@@ -1,0 +1,173 @@
+{
+  "block_id": "continuous-n1-s101",
+  "condition": "fault",
+  "configuration_sha256": "8e9fde5be04feafaf570d75df86becccb0f43fc829cc39b57bbc39b8879bd0f5",
+  "facts": [
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "44bfe8985bcf0975f26db304804b4c90",
+      "fact_index": 0,
+      "fact_sha256": "549f37b9ac2fa6ca5c01b155543d350f84abfdad078e83631da07939cd5640bf",
+      "full_fact_sha256": "549f37b9ac2fa6ca5c01b155543d350f84abfdad078e83631da07939cd5640bf",
+      "phase": "normal",
+      "predecessor": null,
+      "proposal_sha256": "aebe8df47a81eb846c87d24b1906b97f25af6539ce0105654452ddff3f75c476",
+      "release_offset_s": 0,
+      "step_id": "s00",
+      "task_id": "s00",
+      "work_item_id": "trip-0d06ade143dd1896e16e8523"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "5331d38a2988971b4f7a01cf784ead26",
+      "fact_index": 1,
+      "fact_sha256": "d97b044bf7f6d7eaaa66af157d15a65e8fcccb608391ecae609bc9ac70aad8bc",
+      "full_fact_sha256": "d97b044bf7f6d7eaaa66af157d15a65e8fcccb608391ecae609bc9ac70aad8bc",
+      "phase": "normal",
+      "predecessor": "s00",
+      "proposal_sha256": "e078a2b7363d2ec08c1ee64dcaff59e20515a8dc68d75792b53b40c3c3ee0296",
+      "release_offset_s": 90,
+      "step_id": "s01",
+      "task_id": "s01",
+      "work_item_id": "trip-0d06ade143dd1896e16e8523"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "budget_cents",
+      "fact_bytes": 229,
+      "fact_id": "827c9b4a145b4aa2a8ccf859c2b8025f",
+      "fact_index": 2,
+      "fact_sha256": "cb8063c13481b2e86f692118dede17bf20430932f63d2c710f65c62a309051a2",
+      "full_fact_sha256": "cb8063c13481b2e86f692118dede17bf20430932f63d2c710f65c62a309051a2",
+      "phase": "pause",
+      "predecessor": "s01",
+      "proposal_sha256": "c640c56733bc6c904844ebd8f06076bcdd665299609a4babb3fa45708a3a5ccc",
+      "release_offset_s": 180,
+      "step_id": "s02",
+      "task_id": "s02",
+      "work_item_id": "trip-0d06ade143dd1896e16e8523"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_walk_minutes",
+      "fact_bytes": 229,
+      "fact_id": "38a93f93a5d024d0b762334b8c05c63d",
+      "fact_index": 3,
+      "fact_sha256": "46f7a7b7a1ffe94c529611c9ed4e6982611c3dc9276759d4636ae0a1adc67ba4",
+      "full_fact_sha256": "46f7a7b7a1ffe94c529611c9ed4e6982611c3dc9276759d4636ae0a1adc67ba4",
+      "phase": "pause",
+      "predecessor": "s02",
+      "proposal_sha256": "fa71cfc7a752d467c71b2f3e968ef00b33b61998a91e1427554fd29a251a6fdc",
+      "release_offset_s": 270,
+      "step_id": "s03",
+      "task_id": "s03",
+      "work_item_id": "trip-0d06ade143dd1896e16e8523"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "max_travel_minutes",
+      "fact_bytes": 229,
+      "fact_id": "fb9061ea7e72143c0cd6acef5d6e12dd",
+      "fact_index": 4,
+      "fact_sha256": "8b35c4d9a0b7ec86ea92eb240a9105db1d185e843871596e414fa40daf879248",
+      "full_fact_sha256": "8b35c4d9a0b7ec86ea92eb240a9105db1d185e843871596e414fa40daf879248",
+      "phase": "recovery",
+      "predecessor": "s03",
+      "proposal_sha256": "464d6dba881101b59a2eb2a7630d919bf036833b17afb94b40edcbe90aef7b13",
+      "release_offset_s": 360,
+      "step_id": "s04",
+      "task_id": "s04",
+      "work_item_id": "trip-0d06ade143dd1896e16e8523"
+    },
+    {
+      "client_id": "e4c1",
+      "constraint_key": "min_indoor_stops",
+      "fact_bytes": 229,
+      "fact_id": "584b4d78b3e2555ed8618f9e83fa6bb2",
+      "fact_index": 5,
+      "fact_sha256": "082e7b8d96ef884f0f7648ce9735aeb841846e3de9b75da35a6aff76bfada9e8",
+      "full_fact_sha256": "082e7b8d96ef884f0f7648ce9735aeb841846e3de9b75da35a6aff76bfada9e8",
+      "phase": "recovery",
+      "predecessor": "s04",
+      "proposal_sha256": "6459b03061b6326f7fb8530965d2bc700b4d1511702856da7b258b991d3435c2",
+      "release_offset_s": 450,
+      "step_id": "s05",
+      "task_id": "s05",
+      "work_item_id": "trip-0d06ade143dd1896e16e8523"
+    }
+  ],
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "fixture_sha256": "1048b47b6284e1ae057ee6209b10226fa6cf67dcda89700420dc41376e0b8eca",
+  "group": "full_argus",
+  "operation_id": "d2f6dfcef50045d0a8067c6cf418074f",
+  "protocol": {
+    "clients": 1,
+    "constraint_keys": [
+      "budget_cents",
+      "max_walk_minutes",
+      "max_travel_minutes",
+      "min_indoor_stops"
+    ],
+    "continuity_scope": "persistent_memory_across_fresh_agent_sessions",
+    "dag": [
+      {
+        "index": 0,
+        "phase": "normal",
+        "predecessor": null
+      },
+      {
+        "index": 1,
+        "phase": "normal",
+        "predecessor": "s00"
+      },
+      {
+        "index": 2,
+        "phase": "pause",
+        "predecessor": "s01"
+      },
+      {
+        "index": 3,
+        "phase": "pause",
+        "predecessor": "s02"
+      },
+      {
+        "index": 4,
+        "phase": "recovery",
+        "predecessor": "s03"
+      },
+      {
+        "index": 5,
+        "phase": "recovery",
+        "predecessor": "s04"
+      }
+    ],
+    "dependency_policy": "all_confirmed_prior_proposals; all_successors_block_unresolved_writes",
+    "max_concurrency": 1,
+    "model_settings": {
+      "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+    },
+    "proposal_schema": "argus.proposal.v1",
+    "qa_timeout_seconds": 180,
+    "queue_limit": 1,
+    "scenario": "work-item-v1",
+    "schedule": {
+      "deadline_s": 180,
+      "frozen": true,
+      "release_interval_s": 90,
+      "stop_budget_s": 10
+    },
+    "steps_per_client": 6,
+    "task_retries": 0,
+    "tool_mode": "explicit_memory_recall_store"
+  },
+  "protocol_hash": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+  "run_id": "e4p1-eeacfeaf71560d84a0c8168b7a2c20b2",
+  "scenario": "work-item-v1",
+  "schema": "argus.continuous-manifest.v1",
+  "structure_hash": "b7b135e13f4669884b9ffc080bbbe470bfe2f89872f4630c47e4447ff0bf7af7"
+}

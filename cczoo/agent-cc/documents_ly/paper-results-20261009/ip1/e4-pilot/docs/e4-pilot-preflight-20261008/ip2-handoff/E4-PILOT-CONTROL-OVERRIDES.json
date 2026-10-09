@@ -1,0 +1,48 @@
+{
+  "schema": "argus.e4.server-control-overrides.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "controls": {
+    "fault": {
+      "at_s": 120,
+      "timeout_s": 120,
+      "argv": [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "argus-ip2",
+        "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json --event helper-freeze --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/fault.jsonl --execute-fault --hold-recovery"
+      ]
+    },
+    "recovery": {
+      "at_s": 240,
+      "timeout_s": 120,
+      "argv": [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "argus-ip2",
+        "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json --fault /var/lib/argus-receiver/{run_id}/fault.jsonl --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/recovery.jsonl"
+      ]
+    }
+  },
+  "healthy_controls": {
+    "fault": {
+      "at_s": 120,
+      "timeout_s": 120,
+      "argv": []
+    },
+    "recovery": {
+      "at_s": 240,
+      "timeout_s": 120,
+      "argv": []
+    }
+  }
+}

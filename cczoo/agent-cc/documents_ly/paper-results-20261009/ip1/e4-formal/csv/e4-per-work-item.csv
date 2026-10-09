@@ -1,0 +1,7 @@
+run,seed,condition,run_id,work_item_id,complete_task_result,continuation_result,legal_recovery_result,receipt_result,unresolved_proposals,unapplied_required_proposals,planned_tasks,offered_tasks,attempted_tasks
+r1,101,fault,e4p1-eeacfeaf71560d84a0c8168b7a2c20b2,trip-0d06ade143dd1896e16e8523,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,s00,"s00,s01,s02,s03,s04,s05",6,6,0
+r2,101,healthy,e4p1-861c0d0a872e0831d93271cd6292aa98,trip-6397293044a168cb2f99ce56,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,s00,"s00,s01,s02,s03,s04,s05",6,6,0
+r3,102,healthy,e4p1-94e9cd04e6e58ab00041228fadf8da5c,trip-40fb7c2322d066a9c4e2a161,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,s00,"s00,s01,s02,s03,s04,s05",6,6,0
+r4,102,fault,e4p1-cd119c89ea1d8995ffb995b87b6ed3dc,trip-409c4c56aac96833a548d572,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,s00,"s00,s01,s02,s03,s04,s05",6,6,0
+r5,103,fault,e4p1-7998d97419ea05161cc33525d2b1b3c3,trip-50c08e5a5c0ff1c76bee5e19,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,s00,"s00,s01,s02,s03,s04,s05",6,6,0
+r6,103,healthy,e4p1-a719364175d67653b560bf1b386f8539,trip-88ee004a216129d42f1e5082,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN,s00,"s00,s01,s02,s03,s04,s05",6,6,0

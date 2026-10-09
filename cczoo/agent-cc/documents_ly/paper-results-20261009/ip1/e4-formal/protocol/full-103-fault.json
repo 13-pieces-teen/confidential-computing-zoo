@@ -1,0 +1,72 @@
+{
+  "schema": "argus.continuous.v1",
+  "scenario": "work-item-v1",
+  "block_id": "continuous-n1-s103",
+  "group": "full_argus",
+  "fault_kind": "helper-freeze",
+  "fault_scope": "shared_service",
+  "mode": "formal",
+  "structure_seed": 103,
+  "model_settings": {
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2"
+  },
+  "schedule": {
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "stop_budget_s": 10,
+    "frozen": true
+  },
+  "qa_timeout_seconds": 180,
+  "max_concurrency": 1,
+  "queue_limit": 1,
+  "task_retries": 0,
+  "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3",
+  "condition": "fault",
+  "initialization_generation": 1,
+  "bindings": [
+    {
+      "client_id": "e4c1",
+      "container": "argus-oc-paper01full",
+      "docker_user": "21001:21001",
+      "config_path": "/home/node/.openclaw/openclaw.json",
+      "agent_id": "main",
+      "account_id": "argus-eval",
+      "user_id": "e4p1-s103-recovery",
+      "client_spiffe_id": "spiffe://argus.local/agent/openclaw/experiment/paper02/full",
+      "server_spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    }
+  ],
+  "controls": {
+    "fault": {
+      "at_s": 180,
+      "timeout_s": 120,
+      "argv": [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "argus-ip2",
+        "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json --event helper-freeze --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/fault.jsonl --execute-fault --hold-recovery"
+      ]
+    },
+    "recovery": {
+      "at_s": 360,
+      "timeout_s": 120,
+      "argv": [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "argus-ip2",
+        "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json --fault /var/lib/argus-receiver/{run_id}/fault.jsonl --run-id {run_id} --output /var/lib/argus-receiver/{run_id}/recovery.jsonl"
+      ]
+    }
+  },
+  "secret_seed": "REDACTED:R1:sha256=640549c6f74f173da4ac3412a84a7c4b6921ad634e83c6d2ba1eb25721fc17a2"
+}

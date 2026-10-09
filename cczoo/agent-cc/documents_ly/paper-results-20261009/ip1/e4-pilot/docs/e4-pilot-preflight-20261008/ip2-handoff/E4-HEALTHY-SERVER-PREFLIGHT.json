@@ -1,0 +1,17 @@
+{
+  "schema": "argus.e4.server-preflight.v1",
+  "checked_at": "2026-10-08T11:07:31Z",
+  "status": "STAGED_NOT_READY",
+  "run_id": "e4p1-3d00004a2a939c240ce5883134fbdbae",
+  "condition": "no_fault",
+  "account_id": "argus-eval",
+  "user_id": "e4p1-healthy",
+  "api_key_path": "/root/argus-ip1-handoff/e4-pilot-preflight-20261008/ip2-handoff/e4p1-healthy-api-key",
+  "api_key_mode": "0600",
+  "binding_directory": "/var/lib/argus-receiver/e4p1-3d00004a2a939c240ce5883134fbdbae",
+  "receiver_unit": "argus-receiver@e4p1-3d00004a2a939c240ce5883134fbdbae.service",
+  "receiver_output_exists": false,
+  "reason": "The target middleware audit run ID is fixed at launch. The recovery run must finish and its collector must be finalized before a normal TC API launch for the healthy run ID.",
+  "run_authorized_now": false,
+  "next_transition": "finalize recovery collector, perform the manifest-ordered normal launch/register/start for the healthy audit run ID, then issue READY"
+}

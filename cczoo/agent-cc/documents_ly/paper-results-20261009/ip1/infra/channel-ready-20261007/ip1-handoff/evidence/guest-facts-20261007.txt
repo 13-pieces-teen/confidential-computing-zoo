@@ -1,0 +1,4 @@
+collected 2026-10-07T07:35Z via ssh -p 2224 tdx@127.0.0.1 (guest=tdx-guest, kernel 6.11.0-26-generic, up 28 days)
+spire-agent: PID 4123738 started Fri Oct 2 18:47:45 2026 (/opt/spire-1.15.3/bin/spire-agent)
+containers: argus-oc-paper01full Up 3 days (healthy) | agentcc-openclaw-stage2-gateway Up 8 days (healthy)
+creds ready.json: {"version":1,"generation":"generation-2312226600","serial":"ea59525843e305856c1e51e0bfce6024","expires_at":1791358751000,"lease_until":1791358515111}

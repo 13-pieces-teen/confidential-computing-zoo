@@ -1,0 +1,14 @@
+{
+  "schema": "argus.e4.deployment-continuation.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "initial_receipt": "/var/lib/argus-receiver/e4p1-d6771e94005b51df0fd60a23ba981087/deployment.jsonl",
+  "launch_replayed": false,
+  "launch_id": "launch-99533a9",
+  "container_id": "1a20331937bef36bb213281396c1f3bdce9d899a09d0fbd14089d37f57de186d",
+  "register_startup_race_resolved": true,
+  "agent_source_data_dir_fix": "/etc/spire/argus-poc/paper02-agent.conf",
+  "registered": true,
+  "workload_ready": true,
+  "receiver_active": true,
+  "final_status": "READY"
+}

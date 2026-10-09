@@ -1,0 +1,11 @@
+2026-10-07T07:31Z IP1: docker stop argus-v2-openclaw-agent; docker update --restart=no
+status: Exited (1); RestartPolicy=no
+logs saved (no data/CA/entry/history deleted):
+  /root/argus-legacy-logs-20261007/argus-v2-openclaw-agent.log (2938891 lines)
+  /root/argus-legacy-logs-20261007/argus-v2-spire-server.log (4864)
+  /root/argus-legacy-logs-20261007/argus-dual-spire-server.log (1261981)
+  /root/argus-legacy-logs-20261007/argus-spire-m3-spire-server-1.log (3038903)
+  /root/argus-legacy-logs-20261007/argus-v2-guard.log (1395219)
+  /root/argus-legacy-logs-20261007/agentcc-openclaw-sbx-gateway.log (91368)
+  /root/argus-legacy-logs-20261007/argus-v2-openclaw-agent.inspect.json
+dual/m3/v2 server containers untouched; no reconstruction.

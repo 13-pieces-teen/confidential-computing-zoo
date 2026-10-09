@@ -1,0 +1,9 @@
+{
+  "consumer_path": "/opt/argus-experiments/paper02/full_argus/payload/scripts/e4_healthy_launch.py",
+  "consumer_sha256": "94b0242fddae7c5f3196fc18bd6987dd02f4e1eb5b5850aa37f856cbcdae3eca",
+  "receipt_path": "/var/lib/argus-receiver/e4p1-3d00004a2a939c240ce5883134fbdbae/deployment.jsonl",
+  "run_id": "e4p1-3d00004a2a939c240ce5883134fbdbae",
+  "schema": "argus.e4.healthy-token-consumer.v1",
+  "status": "WAITING_FOR_TOKEN",
+  "token_path": "/root/argus-ip1-handoff/e4-pilot-recovery-closure-healthy-token-20261008/ip1-handoff/e4p1-healthy-oidc.token"
+}

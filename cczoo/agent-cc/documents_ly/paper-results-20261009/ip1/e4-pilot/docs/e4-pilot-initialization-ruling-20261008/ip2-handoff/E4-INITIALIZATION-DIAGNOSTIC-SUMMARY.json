@@ -1,0 +1,47 @@
+{
+  "schema": "argus.e4.initialization-diagnostic.v1",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "diagnostic_user": "argus-eval/e4-case-only-diagnostic",
+  "formal_user_modified": false,
+  "experiment_window_started": false,
+  "fault_or_recovery_control_invoked": false,
+  "trials": [
+    {
+      "policy_memory_types": ["cases"],
+      "peer_enabled": false,
+      "task_status": "completed",
+      "memory_count": 0,
+      "accepted": false
+    },
+    {
+      "policy_memory_types": ["cases"],
+      "peer_enabled": true,
+      "task_status": "completed",
+      "memory_count": 0,
+      "accepted": false
+    },
+    {
+      "policy_memory_types": ["events"],
+      "peer_enabled": true,
+      "task_status": "completed",
+      "memory_count": 2,
+      "persisted_value_hits": {
+        "project_id": true,
+        "normal_code": true,
+        "review_code": true,
+        "threshold_cents": true
+      },
+      "old_project_query_all_value_hits": false,
+      "expanded_query_all_value_hits": true,
+      "accepted": true
+    }
+  ],
+  "approved_policy": {
+    "self": {"enabled": true},
+    "peer": {"enabled": true},
+    "memory_types": ["events"],
+    "working_memory": {"enabled": false}
+  },
+  "confirmation_relaxed": false,
+  "server_image_changed": false
+}

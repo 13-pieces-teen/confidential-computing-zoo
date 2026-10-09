@@ -1,0 +1,36 @@
+{
+  "schema": "argus.e4.initialization-retry2-diagnostic.v1",
+  "diagnostic_user": "argus-eval/e4-case-only-diagnostic",
+  "session_id": "948e70d4-cd29-4834-8100-ca390fb6109e",
+  "policy": {
+    "self": {"enabled": true},
+    "peer": {"enabled": true},
+    "memory_types": ["events"],
+    "working_memory": {"enabled": true}
+  },
+  "task_id": "5aea6da8-771d-4067-8b1b-f8f90704e3ea",
+  "task_status": "completed",
+  "memories_extracted": {
+    "memory_write": 1,
+    "memory_edit": 1
+  },
+  "archive": {
+    "endpoint_status": 200,
+    "seed_text_present": true
+  },
+  "context_stats": {
+    "totalArchives": 1,
+    "failedArchives": 0,
+    "archiveTokens": 774
+  },
+  "find_value_hits": {
+    "project_id": true,
+    "normal_code": true,
+    "review_code": true,
+    "threshold_cents": true
+  },
+  "all_unchanged_initialization_gates_pass": true,
+  "formal_user_modified": false,
+  "experiment_window_started": false,
+  "fault_or_recovery_control_invoked": false
+}

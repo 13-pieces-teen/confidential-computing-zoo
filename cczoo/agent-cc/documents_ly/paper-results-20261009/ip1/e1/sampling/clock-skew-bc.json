@@ -1,0 +1,41 @@
+{
+  "measured_at": "2026-10-04T04:23:36.653Z",
+  "method": "sandwich: local-before / guest / ip2 / local-after, 3 rounds",
+  "rounds": [
+    {
+      "round": 1,
+      "local_before": 1791087814.1996949,
+      "guest": 1791087806.6162746,
+      "ip2": 1791087815.1800323,
+      "local_after": 1791087815.1925523,
+      "guest_offset_s": -8.0798,
+      "ip2_offset_s": 0.4839,
+      "round_wall_s": 0.9929
+    },
+    {
+      "round": 2,
+      "local_before": 1791087815.1939077,
+      "guest": 1791087807.330047,
+      "ip2": 1791087815.9229004,
+      "local_after": 1791087815.9377809,
+      "guest_offset_s": -8.2358,
+      "ip2_offset_s": 0.3571,
+      "round_wall_s": 0.7439
+    },
+    {
+      "round": 3,
+      "local_before": 1791087815.939024,
+      "guest": 1791087808.0784194,
+      "ip2": 1791087816.6418777,
+      "local_after": 1791087816.6534617,
+      "guest_offset_s": -8.2178,
+      "ip2_offset_s": 0.3456,
+      "round_wall_s": 0.7144
+    }
+  ],
+  "mean_guest_offset_s": -8.1778,
+  "mean_ip2_offset_s": 0.3955,
+  "guest_offset_spread_s": 0.1559,
+  "ip2_offset_spread_s": 0.1383,
+  "note": "positive = peer clock ahead of IP1 local clock"
+}

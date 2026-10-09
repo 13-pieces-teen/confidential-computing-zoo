@@ -1,0 +1,12 @@
+{
+  "admissions": [],
+  "bound_ms": 10000,
+  "clock_uncertainty_ms": 20,
+  "fault_file": "fault.jsonl",
+  "release_file": {
+    "path": "releases.jsonl",
+    "sha256": "553e6b265079511c06b8192e591c151872a787dbb790b4c0cf8812f1305109a4"
+  },
+  "run_id": "paper-20261004t145835z",
+  "schema": "argus.fact-receipt-context.v1"
+}

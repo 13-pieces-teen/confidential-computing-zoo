@@ -1,0 +1,49 @@
+{
+  "schema": "argus.e4.server-preflight.v1",
+  "checked_at": "2026-10-08T11:07:31Z",
+  "status": "READY",
+  "run_id": "e4p1-d6771e94005b51df0fd60a23ba981087",
+  "condition": "fault",
+  "account_id": "argus-eval",
+  "user_id": "e4p1-recovery",
+  "api_key_path": "/root/argus-ip1-handoff/e4-pilot-preflight-20261008/ip2-handoff/e4p1-recovery-api-key",
+  "api_key_mode": "0600",
+  "launch_id": "launch-99533a9",
+  "container_id": "1a20331937bef36bb213281396c1f3bdce9d899a09d0fbd14089d37f57de186d",
+  "pid": 512035,
+  "target_sha256": "55a27cf5b8b12628ce71af5dc432a48290bd2fe81d35191912e8a65689e1208e",
+  "binding_path": "/var/lib/argus-receiver/e4p1-d6771e94005b51df0fd60a23ba981087/binding.json",
+  "binding_sha256": "6074f9c92e88b60efa27d7b55fdf361edbd3ce1749bc92ae35ce082a721e40cc",
+  "receiver_output": "/var/lib/argus-receiver/e4p1-d6771e94005b51df0fd60a23ba981087/receiver.jsonl",
+  "receiver_unit": "argus-receiver@e4p1-d6771e94005b51df0fd60a23ba981087.service",
+  "receiver_active": true,
+  "receiver_gap_records": 0,
+  "coverage": "COMPLETE after the initial pre-collector tail",
+  "fault_output": "/var/lib/argus-receiver/e4p1-d6771e94005b51df0fd60a23ba981087/fault.jsonl",
+  "recovery_output": "/var/lib/argus-receiver/e4p1-d6771e94005b51df0fd60a23ba981087/recovery.jsonl",
+  "fault_output_exists": false,
+  "recovery_output_exists": false,
+  "services_active": [
+    "ax-paper02-full-provider.service",
+    "ax-paper02-full-agent.service",
+    "ax-paper02-full-authz.service",
+    "ax-paper02-full-helper.service",
+    "ax-paper02-full-nginx.service"
+  ],
+  "workload_ready": true,
+  "port_1943_listening": true,
+  "chain_id": "default",
+  "chain_sequence": 5,
+  "docktap_stop_mutation": {
+    "mutation_id": "mutation-1feb8967145a48148a2e5226caf81c62",
+    "status": "CONFIRMED",
+    "record_id": "2adad632-5943-420b-8a9d-cd4835c9c949"
+  },
+  "prohibited_actions_preserved": {
+    "p0_a3_rerun": false,
+    "old_unknown_mutation_replayed": false,
+    "chain_reset": false,
+    "rtmr_reset": false,
+    "unknown_docker_operation_replayed": false
+  }
+}
