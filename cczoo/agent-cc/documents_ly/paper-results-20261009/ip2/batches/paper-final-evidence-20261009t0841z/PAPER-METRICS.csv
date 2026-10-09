@@ -1,0 +1,26 @@
+metric,value,unit,sample_window,evidence_type,source_file_digest,paper_claim
+e2_entry_close_window,[4530.462, 5145.519],ms,1 fault injection (E2 r4),offline-recompute,"e2/e2-recomputed.json; inputs preexisting/e2-r4/receiver/experiment-window.jsonl sha a1735650c338559f…, originals/fault.jsonl sha 3c9caf27a0a2d089…","E2 入口关闭时间区间 4.530–5.146 s 可复算（历史值精确复现，两版保留）"
+e2_detection_window,[4831.708, 5145.519],ms,same window,offline-recompute,e2/e2-recomputed.json,E2 readiness 撤回（检测）区间可复算
+e2_close_after_detection,[-615.057, 313.810],ms,same window,offline-recompute,e2/e2-recomputed.json,E2 关闭相对检测的相对时序可复算
+e2_fault_completion,4.5415,ms,1 fault command,offline-recompute,"e2/e2-recomputed.json; originals/fault.jsonl sha 3c9caf27a0a2d089…",E2 故障命令执行完成耗时可复算
+e2_post_fault_pre_boundary,18 requests / 19 events / 4795 bytes,count+bytes,fault完成到+10 s界,offline-recompute,e2/e2-recomputed.json,E2 故障后 10 秒界内仍有 18 个请求读取（非完全停止）
+e2_post_boundary,0 requests / 0 events / 0 bytes,count+bytes,+10 s界到 receiver_stop (146 request pairs),offline-recompute,e2/e2-recomputed.json,E2 10 秒界后零应用读取（UNKNOWN 尾段保留，不当作零）
+e2_last_application_read,4612.611,ms,1 window,offline-recompute,e2/e2-recomputed.json,E2 最后一次应用读取 4.613 s 复现；4837.674 ms 为在途 http.disconnect（0 字节），两值均解释
+e2_effective_observation_end,51410 (COMPLETE coverage to 53419.373),ms,1 window,offline-recompute + missing-material,"e2/e2-recomputed.json; probe jsonl 未随作物导出（缺项，待 IP1 客户端原件）",E2 有效观察终点 51410 ms = 最后客户端探针完成 +20 ms 界；COMPLETE 覆盖至 53419.373 ms
+e2_backend_alive_after_entry_stop,163 samples OBSERVED (raw monotonic 181),count,入口关闭后采样,offline-recompute (analyser ±20 ms band),e2/e2-recomputed.json,E2 入口关闭后后端仍存活（OBSERVED，双界口径两版保留）
+e1_seven_cases_reproduced,7/7 PASS,count,7 fixed offline fixtures,rule-replay (production LogVerifier + archived Rekor),"e1-cases/seven-cases-decisions.csv; inputs preexisting/e1-offline-history-fixtures/",七个历史规则案例可独立复核、全部与历史预期一致
+e1_expected_deny_as_rule_hit,3/3 (same_image_new_instance / hidden_stop / instance_mismatch),count,3 DENY fixtures,rule-replay,e1-cases/seven-cases-decisions.csv,三个预期拒绝均为规则命中（非运行错误），可作规则级对照引用
+e1_error_or_unknown,0,count,7 fixtures,rule-replay,e1-cases/seven-cases-decisions.csv,无缺依赖/归档不全/运行错误混入拒绝统计
+e1_verify_elapsed,6.2–10.7,ms,7 fixtures,rule-replay,"e1-cases/seven-cases-reasons.json; sigstore 3.6.7, tlog tree sha 63d41663…",离线复核开销量级（本地重放，非在线对照）
+s1_counter_interval,600.281,s,1 observation window,server-original,"s1/s1-recheck.json; provider-before.json sha da8abcb47f7ab938… → provider-after.json sha 01c173fd776a52a6…",S1 计数区间 1791531867654→1791532467935 ms
+s1_publications,3 (3 distinct serials),count,1 counter interval,server-original,"s1/s1-recheck.json; helper-journal-window.json sha 176ac776101eae2e…","S1 可引用结论：600.281 s 内三次 Workload SVID 发布"
+s1_workload_quote_deltas,0/0/0 (node 0/0/0),count,1 counter interval,server-original,s1/s1-recheck.json,S1 区间内无新的 Workload Quote 调用（attempted/generated/failed 增量 0/0/0）
+s1_identity_chain,provider c379b316…:1280687:1791524628548924645 + subscription 76bc43416ab64049871e818f3bcd15d3 + launch-a4ba2ba unchanged,,1 counter interval,server-original,s1/s1-recheck.json,S1 身份复用：同一 Provider/目标实例/Helper 订阅贯穿区间
+s1_business_success,155/180 (25 UNKNOWN = 19 in-window + 6 outside; 0 rejected/timeout/overload),count,180 planned requests,server-original + client-original,"s1/s1-recheck.json; batch argus-paper-minimal-20261009t0718z-01 results/RESULTS.csv",S1 业务连续性单独引用：155 成功、25 UNKNOWN（未重放）
+s1_coverage_insufficiency,120768,ms,1 window,ip1-corrected,"s1/s1-recheck.json; IP1-FINAL-RECEIPT（coverage insufficiency 120768 ms）",S1 业务端侧覆盖率不足更正为 120768 ms；coverage UNKNOWN、verdict FAIL 维持
+s1_client_side_serials,8,count,900 s client plane,ip1-corrected,"s1/s1-recheck.json; IP1-FINAL-RECEIPT（8 client-side serials）",IP1 客户端侧 900 s 观测到 8 个 serial（与服务端 3 次发布为不同测量面，分别引用）
+s1_third_publication_client_coverage,none claimed (3rd publish 15:53:41.584Z after client freeze 15:52:47.347Z),,1 window,server-original + client-original,s1/s1-recheck.json,S1 第三次发布不描述为有完整客户端覆盖
+a3_admission_verdict,ESTABLISHED_ADMITTED (attempt 41aaef740d1944f4a8718931b38e2783),,1 admission,archived-original (no re-collection),"a3-index/A3-AND-COST-SOURCES.md; e1/online/A3_FINAL_STATUS.txt sha a7db975d512cfe65…",A3 新准入结论来源索引（不重跑）
+a3_legal_client_legs,54/54 (IP1 rounds 37–54),count,54 legs,archived-original (no re-collection),"e1/online/IP2-summary.md sha 0e3fe0785e6ba880…; IP1_E1_FULL_A3_CORRELATION.md sha 933ebf3aadf99589…",A3 合法客户端业务访问 ESTABLISHED/OBSERVED
+e1_admission_cost_provider_total,1086.17503 (quote 1034.778383 + history_snapshot 6.338805; ready_elapsed 7171.385087),ms,1 admission,archived-original (no re-collection),"tables/FIGURE-DATA.json sha ca4dabc70887fc72",单次准入成本：Provider 总计 1086.18 ms（Quote 1034.78 ms、历史快照 6.34 ms）
+e1_stage_elapsed,common_target 243 / provider 1330 / evidence_binding 1330 / remote_appraisal 6789 / final_target 6791,ms,1 admission,archived-original (no re-collection),"tables/FIGURE-DATA.json sha ca4dabc70887fc72",单次准入分阶段耗时（制图直接引用）

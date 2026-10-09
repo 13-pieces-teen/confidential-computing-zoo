@@ -1,0 +1,460 @@
+{
+ "schema": "argus.paper-final.e1-seven-cases.v1",
+ "python": "3.11.2 (main, May 12 2026, 05:17:27) [GCC 12.2.0]",
+ "executable": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/tc_api/venv/bin/python3",
+ "fixture_dir": "/root/argus-results-ip2-20261009-worktree/cczoo/agent-cc/documents_ly/paper-results-20261009/ip2/batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures",
+ "tlog_tree_sha256": "63d416636f00ca195f193f983dcabfcd5a7612c5",
+ "tlog_identical_at": {
+  "3cf25a87": true,
+  "deployment_head_12b365ed": true
+ },
+ "deployment_head": "12b365ed8d3c73965e69c8fbe3fcb46075fefa6c",
+ "sigstore_version": "3.6.7",
+ "cryptography_version": "46.0.7",
+ "rekor_types_file": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/tc_api/venv/lib/python3.11/site-packages/rekor_types/__init__.py",
+ "analyzer_source_sha256": {
+  "admission_cases.py": "e4e18697bc0a66d463e6a632e4685e71a37a866cf28d59949d68111ffd088bdd",
+  "history_diagnostics.py": "e5324fa724907892901fe36bafed166ae000fc35077eaaf8b6b0b2ff37033620",
+  "verify_trucon.py": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c"
+ },
+ "versions_json_expected": {
+  "analyzer-source/admission_cases.py": "e4e18697bc0a66d463e6a632e4685e71a37a866cf28d59949d68111ffd088bdd",
+  "analyzer-source/history_diagnostics.py": "e5324fa724907892901fe36bafed166ae000fc35077eaaf8b6b0b2ff37033620",
+  "analyzer-source/verify_trucon.py": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c"
+ },
+ "loaded_validator_digests": {
+  "verify_trucon": {
+   "file": "/root/argus-results-ip2-20261009-worktree/cczoo/agent-cc/documents_ly/paper-results-20261009/ip2/batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/analyzer-source/verify_trucon.py",
+   "sha256": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c"
+  },
+  "tlog.digest": {
+   "file": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/tlog/tlog/digest.py",
+   "sha256": "6ff06efc7a8457e2013c6bf1956e778753560c6f8d0095ebb978c88faca7c1d1"
+  },
+  "tlog.backends.rekor.adapter": {
+   "file": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/tlog/tlog/backends/rekor/adapter.py",
+   "sha256": "1b46007b74589f6c35283eaf7e45013897ae24f352ddf6fb0b5281d9c4d8455c"
+  },
+  "tlog": {
+   "file": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/tlog/tlog/__init__.py",
+   "sha256": "a585c845a83cdc774ab1246410d3036a2d2a42f7fc4da86daebff0956bdfa939"
+  },
+  "tlog.backends.rekor": {
+   "file": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/tlog/tlog/backends/rekor/__init__.py",
+   "sha256": "912a995011be9ad9fc0fca1b2725a8e6fa8cac2d2ffe9c61c49a8e5cf23f348d"
+  }
+ },
+ "results": [
+  {
+   "case": "config_mismatch",
+   "expected": "ALLOW",
+   "request_sha256": "fc5e0a53ad24a3366dee3500a70ff4f1a4302d477729c9127d41f25228e3b0cd",
+   "expected_request_sha256": "2d8f508168b7ee51f40631044a87b57227573cdcd20abb3efcaa1d514d02548d",
+   "input_material_sha256": {
+    "request.json": "fc5e0a53ad24a3366dee3500a70ff4f1a4302d477729c9127d41f25228e3b0cd",
+    "rekor.json": "df1cdc75326b4897b963eb6303de5fa2ddb6c92d868579761cb048569c2019ac",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "86e9c44b119a7f46c84a6f00fc677f38e0b5ff5d4e96d9bc47c70b9e4bb3dd6b",
+    "init.pem": "66e2a05d0251616180726e5c6c59c8f0a93c1463eca167553c1c17845e98d090",
+    "rekor.pem": "a33e1b103c40257339f1711ef11e1a09f547378027793a158012c1d9a6f134bb"
+   },
+   "classification": "ALLOW",
+   "actual": "ALLOW",
+   "reason": null,
+   "timings": {
+    "outcome": "ALLOW",
+    "verify_ms": 10.692868,
+    "fetch_ms": 0.5871770000000001,
+    "fetched_entries": 4,
+    "fetched_bytes": 15896,
+    "requested_entries": 4
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "DENY",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "ALLOW",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "verified": {
+      "baseline_rtmr": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "launch_entry_uuid": "9e022889319c5b761f7d4b1b8a72ff34c79a2e9a71d50afc0a02c571a65f548f",
+      "verified": true
+     }
+    },
+    "target_launch_only": {
+     "decision": "ALLOW",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  },
+  {
+   "case": "hidden_stop",
+   "expected": "DENY",
+   "request_sha256": "7bafb13e1b44f400af0e32f0baba62efc707b7e53ff9499c6e00e2b6a94b5667",
+   "expected_request_sha256": "fe300414857d78193ae3144737245219d6c9e39f9f58d8c987217dffba2a0460",
+   "input_material_sha256": {
+    "request.json": "7bafb13e1b44f400af0e32f0baba62efc707b7e53ff9499c6e00e2b6a94b5667",
+    "rekor.json": "2bc2093eefb0e3af5ae210abf9a191f2ab70dbec5939a1ecdcbf0317ff907a76",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "7898f2acd62cf9c3bedd72b00e45f61d1e784ac115fcb65bc823a1eb730a3116",
+    "init.pem": "dcf0a9cbd9f642406242cfd823046d2fac8902ee5de9fb691f7f893ab867d254",
+    "rekor.pem": "3b55cf81771149c879b46921acc06474143f673cebd3a9bdbf8d2b371770a6ff"
+   },
+   "classification": "RULE_DENY",
+   "actual": "DENY",
+   "reason": "history does not reproduce Quote RTMR2",
+   "timings": {
+    "outcome": "DENY_OR_ERROR",
+    "verify_ms": 6.200665,
+    "fetch_ms": 0.27579,
+    "fetched_entries": 3,
+    "fetched_bytes": 11592,
+    "requested_entries": 3
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "DENY",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "DENY",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "reason": "history does not reproduce Quote RTMR2"
+    },
+    "target_launch_only": {
+     "decision": "ALLOW",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  },
+  {
+   "case": "instance_mismatch",
+   "expected": "DENY",
+   "request_sha256": "6f9635e8db459630bcb76600d9dc97dc3bea94896642107c4c9f11391dd02f43",
+   "expected_request_sha256": "9476946a69e99441b70a8d190dee106cbc4500c7dcd2100e29a655aaaee5113a",
+   "input_material_sha256": {
+    "request.json": "6f9635e8db459630bcb76600d9dc97dc3bea94896642107c4c9f11391dd02f43",
+    "rekor.json": "e78479edff16cae4973bca8b10d3638a8224eaff59211805addb7b5b6fdf0a33",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "f76210baf5f7b4c3e791a66f3d622e1c7dc82cd0017808d2b542f9b63a5ad2ef",
+    "init.pem": "e6cc82eff308011bbbd619d4d381f55841cf2cb7d0620373f945344d4d86164c",
+    "rekor.pem": "37648a967bb359a04295a020857ae3d2ef6f100493931727f2338583077e4f90"
+   },
+   "classification": "RULE_DENY",
+   "actual": "DENY",
+   "reason": "launch record does not match current container/image",
+   "timings": {
+    "outcome": "DENY_OR_ERROR",
+    "verify_ms": 6.219977,
+    "fetch_ms": 0.27451400000000004,
+    "fetched_entries": 3,
+    "fetched_bytes": 11580,
+    "requested_entries": 4
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "DENY",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "DENY",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "reason": "launch record does not match current container/image"
+    },
+    "target_launch_only": {
+     "decision": "DENY",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  },
+  {
+   "case": "legal",
+   "expected": "ALLOW",
+   "request_sha256": "c948431c94f480f47c610b7dcf30808ae2b7b28c62636109eb9a65ef4477c214",
+   "expected_request_sha256": "ade75504905babeb5eae8bb162ff4a351f7c618286c8949d67cf727ae676d6ec",
+   "input_material_sha256": {
+    "request.json": "c948431c94f480f47c610b7dcf30808ae2b7b28c62636109eb9a65ef4477c214",
+    "rekor.json": "8264b7da5f63fc0ef19bc8bc9838cb4af1193f7fe14923c5f9964bc62e88ed53",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "2759f7996bb8516182f88f3ab729c71a42fa084df8979cec9a70b29437abcc00",
+    "init.pem": "88ac84ccad6c741085fbf8a2994fe5514962735785c2d73ec4004f4d4cb895fe",
+    "rekor.pem": "146ce322d7d7d407345f282259f157c9f55fd28c381ebc57db8aab3c57133c0b"
+   },
+   "classification": "ALLOW",
+   "actual": "ALLOW",
+   "reason": null,
+   "timings": {
+    "outcome": "ALLOW",
+    "verify_ms": 6.100915,
+    "fetch_ms": 0.247845,
+    "fetched_entries": 3,
+    "fetched_bytes": 11584,
+    "requested_entries": 3
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "ALLOW",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "ALLOW",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "verified": {
+      "baseline_rtmr": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "launch_entry_uuid": "f9d964470a9833712a3e0c0699e3924286a18032bb5f53dc4f0a369a768b514f",
+      "verified": true
+     }
+    },
+    "target_launch_only": {
+     "decision": "ALLOW",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  },
+  {
+   "case": "old_evidence",
+   "expected": "ALLOW",
+   "request_sha256": "30b6b4ba4968a77378eb0890ed245bd5e01f692e323e77b85bdbc88cbbbb0ff1",
+   "expected_request_sha256": "09f182fbe0d822e52d574d106de10cd89549b320f9086bcb65a533233ab6674c",
+   "input_material_sha256": {
+    "request.json": "30b6b4ba4968a77378eb0890ed245bd5e01f692e323e77b85bdbc88cbbbb0ff1",
+    "rekor.json": "1805d1fc47321609a5f53affea66f98a8586ab82d72669dfea0ff67096229f33",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "35e96fa8c4d087789e775f50f2d221ebcd9a159be0beb7490cb2ceb32274fa79",
+    "init.pem": "90eedd466b06ebf563656a72df5687b18006da079a05d97a892b6e3813561b97",
+    "rekor.pem": "4eae23bbb25071a7ce88ec8ca2a09f3ebe80712dcc4491dbc292b91149afaf7c"
+   },
+   "classification": "ALLOW",
+   "actual": "ALLOW",
+   "reason": null,
+   "timings": {
+    "outcome": "ALLOW",
+    "verify_ms": 8.33029,
+    "fetch_ms": 0.32395799999999997,
+    "fetched_entries": 4,
+    "fetched_bytes": 15900,
+    "requested_entries": 4
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "DENY",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "ALLOW",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "verified": {
+      "baseline_rtmr": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "launch_entry_uuid": "21e1e36044f5787497bd20d2627c36fe51f86a85b3de0dd8b59a4ae7794884f6",
+      "verified": true
+     }
+    },
+    "target_launch_only": {
+     "decision": "ALLOW",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  },
+  {
+   "case": "same_image_new_instance",
+   "expected": "DENY",
+   "request_sha256": "8e36ba3c65109d20ef35d46ae1c87e1a7473be9739a81b7d7d1dee50bba89142",
+   "expected_request_sha256": "27a41ee5b88705f810fb3f87291331833f3abc07b3e673ff8e71e46ddf1c8054",
+   "input_material_sha256": {
+    "request.json": "8e36ba3c65109d20ef35d46ae1c87e1a7473be9739a81b7d7d1dee50bba89142",
+    "rekor.json": "e75dd6156ecc6cc9dfbbfb1a432ed1af40122c4244e3431263a4659ab9c724dd",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "bc3b906f9676f025b3107373076cd842ac9b068feb86ec742a2054a93df8147e",
+    "init.pem": "1c67843d99f591a44dcef02525438a7082236e59c44f64bbf2a059f7f14def89",
+    "rekor.pem": "e6a084d843f623e1c1b8f16614d13380ef81980eaec9975cfb90f621125a3293"
+   },
+   "classification": "RULE_DENY",
+   "actual": "DENY",
+   "reason": "exactly one target launch record is required",
+   "timings": {
+    "outcome": "DENY_OR_ERROR",
+    "verify_ms": 8.306525,
+    "fetch_ms": 0.40341899999999997,
+    "fetched_entries": 4,
+    "fetched_bytes": 15912,
+    "requested_entries": 4
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "DENY",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "DENY",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "reason": "exactly one target launch record is required"
+    },
+    "target_launch_only": {
+     "decision": "DENY",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  },
+  {
+   "case": "unrelated_activity",
+   "expected": "ALLOW",
+   "request_sha256": "fb95985c767ab2e9fa90b6131c3d6a44b9155fd25730e6f9e8dddbbb076ad0c9",
+   "expected_request_sha256": "a89293369740b13469b75f5eb4c69fca19002647b6ed5e36cdc22fcaec814dbf",
+   "input_material_sha256": {
+    "request.json": "fb95985c767ab2e9fa90b6131c3d6a44b9155fd25730e6f9e8dddbbb076ad0c9",
+    "rekor.json": "162e9ed690ac9110a4a0a6a3261e1ae4e7fe900f07bebc7f9e609c12f51bab73",
+    "trust.offline.json": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+    "trust.original.json": "27d77079595ab839a56e2bb35573f8fa6db4053de32ba9fc948b365023cebc40",
+    "init.pem": "7b5ee10d889f742d36e97489214a7aed13a0b037f8f51cefc8f5835b059194f3",
+    "rekor.pem": "0bc80a2a465a7e04f4bd606de8b01493c9c74230b518d0ffafec0d962f2ff52e"
+   },
+   "classification": "ALLOW",
+   "actual": "ALLOW",
+   "reason": null,
+   "timings": {
+    "outcome": "ALLOW",
+    "verify_ms": 8.475825,
+    "fetch_ms": 0.34062,
+    "fetched_entries": 4,
+    "fetched_bytes": 15896,
+    "requested_entries": 4
+   },
+   "historical_rules": {
+    "fixed_accumulated_measurement": {
+     "decision": "DENY",
+     "missing": [
+      "event meaning",
+      "current instance binding",
+      "tolerance of unrelated measured activity"
+     ]
+    },
+    "full_history_current_instance": {
+     "decision": "ALLOW",
+     "implementation": "production LogVerifier.verify",
+     "not_checked_here": [
+      "TDX Quote",
+      "REPORTDATA",
+      "challenge freshness",
+      "current PID/starttime",
+      "configuration admission policy"
+     ],
+     "verified": {
+      "baseline_rtmr": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "launch_entry_uuid": "a534a2c55bb28116af02d38e46593ee79c2482f44b65b69c989168c43d5bb82b",
+      "verified": true
+     }
+    },
+    "target_launch_only": {
+     "decision": "ALLOW",
+     "missing": [
+      "history completeness",
+      "subsequent stop/removal",
+      "full RTMR reproduction"
+     ]
+    }
+   }
+  }
+ ],
+ "verdicts": {
+  "config_mismatch": "PASS",
+  "hidden_stop": "PASS",
+  "instance_mismatch": "PASS",
+  "legal": "PASS",
+  "old_evidence": "PASS",
+  "same_image_new_instance": "PASS",
+  "unrelated_activity": "PASS"
+ },
+ "note": "RULE_DENY = verifier rule violation (expected rejection); ERROR = transport/archive gap, missing deps/files, config or format failure - never counted as a successful rejection; Fixed/Launch/History are rule-level comparisons, not a full Native SPIRE online comparison"
+}

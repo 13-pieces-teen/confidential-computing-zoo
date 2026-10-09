@@ -1,0 +1,18 @@
+event,source_record,monotonic_ns,at_ms,relative_ms_monotonic,relative_ms_wall_20ms,note
+fault_invocation,fault.jsonl executed fault,1229525121391346,1791448220012,0.0,0,
+fault_completed,fault.jsonl completed,1229525125932846,1791448220016,4.542,4,
+first_body_read(pre-fault),experiment-window record 162141,1229516736737689,1791448211627,-8384.654,-8385,"request 56561dc1 chunk 1, 264 bytes, more_body=true"
+entry_stop_observed_after,lifecycle entry_stopped,1229529651853183,1791448224542,4530.462,4530,last poll before stop was observed
+entry_stop_poll,lifecycle entry_stopped,1229530266909901,1791448225157,5145.519,5145,poll that observed systemd_unit_inactive_no_main_pid
+detection_observed_after,lifecycle detected,1229529953099523,1791448224843,4831.708,4831,
+detection_poll,lifecycle detected,1229530266909901,1791448225157,5145.519,5145,readiness_withdrawal_or_expiry
+last_body_read_complete_lifecycle,record 162520,1229529734002166,1791448224624,4612.611,4612,fe73240e-715f-4931-aa3c-86f17e5cad06
+last_body_read_overall_inflight,record 162520,1229529734002166,1791448224624,4612.611,4612,fe73240e-715f-4931-aa3c-86f17e5cad06 (no request_end in crop)
+bound_fault_completed+10000ms,bound_ms=10000,1229535125932846,1791448230016,10004.541,10004,stop bound
+last_COMPLETE_coverage_end,experiment-window coverage_interval,1229578540763980,1791448273431,53419.373,53419,
+UNKNOWN_tail_start,coverage record 163241,1229578540763980,1791448273431,53419.373,53419,uncovered_final_or_crash_tail
+UNKNOWN_tail_end,coverage record 163241,1229578754803631,1791448273645,53633.412,53633,receiver_stop
+receiver_stop,record 163242,1229578754841467,1791448273645,53633.45,53633,complete=false coverage=intervals_only
+observer_stop,lifecycle observer_stop,1229579998172226,1791448274888,54876.781,54876,complete=true healthy_baseline=true failed_samples=0
+recovery_probe_91aed3cc-4eaa-4272-a1d9-fca7a9101c76,recovery-window records 17595-17596,,,,,body_reads=0 bytes=0 next_coverage=COMPLETE@17597
+recovery_probe_cfe0f582-59dd-4574-9807-1d7ad501b7c7,recovery-window records 17599-17604,,,,,body_reads=1 bytes=69 next_coverage=COMPLETE@17605

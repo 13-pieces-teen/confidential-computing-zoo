@@ -1,0 +1,282 @@
+{
+ "schema": "argus.paper-final.e2-recompute.v1",
+ "run_id": "paper-20261004t145835z",
+ "trial_id": "e2-full-helper-freeze-20261008-r4",
+ "inputs": {
+  "crops": "/root/argus-results-ip2-20261009-worktree/cczoo/agent-cc/documents_ly/paper-results-20261009/ip2/batches/20261009-repair-and-rerun/preexisting/e2-r4",
+  "experiment_crop_sha256": "a1735650c338559f02a7f8397ebb2a26c82aa4ce28e2dd0e2c975a4690493ae4",
+  "recovery_crop_sha256": "e75ef2e6fe126bbd03b2d7da427e1d52336deab20b16a9a7e00a45684b270999",
+  "fault_sha256": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63",
+  "lifecycle_sha256": "9b83b38ceae9806090de243fdef8c02410055eb12ff4883ed9464252bf37c4a8",
+  "timeline_sha256": "4dc1ad53e67843c203afbf7926bfc1d23497522a14b3ea59cd268e2955cf1cfc",
+  "result_sha256": "48efff32ed194cc9a924cadda4e92bbca946dbda16e7546aadf1b9b6cb5600af"
+ },
+ "fault_injection": {
+  "event": "helper-freeze",
+  "executed": true,
+  "started_at_ms": 1791448220012,
+  "started_monotonic_ns": 1229525121391346,
+  "completed_monotonic_ns": 1229525125932846,
+  "command_completion_ms": 4.5415,
+  "bound_ms": 10000
+ },
+ "checks": {
+  "crop_sha256_experiment": {
+   "ok": true,
+   "detail": ""
+  },
+  "crop_sha256_recovery": {
+   "ok": true,
+   "detail": ""
+  },
+  "record_seq_contiguous_experiment": {
+   "ok": true,
+   "detail": ""
+  },
+  "record_seq_contiguous_recovery": {
+   "ok": true,
+   "detail": ""
+  },
+  "terminal_receiver_stop_incomplete": {
+   "ok": true,
+   "detail": ""
+  },
+  "terminal_UNKNOWN_tail": {
+   "ok": true,
+   "detail": ""
+  },
+  "recovery_watermarks_monotonic": {
+   "ok": true,
+   "detail": ""
+  },
+  "recovery_has_COMPLETE_coverage": {
+   "ok": true,
+   "detail": ""
+  }
+ },
+ "entry_stop_interval": {
+  "lower_ms": 4530.461837,
+  "upper_ms": 5145.518555,
+  "source": "lifecycle entry_stopped poll bracket (observed_after -> poll)"
+ },
+ "entry_stop_from_samples": {
+  "lower_ms": 4841.555534,
+  "upper_ms": 5145.518555,
+  "source": "reconstructed from lifecycle_sample ready flags"
+ },
+ "detection_interval": {
+  "lower_ms": 4831.708177,
+  "upper_ms": 5145.518555,
+  "source": "lifecycle detected poll bracket"
+ },
+ "close_after_detection": {
+  "lower_ms": -615.0567179999998,
+  "upper_ms": 313.8103779999992
+ },
+ "application_reads": {
+  "total_body_read_events": 54,
+  "distinct_read_requests": 48,
+  "disconnect_events": 1,
+  "last_body_read_overall": {
+   "request_id": "fe73240e-715f-4931-aa3c-86f17e5cad06",
+   "record_seq": 162520,
+   "relative_ms_monotonic": 4612.61082,
+   "relative_ms_wall": 4612,
+   "note": "request has no request_end row in this crop (inflight/unestablished admission, result UNKNOWN)"
+  },
+  "last_body_read_complete_lifecycle": {
+   "request_id": "fe73240e-715f-4931-aa3c-86f17e5cad06",
+   "record_seq": 162520,
+   "relative_ms_monotonic": 4612.61082,
+   "relative_ms_wall": 4612
+  },
+  "post_fault_before_bound": {
+   "requests": 18,
+   "events": 19,
+   "bytes": 4795,
+   "window": "fault_completed < t <= fault_completed+10000ms"
+  },
+  "post_bound": {
+   "requests": 0,
+   "events": 0,
+   "bytes": 0,
+   "window": "t > fault_completed+10000ms"
+  },
+  "pre_fault": {
+   "requests": 31,
+   "bytes": 8850
+  },
+  "total_bytes_all_body_reads": 13645
+ },
+ "coverage": {
+  "complete_intervals": 251,
+  "unknown_intervals": 1,
+  "complete_span_start_rel_ms": -9588.729891,
+  "complete_span_end_rel_ms": 53419.372634,
+  "unknown_tail": [
+   {
+    "start_rel_ms": 53419.372634,
+    "end_rel_ms": 53633.412285,
+    "reason": "uncovered_final_or_crash_tail"
+   }
+  ],
+  "gap_between_complete_and_unknown_start_ms": 0.0
+ },
+ "observation_end_candidates": {
+  "observer_stop_rel_ms": 54876.78088,
+  "receiver_stop_rel_ms": 53633.450121,
+  "last_COMPLETE_coverage_end_rel_ms": 53419.372634,
+  "last_watermark_rel_ms": 53419.372634,
+  "last_body_read_rel_ms_monotonic": 4612.61082,
+  "historical_observation_end_ms": 51410,
+  "explanation": "historical 51410 ms = last client probe request completion (wall rel 51390 ms) + 20 ms clock uncertainty; the effective post-bound receiver observation end supported by COMPLETE coverage is 53419.37 ms (observed_to_ms)"
+ },
+ "backend_availability": {
+  "total_samples": 203,
+  "after_fault_raw_monotonic_gt_completed": 181,
+  "after_fault_analyzer_semantics": 180,
+  "after_entry_stop_analyzer_semantics": 163,
+  "after_entry_stop_raw_monotonic_gt_poll": 163,
+  "unknown_samples": 0,
+  "last_sample_rel_ms": 54577.704474,
+  "first_sample_rel_ms": -6619.399839,
+  "note": "historical after_fault=180 / after_entry_stop=163 reproduce exactly with the analyzer's +-20ms wall-uncertainty bands on backend_probe.started_at_ms; a raw monotonic count gives 181"
+ },
+ "recovery_probes": {
+  "91aed3cc-4eaa-4272-a1d9-fca7a9101c76": {
+   "request_enter_record": 17595,
+   "request_end_record": 17596,
+   "body_reads": 0,
+   "body_read_bytes": 0,
+   "next_coverage": "COMPLETE",
+   "next_coverage_record": 17597
+  },
+  "cfe0f582-59dd-4574-9807-1d7ad501b7c7": {
+   "request_enter_record": 17599,
+   "request_end_record": 17604,
+   "body_reads": 1,
+   "body_read_bytes": 69,
+   "next_coverage": "COMPLETE",
+   "next_coverage_record": 17605
+  }
+ },
+ "comparison": {
+  "entry_stop_interval": {
+   "historical": [
+    4530.461837,
+    5145.518555
+   ],
+   "recomputed": [
+    4530.461837,
+    5145.518555
+   ],
+   "match": true
+  },
+  "detection_interval": {
+   "historical": [
+    4831.708177,
+    5145.518555
+   ],
+   "recomputed": [
+    4831.708177,
+    5145.518555
+   ]
+  },
+  "last_application_read_ms": {
+   "historical": 4612.61082,
+   "recomputed": {
+    "overall_last_body_read": 4612.61082,
+    "complete_lifecycle_last_body_read": 4612.61082
+   },
+   "note": "4612.61ms = last http.request body_read (recomputed exactly; historical filter requires probe-known request ids, bytes>0, kernel provenance -- the crop contains only such rows). 4837.67ms in result.json whole_window.last_body_read is the http.disconnect (0 bytes, more_body=false) of the inflight request 56561dc1 -- a different event scope, also reproduced."
+  },
+  "post_fault_before_bound": {
+   "historical": {
+    "ambiguous_bytes": 0,
+    "bytes": 4795,
+    "requests": 18
+   },
+   "recomputed": {
+    "requests": 18,
+    "events": 19,
+    "bytes": 4795,
+    "window": "fault_completed < t <= fault_completed+10000ms"
+   }
+  },
+  "post_bound": {
+   "historical": {
+    "ambiguous_bytes": 0,
+    "bytes": 0,
+    "requests": 0
+   },
+   "recomputed": {
+    "requests": 0,
+    "events": 0,
+    "bytes": 0,
+    "window": "t > fault_completed+10000ms"
+   }
+  },
+  "backend_availability": {
+   "historical": {
+    "after_fault": 180,
+    "after_entry_stop": 163
+   },
+   "recomputed": {
+    "after_fault_analyzer_semantics": 180,
+    "after_entry_stop_analyzer_semantics": 163,
+    "after_fault_raw_monotonic": 181
+   }
+  },
+  "close_after_detection": {
+   "historical": [
+    -615.0567179999998,
+    313.8103779999992
+   ],
+   "recomputed": [
+    -615.0567179999998,
+    313.8103779999992
+   ]
+  },
+  "fault_command_completion_ms": {
+   "historical": 4.5415,
+   "recomputed": 4.5415
+  },
+  "coverage_observed_to_ms": {
+   "historical": 53419.372634,
+   "recomputed": 53419.372634
+  },
+  "client_reads": {
+   "historical": {
+    "last_observed_read": {
+     "clock": "wall_with_uncertainty",
+     "lower_ms": 4807,
+     "upper_ms": 4847
+    },
+    "observed_bytes": 18348,
+    "observed_events": 47,
+    "post_bound": {
+     "ambiguous_bytes": 0,
+     "bytes": 0,
+     "requests": 0
+    },
+    "post_fault": {
+     "ambiguous_bytes": 0,
+     "bytes": 7028,
+     "requests": 18
+    }
+   },
+   "recomputed": null,
+   "note": "trace.jsonl (sha eb5ccb26...) is not part of the public crops; client-side metrics are historical-only until IP1 client originals are attached"
+  }
+ },
+ "missing_materials": [
+  "trace.jsonl (client HTTP read events) \u2014 sha recorded as eb5ccb264e32beeee5d55a4da23624805d631d62ba09a9a25fb1d3510024605e; not present in the public crops, so client_reads stays historical-only",
+  "client probe jsonl (type=request rows with completed_at_ms) \u2014 source of historical observation_end_ms 51410 (last probe completion wall rel 51390 ms + 20 ms); needed to re-derive observation_end_ms; held by IP1 or in the original collection dir"
+ ],
+ "analyzer_reference": {
+  "file": "experiments/argus/timeline.py",
+  "repo_head": "12b365ed8d3c73965e69c8fbe3fcb46075fefa6c",
+  "sha256": "ef0785f8890d6f909d9f6ea2d042f30f5ffe9186ccdb88728eda70805cd6b091",
+  "note": "semantics for application_reads filters, observation_end_ms, backend_availability bands, coverage clipping reproduced from this file (read-only; not modified)"
+ }
+}

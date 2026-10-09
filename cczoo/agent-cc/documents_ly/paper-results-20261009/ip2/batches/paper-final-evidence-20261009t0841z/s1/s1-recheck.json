@@ -1,0 +1,112 @@
+{
+ "schema": "argus.paper-final.s1-identity-reuse.v1",
+ "counter_interval": {
+  "start_ms": 1791531867654,
+  "end_ms": 1791532467935,
+  "duration_ms": 600281,
+  "duration_s": 600.281,
+  "source": "provider-before.json captured_at_ms -> provider-after.json captured_at_ms"
+ },
+ "provider_identity": {
+  "instance_id": "c379b316-287e-4c6b-821b-63ae5a51c45e:1280687:1791524628548924645",
+  "unchanged": true,
+  "socket_unchanged": true,
+  "agent_unchanged": true,
+  "boot_matches_helper_anchor": true
+ },
+ "helper_subscription": {
+  "subscription_id": "76bc43416ab64049871e818f3bcd15d3",
+  "same_subscription_all_pubs": true,
+  "same_unit": true,
+  "same_helper_pid": true,
+  "same_boot": true,
+  "same_target": true
+ },
+ "publications": {
+  "count": 3,
+  "serials": [
+   "117168169887379234192897520659204972313",
+   "326027069949880564519896745254572331883",
+   "80937547914853678949157948885751517620"
+  ],
+  "distinct_serials": true,
+  "all_in_counter_interval": true,
+  "realtime_us": [
+   1791532144796056,
+   1791532289561928,
+   1791532421583780
+  ]
+ },
+ "journal_window_covers_counter_interval": true,
+ "quote_deltas": {
+  "workload": {
+   "attempted": 0,
+   "generated": 0,
+   "failed": 0
+  },
+  "node": {
+   "attempted": 0,
+   "generated": 0,
+   "failed": 0
+  },
+  "generation_elapsed_ns_unchanged": true,
+  "interpretation": "zero new Workload Quote calls inside the counter interval"
+ },
+ "business_side_separate": {
+  "planned": 180,
+  "actual": 180,
+  "success": 155,
+  "unknown": 25,
+  "unknown_split": {
+   "in_window": 19,
+   "outside_window": 6
+  },
+  "rejected": 0,
+  "timeout": 0,
+  "overload": 0,
+  "continuity_coverage": "UNKNOWN",
+  "verdict": "FAIL",
+  "ip1_corrections": {
+   "coverage_insufficiency_ms": 120768,
+   "client_side_serials_over_900s": 8,
+   "note": "client measurement ended 1791532367347 before completed_at_ms+20000=1791532488115"
+  }
+ },
+ "third_publication_client_coverage": {
+  "third_pub_realtime_us": 1791532421583780,
+  "client_measurement_frozen_ms": 1791532367347,
+  "third_pub_after_client_freeze": true,
+  "claim": "no complete end-to-end client coverage claimed for the third publication; the S1 identity-reuse conclusion is server-side (Helper journal + Provider counters) only"
+ },
+ "source_sha256": {
+  "provider-before.json": "da8abcb47f7ab9389a0c49bb87cfa6520f2030487b6c3480074670b0d2fa6896",
+  "provider-after.json": "01c173fd776a52a6398f92295acbd66d6db2206abca511cd9902d50dd5b57c33",
+  "helper-journal-window.json": "176ac776101eae2e6e9c75b823426da01bfa7eba8347ad5ff488212807a77b5d",
+  "helper-journal-anchor.json": "4abe20619311f44147843d8c9de807c4b8473207f5b65c91bc02fa8ca3ff69ba",
+  "workload-before.json": "f6034692f78e74d07f8f0566cb67c33843709f79bf81a0bcbe6b21f0e42a4c95",
+  "workload-after.json": "80d9a13a56b7337f4d5319840f96f3647b4e6fe1b26f59aaf734f4bf7a7df266"
+ },
+ "recorded_sha256_observation_json": {
+  "provider-before": "da8abcb47f7ab9389a0c49bb87cfa6520f2030487b6c3480074670b0d2fa6896",
+  "provider-after": "01c173fd776a52a6398f92295acbd66d6db2206abca511cd9902d50dd5b57c33",
+  "helper-journal-window": "176ac776101eae2e6e9c75b823426da01bfa7eba8347ad5ff488212807a77b5d",
+  "helper-journal-anchor": "4abe20619311f44147843d8c9de807c4b8473207f5b65c91bc02fa8ca3ff69ba"
+ },
+ "citable_conclusion": {
+  "zh": "600.281 \u79d2\u5185\u4e09\u6b21 Workload SVID \u53d1\u5e03\uff08\u4e09\u4e2a\u4e0d\u540c serial\uff09\uff0cWorkload Quote \u589e\u91cf 0/0/0",
+  "en": "three Workload SVID publications (three distinct serials) within 600.281 s; Workload Quote deltas 0/0/0",
+  "scope": "server-side identity reuse only; separate from business continuity; third publication has no complete client coverage"
+ },
+ "checks": {
+  "duration == 600281 ms": true,
+  "same provider instance": true,
+  "three distinct serials": true,
+  "all pubs in interval": true,
+  "journal window covers interval": true,
+  "workload deltas 0/0/0": true,
+  "node deltas 0/0/0": true,
+  "same helper subscription": true,
+  "same target": true,
+  "third pub after client freeze": true
+ }
+}

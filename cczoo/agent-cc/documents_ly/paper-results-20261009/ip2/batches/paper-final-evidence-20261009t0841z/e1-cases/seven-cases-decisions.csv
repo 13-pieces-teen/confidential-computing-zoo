@@ -1,0 +1,8 @@
+case,expected,actual,classification,verdict,reason,outcome_timing,verify_ms,fetched_entries,fetched_bytes
+config_mismatch,ALLOW,ALLOW,ALLOW,PASS,,ALLOW,10.692868,4,15896
+hidden_stop,DENY,DENY,RULE_DENY,PASS,history does not reproduce Quote RTMR2,DENY_OR_ERROR,6.200665,3,11592
+instance_mismatch,DENY,DENY,RULE_DENY,PASS,launch record does not match current container/image,DENY_OR_ERROR,6.219977,3,11580
+legal,ALLOW,ALLOW,ALLOW,PASS,,ALLOW,6.100915,3,11584
+old_evidence,ALLOW,ALLOW,ALLOW,PASS,,ALLOW,8.33029,4,15900
+same_image_new_instance,DENY,DENY,RULE_DENY,PASS,exactly one target launch record is required,DENY_OR_ERROR,8.306525,4,15912
+unrelated_activity,ALLOW,ALLOW,ALLOW,PASS,,ALLOW,8.475825,4,15896

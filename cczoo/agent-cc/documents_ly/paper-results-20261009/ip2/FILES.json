@@ -711,6 +711,96 @@
    "category": "batches"
   },
   {
+   "path": "batches/paper-final-evidence-20261009t0841z/PAPER-METRICS.csv",
+   "bytes": 5973,
+   "sha256": "996d0aae22d2cf2b08e0640f333e9aad406de48d2bf04bb73dd7d449bd1d542e",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/SHA256SUMS",
+   "bytes": 1241,
+   "sha256": "cf0c4e5501e1118c498a807db67950f0fffd9d9e8ec98cd4b9ff1aa167b5add9",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/SUMMARY.md",
+   "bytes": 5591,
+   "sha256": "845e9191b580560865f82a573f3a0395045ff253e9116d66f4dadc4e9af623e3",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/a3-index/A3-AND-COST-SOURCES.md",
+   "bytes": 2779,
+   "sha256": "4e46f9b6e6590dc5d81b2b02106df939b0107d57d02853e5df2ecd963f3b9f3e",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e1-cases/README.md",
+   "bytes": 3660,
+   "sha256": "e34092cd3fc1cbcc25aca28587ede98991264ffb14c0c7d672fc3b7f8d8795f7",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e1-cases/seven-cases-decisions.csv",
+   "bytes": 715,
+   "sha256": "c1313f94400a37ac74af30e8acfb9d2950e732784827ba24b252246bc63bc07f",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e1-cases/seven-cases-reasons.json",
+   "bytes": 17138,
+   "sha256": "311aee3037af916670477f5983b320bd3ddc98fff394231b12d3cd50f6e46224",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e1-cases/verify-seven-cases.py",
+   "bytes": 9079,
+   "sha256": "f71dba1bada161091b3fb8a8c86d778eefd648719af17e5da1b0768d85ab6dad",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e2/SOURCES.md",
+   "bytes": 4422,
+   "sha256": "5ca5ac7456ca919593183f6630ec9f2abb9918b9442f24439835bf4820aebd1b",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e2/e2-recompute.py",
+   "bytes": 22373,
+   "sha256": "0fa949fe894ddf7c3a0603860d8bd86655d885dce84910c338a6b8024e047949",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e2/e2-recomputed.json",
+   "bytes": 8579,
+   "sha256": "5d15fb388be69de06814124e07f9f5f537d8c65e83a97627d3ca60d09d085bcf",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/e2/e2-timeline.csv",
+   "bytes": 2147,
+   "sha256": "d3a3e99c20525654ef82bfe3dacf0df1015cd226ef7b9388e4743102f2db175f",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/s1/README.md",
+   "bytes": 3557,
+   "sha256": "e24b81efe7ce9a82f9d938318b9ab74c510718abc525ff2f6f6c5ffd5bccd6e4",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/s1/s1-recheck.json",
+   "bytes": 4022,
+   "sha256": "db460830356973aa7cc71c8a5774fadbf58e076b78cb2d5471bcafb228dd8c56",
+   "category": "batches"
+  },
+  {
+   "path": "batches/paper-final-evidence-20261009t0841z/s1/verify-s1-identity-reuse.py",
+   "bytes": 7532,
+   "sha256": "e8749dc95b9a657494b199b086aca615c2b20ac124279d0bae3b79ce6702b2c3",
+   "category": "batches"
+  },
+  {
    "path": "config/runtime-environment.json",
    "bytes": 1959,
    "sha256": "3d06fc2725400e380412e3628b1cd4459c2dea8e3fd857d489636591ff56061b",
@@ -1359,6 +1449,6 @@
    "category": "tables"
   }
  ],
- "file_count": 226,
- "total_bytes": 54326678
+ "file_count": 241,
+ "total_bytes": 54425486
 }
