@@ -1,0 +1,10 @@
+{
+  "allowed_baseline_rtmr": [
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  ],
+  "init_public_key_paths": [
+    "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/init.pem"
+  ],
+  "rekor_public_key_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/rekor.pem",
+  "rekor_url": "https://rekor.example"
+}

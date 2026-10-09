@@ -792,6 +792,576 @@
       "source_sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186",
       "export_sha256": "f148d17c218da4548201c8301bbd24f8317a06a1275d10f45b3da5e85e6f81f9",
       "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/fault.jsonl",
+      "classification": "byte-for-byte original",
+      "export_sha256": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/fault.jsonl",
+      "source_sha256": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/lifecycle.jsonl",
+      "classification": "byte-for-byte original",
+      "export_sha256": "9b83b38ceae9806090de243fdef8c02410055eb12ff4883ed9464252bf37c4a8",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/lifecycle.jsonl",
+      "source_sha256": "9b83b38ceae9806090de243fdef8c02410055eb12ff4883ed9464252bf37c4a8"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/recovery-receiver-finalize.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "237cbed15dfdf9779229dc515a5499003e11c00874124cfd92b5ca23a7799142",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/recovery-20261008T0854Z/receiver-finalize.json",
+      "source_sha256": "237cbed15dfdf9779229dc515a5499003e11c00874124cfd92b5ca23a7799142"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "48efff32ed194cc9a924cadda4e92bbca946dbda16e7546aadf1b9b6cb5600af",
+      "byte_identical": true,
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/result.json",
+      "source_sha256": "48efff32ed194cc9a924cadda4e92bbca946dbda16e7546aadf1b9b6cb5600af"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/assessment.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "8d7855cf2eb14a0f02dd312a6860c05daa0f62402f2a793ed840330f7060feca",
+      "byte_identical": true,
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/assessment.json",
+      "source_sha256": "8d7855cf2eb14a0f02dd312a6860c05daa0f62402f2a793ed840330f7060feca"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/timeline.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "4dc1ad53e67843c203afbf7926bfc1d23497522a14b3ea59cd268e2955cf1cfc",
+      "byte_identical": true,
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/timeline.json",
+      "source_sha256": "4dc1ad53e67843c203afbf7926bfc1d23497522a14b3ea59cd268e2955cf1cfc"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/state.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "e1dc3503723aef734fe06257bd91d4475cbedcc56e020a8b9befd53508934a3e",
+      "byte_identical": true,
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/state.json",
+      "source_sha256": "e1dc3503723aef734fe06257bd91d4475cbedcc56e020a8b9befd53508934a3e"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/originals/final-closure.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "7f174fe10a4e475ab93cbe87f135837b1d772e8f3a9e5455f2b632b59216ab63",
+      "byte_identical": true,
+      "source_path": "/root/argus-ip1-handoff/e2-r4-final-closure-20261008/ip2-handoff/E2-R4-FINAL-CLOSURE.json",
+      "source_sha256": "7f174fe10a4e475ab93cbe87f135837b1d772e8f3a9e5455f2b632b59216ab63"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/receiver/experiment-source-start.jsonl",
+      "classification": "exact source line 1",
+      "export_sha256": "fcc0a4367663753c635f8db6a4e28edc14344a23b25f9ffcf28279b1633c2f7d",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/receiver.jsonl",
+      "source_sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/receiver/experiment-window.jsonl",
+      "classification": "contiguous exact source lines 162130-163242",
+      "export_sha256": "a1735650c338559f02a7f8397ebb2a26c82aa4ce28e2dd0e2c975a4690493ae4",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/receiver.jsonl",
+      "source_sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/receiver/recovery-source-start.jsonl",
+      "classification": "exact source line 1",
+      "export_sha256": "e36965de717685b47fbb6c0a77ebc8aebb6171ccee08a6df0e9e291306f386bc",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/recovery-20261008T0854Z/receiver-recovery.jsonl",
+      "source_sha256": "9a859b90a8b25332ba1547c0cc854cfd2186b180a60a35ec2e7ac34096792525"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/receiver/recovery-window.jsonl",
+      "classification": "contiguous exact source lines 17580-17620",
+      "export_sha256": "e75ef2e6fe126bbd03b2d7da427e1d52336deab20b16a9a7e00a45684b270999",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/recovery-20261008T0854Z/receiver-recovery.jsonl",
+      "source_sha256": "9a859b90a8b25332ba1547c0cc854cfd2186b180a60a35ec2e7ac34096792525"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/receiver/recovery-source-stop.jsonl",
+      "classification": "exact source line 19126",
+      "export_sha256": "6e30c86926637ee068ac2ae5a9b067a58d60562d84e9cb248660888b2f1bb010",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/recovery-20261008T0854Z/receiver-recovery.jsonl",
+      "source_sha256": "9a859b90a8b25332ba1547c0cc854cfd2186b180a60a35ec2e7ac34096792525"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/CROP-RULES.json",
+      "classification": "derived public copy",
+      "export_sha256": "cb6e02f0867ecad9508ccc260d68eab6a3c9f47ab78af933e5d1740c65de1c4d",
+      "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/README.md",
+      "classification": "derived public copy",
+      "export_sha256": "b25bf63bc54edc65b4e9ca38cfdbb0cbce8e5ebac4e619a6a736178a0d0e4c8d",
+      "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e2-r4/verify_e2_r4_windows.py",
+      "classification": "derived public copy",
+      "export_sha256": "f6f78ebebcdd8ca5938da8815582b368307b5ad08f248cc6e64c2febe564be5f",
+      "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/summary.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "7b209bdd8f4362d260e329abc955e2b614f4da1a652a6fe4abec4025362527a4",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/summary.json",
+      "source_sha256": "7b209bdd8f4362d260e329abc955e2b614f4da1a652a6fe4abec4025362527a4"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "c948431c94f480f47c610b7dcf30808ae2b7b28c62636109eb9a65ef4477c214",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/request.json",
+      "source_sha256": "c948431c94f480f47c610b7dcf30808ae2b7b28c62636109eb9a65ef4477c214"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "8264b7da5f63fc0ef19bc8bc9838cb4af1193f7fe14923c5f9964bc62e88ed53",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/rekor.json",
+      "source_sha256": "8264b7da5f63fc0ef19bc8bc9838cb4af1193f7fe14923c5f9964bc62e88ed53"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "eec971c86ad6983bed2ca90d97f5997b8ffaa64f54af58aa9c5ebf4d80551253",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/result.json",
+      "source_sha256": "eec971c86ad6983bed2ca90d97f5997b8ffaa64f54af58aa9c5ebf4d80551253"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "88ac84ccad6c741085fbf8a2994fe5514962735785c2d73ec4004f4d4cb895fe",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/init.pem",
+      "source_sha256": "88ac84ccad6c741085fbf8a2994fe5514962735785c2d73ec4004f4d4cb895fe"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "146ce322d7d7d407345f282259f157c9f55fd28c381ebc57db8aab3c57133c0b",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/rekor.pem",
+      "source_sha256": "146ce322d7d7d407345f282259f157c9f55fd28c381ebc57db8aab3c57133c0b"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "2759f7996bb8516182f88f3ab729c71a42fa084df8979cec9a70b29437abcc00",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/trust.json",
+      "source_sha256": "2759f7996bb8516182f88f3ab729c71a42fa084df8979cec9a70b29437abcc00"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/legal/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/trust.json",
+      "source_sha256": "2759f7996bb8516182f88f3ab729c71a42fa084df8979cec9a70b29437abcc00"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "fb95985c767ab2e9fa90b6131c3d6a44b9155fd25730e6f9e8dddbbb076ad0c9",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/request.json",
+      "source_sha256": "fb95985c767ab2e9fa90b6131c3d6a44b9155fd25730e6f9e8dddbbb076ad0c9"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "162e9ed690ac9110a4a0a6a3261e1ae4e7fe900f07bebc7f9e609c12f51bab73",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/rekor.json",
+      "source_sha256": "162e9ed690ac9110a4a0a6a3261e1ae4e7fe900f07bebc7f9e609c12f51bab73"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "6e0ab8ce3d68f2a429597020acd65b516a61019120ec0c3da0052d6b4c0d0519",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/result.json",
+      "source_sha256": "6e0ab8ce3d68f2a429597020acd65b516a61019120ec0c3da0052d6b4c0d0519"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "7b5ee10d889f742d36e97489214a7aed13a0b037f8f51cefc8f5835b059194f3",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/init.pem",
+      "source_sha256": "7b5ee10d889f742d36e97489214a7aed13a0b037f8f51cefc8f5835b059194f3"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "0bc80a2a465a7e04f4bd606de8b01493c9c74230b518d0ffafec0d962f2ff52e",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/rekor.pem",
+      "source_sha256": "0bc80a2a465a7e04f4bd606de8b01493c9c74230b518d0ffafec0d962f2ff52e"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "27d77079595ab839a56e2bb35573f8fa6db4053de32ba9fc948b365023cebc40",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/trust.json",
+      "source_sha256": "27d77079595ab839a56e2bb35573f8fa6db4053de32ba9fc948b365023cebc40"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/unrelated_activity/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/trust.json",
+      "source_sha256": "27d77079595ab839a56e2bb35573f8fa6db4053de32ba9fc948b365023cebc40"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "8e36ba3c65109d20ef35d46ae1c87e1a7473be9739a81b7d7d1dee50bba89142",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/request.json",
+      "source_sha256": "8e36ba3c65109d20ef35d46ae1c87e1a7473be9739a81b7d7d1dee50bba89142"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "e75dd6156ecc6cc9dfbbfb1a432ed1af40122c4244e3431263a4659ab9c724dd",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/rekor.json",
+      "source_sha256": "e75dd6156ecc6cc9dfbbfb1a432ed1af40122c4244e3431263a4659ab9c724dd"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "3c2192ef07849629d7e9dcfb8caeae355cdf7fb75e763177c89e7a4f41d9e553",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/result.json",
+      "source_sha256": "3c2192ef07849629d7e9dcfb8caeae355cdf7fb75e763177c89e7a4f41d9e553"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "1c67843d99f591a44dcef02525438a7082236e59c44f64bbf2a059f7f14def89",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/init.pem",
+      "source_sha256": "1c67843d99f591a44dcef02525438a7082236e59c44f64bbf2a059f7f14def89"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "e6a084d843f623e1c1b8f16614d13380ef81980eaec9975cfb90f621125a3293",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/rekor.pem",
+      "source_sha256": "e6a084d843f623e1c1b8f16614d13380ef81980eaec9975cfb90f621125a3293"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "bc3b906f9676f025b3107373076cd842ac9b068feb86ec742a2054a93df8147e",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/trust.json",
+      "source_sha256": "bc3b906f9676f025b3107373076cd842ac9b068feb86ec742a2054a93df8147e"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/same_image_new_instance/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/trust.json",
+      "source_sha256": "bc3b906f9676f025b3107373076cd842ac9b068feb86ec742a2054a93df8147e"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "7bafb13e1b44f400af0e32f0baba62efc707b7e53ff9499c6e00e2b6a94b5667",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/request.json",
+      "source_sha256": "7bafb13e1b44f400af0e32f0baba62efc707b7e53ff9499c6e00e2b6a94b5667"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "2bc2093eefb0e3af5ae210abf9a191f2ab70dbec5939a1ecdcbf0317ff907a76",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/rekor.json",
+      "source_sha256": "2bc2093eefb0e3af5ae210abf9a191f2ab70dbec5939a1ecdcbf0317ff907a76"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "8bb7376a9c8055f37995015b9acb43dcabe8be47493eb17e4556a7379fd0bdb2",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/result.json",
+      "source_sha256": "8bb7376a9c8055f37995015b9acb43dcabe8be47493eb17e4556a7379fd0bdb2"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "dcf0a9cbd9f642406242cfd823046d2fac8902ee5de9fb691f7f893ab867d254",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/init.pem",
+      "source_sha256": "dcf0a9cbd9f642406242cfd823046d2fac8902ee5de9fb691f7f893ab867d254"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "3b55cf81771149c879b46921acc06474143f673cebd3a9bdbf8d2b371770a6ff",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/rekor.pem",
+      "source_sha256": "3b55cf81771149c879b46921acc06474143f673cebd3a9bdbf8d2b371770a6ff"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "7898f2acd62cf9c3bedd72b00e45f61d1e784ac115fcb65bc823a1eb730a3116",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/trust.json",
+      "source_sha256": "7898f2acd62cf9c3bedd72b00e45f61d1e784ac115fcb65bc823a1eb730a3116"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/hidden_stop/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/trust.json",
+      "source_sha256": "7898f2acd62cf9c3bedd72b00e45f61d1e784ac115fcb65bc823a1eb730a3116"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "fc5e0a53ad24a3366dee3500a70ff4f1a4302d477729c9127d41f25228e3b0cd",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/request.json",
+      "source_sha256": "fc5e0a53ad24a3366dee3500a70ff4f1a4302d477729c9127d41f25228e3b0cd"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "df1cdc75326b4897b963eb6303de5fa2ddb6c92d868579761cb048569c2019ac",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/rekor.json",
+      "source_sha256": "df1cdc75326b4897b963eb6303de5fa2ddb6c92d868579761cb048569c2019ac"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "8b77e1f20815f260c9875445e3565fcd2d6a18e3da6ec53014fb6e89c094d3cc",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/result.json",
+      "source_sha256": "8b77e1f20815f260c9875445e3565fcd2d6a18e3da6ec53014fb6e89c094d3cc"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "66e2a05d0251616180726e5c6c59c8f0a93c1463eca167553c1c17845e98d090",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/init.pem",
+      "source_sha256": "66e2a05d0251616180726e5c6c59c8f0a93c1463eca167553c1c17845e98d090"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "a33e1b103c40257339f1711ef11e1a09f547378027793a158012c1d9a6f134bb",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/rekor.pem",
+      "source_sha256": "a33e1b103c40257339f1711ef11e1a09f547378027793a158012c1d9a6f134bb"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "86e9c44b119a7f46c84a6f00fc677f38e0b5ff5d4e96d9bc47c70b9e4bb3dd6b",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/trust.json",
+      "source_sha256": "86e9c44b119a7f46c84a6f00fc677f38e0b5ff5d4e96d9bc47c70b9e4bb3dd6b"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/config_mismatch/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/trust.json",
+      "source_sha256": "86e9c44b119a7f46c84a6f00fc677f38e0b5ff5d4e96d9bc47c70b9e4bb3dd6b"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "30b6b4ba4968a77378eb0890ed245bd5e01f692e323e77b85bdbc88cbbbb0ff1",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/request.json",
+      "source_sha256": "30b6b4ba4968a77378eb0890ed245bd5e01f692e323e77b85bdbc88cbbbb0ff1"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "1805d1fc47321609a5f53affea66f98a8586ab82d72669dfea0ff67096229f33",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/rekor.json",
+      "source_sha256": "1805d1fc47321609a5f53affea66f98a8586ab82d72669dfea0ff67096229f33"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "cc8ebcf85e5932309bcb429644265e12747131db94a7821853b2f11c367a0911",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/result.json",
+      "source_sha256": "cc8ebcf85e5932309bcb429644265e12747131db94a7821853b2f11c367a0911"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "90eedd466b06ebf563656a72df5687b18006da079a05d97a892b6e3813561b97",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/init.pem",
+      "source_sha256": "90eedd466b06ebf563656a72df5687b18006da079a05d97a892b6e3813561b97"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "4eae23bbb25071a7ce88ec8ca2a09f3ebe80712dcc4491dbc292b91149afaf7c",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/rekor.pem",
+      "source_sha256": "4eae23bbb25071a7ce88ec8ca2a09f3ebe80712dcc4491dbc292b91149afaf7c"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "35e96fa8c4d087789e775f50f2d221ebcd9a159be0beb7490cb2ceb32274fa79",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/trust.json",
+      "source_sha256": "35e96fa8c4d087789e775f50f2d221ebcd9a159be0beb7490cb2ceb32274fa79"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/old_evidence/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/trust.json",
+      "source_sha256": "35e96fa8c4d087789e775f50f2d221ebcd9a159be0beb7490cb2ceb32274fa79"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/request.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "6f9635e8db459630bcb76600d9dc97dc3bea94896642107c4c9f11391dd02f43",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/request.json",
+      "source_sha256": "6f9635e8db459630bcb76600d9dc97dc3bea94896642107c4c9f11391dd02f43"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/rekor.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "e78479edff16cae4973bca8b10d3638a8224eaff59211805addb7b5b6fdf0a33",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/rekor.json",
+      "source_sha256": "e78479edff16cae4973bca8b10d3638a8224eaff59211805addb7b5b6fdf0a33"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/result.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "7052d9dee1a53d5859152a158b5bf9ca6de7b2898818a9bcf0eff03141791167",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/result.json",
+      "source_sha256": "7052d9dee1a53d5859152a158b5bf9ca6de7b2898818a9bcf0eff03141791167"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/init.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "e6cc82eff308011bbbd619d4d381f55841cf2cb7d0620373f945344d4d86164c",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/init.pem",
+      "source_sha256": "e6cc82eff308011bbbd619d4d381f55841cf2cb7d0620373f945344d4d86164c"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/rekor.pem",
+      "classification": "byte-for-byte original",
+      "export_sha256": "37648a967bb359a04295a020857ae3d2ef6f100493931727f2338583077e4f90",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/rekor.pem",
+      "source_sha256": "37648a967bb359a04295a020857ae3d2ef6f100493931727f2338583077e4f90"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/trust.original.json",
+      "classification": "byte-for-byte original",
+      "export_sha256": "f76210baf5f7b4c3e791a66f3d622e1c7dc82cd0017808d2b542f9b63a5ad2ef",
+      "byte_identical": true,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/trust.json",
+      "source_sha256": "f76210baf5f7b4c3e791a66f3d622e1c7dc82cd0017808d2b542f9b63a5ad2ef"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/cases/instance_mismatch/trust.offline.json",
+      "classification": "derived path-relocated public trust config",
+      "export_sha256": "9d92479e211dcad184d9f20d585ef405c74169c63e7393a0f98e848f385de9e7",
+      "byte_identical": false,
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/trust.json",
+      "source_sha256": "f76210baf5f7b4c3e791a66f3d622e1c7dc82cd0017808d2b542f9b63a5ad2ef"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/analyzer-source/admission_cases.py",
+      "classification": "byte-for-byte analyzer source",
+      "export_sha256": "e4e18697bc0a66d463e6a632e4685e71a37a866cf28d59949d68111ffd088bdd",
+      "byte_identical": true,
+      "source_path": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/admission_cases.py",
+      "source_sha256": "e4e18697bc0a66d463e6a632e4685e71a37a866cf28d59949d68111ffd088bdd"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/analyzer-source/history_diagnostics.py",
+      "classification": "byte-for-byte analyzer source",
+      "export_sha256": "e5324fa724907892901fe36bafed166ae000fc35077eaaf8b6b0b2ff37033620",
+      "byte_identical": true,
+      "source_path": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/experiments/argus/history_diagnostics.py",
+      "source_sha256": "e5324fa724907892901fe36bafed166ae000fc35077eaaf8b6b0b2ff37033620"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/analyzer-source/verify_trucon.py",
+      "classification": "byte-for-byte analyzer source",
+      "export_sha256": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c",
+      "byte_identical": true,
+      "source_path": "/home/ying_liu/confidential-computing-zoo/cczoo/agent-cc/core/spire/workload/trustee/verify_trucon.py",
+      "source_sha256": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c"
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/VERSIONS.json",
+      "classification": "derived public copy",
+      "export_sha256": "297e7f97972e8dd0e4b8674e6835344519ca93ba9c9c4c13058f56381c8e269b",
+      "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/README.md",
+      "classification": "derived public copy",
+      "export_sha256": "6d2df89a8c40901051b943091ef7e360dc949a482f9fc320c45b6991b3133db0",
+      "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/verify_e1_fixtures.py",
+      "classification": "derived public copy",
+      "export_sha256": "0092495cad46b6ad667b1beae6fb5f9b3088a5bf9a39a216ed00b274f0d2c093",
+      "byte_identical": false
+    },
+    {
+      "export_path": "batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures/requirements.txt",
+      "classification": "derived public copy",
+      "export_sha256": "c57569eb82dfd7a131a875cb2555e6012a2f0b1d2ffa878f6cc85356da3d0c54",
+      "byte_identical": false
     }
   ]
 }

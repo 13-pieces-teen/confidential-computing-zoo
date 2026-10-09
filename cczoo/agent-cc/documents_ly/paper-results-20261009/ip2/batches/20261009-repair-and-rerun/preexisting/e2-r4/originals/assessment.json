@@ -1,0 +1,15 @@
+{
+  "run_id": "paper-20261004t145835z",
+  "result": "PASS",
+  "traffic": "PASS",
+  "receiver_delivery": "PASS",
+  "bound_ms": 10000,
+  "clock_uncertainty_ms": 20,
+  "scope": "observed application reads after the stop bound; in-flight coverage is reported separately",
+  "client_response_delivery": "PASS",
+  "client_response_post_bound_bytes": 0,
+  "client_response_ambiguous_bytes": 0,
+  "client_response_scope": "successful business response or synthetic marker at client HTTP reads; error responses counted separately",
+  "client_response_non_success_observed_bytes": 0,
+  "inflight_delivery": "PASS"
+}

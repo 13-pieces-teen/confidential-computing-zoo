@@ -1,0 +1,68 @@
+{
+  "clock": {
+    "correction": "No constant offset was applied. Cross-host wall comparisons retain +/-20 ms bounds.",
+    "same_host_event_order": "monotonic_ns",
+    "wall_clock_uncertainty_ms": 20
+  },
+  "experiment": {
+    "crop_export": "receiver/experiment-window.jsonl",
+    "crop_record_seq": [
+      162130,
+      163242
+    ],
+    "crop_sha256": "a1735650c338559f02a7f8397ebb2a26c82aa4ce28e2dd0e2c975a4690493ae4",
+    "crop_source_lines": [
+      162130,
+      163242
+    ],
+    "first_body_read": {
+      "record_seq": 162141,
+      "source_seq": 83755
+    },
+    "inflight_request_id": "56561dc1-9eef-4c8d-9767-930e02901fa4",
+    "known_final_gap": {
+      "reason": "uncovered_final_or_crash_tail",
+      "record_seq": 163241,
+      "status": "UNKNOWN"
+    },
+    "receiver_stop": {
+      "complete": false,
+      "coverage": "intervals_only"
+    },
+    "selection": "One contiguous byte-exact line range beginning with five pre-request watermark/coverage pairs and ending at receiver_stop.",
+    "source_bytes": 122493797,
+    "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/receiver.jsonl",
+    "source_sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186",
+    "source_start_export": "receiver/experiment-source-start.jsonl"
+  },
+  "missing_value_policy": "Preserve UNKNOWN and original missing fields; never infer zero or COMPLETE.",
+  "recovery": {
+    "crop_export": "receiver/recovery-window.jsonl",
+    "crop_record_seq": [
+      17580,
+      17620
+    ],
+    "crop_sha256": "e75ef2e6fe126bbd03b2d7da427e1d52336deab20b16a9a7e00a45684b270999",
+    "crop_source_lines": [
+      17580,
+      17620
+    ],
+    "receiver_stop": {
+      "complete": false,
+      "coverage": "intervals_only"
+    },
+    "request_ids": [
+      "91aed3cc-4eaa-4272-a1d9-fca7a9101c76",
+      "cfe0f582-59dd-4574-9807-1d7ad501b7c7"
+    ],
+    "selection": "One contiguous byte-exact line range with pre-request watermarks, both complete request lifecycles, and post-request coverage/watermarks; source start/stop and finalize are separate exact originals.",
+    "source_bytes": 14286547,
+    "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4/recovery-20261008T0854Z/receiver-recovery.jsonl",
+    "source_sha256": "9a859b90a8b25332ba1547c0cc854cfd2186b180a60a35ec2e7ac34096792525",
+    "source_start_export": "receiver/recovery-source-start.jsonl",
+    "source_stop_export": "receiver/recovery-source-stop.jsonl"
+  },
+  "run_id": "paper-20261004t145835z",
+  "schema": "argus.e2-r4-public-window.v1",
+  "trial_id": "e2-full-helper-freeze-20261008-r4"
+}

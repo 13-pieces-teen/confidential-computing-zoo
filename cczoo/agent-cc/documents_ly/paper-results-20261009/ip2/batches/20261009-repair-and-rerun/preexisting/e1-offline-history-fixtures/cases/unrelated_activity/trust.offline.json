@@ -1,0 +1,10 @@
+{
+  "allowed_baseline_rtmr": [
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  ],
+  "init_public_key_paths": [
+    "init.pem"
+  ],
+  "rekor_public_key_path": "rekor.pem",
+  "rekor_url": "https://rekor.example"
+}

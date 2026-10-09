@@ -1,0 +1,12 @@
+{
+  "files": {
+    "analyzer-source/admission_cases.py": "e4e18697bc0a66d463e6a632e4685e71a37a866cf28d59949d68111ffd088bdd",
+    "analyzer-source/history_diagnostics.py": "e5324fa724907892901fe36bafed166ae000fc35077eaaf8b6b0b2ff37033620",
+    "analyzer-source/verify_trucon.py": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c"
+  },
+  "fresh_online_admission": "NOT_RUN",
+  "git_commit": "3cf25a87a2ba1ab4f6ff4ac0821ca515570fa5c7",
+  "private_keys_exported": false,
+  "rekor_transport": "fixed archived JSON responses; no live Rekor network access",
+  "scope": "synthetic signed cryptographic fixtures through the production LogVerifier history sub-verifier"
+}

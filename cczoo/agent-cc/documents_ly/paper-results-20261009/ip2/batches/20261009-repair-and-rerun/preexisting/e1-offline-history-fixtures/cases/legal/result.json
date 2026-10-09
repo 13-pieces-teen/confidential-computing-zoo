@@ -1,0 +1,46 @@
+{
+  "case": "legal",
+  "evidence_class": "synthetic signed cryptographic fixture; production log sub-verifier",
+  "expected_log_decision": "ALLOW",
+  "fixture_result": "PASS",
+  "full_admission": "NOT_RUN",
+  "live_admission": "NOT_RUN",
+  "outer_checks_required": [],
+  "quote_and_freshness": "not re-evaluated by this log-only tool",
+  "request_sha256": "ade75504905babeb5eae8bb162ff4a351f7c618286c8949d67cf727ae676d6ec",
+  "rules": {
+    "fixed_accumulated_measurement": {
+      "decision": "ALLOW",
+      "missing": [
+        "event meaning",
+        "current instance binding",
+        "tolerance of unrelated measured activity"
+      ]
+    },
+    "full_history_current_instance": {
+      "decision": "ALLOW",
+      "implementation": "production LogVerifier.verify",
+      "not_checked_here": [
+        "TDX Quote",
+        "REPORTDATA",
+        "challenge freshness",
+        "current PID/starttime",
+        "configuration admission policy"
+      ],
+      "verified": {
+        "baseline_rtmr": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "launch_entry_uuid": "f9d964470a9833712a3e0c0699e3924286a18032bb5f53dc4f0a369a768b514f",
+        "verified": true
+      }
+    },
+    "target_launch_only": {
+      "decision": "ALLOW",
+      "missing": [
+        "history completeness",
+        "subsequent stop/removal",
+        "full RTMR reproduction"
+      ]
+    }
+  },
+  "schema": "argus.history-diagnostics.v1"
+}

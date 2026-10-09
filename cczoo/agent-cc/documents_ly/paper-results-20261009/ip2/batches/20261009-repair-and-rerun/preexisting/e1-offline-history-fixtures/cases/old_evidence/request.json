@@ -1,0 +1,29 @@
+{
+  "rekor_entry_ids": [
+    "b7f17859e5b7d48ea015f61e0b3b8a856356e0939f26424050a7fe7655a66fd8",
+    "6e5148b5c33b54862b146b4df914376320cedd20b0f6241360a3ba643b10d98b",
+    "21e1e36044f5787497bd20d2627c36fe51f86a85b3de0dd8b59a4ae7794884f6",
+    "09fb309096b29fbed39359681bdfeb30e22d7db389712ca2033027e544114a1e"
+  ],
+  "rtmr2": "7a2e48d9888a80cbd60eb179ebec76f4ce23fafe15d9444ee5a4823220e637b7fd26547731a80679b5356cab7ca4a6d4",
+  "runtime_data": {
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "boot_id": "00112233-4455-6677-8899-aabbccddeeff",
+    "config_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config_path": "/etc/openviking/ov.conf",
+    "container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "executable": "/usr/local/bin/python3.12",
+    "image_config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "launch_id": "launch-test-001",
+    "listen_port": "1933",
+    "net_namespace": "net:[4026533001]",
+    "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "pid": "1234",
+    "pid_namespace": "pid:[4026533000]",
+    "policy_id": "argus-workload-openviking-v1",
+    "protocol": "argus.workload.tdx.v1",
+    "rootfs_read_only": "true",
+    "start_time": "654321",
+    "workload_id": "openviking-cmem"
+  }
+}
