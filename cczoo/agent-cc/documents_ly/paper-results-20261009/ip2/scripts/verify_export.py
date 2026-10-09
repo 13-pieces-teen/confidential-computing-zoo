@@ -28,7 +28,11 @@ def main():
     actual = sorted(
         str(path.relative_to(ROOT))
         for path in ROOT.rglob("*")
-        if path.is_file() and path.name not in {"SHA256SUMS", "FILES.json"}
+        if path.is_file()
+        and path.relative_to(ROOT) not in {
+            Path("SHA256SUMS"),
+            Path("FILES.json"),
+        }
     )
     listed = sorted(row["path"] for row in inventory["files"])
     if actual != listed:
