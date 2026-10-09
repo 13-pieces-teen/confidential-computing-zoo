@@ -1,0 +1,31 @@
+run_id,metric,value,unit,denominator,status,evidence,limits
+argus-paper-minimal-20261009t0718z-01-rotation,rotation_svid_serial_change,245456514439120629732028939970102485636 -> 117168169887379234192897520659204972313,,,OBSERVED,server/workload-before.json + server/workload-after.json,at least one valid serial change between snapshots
+argus-paper-minimal-20261009t0718z-01-rotation,rotation_in_window_publications,3,count,,OBSERVED,server/helper-journal-window.json,exact count from complete trusted Helper journal window (3 distinct serials)
+argus-paper-minimal-20261009t0718z-01-rotation,rotation_helper_stability,unchanged subscription 76bc43416ab64049871e818f3bcd15d3 + launch-a4ba2ba,,,OBSERVED,server/workload-before.json + server/workload-after.json,same Helper subscription and launch across snapshots
+argus-paper-minimal-20261009t0718z-01-rotation,business_total_requests_planned,180,count,,OBSERVED,client/load-result.json,900 s x 0.2/s plan
+argus-paper-minimal-20261009t0718z-01-rotation,business_total_requests_actual,180,count,180,OBSERVED,client/requests.jsonl,no fabricated requests; two earlier aborted launch attempts sent none
+argus-paper-minimal-20261009t0718z-01-rotation,business_success,155,count,180,OBSERVED,client/requests.jsonl,all success rows memory_result=nonempty
+argus-paper-minimal-20261009t0718z-01-rotation,business_unknown,25,count,180,OBSERVED,client/requests.jsonl,error_class=ValueError http_status=None; SVID generation-dir swap race; not replayed
+argus-paper-minimal-20261009t0718z-01-rotation,business_rejected,0,count,180,OBSERVED,client/requests.jsonl,
+argus-paper-minimal-20261009t0718z-01-rotation,business_timeout,0,count,180,OBSERVED,client/requests.jsonl,
+argus-paper-minimal-20261009t0718z-01-rotation,business_overload,0,count,180,OBSERVED,client/requests.jsonl,
+argus-paper-minimal-20261009t0718z-01-rotation,business_in_window_requests,104,count,,OBSERVED,results/collect-result.json,in [started-20s, completed+20s] = [1791531847266,1791532488115]
+argus-paper-minimal-20261009t0718z-01-rotation,business_in_window_success_nonempty,85,count,104,OBSERVED,results/collect-result.json,all nonempty
+argus-paper-minimal-20261009t0718z-01-rotation,business_in_window_unknown,19,count,104,OBSERVED,results/collect-result.json,7 interruption episodes; 6 single-request blips recovered in 5 s + final 13-request episode to client end
+argus-paper-minimal-20261009t0718z-01-rotation,business_max_probe_gap,125768,ms,10000,UNKNOWN,results/collect-result.json,end-side coverage insufficient; client measurement ended 1791532367347 before completed_at_ms+20000=1791532488115
+argus-paper-minimal-20261009t0718z-01-rotation,business_continuity_coverage,UNKNOWN,,,UNKNOWN,results/collect-result.json,start-side ok (384 s margin); end-side uncovered (~120 s); timestamps frozen; single formal window; no rerun
+argus-paper-minimal-20261009t0718z-01-rotation,business_continuity_verdict,FAIL,,,FAIL,results/collect-result.json,verdict reflects in-window unknown rows + uncovered tail; does not mean 25 planned requests were fabricated
+argus-paper-minimal-20261009t0718z-01-rotation,quote_workload_attempted_delta,0,count,,OBSERVED,server/provider-before.json + server/provider-after.json,zero new Workload Quote calls in counter interval 07:44:27.654Z-07:54:27.934Z
+argus-paper-minimal-20261009t0718z-01-rotation,quote_workload_generated_delta,0,count,,OBSERVED,server/provider-before.json + server/provider-after.json,
+argus-paper-minimal-20261009t0718z-01-rotation,quote_workload_failed_delta,0,count,,OBSERVED,server/provider-before.json + server/provider-after.json,all three workload deltas zero -> claim 'no new Workload Quote calls in this counter interval' is supported
+argus-paper-minimal-20261009t0718z-01-rotation,quote_node_attempted_delta,0,count,,OBSERVED,server/provider-before.json + server/provider-after.json,
+argus-paper-minimal-20261009t0718z-01-rotation,quote_node_generated_delta,0,count,,OBSERVED,server/provider-before.json + server/provider-after.json,
+argus-paper-minimal-20261009t0718z-01-rotation,quote_node_failed_delta,0,count,,OBSERVED,server/provider-before.json + server/provider-after.json,
+argus-paper-minimal-20261009t0718z-01-rotation,quote_provider_identity,unchanged c379b316-287e-4c6b-821b-63ae5a51c45e:1280687:1791524628548924645,,,OBSERVED,server/provider-before.json + server/provider-after.json,same Provider process/socket/agent across the interval
+argus-paper-minimal-20261009t0718z-01-rotation,quote_counter_interval,1791531867654 -> 1791532467935,ms,,OBSERVED,server/provider-before.json + server/provider-after.json,600.28 s interval nested inside the observation window
+argus-paper-minimal-20261009t0718z-01-rotation,aux_api_ms_p50,111.3,ms,161,OBSERVED,client/load-result.json,completed responses incl. warmup; not Argus relative overhead
+argus-paper-minimal-20261009t0718z-01-rotation,aux_api_ms_p95,194.9,ms,161,OBSERVED,client/load-result.json,IP1 success-only subset n=155 p50 112.0 p95 257.7
+argus-paper-minimal-20261009t0718z-01-rotation,aux_connection_reuse,144/180 (80%),requests,,OBSERVED,client/load-result.json,17 reconnects: 5 credentials_rotated + 12 previous_error
+argus-paper-minimal-20261009t0718z-01-rotation,clock_guest_behind_ip2,15430,ms,n=10,OBSERVED,client/clock-measurement.json,collect bound 20000 ms = absmax+2sd+resolution+rtt
+argus-paper-minimal-20261009t0718z-01-rotation,s2_authorization_matrix,SKIPPED,,,SKIPPED,cited: P0 negative-probes-20261003T1000Z.json sha 3af191ef...,P0 7/7 negatives support the claim; no new requests
+argus-paper-minimal-20261009t0718z-01-rotation,s3_agent_recall,SKIPPED,,,SKIPPED,cited: ip1-p0d-sf-recall-exactness-20261003 report sha 17f6c651...,real P0 recall originals available; no new model call

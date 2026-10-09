@@ -1,0 +1,9 @@
+{
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "case": "workload-rotation",
+  "target_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+  "duration_seconds": 600,
+  "workload_config": "/etc/argus-experiments/paper02/full_argus/environment.json",
+  "provider_socket": "/run/ax-paper02-full/evidence-provider.sock",
+  "provider_agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node"
+}

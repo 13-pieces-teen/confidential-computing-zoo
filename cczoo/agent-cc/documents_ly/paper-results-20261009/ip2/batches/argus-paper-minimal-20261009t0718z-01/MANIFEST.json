@@ -1,0 +1,44 @@
+{
+  "schema": "argus.paper-minimal.batch-manifest.v1",
+  "batch_id": "argus-paper-minimal-20261009t0718z-01",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "materials": {
+    "repo": "https://github.com/13-pieces-teen/confidential-computing-zoo.git",
+    "branch": "docs/argus-minimal-experiments-20261009",
+    "commit": "b471a34b73e4f8490fa633b7ea3bcfb510756d39",
+    "sha256sums_verified": true,
+    "files": {
+      ".gitattributes": "4b91f530b9a55ab8181655ef520c6fb60edca06710628f330f662406d892215f",
+      "README.md": "ad6ca6206666262bd4caf869820b97d302197587bc7be1740df008a807fbaa93",
+      "PLAN.md": "4562aebdc77e0d578b471a8345eef0313fbda3847940bfcd9e6a90ccb4f4c5f9",
+      "IP1-PROMPT.md": "939d0963b9166434d8c612c33b958e28dd1b4fd2bd1125b78cc28f3cf2400d46",
+      "IP2-PROMPT.md": "a576128a266397a830811095a0eb8b3926aa6d5f8c2101d3d64b516b60ceb536",
+      "GIT-GET.md": "21a058b5dbeb139ef8c13e79eb53d94695dfa62f88e95bb17836e3bdef51b49d"
+    }
+  },
+  "actual_running_versions": {
+    "deployment_repo_head": "12b365ed8d3c73965e69c8fbe3fcb46075fefa6c",
+    "full_service": {
+      "epoch": "paper-20261004t145835z",
+      "run_name": "ax-paper02-full",
+      "container_id": "fb2a2294a5f088d905b70c9d3d24f41ad2ceaceeda00151d49a68db5bc1686f4",
+      "image": "docker://127.0.0.1:5000/openviking-audit:v0.4.8",
+      "launch_id": "launch-a4ba2ba",
+      "launch_run_id": "e8ca6f0e-f1e2-40d2-9797-d6e7ceb7447e"
+    },
+    "tools_sha256": {
+      "lifecycle_trial.py": "44f635209e665e4892c0742c80cc85646418b14418366d1b588d7d67631b884c",
+      "lifecycle_evidence.py": "3ecb57d65edd04fb9ace3a49c5b754a6072e2495d98ea8725db01755efc63251",
+      "load_fleet.py": "b9b330bf29f755dd30922d1ecd99e19d011519735a72e2480ad94dd26b34568b",
+      "trusted_runtime.py": "47e80028363c5daab60720fffc1475d93303c8fc20b479bdf2e6a08061e3adc6",
+      "common.py": "b9b6542ac6a5ccab1079d667ba5408150c4751a2111f2cb0bc54b88fc875bad8"
+    },
+    "ip1_client_side": {
+      "load_fleet.py_sha256": "b9b330bf29f755dd30922d1ecd99e19d011519735a72e2480ad94dd26b34568b",
+      "tool_tree": "d34f389d",
+      "note": "load_fleet.py matches IP2-side hash; IP1 workspace analysis.py has uncommitted modifications, not adopted"
+    },
+    "note": "materials commit is the experiment-protocol version only; running tools are the deployed tree at 12b365ed; docs branch code was NOT deployed"
+  },
+  "batch_files": ["README.md", "SUMMARY.md", "MANIFEST.json", "run-plan-manifest.json", "SHA256SUMS", "config/", "s0/", "materials/", "server/", "client/", "results/ (collect-result.json + RESULTS.csv)"]
+}

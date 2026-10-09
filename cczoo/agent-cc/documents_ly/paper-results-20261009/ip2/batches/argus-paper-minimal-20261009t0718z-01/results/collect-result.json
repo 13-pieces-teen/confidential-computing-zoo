@@ -1,0 +1,180 @@
+{
+  "automatic_mutations": false,
+  "business_continuity": {
+    "clients": [
+      {
+        "coverage": "UNKNOWN",
+        "failed_queries": 19,
+        "instance_id": "c1",
+        "interruption_episodes": [
+          {
+            "failed_queries": 1,
+            "first_failed_request_ms": 1791531932347,
+            "first_success_after_ms": 1791531937347,
+            "last_success_before_ms": 1791531927347,
+            "sampled_recovery_ms": 5000
+          },
+          {
+            "failed_queries": 1,
+            "first_failed_request_ms": 1791531992347,
+            "first_success_after_ms": 1791531997347,
+            "last_success_before_ms": 1791531987347,
+            "sampled_recovery_ms": 5000
+          },
+          {
+            "failed_queries": 1,
+            "first_failed_request_ms": 1791532087347,
+            "first_success_after_ms": 1791532092347,
+            "last_success_before_ms": 1791532082347,
+            "sampled_recovery_ms": 5000
+          },
+          {
+            "failed_queries": 1,
+            "first_failed_request_ms": 1791532132347,
+            "first_success_after_ms": 1791532137347,
+            "last_success_before_ms": 1791532127347,
+            "sampled_recovery_ms": 5000
+          },
+          {
+            "failed_queries": 1,
+            "first_failed_request_ms": 1791532237347,
+            "first_success_after_ms": 1791532242347,
+            "last_success_before_ms": 1791532232347,
+            "sampled_recovery_ms": 5000
+          },
+          {
+            "failed_queries": 1,
+            "first_failed_request_ms": 1791532277347,
+            "first_success_after_ms": 1791532282347,
+            "last_success_before_ms": 1791532272347,
+            "sampled_recovery_ms": 5000
+          },
+          {
+            "failed_queries": 13,
+            "first_failed_request_ms": 1791532302347,
+            "first_success_after_ms": null,
+            "last_success_before_ms": 1791532297347,
+            "sampled_recovery_ms": null
+          }
+        ],
+        "max_observed_probe_gap_ms": 125768,
+        "nonempty_successes": 85,
+        "outcomes": {
+          "overload": 0,
+          "rejected": 0,
+          "success": 85,
+          "timeout": 0,
+          "unknown": 19
+        },
+        "queries": 104
+      }
+    ],
+    "clock_uncertainty_ms": 20000,
+    "coverage": "UNKNOWN",
+    "failed_queries": 19,
+    "interpretation": "PASS means no failed scheduled memory queries in covered samples, not zero interruption between probes",
+    "max_probe_gap_ms": 10000,
+    "requests_sha256": "f490611c2c8ab75dce4dc093188dc3d8db7faa5fffd2f2f0908145b429a4c6c0",
+    "result": "FAIL",
+    "scope": "sampled nonempty private-memory API responses; not complete Agent task correctness",
+    "source_sha256": "8fb37fce888dbdd5e3ac8d9763b3205e5fbc3b5ec6ca7a55fac5e820646f227d",
+    "window_ended_at_ms": 1791532468115,
+    "window_started_at_ms": 1791531867266
+  },
+  "case": "workload-rotation",
+  "helper_events": {
+    "distinct_svid_serials": 3,
+    "events": [
+      {
+        "at_ms": 1791532144796.056,
+        "kind": "publish",
+        "launch_id": "launch-a4ba2ba",
+        "serial": "80937547914853678949157948885751517620",
+        "subscription_id": "76bc43416ab64049871e818f3bcd15d3"
+      },
+      {
+        "at_ms": 1791532289561.928,
+        "kind": "publish",
+        "launch_id": "launch-a4ba2ba",
+        "serial": "326027069949880564519896745254572331883",
+        "subscription_id": "76bc43416ab64049871e818f3bcd15d3"
+      },
+      {
+        "at_ms": 1791532421583.78,
+        "kind": "publish",
+        "launch_id": "launch-a4ba2ba",
+        "serial": "117168169887379234192897520659204972313",
+        "subscription_id": "76bc43416ab64049871e818f3bcd15d3"
+      }
+    ],
+    "result": "OBSERVED",
+    "scope": "trusted local journal events in the snapshot window; not Quote counts",
+    "source_sha256": "176ac776101eae2e6e9c75b823426da01bfa7eba8347ad5ff488212807a77b5d",
+    "subscription_ends": 0,
+    "subscription_starts": 0,
+    "svid_publications": 3
+  },
+  "node": {
+    "result": "NOT_RUN"
+  },
+  "node_quote_samples": {
+    "count": null,
+    "result": "NOT_RUN"
+  },
+  "observation_sha256": "e0fd777f831ac90e190f80e42f9d98a92160579f66a0039c88a7d5d5a5ef1b2c",
+  "quote_generated": {
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "generation_timing": {
+      "node": {
+        "completed_calls": 0,
+        "elapsed_ns": 0,
+        "mean_ms": null,
+        "result": "OBSERVED",
+        "scope": "monotonic generate_quote calls, including failed and discarded attempts"
+      },
+      "workload": {
+        "completed_calls": 0,
+        "elapsed_ns": 0,
+        "mean_ms": null,
+        "result": "OBSERVED",
+        "scope": "monotonic generate_quote calls, including failed and discarded attempts"
+      }
+    },
+    "node": {
+      "attempted": 0,
+      "failed": 0,
+      "generated": 0
+    },
+    "provider_instance_id": "c379b316-287e-4c6b-821b-63ae5a51c45e:1280687:1791524628548924645",
+    "result": "OBSERVED",
+    "scope": "actual Provider generation; includes discarded Quotes",
+    "workload": {
+      "attempted": 0,
+      "failed": 0,
+      "generated": 0
+    }
+  },
+  "recovery_access": {
+    "result": "NOT_RUN"
+  },
+  "result": "PASS",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "schema": "argus.lifecycle-trial-result.v1",
+  "scope": "primary lifecycle case; Quote and business evidence are reported separately",
+  "workload": {
+    "after_serial": "117168169887379234192897520659204972313",
+    "before_serial": "245456514439120629732028939970102485636",
+    "business_continuity": "NOT_RUN",
+    "case": "workload_svid_rotation",
+    "node_quote_reuse": "NOT_RUN",
+    "observed_serial_transitions_min": 1,
+    "result": "PASS",
+    "schema": "argus.lifecycle-result.v1",
+    "scope": "same instance and Helper, valid public Workload SVID changed"
+  },
+  "workload_quote_samples": {
+    "count": null,
+    "reason": "received Workload Quote samples are not captured here; real generation counts are reported separately in quote_generated",
+    "result": "UNKNOWN"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "boot_id": "c379b316287e4c6b821b63ae5a51c45e",
+  "completed_at_ms": 1791531867336,
+  "config_sha256": "43b6c0e96821640ae0fbee65d5bad24789cf852647f8af608e56d42776120b02",
+  "cursor": "s=2f6a42ec5927496fb5c41b8177c96779;i=6abb19;b=c379b316287e4c6b821b63ae5a51c45e;m=131bf2b4233;t=65d63848c5771;x=983d8b8a448bfdc4",
+  "helper_unit": "ax-paper02-full-helper.service",
+  "schema": "argus.helper-journal-anchor.v1",
+  "started_at_ms": 1791531867327
+}

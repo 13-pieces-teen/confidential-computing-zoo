@@ -1,0 +1,144 @@
+{
+  "completed_at_ms": 1791531867559,
+  "config_sha256": "43b6c0e96821640ae0fbee65d5bad24789cf852647f8af608e56d42776120b02",
+  "containers": [
+    {
+      "container_id": "fb2a2294a5f088d905b70c9d3d24f41ad2ceaceeda00151d49a68db5bc1686f4",
+      "launch_id": "launch-a4ba2ba",
+      "running": true
+    },
+    {
+      "container_id": "3458c186b2084229aacdc1767413209b20fba92e8c3989ed33c93a3cc42da35a",
+      "launch_id": "launch-aae0f8b",
+      "running": false
+    },
+    {
+      "container_id": "4c9db6e9439848884bafc9a4d96d75ea32fa664d5c893f2d7c835c0216f864ce",
+      "launch_id": "launch-bb519aa",
+      "running": false
+    },
+    {
+      "container_id": "c3ccc41d2f1e99f7498bdbf1f7165e6c1c298813cbbdbc21ce961463841e5513",
+      "launch_id": "launch-bc91767",
+      "running": false
+    },
+    {
+      "container_id": "d0c7e7d90f2534b7278a1833f84f2bb1bcad640ddd5f9f7ae3e0f516e7980c13",
+      "launch_id": "launch-2b2e20e",
+      "running": false
+    },
+    {
+      "container_id": "cda857bb1fb14360f7eeecdeb54f249e450e9b6f52ebda32dd1d3be2da843923",
+      "launch_id": "launch-4566a09",
+      "running": false
+    },
+    {
+      "container_id": "e56a7ed02c14dbbf19e5125bc6d754bc599f9fb05cce79d0e9aa792571c07840",
+      "launch_id": "launch-f719091",
+      "running": false
+    },
+    {
+      "container_id": "91035f622a3267bbbcfddedb9be1f2d9056bd005dc3f981bd4bdac7d697d0d7d",
+      "launch_id": "launch-c6f544b",
+      "running": false
+    },
+    {
+      "container_id": "1a20331937bef36bb213281396c1f3bdce9d899a09d0fbd14089d37f57de186d",
+      "launch_id": "launch-99533a9",
+      "running": false
+    },
+    {
+      "container_id": "bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c",
+      "launch_id": "launch-8708838",
+      "running": false
+    },
+    {
+      "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+      "launch_id": "launch-9295b78",
+      "running": false
+    },
+    {
+      "container_id": "7fb9b146249566bb52cdc98b04d61585a982d70d25c0ef97077f42d7a001d755",
+      "launch_id": "launch-c7d455d",
+      "running": false
+    },
+    {
+      "container_id": "89b10e0b3e38e5a2fa99fb1dbce9767fc7cd4c1a783c0896df708d7853eca805",
+      "launch_id": "launch-e555455",
+      "running": false
+    },
+    {
+      "container_id": "c12a4ad398c1c86db4d98b904672659c99dfa1efed7d0f8faa75cbb4baae76c5",
+      "launch_id": "launch-3e2c339",
+      "running": false
+    },
+    {
+      "container_id": "c12ec6e619c41c3f222b6ac17d2095aa19ad336b1f3c619e0ff90e4261ebfc3a",
+      "launch_id": "launch-be60184",
+      "running": false
+    },
+    {
+      "container_id": "9e24ae35869903d70481fdc525257b1e3659cbc38e715c3e63bb3338f4f8a6c4",
+      "launch_id": "launch-97f1b19",
+      "running": false
+    },
+    {
+      "container_id": "680667b205349bd19c6d689afb6099c9ea93a95d98446ea508a2e8c2764c1cdc",
+      "launch_id": "launch-a3b85ae",
+      "running": false
+    }
+  ],
+  "credential": {
+    "certificate_sha256": "9fde098f3698f5237d8c504ccaf9a54a915c62270ed1308174178d0888360e53",
+    "chain_valid": true,
+    "expires_at": "Oct  9 07:49:17 2026 GMT",
+    "serial": "245456514439120629732028939970102485636",
+    "uri_san": [
+      "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full"
+    ]
+  },
+  "hardware_acceptance": "NOT_RUN",
+  "launch": {
+    "config_sha256": "43b6c0e96821640ae0fbee65d5bad24789cf852647f8af608e56d42776120b02",
+    "container_id": "fb2a2294a5f088d905b70c9d3d24f41ad2ceaceeda00151d49a68db5bc1686f4",
+    "launch_id": "launch-a4ba2ba",
+    "run_id": "e8ca6f0e-f1e2-40d2-9797-d6e7ceb7447e",
+    "stage": "complete"
+  },
+  "runtime_variant": "full_argus",
+  "schema": "argus.lifecycle-snapshot.v1",
+  "started_at_ms": 1791531867442,
+  "status": {
+    "helper_invocation_id": "76bc43416ab64049871e818f3bcd15d3",
+    "readiness_error": null,
+    "ready": true,
+    "target_serial": "245456514439120629732028939970102485636",
+    "units": {
+      "ax-paper02-full-agent": "active",
+      "ax-paper02-full-authz": "active",
+      "ax-paper02-full-helper": "active",
+      "ax-paper02-full-nginx": "active",
+      "ax-paper02-full-provider": "active"
+    }
+  },
+  "target": {
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "config_digest": "sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1",
+    "config_path": "/etc/openviking/ov.conf",
+    "container_id": "fb2a2294a5f088d905b70c9d3d24f41ad2ceaceeda00151d49a68db5bc1686f4",
+    "executable": "/usr/local/bin/python3.13",
+    "image_config_digest": "sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3",
+    "launch_id": "launch-a4ba2ba",
+    "listen_port": "1933",
+    "net_namespace": "net:[4026532656]",
+    "pid": "1279456",
+    "pid_namespace": "pid:[4026532655]",
+    "policy_id": "argus-workload-openviking-paper02-20261004-01",
+    "rootfs_read_only": "true",
+    "start_time": "130590099",
+    "workload_id": "openviking-cmem"
+  },
+  "target_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+  "workload_id": "openviking-cmem"
+}

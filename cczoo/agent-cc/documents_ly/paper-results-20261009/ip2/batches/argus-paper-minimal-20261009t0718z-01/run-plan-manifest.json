@@ -1,0 +1,87 @@
+{
+  "schema": "argus.paper-minimal.run-plan-manifest.v1",
+  "batch_id": "argus-paper-minimal-20261009t0718z-01",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "coordinator": "IP2",
+  "materials": {
+    "repo": "https://github.com/13-pieces-teen/confidential-computing-zoo.git",
+    "branch": "docs/argus-minimal-experiments-20261009",
+    "commit": "b471a34b73e4f8490fa633b7ea3bcfb510756d39",
+    "sha256sums_verified": true,
+    "materials_dir": "cczoo/agent-cc/experiments/argus/paper-minimal-20261009/"
+  },
+  "current_full_service": {
+    "epoch": "paper-20261004t145835z",
+    "run_name": "ax-paper02-full",
+    "target_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+    "helper_id": "spiffe://argus.local/infra/openviking-helper/experiment/paper02/full",
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "allowed_client_ids": ["spiffe://argus.local/agent/openclaw/experiment/paper02/full"],
+    "launch_id": "launch-a4ba2ba",
+    "launch_run_id": "e8ca6f0e-f1e2-40d2-9797-d6e7ceb7447e",
+    "container_id": "fb2a2294a5f088d905b70c9d3d24f41ad2ceaceeda00151d49a68db5bc1686f4",
+    "container_started_utc": "2026-10-09T05:43:16Z",
+    "image": "docker://127.0.0.1:5000/openviking-audit:v0.4.8",
+    "image_config_digest": "sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3",
+    "policy_id": "argus-workload-openviking-paper02-20261004-01",
+    "config_sha256": "43b6c0e96821640ae0fbee65d5bad24789cf852647f8af608e56d42776120b02",
+    "receiver_audit": {"mode": "on", "run_id": "e4p2-h1-20261009-01", "mount": "/run/argus-receiver/e4p2-h1-20261009-01/data:/run/argus-audit"},
+    "endpoints": {"business_https": "https://127.0.0.1:1943", "api_search_find": "/api/v1/search/find", "gateway_port": 1943, "workload_listen": 1933}
+  },
+  "running_processes_20261009t0718z": {
+    "spire_agent": {"pid": 1280689, "started_local": "2026-10-09T13:43:47+08:00"},
+    "evidence_provider": {"pid": 1280687, "started_local": "2026-10-09T13:43:47+08:00", "socket": "/run/ax-paper02-full/evidence-provider.sock", "provider_instance_id": "c379b316-287e-4c6b-821b-63ae5a51c45e:1280687:1791524628548924645", "quote_counter_interface": "AVAILABLE"},
+    "spiffe_helper": {"pid": 1281816, "started_local": "2026-10-09T13:44:43+08:00", "invocation_id": "76bc43416ab64049871e818f3bcd15d3", "boot_id": "c379b316287e4c6b821b63ae5a51c45e"},
+    "nginx": {"pid": 1282598, "started_local": "2026-10-09T13:45:26+08:00"},
+    "authz": {"pid": 1280686, "socket": "/run/ax-paper02-full-authz/authz.sock"}
+  },
+  "observed_rotation_health": {
+    "source": "ax-paper02-full-helper journal (read-only)",
+    "recent_publications_local": [
+      "2026-10-09T15:10:33+08:00 serial=117642069832130462364157370181127022603",
+      "2026-10-09T15:12:54+08:00 serial=242701093021425603041416303052206829871"
+    ],
+    "note": "target SVID publication observed roughly every ~141 s; a 600 s window is expected to contain several rotations; no TTL change will be made"
+  },
+  "tool_versions": {
+    "materials_commit": "b471a34b73e4f8490fa633b7ea3bcfb510756d39",
+    "deployment_repo_head": "12b365ed8d3c73965e69c8fbe3fcb46075fefa6c",
+    "lifecycle_trial.py_sha256": "44f635209e665e4892c0742c80cc85646418b14418366d1b588d7d67631b884c",
+    "lifecycle_evidence.py_sha256": "3ecb57d65edd04fb9ace3a49c5b754a6072e2495d98ea8725db01755efc63251",
+    "load_fleet.py_sha256": "b9b330bf29f755dd30922d1ecd99e19d011519735a72e2480ad94dd26b34568b",
+    "trusted_runtime.py_sha256": "47e80028363c5daab60720fffc1475d93303c8fc20b479bdf2e6a08061e3adc6",
+    "common.py_sha256": "b9b6542ac6a5ccab1079d667ba5408150c4751a2111f2cb0bc54b88fc875bad8",
+    "note": "materials commit is the experiment-protocol version only; running tools are the deployed tree at 12b365ed (working tree has unrelated modifications, none to the three tools above)"
+  },
+  "s1_frozen_parameters": {
+    "case": "workload-rotation",
+    "service_arm": "current Full (ax-paper02-full)",
+    "client": "1 existing legitimate client (paper02/full)",
+    "api": "/api/v1/search/find with fixed non-empty query",
+    "connection_mode": "reuse",
+    "rate": 0.2,
+    "concurrency_per_client": 2,
+    "timeout_seconds": 10,
+    "warmup_seconds": 30,
+    "measurement_seconds": 900,
+    "ip2_observation_seconds": 600,
+    "max_probe_gap_ms": 10000,
+    "formal_windows": 1
+  },
+  "clock": {
+    "ip2_to_ip1_control": {"mean_offset_ms": -497.7, "conservative_bound_ms": 1200, "method": "trustee TLS forward Date header, 3 samples, 2026-10-09T07:16Z"},
+    "request": "IP1 measures client Guest <-> IP2 offset and error fresh; combined collect bound = |guest<->IP1| + error + 1200 ms"
+  },
+  "delivery_dirs": {
+    "ip2_batch": "/root/argus-paper-minimal-20261009t0718z-01",
+    "ip2_server": "/root/argus-paper-minimal-20261009t0718z-01/server",
+    "ip2_s0": "/root/argus-paper-minimal-20261009t0718z-01/s0",
+    "ip2_results": "/root/argus-paper-minimal-20261009t0718z-01/results",
+    "channel": "/root/argus-ip1-handoff/paper-minimal-s0-runplan-20261009",
+    "results_branch": "codex/argus-results-ip2-20261009"
+  },
+  "s2_condition": "execute only if P0 authorization originals cannot support the prototype-config claim; then valid-key x3, missing-key x3, synthetic-invalid-key x3 against protected /api/v1/sessions, forged user-header x3; wrong-SPIFFE only if an existing valid non-allowlisted experimental identity exists, else NOT_RUN",
+  "s3_condition": "execute only if available real Agent cases are insufficient AND a confirmed synthetic fact exists in the current scope; one recall, 180 s cap",
+  "signals": "CLIENT_ACTIVE (IP1 -> IP2, includes measurement start/end + trace path) -> IP2 observe (<=120 s) -> OBSERVATION_FINISHED (IP2 -> IP1, completed_at_ms). A signal missing >10 min: check the channel once and report state.",
+  "excluded": "no P0/A3/E2/E4 reruns, no faults, no new admissions, no restarts, no TTL changes, no native deployment"
+}

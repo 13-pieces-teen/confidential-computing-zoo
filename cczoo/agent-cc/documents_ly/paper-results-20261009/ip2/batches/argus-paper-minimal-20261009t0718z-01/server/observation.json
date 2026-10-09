@@ -1,0 +1,62 @@
+{
+  "after": {
+    "provider": {
+      "completed_at_ms": 1791532467948,
+      "exit_code": 0,
+      "result": "OBSERVED",
+      "sha256": "01c173fd776a52a6398f92295acbd66d6db2206abca511cd9902d50dd5b57c33",
+      "source": "provider-after.json",
+      "started_at_ms": 1791532467883
+    },
+    "workload": {
+      "completed_at_ms": 1791532467883,
+      "exit_code": 0,
+      "result": "OBSERVED",
+      "sha256": "80d9a13a56b7337f4d5319840f96f3647b4e6fe1b26f59aaf734f4bf7a7df266",
+      "source": "workload-after.json",
+      "started_at_ms": 1791532467667
+    }
+  },
+  "automatic_mutations": false,
+  "before": {
+    "provider": {
+      "completed_at_ms": 1791531867665,
+      "exit_code": 0,
+      "result": "OBSERVED",
+      "sha256": "da8abcb47f7ab9389a0c49bb87cfa6520f2030487b6c3480074670b0d2fa6896",
+      "source": "provider-before.json",
+      "started_at_ms": 1791531867600
+    },
+    "workload": {
+      "completed_at_ms": 1791531867600,
+      "exit_code": 0,
+      "result": "OBSERVED",
+      "sha256": "f6034692f78e74d07f8f0566cb67c33843709f79bf81a0bcbe6b21f0e42a4c95",
+      "source": "workload-before.json",
+      "started_at_ms": 1791531867383
+    }
+  },
+  "case": "workload-rotation",
+  "complete": true,
+  "completed_at_ms": 1791532468115,
+  "config_sha256": "3edc49788bce8ce1541e1010eeb2f08e6cc02bfe4fa0346e63b2c43d15349194",
+  "duration_seconds": 600,
+  "helper_journal": {
+    "result": "OBSERVED",
+    "sha256": "176ac776101eae2e6e9c75b823426da01bfa7eba8347ad5ff488212807a77b5d",
+    "source": "helper-journal-window.json"
+  },
+  "helper_journal_anchor": {
+    "result": "OBSERVED",
+    "sha256": "4abe20619311f44147843d8c9de807c4b8473207f5b65c91bc02fa8ca3ff69ba",
+    "source": "helper-journal-anchor.json"
+  },
+  "observation_ended_at_ms": 1791532467667,
+  "observation_started_at_ms": 1791531867665,
+  "provider_agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "schema": "argus.lifecycle-trial.v1",
+  "started_at_ms": 1791531867266,
+  "target_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper02/full",
+  "workload_quote_source": "provider_generation_counters"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "argus.paper-minimal.clock-measurement.v1",
+  "batch_id": "argus-paper-minimal-20261009t0718z-01",
+  "measured_by": "IP2",
+  "method": "GET https://127.0.0.1:18443/ over the existing trustee TLS forward (CA /etc/argus-workload/trustee-tls-ca.pem, SNI trustee.argus.local); IP1 clock read from the HTTP Date header (1 s granularity), IP2 clock from local mid-RTT timestamp",
+  "read_only": true,
+  "samples": [
+    {"offset_ms_ip1_minus_ip2": -532.8, "rtt_ms": 133.0},
+    {"offset_ms_ip1_minus_ip2": -165.0, "rtt_ms": 130.4},
+    {"offset_ms_ip1_minus_ip2": -795.4, "rtt_ms": 129.7}
+  ],
+  "mean_offset_ms_ip1_minus_ip2": -497.7,
+  "conservative_bound_ms": 1200,
+  "bound_basis": "Date header 1 s granularity + RTT/2 (~66 ms) + margin; IP2 <=> IP1-control only",
+  "client_guest_to_ip2": "PENDING IP1 delivery; combined bound for collect will be |guest<->IP1| + error + 1200 ms",
+  "measured_at_ms_local": 1791530120000,
+  "not_reused": "fresh measurement, not the 2026-10-08 skew figures"
+}

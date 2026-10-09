@@ -1,0 +1,22 @@
+{
+  "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+  "captured_at_ms": 1791530348549,
+  "node": {
+    "attempted": 0,
+    "failed": 0,
+    "generated": 0,
+    "generation_elapsed_ns": 0
+  },
+  "observation_completed_at_ms": 1791530348549,
+  "observation_started_at_ms": 1791530348549,
+  "provider_instance_id": "c379b316-287e-4c6b-821b-63ae5a51c45e:1280687:1791524628548924645",
+  "run_id": "argus-paper-minimal-20261009t0718z-01-rotation",
+  "schema": "argus.quote-counters.v1",
+  "socket_path": "/run/ax-paper02-full/evidence-provider.sock",
+  "workload": {
+    "attempted": 2,
+    "failed": 0,
+    "generated": 2,
+    "generation_elapsed_ns": 2054669555
+  }
+}

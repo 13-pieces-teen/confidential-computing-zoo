@@ -1,0 +1,46 @@
+{
+  "schema": "argus.paper-minimal.existing-evidence-index.v1",
+  "batch_id": "argus-paper-minimal-20261009t0718z-01",
+  "indexed_by": "IP2",
+  "indexed_at_local": "2026-10-09T15:22+08:00",
+  "e2_r4": {
+    "status": "originals present locally and on results branch",
+    "local_receiver_dir": "/var/lib/argus-receiver/paper-20261004t145835z/e2-full-helper-freeze-20261008-r4",
+    "local_epoch_files": {
+      "binding_json": {"path": "/var/lib/argus-receiver/paper-20261004t145835z/binding.json", "sha256": "1c1fba890e997e55975c8d161ee43e1d9cb272e3d30f7f1f0a4a6bfb72276887"},
+      "receiver_jsonl": {"path": "/var/lib/argus-receiver/paper-20261004t145835z/receiver.jsonl", "sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186", "bytes": 122493797}
+    },
+    "local_sha256_index": "s0/e2-r4-local-sha256.txt",
+    "results_branch_export": "cczoo/agent-cc/documents_ly/paper-results-20261009/ip2/e2/ (result.json, assessment.json, fault.jsonl, state.json, timeline.json, IP2-E2-R4-FINAL-CLOSURE.md/json, journal-fault-cascade-20261008.txt)",
+    "results_branch": "codex/argus-results-ip2-20261009",
+    "results_branch_commit": "5780d8287cd9c1a073bff331a40189482b2d3175",
+    "missing": []
+  },
+  "historical_rules_seven_cases": {
+    "status": "all 7 cases already exported on results branch; no re-run",
+    "cases": ["legal", "unrelated_activity", "same_image_new_instance", "hidden_stop", "config_mismatch", "old_evidence", "instance_mismatch"],
+    "results_branch_path": "cczoo/agent-cc/documents_ly/paper-results-20261009/ip2/batches/20261009-repair-and-rerun/preexisting/e1-offline-history-fixtures",
+    "versions": {
+      "git_commit": "3cf25a87a2ba1ab4f6ff4ac0821ca515570fa5c7",
+      "analyzer_source": {
+        "admission_cases.py": "e4e18697bc0a66d463e6a632e4685e71a37a866cf28d59949d68111ffd088bdd",
+        "history_diagnostics.py": "e5324fa724907892901fe36bafed166ae000fc35077eaaf8b6b0b2ff37033620",
+        "verify_trucon.py": "495218b94491debbd21389c864d7259284e41147d131b542dd263382a2a4d93c"
+      },
+      "fresh_online_admission": "NOT_RUN",
+      "private_keys_exported": false
+    },
+    "local_construct_tool": "experiments/argus/admission_cases.py (same 7 cases; production LogVerifier history sub-verifier; ephemeral non-production keys)",
+    "missing": []
+  },
+  "p0": {
+    "status": "channel originals present; IP1 owns auth/Agent-recall finding, IP2 supplements server-side association",
+    "channel_dir": "/root/argus-ip1-handoff/p0-20261002t1521z/",
+    "key_files": ["P0_FINAL_STATUS.txt", "IP1_HANDOFF.txt", "ip1-p0d-sf-attempt1-20261003", "ip1-p0d-sf-recall-exactness-20261003", "p0c-business-keys-20261003", "p0-final-closure-20261003"],
+    "results_branch_side": "cczoo/agent-cc/documents_ly/paper-results-20261009/ip2/e1/online/ (A3 originals; P0 auth negatives still IP1's to confirm)",
+    "missing": ["IP1 verdict on whether P0 authorization negatives (valid key / missing key / invalid key / forged user header) exist as originals"]
+  },
+  "s0_preflight": "s0/preflight-ip2.md",
+  "provider_probe": "s0/provider-quote-probe.json",
+  "clock_measurement": "s0/clock-measurement-ip2.json"
+}
