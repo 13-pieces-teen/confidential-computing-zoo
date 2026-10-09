@@ -189,6 +189,9 @@ def test_confirmed_pause_update_is_recalled_and_included_after_recovery(tmp_path
     assert result['planned_tasks'] == 6 and result['counts']['PASS'] == 6
     assert result['work_items'][0]['continuation_result'] == 'PASS'
     assert result['work_items'][0]['complete_task_result'] == 'PASS'
+    assert result['work_items'][0]['planned_proposals'] == [f's{i:02d}' for i in range(6)]
+    assert result['work_items'][0]['confirmed_proposals'] == [f's{i:02d}' for i in range(6)]
+    assert result['work_items'][0]['used_proposals'] == [f's{i:02d}' for i in range(6)]
     assert result['work_items'][0]['applied_confirmed_proposals'] == [f's{i:02d}' for i in range(6)]
     state = read(output/'state.json')
     assert state['steps']['alice/s04']['effective_step']['expected']['constraints']['budget_cents'] == fixture['steps'][2]['amount_cents']
@@ -246,6 +249,9 @@ def test_confirmed_rejection_is_reported_not_silently_lost(tmp_path):
     assert [p['status'] for p in item['proposals']] == ['CONFIRMED','CONFIRMED','REJECTED','REJECTED','CONFIRMED','CONFIRMED']
     assert item['continuation_result'] == 'PASS' and item['complete_task_result'] == 'FAIL'
     assert item['result'] == 'FAIL' and item['applied_confirmed_proposals'] == ['s00','s01','s04','s05']
+    assert item['planned_proposals'] == [f's{i:02d}' for i in range(6)]
+    assert item['confirmed_proposals'] == ['s00','s01','s04','s05']
+    assert item['used_proposals'] == ['s00','s01','s04','s05']
     assert item['unapplied_required_proposals'] == ['s02','s03']
     assert result['counts']['PASS'] == 4  # planned task denominator still includes rejections
 
@@ -415,6 +421,8 @@ def test_lost_gateway_and_empty_audit_gate_all_successors_without_replay(tmp_pat
     assert all(not s['dispatch_attempted'] for s in result['steps'][3:])
     assert result['work_items'][0]['complete_task_result'] == 'UNKNOWN'
     assert result['work_items'][0]['unresolved_proposals'] == ['s02']
+    assert result['work_items'][0]['confirmed_proposals'] == ['s00','s01']
+    assert 's02' not in result['work_items'][0]['applied_confirmed_proposals']
     assert [p['status'] for p in result['work_items'][0]['proposals'][3:]] == ['NOT_DISPATCHED'] * 3
     gateway.forbid_writes = True
     resumed = execute(path,output,'resume',gateway)

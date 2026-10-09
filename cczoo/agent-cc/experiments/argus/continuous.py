@@ -32,6 +32,10 @@ ROOT = Path(__file__).resolve().parent
 BINDING_FIELDS = {'client_id', 'container', 'docker_user', 'config_path', 'agent_id',
                   'account_id', 'user_id', 'client_spiffe_id', 'server_spiffe_id'}
 PHASES = ('normal', 'pause', 'recovery')
+SESSION_PREFIX = 'agent:main:'
+SESSION_KEY = re.compile(r'argus-e4:(?P<run>[a-z][a-z0-9-]{0,63}):'
+                         r'(?P<client>[A-Za-z0-9_.-]{1,100}):s(?P<step>[0-9]{2}):'
+                         r'(?P<attempt>[1-9][0-9]*)\Z')
 # A committed seed's Phase-2 extraction can outlive the plugin's client-side wait
 # poll (the poll bails with status 'timeout' on one transient read failure), so a
 # reconcile may observe the archive before it is servable. Re-query the same seed
@@ -51,6 +55,15 @@ def secure_write(path, value):
     atomic(path, value)
     if os.name == 'posix':
         os.chmod(path, 0o600)
+
+
+def canonical_session_key(value):
+    if not isinstance(value, str):
+        return None
+    if value.startswith('agent:') and not value.startswith(SESSION_PREFIX):
+        return None
+    canonical = value[len(SESSION_PREFIX):] if value.startswith(SESSION_PREFIX) else value
+    return canonical if SESSION_KEY.fullmatch(canonical) else None
 
 
 def configuration(path):
@@ -82,6 +95,32 @@ def configuration(path):
             'v1 uses one active task and one queued task per client, without task retries')
     require(c.get('mode', 'pilot') in ('pilot', 'formal'), 'invalid mode')
     require(c.get('mode', 'pilot') != 'formal' or schedule['frozen'] is True, 'formal schedule must be frozen after pilots')
+    if c.get('mode', 'pilot') == 'formal':
+        gate = c.get('formal_gate') or {}
+        require(set(gate) == {'healthy_receipt_path','healthy_receipt_sha256',
+                              'fault_receipt_path','fault_receipt_sha256'},
+                'formal runs require exact healthy and fault pilot gate receipts')
+        healthy_path = Path(gate['healthy_receipt_path']).resolve()
+        fault_path = Path(gate['fault_receipt_path']).resolve()
+        require(healthy_path.is_file() and sha(healthy_path) == gate['healthy_receipt_sha256'],
+                'healthy-pilot gate receipt changed')
+        require(fault_path.is_file() and sha(fault_path) == gate['fault_receipt_sha256'],
+                'fault-pilot gate receipt changed')
+        healthy, fault = read(healthy_path), read(fault_path)
+        require(healthy.get('schema') == 'argus.healthy-pilot-gate.v1'
+                and healthy.get('condition') == 'no_fault' and healthy.get('planned_steps') == 6
+                and healthy.get('service_recovery') == 'NOT_APPLICABLE'
+                and all(healthy.get(name) == 'PASS' for name in
+                        ('window_completion','task_correctness','receiver_coverage')),
+                'healthy pilot did not satisfy the formal gate')
+        require(fault.get('schema') == 'argus.fault-pilot-gate.v1'
+                and fault.get('condition') == 'fault' and fault.get('planned_steps') == 6
+                and not fault.get('unresolved_proposals')
+                and all(fault.get(name) == 'PASS' for name in
+                        ('window_completion','service_recovery','task_correctness','receiver_coverage',
+                         'pre_fault_confirmed_state','post_fault_attempt','legal_recovery',
+                         'correct_continuation')),
+                'fault pilot did not satisfy the formal gate')
     require(c.get('fault_kind') is None or isinstance(c['fault_kind'],str) and bool(c['fault_kind'].strip()), 'fault_kind must be a nonempty string')
     require(c.get('mode','pilot') != 'formal' or bool(c.get('fault_kind')), 'formal runs require fault_kind, including the matched no-fault condition')
     service_fault = c.get('fault_kind') in ('helper-freeze', 'helper-crash', 'target-exit')
@@ -206,6 +245,65 @@ def prepare(config_path, output):
 class Gateway(BaseGateway):
     def __init__(self):
         self.script = (ROOT / 'continuous_gateway.mjs').read_text(encoding='utf-8')
+        self.diagnostic_root = None
+
+    def set_diagnostic_root(self, root):
+        self.diagnostic_root = Path(root)
+        self.diagnostic_root.mkdir(parents=True, exist_ok=True)
+        if os.name == 'posix':
+            os.chmod(self.diagnostic_root, 0o700)
+
+    def call(self, binding, action, **payload):
+        spec = {**{k: binding[k] for k in ('agent_id','account_id','user_id','client_spiffe_id','server_spiffe_id')},
+                'session_key':payload.pop('session_key', 'argus-e4-inspection'), 'action':action, **payload}
+        command = ['docker','exec','-i','-u',binding['docker_user'],'-e',
+                   'OPENCLAW_CONFIG_PATH='+binding['config_path'],binding['container'],
+                   'node','--input-type=module','-e',self.script]
+        started = now_ms()
+        try:
+            completed = subprocess.run(command,input=json.dumps(spec),text=True,encoding='utf-8',
+                                       capture_output=True,timeout=payload.get('timeout_seconds',180)+90)
+            stderr_ref = self._retain_stderr(completed.stderr, action, completed.returncode)
+            try:
+                value = json.loads(completed.stdout.splitlines()[-1])
+            except (ValueError,IndexError):
+                value = {'result':'UNKNOWN','code':'GATEWAY_PROCESS_UNAVAILABLE',
+                         'action':action,'operation_phase':'subprocess_decode'}
+            if not isinstance(value,dict):
+                value = {'result':'UNKNOWN','code':'GATEWAY_PROCESS_UNAVAILABLE',
+                         'action':action,'operation_phase':'subprocess_decode'}
+            value.setdefault('action',action)
+            value.setdefault('operation_phase','gateway_'+action)
+            value['duration_ms'] = max(value.get('duration_ms',0),now_ms()-started)
+            value['subprocess_exit_code'] = completed.returncode
+            if stderr_ref:
+                value['private_stderr'] = stderr_ref
+            return value
+        except subprocess.TimeoutExpired as error:
+            stderr = error.stderr.decode(errors='replace') if isinstance(error.stderr,bytes) else error.stderr
+            result = {'result':'UNKNOWN','code':'GATEWAY_TIMEOUT','outcome':'timeout',
+                      'action':action,'operation_phase':'subprocess_wait',
+                      'duration_ms':now_ms()-started,'subprocess_exit_code':None}
+            stderr_ref = self._retain_stderr(stderr,action,None)
+            if stderr_ref:
+                result['private_stderr'] = stderr_ref
+            return result
+        except (OSError,subprocess.SubprocessError):
+            return {'result':'UNKNOWN','code':'GATEWAY_PROCESS_UNAVAILABLE','outcome':'unknown',
+                    'action':action,'operation_phase':'subprocess_start',
+                    'duration_ms':now_ms()-started,'subprocess_exit_code':None}
+
+    def _retain_stderr(self, stderr, action, exit_code):
+        if not stderr or self.diagnostic_root is None:
+            return None
+        raw = stderr.encode('utf-8',errors='replace')
+        name = f'{now_ms()}-{action}-{uuid.uuid4().hex}.stderr'
+        path = self.diagnostic_root / name
+        fd = os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(fd,'wb') as stream:
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+        return {'reference':'private-diagnostics/'+name,'sha256':hashlib.sha256(raw).hexdigest(),
+                'bytes':len(raw),'summary':{'action':action,'subprocess_exit_code':exit_code}}
 
     def records(self, binding, since, session_key):
         # Docker log retrieval supplies positive observations only. Even a
@@ -222,8 +320,13 @@ class Gateway(BaseGateway):
                     value = json.loads(line[line.index('{'):])
                 except (ValueError, TypeError):
                     continue
-                if value.get('session_key') == session_key and value.get('component') in ('argus-openclaw-task','argus-openclaw-spiffe'):
-                    records.append(value)
+                raw = (value.get('session_key') or value.get('sessionKey')
+                       or (value.get('ctx') or {}).get('sessionKey'))
+                canonical = canonical_session_key(raw)
+                if canonical == session_key and value.get('component') in ('argus-openclaw-task','argus-openclaw-spiffe'):
+                    records.append({**value,'raw_session_key':raw,'canonical_session_key':canonical,
+                                    'session_key_source':('session_key' if value.get('session_key') else
+                                        'sessionKey' if value.get('sessionKey') else 'ctx.sessionKey')})
             return records
         except (OSError, subprocess.SubprocessError):
             return None
@@ -391,6 +494,7 @@ def _score_step(step, entry):
             'recalled': recalled if records is not None else 'UNKNOWN', 'tool_call_count': len(tools) if records is not None else None,
             'confirmed_predecessors_recalled': predecessors_recalled if records is not None else 'UNKNOWN',
             'confirmed_proposals_recalled': proposals_recalled if records is not None else 'UNKNOWN',
+            'recalled_proposal_hashes':sorted(value for value in proposal_outputs if isinstance(value,str)),
             'full_fact_sent':True if full_sent else False if not_dispatched else 'UNKNOWN',
             'gateway_outcome':entry.get('agent', {}).get('result'), 'gateway_error':entry.get('agent', {}).get('code'),
             'store_tool_failed':store_failed,
@@ -490,6 +594,10 @@ def result_for(c, manifest, fixture, state, output):
     complete = state.get('phase') == 'complete'
     expected_control = 'completed' if c['condition'] == 'fault' else 'no_fault'
     controls_ok = all(v.get('status') == expected_control and v.get('returncode',0) == 0 for v in state.get('controls', {}).values())
+    recovery_checks = [entry.get('recovery_preflight') for entry in state['steps'].values()
+                       if entry.get('recovery_preflight')]
+    service_recovered = (c['condition'] == 'fault' and controls_ok
+                         and any(check.get('result') == 'OBSERVED' for check in recovery_checks))
     expected_model = c['model_settings'].get('model')
     model_mismatches = [s['step_id'] for s in steps if s.get('model') and expected_model and expected_model not in
                         (s['model'], str(s.get('provider'))+'/'+s['model'])]
@@ -508,6 +616,19 @@ def result_for(c, manifest, fixture, state, output):
               'counts':{v:sum(s['task_result']==v for s in steps) for v in ('PASS','FAIL','UNKNOWN','NOT_RUN')},
               'planned_tasks':len(steps), 'offered_tasks':sum(s['offered'] for s in steps),
               'attempted_tasks':sum(s['attempted'] is True for s in steps), 'receipt_result':'UNKNOWN'}
+    result['gates'] = {
+        'window_completion':'PASS' if complete else 'UNKNOWN' if start is not None else 'NOT_RUN',
+        'control_execution':'PASS' if controls_ok and len(state['controls']) == 2 else
+                            'UNKNOWN' if start is not None else 'NOT_RUN',
+        'service_recovery':'NOT_APPLICABLE' if c['condition'] == 'no_fault' else
+                           'PASS' if service_recovered else
+                           'UNKNOWN' if start is not None else 'NOT_RUN',
+        'task_correctness':'PASS' if steps and all(s['task_result'] == 'PASS' for s in steps) else
+                           'FAIL' if any(s['task_result'] == 'FAIL' for s in steps) else
+                           'UNKNOWN' if any(s['task_result'] == 'UNKNOWN' for s in steps) else
+                           'NOT_RUN',
+        'receiver_coverage':'UNKNOWN'
+    }
     if c['scenario'] == 'work-item-v1':
         work_items = []
         for binding in c['bindings']:
@@ -519,6 +640,15 @@ def result_for(c, manifest, fixture, state, output):
                           'task_result':s['task_result']} for s in rows]
             unknown = [p['step_id'] for p in proposals if p['status'] == 'UNKNOWN']
             final = rows[-1]
+            planned = [p['step_id'] for p in proposals]
+            confirmed = [p['step_id'] for p in proposals if p['status'] == 'CONFIRMED']
+            by_hash = {step.get('proposal_sha256'):step['step_id'] for step in
+                       (by_id[(binding['client_id'],p['step_id'])] for p in proposals)}
+            used = sorted({by_hash[value] for value in final.get('recalled_proposal_hashes', [])
+                           if value in by_hash},key=planned.index)
+            if final['task_result'] == 'PASS' and final['committed'] is True:
+                used.append(final['step_id'])
+            applied = [step_id for step_id in used if step_id in confirmed]
             continuation = ('NOT_RUN' if start is None else 'UNKNOWN' if unknown else
                     'PASS' if final['task_result'] == 'PASS' else final['task_result'])
             complete_task = ('NOT_RUN' if start is None else 'UNKNOWN' if unknown or not complete or
@@ -530,8 +660,8 @@ def result_for(c, manifest, fixture, state, output):
                                'continuation_result':continuation, 'proposals':proposals, 'unresolved_proposals':unknown,
                                'unapplied_required_proposals':[p['step_id'] for p in proposals if p['status'] != 'CONFIRMED'],
                                'final_step_id':final['step_id'],
-                               'applied_confirmed_proposals':(final.get('confirmed_predecessors') or []) +
-                                   ([final['step_id']] if final['committed'] is True else []),
+                               'planned_proposals':planned, 'confirmed_proposals':confirmed,
+                               'used_proposals':used, 'applied_confirmed_proposals':applied,
                                'continuity_scope':'persistent_memory_across_fresh_agent_sessions',
                                'receipt_result':'UNKNOWN', 'legal_recovery_result':'UNKNOWN'})
         result['work_items'] = work_items
@@ -540,7 +670,11 @@ def result_for(c, manifest, fixture, state, output):
 
 
 def execute(config_path, output, action='run', gateway=None):
-    c = configuration(config_path); output = Path(output); gateway = Observations(gateway or Gateway())
+    c = configuration(config_path); output = Path(output)
+    raw_gateway = gateway or Gateway()
+    if hasattr(raw_gateway,'set_diagnostic_root'):
+        raw_gateway.set_diagnostic_root(output/'private-diagnostics')
+    gateway = Observations(raw_gateway)
     with lock(output):
         if not (output/'state.json').exists():
             require(action != 'resume', 'no run to reconcile')

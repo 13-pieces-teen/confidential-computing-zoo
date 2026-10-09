@@ -7,6 +7,34 @@ import {createHash} from 'node:crypto';
 
 const spec = JSON.parse(fs.readFileSync(0, 'utf8'));
 const hash = text => createHash('sha256').update(text).digest('hex');
+const ERROR_CODES = {
+  session_get:'SESSION_GET_FAILED', context_get:'CONTEXT_GET_FAILED',
+  task_get:'TASK_GET_FAILED', archive_get:'ARCHIVE_GET_FAILED'
+};
+const errorObservation = (error, operationPhase, started) => {
+  const response = error?.response;
+  const status = Number.isInteger(error?.status) ? error.status
+    : Number.isInteger(response?.status) ? response.status : null;
+  const requestId = error?.requestId ?? error?.request_id
+    ?? response?.headers?.get?.('x-request-id') ?? null;
+  return {
+    result:'UNKNOWN', action:'inspect', operation_phase:operationPhase,
+    code:ERROR_CODES[operationPhase], http_status:status,
+    request_id:typeof requestId === 'string' ? requestId : null,
+    duration_ms:Date.now()-started
+  };
+};
+const observeInspection = async (operationPhase, operation) => {
+  const started = Date.now();
+  try {
+    return {ok:true, value:await operation(), observation:{
+      result:'OBSERVED', action:'inspect', operation_phase:operationPhase,
+      duration_ms:Date.now()-started
+    }};
+  } catch (error) {
+    return {ok:false, value:null, observation:errorObservation(error,operationPhase,started)};
+  }
+};
 let transport;
 let inputRelease;
 try {
@@ -98,14 +126,33 @@ try {
     const commit = await client.commitSession(spec.ov_session_id,{wait:true,agentId:actor,keepRecentCount:0});
     result = {commit,ov_session_id:spec.ov_session_id};
   } else if (spec.action === 'inspect') {
-    const session = await client.getSession(spec.ov_session_id,actor);
-    const context = await client.getSessionContext(spec.ov_session_id,128000,actor);
-    const task = spec.extraction_task_id ? await client.getTask(spec.extraction_task_id,actor) : null;
+    const phases = [];
+    const sessionResult = await observeInspection('session_get',
+      () => client.getSession(spec.ov_session_id,actor));
+    phases.push(sessionResult.observation);
+    const contextResult = await observeInspection('context_get',
+      () => client.getSessionContext(spec.ov_session_id,128000,actor));
+    phases.push(contextResult.observation);
+    const taskResult = spec.extraction_task_id
+      ? await observeInspection('task_get',() => client.getTask(spec.extraction_task_id,actor))
+      : {ok:true,value:null,observation:{result:'NOT_RUN',action:'inspect',
+          operation_phase:'task_get',duration_ms:0}};
+    phases.push(taskResult.observation);
+    const context = contextResult.value ?? {};
     const archiveIds = new Set((context.pre_archive_abstracts ?? []).map(a => a.archive_id));
     if (spec.archive_id) archiveIds.add(spec.archive_id);
     const archives = [];
-    for (const id of archiveIds) archives.push(await client.getSessionArchive(spec.ov_session_id,id,actor));
-    result = {session,task,archives,context};
+    for (const id of archiveIds) {
+      const archiveResult = await observeInspection('archive_get',
+        () => client.getSessionArchive(spec.ov_session_id,id,actor));
+      phases.push({...archiveResult.observation,archive_id_sha256:hash(String(id))});
+      if (archiveResult.ok) archives.push(archiveResult.value);
+    }
+    result = {
+      result:phases.some(phase=>phase.result === 'UNKNOWN') ? 'UNKNOWN' : 'OBSERVED',
+      session:sessionResult.value, task:taskResult.value, archives, context:contextResult.value,
+      phase_observations:phases
+    };
   } else if (spec.action === 'find') {
     const found = await client.find(spec.query,{targetUri:'viking://user/memories',limit:20},actor);
     const memories = [];

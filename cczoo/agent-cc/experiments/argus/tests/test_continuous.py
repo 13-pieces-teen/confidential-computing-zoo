@@ -6,12 +6,14 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from common import atomic, read
-from continuous import configuration, make_fixture, prepare, prompt_for, score_step, execute, result_for
+from continuous import (Gateway, canonical_session_key, configuration, make_fixture, prepare,
+                        prompt_for, score_step, execute, result_for)
 from fact_protocol import encode_fact, parse_fact, facts_in
 
 
@@ -28,6 +30,23 @@ class ContinuousTest(unittest.TestCase):
         self.root=Path(self.tmp.name); self.path=self.root/'config.json'
         atomic(self.path,config()); self.c=configuration(self.path)
         self.fixture=make_fixture(self.c,'a'*64); self.step=self.fixture['steps'][0]
+
+    def formal_gate(self, healthy_changes=None, fault_changes=None):
+        healthy = {'schema':'argus.healthy-pilot-gate.v1','condition':'no_fault','planned_steps':6,
+                   'window_completion':'PASS','service_recovery':'NOT_APPLICABLE',
+                   'task_correctness':'PASS','receiver_coverage':'PASS'}
+        fault = {'schema':'argus.fault-pilot-gate.v1','condition':'fault','planned_steps':6,
+                 'window_completion':'PASS','service_recovery':'PASS','task_correctness':'PASS',
+                 'receiver_coverage':'PASS','pre_fault_confirmed_state':'PASS',
+                 'post_fault_attempt':'PASS','legal_recovery':'PASS',
+                 'correct_continuation':'PASS','unresolved_proposals':[]}
+        healthy.update(healthy_changes or {}); fault.update(fault_changes or {})
+        healthy_path = self.root/'healthy-pilot-gate.json'; atomic(healthy_path,healthy)
+        fault_path = self.root/'fault-pilot-gate.json'; atomic(fault_path,fault)
+        return {'healthy_receipt_path':str(healthy_path),
+                'healthy_receipt_sha256':hashlib.sha256(healthy_path.read_bytes()).hexdigest(),
+                'fault_receipt_path':str(fault_path),
+                'fault_receipt_sha256':hashlib.sha256(fault_path.read_bytes()).hexdigest()}
 
     def test_frame_is_complete_ascii_and_survives_json(self):
         frame=self.step['frame']; observed=parse_fact(frame)
@@ -146,8 +165,72 @@ class ContinuousTest(unittest.TestCase):
     def test_formal_requires_frozen_schedule_and_fault_commands(self):
         value=config(); value['mode']='formal'; atomic(self.path,value)
         with self.assertRaisesRegex(ValueError,'frozen'): configuration(self.path)
-        value['schedule']={'frozen':True}; value['condition']='fault'; value['fault_kind']='helper-freeze'; atomic(self.path,value)
+        value['schedule']={'frozen':True}; value['condition']='fault'; value['fault_kind']='helper-freeze'
+        value['formal_gate']=self.formal_gate(); atomic(self.path,value)
         with self.assertRaisesRegex(ValueError,'commands'): configuration(self.path)
+
+    def test_failed_healthy_pilot_refuses_formal(self):
+        value=config(); value.update(mode='formal',condition='fault',fault_kind='helper-freeze',
+                                    schedule={'frozen':True},
+                                    controls={'fault':{'argv':['true']},'recovery':{'argv':['true']}},
+                                    formal_gate=self.formal_gate(healthy_changes={'task_correctness':'FAIL'}))
+        atomic(self.path,value)
+        with self.assertRaisesRegex(ValueError,'did not satisfy'): configuration(self.path)
+
+    def test_failed_fault_pilot_refuses_formal(self):
+        value=config(); value.update(mode='formal',condition='fault',fault_kind='helper-freeze',
+                                    schedule={'frozen':True},
+                                    controls={'fault':{'argv':['true']},'recovery':{'argv':['true']}},
+                                    formal_gate=self.formal_gate(fault_changes={'correct_continuation':'UNKNOWN',
+                                                                               'unresolved_proposals':['s02']}))
+        atomic(self.path,value)
+        with self.assertRaisesRegex(ValueError,'fault pilot did not satisfy'): configuration(self.path)
+
+    def test_session_key_canonicalization_accepts_main_only(self):
+        bare = 'argus-e4:run-1:alice:s00:1'
+        self.assertEqual(canonical_session_key(bare),bare)
+        self.assertEqual(canonical_session_key('agent:main:'+bare),bare)
+        self.assertIsNone(canonical_session_key('agent:worker:'+bare))
+        self.assertIsNone(canonical_session_key('agent:main:argus-e4:other:alice:s00:0'))
+
+    def test_gateway_records_save_raw_and_canonical_and_isolate_other_agent(self):
+        expected = 'argus-e4:run-1:alice:s00:1'
+        rows = [
+            {'component':'argus-openclaw-task','session_key':expected,'event':'tool_started'},
+            {'component':'argus-openclaw-spiffe','ctx':{'sessionKey':'agent:main:'+expected},'event':'tool_completed'},
+            {'component':'argus-openclaw-task','session_key':'agent:worker:'+expected,'event':'tool_started'}]
+        completed = SimpleNamespace(returncode=0,stdout='\n'.join(json.dumps(v) for v in rows),stderr='')
+        with patch('continuous.subprocess.run',return_value=completed):
+            records = Gateway().records({'container':'gateway-a'},'2026-10-09T00:00:00Z',expected)
+        self.assertEqual(len(records),2)
+        self.assertEqual({row['canonical_session_key'] for row in records},{expected})
+        self.assertEqual({row['raw_session_key'] for row in records},
+                         {expected,'agent:main:'+expected})
+        self.assertEqual({row['session_key_source'] for row in records},
+                         {'session_key','ctx.sessionKey'})
+
+    def test_gateway_preserves_partial_phase_result_and_private_stderr(self):
+        gateway=Gateway(); gateway.set_diagnostic_root(self.root/'private-diagnostics')
+        observed={'result':'UNKNOWN','action':'inspect','operation_phase':'context_get',
+                  'code':'CONTEXT_GET_FAILED','session':{'commit_count':1},
+                  'phase_observations':[{'result':'OBSERVED','operation_phase':'session_get'},
+                                        {'result':'UNKNOWN','operation_phase':'context_get',
+                                         'code':'CONTEXT_GET_FAILED','http_status':503,
+                                         'request_id':'request-1','duration_ms':12}]}
+        completed=SimpleNamespace(returncode=1,stdout=json.dumps(observed)+'\n',
+                                  stderr='sensitive upstream details')
+        binding={'container':'gateway-a','docker_user':'10001:10001','config_path':'/config/openclaw.json',
+                 'agent_id':'main','account_id':'eval','user_id':'alice',
+                 'client_spiffe_id':'spiffe://argus.local/client/a',
+                 'server_spiffe_id':'spiffe://argus.local/service/memory'}
+        with patch('continuous.subprocess.run',return_value=completed):
+            result=gateway.call(binding,'inspect',ov_session_id='session')
+        self.assertEqual(result['session']['commit_count'],1)
+        self.assertEqual(result['phase_observations'][1]['http_status'],503)
+        self.assertEqual(result['subprocess_exit_code'],1)
+        diagnostic=self.root/result['private_stderr']['reference']
+        self.assertEqual(diagnostic.read_text(),'sensitive upstream details')
+        self.assertEqual(diagnostic.stat().st_mode & 0o077,0)
 
     def test_protocol_hash_pools_seeds_but_structure_hash_pairs_exact_difficulty(self):
         one=prepare(self.path,self.root/'one')
@@ -156,6 +239,17 @@ class ContinuousTest(unittest.TestCase):
         two=prepare(self.path,self.root/'two')
         self.assertEqual(one['protocol_hash'],two['protocol_hash'])
         self.assertNotEqual(one['structure_hash'],two['structure_hash'])
+
+    def test_work_item_retry_uses_events_policy_and_fresh_seed_session(self):
+        value=config(); value['scenario']='work-item-v1'; value['initialization_generation']=0
+        atomic(self.path,value); first=make_fixture(configuration(self.path),'a'*64)
+        value['initialization_generation']=1
+        atomic(self.path,value); second=make_fixture(configuration(self.path),'a'*64)
+        self.assertNotEqual(first['rules'][0]['ov_session_id'],second['rules'][0]['ov_session_id'])
+        self.assertEqual(second['rules'][0]['memory_policy']['memory_types'],['events'])
+        self.assertTrue(second['rules'][0]['memory_policy']['working_memory']['enabled'])
+        self.assertIn(second['rules'][0]['project_id'],second['rules'][0]['initialization_query'])
+        self.assertIn(second['rules'][0]['work_item_id'],second['rules'][0]['initialization_query'])
 
     def test_releases_continue_when_agent_fails_and_keep_all_deadlines(self):
         value=config(); value['schedule']={'release_interval_s':0.003,'deadline_s':0.025,'stop_budget_s':0.001}
