@@ -1,0 +1,47 @@
+{
+  "schema": "argus.paper02.figure-data.v1",
+  "environment": {
+    "host_class": "original IP2 TDX guest",
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "spire_version": "1.15.3",
+    "e4_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+    "controlled_v2_backend": "NOT_DEPLOYED_NOT_USED"
+  },
+  "e1_admission_cost_ms": {
+    "history_snapshot": 6.338805,
+    "quote": 1034.778383,
+    "provider_total": 1086.17503,
+    "ready_elapsed": 7171.385087
+  },
+  "e1_stage_elapsed_ms": {
+    "common_target": 243,
+    "provider": 1330,
+    "evidence_binding": 1330,
+    "remote_appraisal": 6789,
+    "final_target": 6791
+  },
+  "e2_boundary_ms": {
+    "fault_command_complete": [4.5415, 4.5415],
+    "entry_stop": [4530.461837, 5145.518555],
+    "last_application_read": [4612.61082, 4612.61082],
+    "readiness_detection": [4831.708177, 5145.518555],
+    "observation_end": 51410,
+    "backend_last_observed": [54557, 54646]
+  },
+  "e4_runs": [
+    {"seed": 101, "condition": "fault", "first_answer_s": 121.144, "fail": 5, "unknown": 1, "requests": 34, "complete_intervals": 2507},
+    {"seed": 101, "condition": "healthy", "first_answer_s": 136.357, "fail": 5, "unknown": 1, "requests": 38, "complete_intervals": 2507},
+    {"seed": 102, "condition": "healthy", "first_answer_s": 112.502, "fail": 5, "unknown": 1, "requests": 39, "complete_intervals": 2507},
+    {"seed": 102, "condition": "fault", "first_answer_s": 129.258, "fail": 5, "unknown": 1, "requests": 34, "complete_intervals": 2507},
+    {"seed": 103, "condition": "fault", "first_answer_s": 145.556, "fail": 5, "unknown": 1, "requests": 34, "complete_intervals": 2507},
+    {"seed": 103, "condition": "healthy", "first_answer_s": 95.425, "fail": 5, "unknown": 1, "requests": 37, "complete_intervals": 2507}
+  ],
+  "missing_online_e1": [
+    "wrong_nonce",
+    "old_evidence_fresh_challenge",
+    "hidden_stop_submission",
+    "mismatched_quote_or_ear",
+    "current_facts_only_backend"
+  ],
+  "missing_value_policy": "UNKNOWN and NOT_RUN remain categorical; never replace with zero"
+}

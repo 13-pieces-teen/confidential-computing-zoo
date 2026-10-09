@@ -1,0 +1,73 @@
+{
+  "schema": "argus.e1-readiness-snapshot.v1",
+  "observed_at": "2026-10-04T03:27:56Z",
+  "scope": "read-only post-rest readiness; not A3 historical evidence",
+  "full_runtime": {
+    "units_active": 5,
+    "ready": true,
+    "container_status": "running",
+    "container_health": "healthy",
+    "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+    "pid": 1716593,
+    "launch_id": "launch-9295b78",
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e"
+  },
+  "live_identity": {
+    "spiffe_id": "spiffe://argus.local/service/openviking-cmem/experiment/paper01/full",
+    "serial_hex": "6A4BEE0DEEC009293930331D89EC7107",
+    "not_before": "2026-10-04T03:26:55Z",
+    "not_after": "2026-10-04T03:32:05Z",
+    "valid_at_snapshot": true,
+    "helper_invocation_id": "664f18cca38e4171af0c9426d05add78"
+  },
+  "collector": {
+    "active": true,
+    "substate": "running",
+    "main_pid": 1718126,
+    "binding_file": "/var/lib/argus-receiver/p0-20261002t1521z/binding-20261003T123141Z.json",
+    "binding_target_matches_runtime": true
+  },
+  "control_connectivity": {
+    "protected_listener_18022": true,
+    "trustee_listener_18443": true,
+    "forced_server_check_ok": true,
+    "spire_server_version": "1.15.3",
+    "spire_server_pid": 4161698
+  },
+  "trucon": {
+    "chain_id": "default",
+    "sequence_num": 10,
+    "head_record_id": "f17a50fc-5837-48a5-be9a-cc05b9dc27bf",
+    "log_ids_count": 10,
+    "unresolved_mutations": 0,
+    "docktap_mutations_schema": true,
+    "delegations_schema": true
+  },
+  "barrier": {
+    "armed_or_reached_receipts_present": false,
+    "healthy_process_barrier_env_present": false,
+    "tool_available": true,
+    "before_confirm_supported": true
+  },
+  "policies": {
+    "workload_policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+    "workload_policy_sha256": "3904444421d654d17b6b214c739efcb4073f295503a4fa09da53d49c2b6a8a79",
+    "workload_policy_has_temporal_clause": false,
+    "node_policy_id": "argus-node-poc-ignore-tcb-20261003-01",
+    "node_policy_not_after": "2026-10-05T16:00:00Z",
+    "node_policy_valid_at_snapshot": true
+  },
+  "delegation": {
+    "delegation_id": "del-13a8012059de",
+    "scope": [
+      "pull",
+      "create",
+      "start",
+      "stop",
+      "rm"
+    ],
+    "expires_at": "2026-10-03T22:35:09.932454Z",
+    "valid_at_snapshot": false,
+    "remaining_seconds": -17536
+  }
+}

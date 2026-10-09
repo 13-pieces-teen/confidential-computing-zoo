@@ -1,0 +1,178 @@
+{
+ "schema": "argus.e4.formal-run-evidence.v1",
+ "run_id": "e4p1-eeacfeaf71560d84a0c8168b7a2c20b2",
+ "operation_id": "d2f6dfcef50045d0a8067c6cf418074f",
+ "output_dir": "/secure/e4-formal/runs/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2",
+ "initialization_generation": 1,
+ "configuration_sha256": "8e9fde5be04feafaf570d75df86becccb0f43fc829cc39b57bbc39b8879bd0f5",
+ "manifest_sha256": "3b349b6374df11a7c7d29e6b95f4d2807d053f398fefafc4888a8a4745b68b28",
+ "result": "PASS",
+ "exit_code": 0,
+ "measurement_complete": true,
+ "phase": "complete",
+ "completed_at": "2026-10-08T18:06:30.976Z",
+ "initialization": {
+  "ov_session_id": "e74eb5f0-ed93-cc83-664d-05565d0fbbc6",
+  "confirmed": true,
+  "status": "confirmed",
+  "memory_policy": {
+   "memory_types": [
+    "events"
+   ],
+   "peer": {
+    "enabled": true
+   },
+   "self": {
+    "enabled": true
+   },
+   "working_memory": {
+    "enabled": true
+   }
+  },
+  "commit_count": 1,
+  "task_status": "completed",
+  "memories_extracted": {
+   "memory_write": 4
+  },
+  "archive": {
+   "servable": true,
+   "abstract": "# Working Memory",
+   "archive_id": "archive_001",
+   "seed_text_observed": true,
+   "failed_archives": "not_reported"
+  },
+  "find": {
+   "query": "Private project 67cc1bdcc876 work_item_id=trip-0d06ade143dd1896e16e8523 行程规则 routes initial_constraints",
+   "events_memories": [
+    {
+     "name": "项目数据处理规则确认.md",
+     "hits": {
+      "project_id": true,
+      "normal_code": false,
+      "review_code": false,
+      "threshold_cents": false
+     }
+    },
+    {
+     "name": "行程规划约束确认.md",
+     "hits": {
+      "project_id": false,
+      "normal_code": true,
+      "review_code": true,
+      "threshold_cents": true
+     }
+    },
+    {
+     "name": "候选路线方案提供.md",
+     "hits": {
+      "project_id": false,
+      "normal_code": true,
+      "review_code": true,
+      "threshold_cents": true
+     }
+    },
+    {
+     "name": "原始提案保留要求.md",
+     "hits": {
+      "project_id": false,
+      "normal_code": false,
+      "review_code": false,
+      "threshold_cents": false
+     }
+    }
+   ],
+   "collective_four_value_hit": true
+  }
+ },
+ "window": {
+  "started_at": "2026-10-08T17:56:00.976Z",
+  "duration_s": 630,
+  "steps": {
+   "total": 6,
+   "completed": 6
+  },
+  "step_counts": {
+   "PASS": 0,
+   "FAIL": 5,
+   "UNKNOWN": 1,
+   "NOT_RUN": 0
+  },
+  "counts_evidence_scope": "execution_window_not_task_or_receipt_success",
+  "offered_tasks": 6,
+  "attempted_tasks": 0,
+  "planned_tasks": 6
+ },
+ "step_outcomes": [
+  {
+   "step_id": "s00",
+   "reason": "ANSWER_INCORRECT",
+   "answer_at_ms": 1791482282120,
+   "completed_at_ms": 1791482282120
+  },
+  {
+   "step_id": "s01",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791482293088
+  },
+  {
+   "step_id": "s02",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791482351873
+  },
+  {
+   "step_id": "s03",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791482446942
+  },
+  {
+   "step_id": "s04",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791482557203
+  },
+  {
+   "step_id": "s05",
+   "reason": "CHECKPOINT_UNCONFIRMED",
+   "answer_at_ms": null,
+   "completed_at_ms": 1791482644705
+  }
+ ],
+ "controls": {
+  "fault": {
+   "planned_at": "2026-10-08T17:59:00.976Z",
+   "started_at": "2026-10-08T17:59:01.020Z",
+   "completed_at": "2026-10-08T17:59:02.292Z",
+   "returncode": 0,
+   "status": "completed",
+   "argv_sha256": "b0f4d271bdce19b39a31251af24304e1f24477805c0ba6278c8dff1edad01030",
+   "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json"
+  },
+  "recovery": {
+   "planned_at": "2026-10-08T18:02:00.976Z",
+   "started_at": "2026-10-08T18:02:00.994Z",
+   "completed_at": "2026-10-08T18:02:09.136Z",
+   "returncode": 0,
+   "status": "completed",
+   "argv_sha256": "06123d651d427888a43a844e773034d3424f5561dce46509a9ced31e901cd415",
+   "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json"
+  }
+ },
+ "model_observations": {
+  "e4c1": {
+   "configured_model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+   "model_config_sha256": "cffc15f6a4a29b47c2695431e69d75a6cd747c1ddace3aaeb633a80bb646b76f",
+   "sampling_observation": {
+    "configured_sources": [],
+    "effective_parameters": "UNKNOWN",
+    "scope": "read-only configured values; provider application and defaults are not attested",
+    "status": "PROVIDER_DEFAULT_UNVERIFIED"
+   }
+  }
+ },
+ "protocol_digest": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+ "receipt_result": "UNKNOWN",
+ "evidence_scope": "execution_window_not_task_or_receipt_success"
+}

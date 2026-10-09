@@ -1,0 +1,14 @@
+{
+  "derived": true,
+  "note": "Canonicalized JSON excerpt; the protected source original is unchanged.",
+  "records": 6,
+  "schema": "argus.public-receiver-excerpt.v1",
+  "selection": {
+    "request_ids": [
+      "76037f47-0204-4775-b48d-d5b31b1dff91",
+      "913ea143-89fa-4f64-b9ca-09f7158e1426"
+    ]
+  },
+  "source_sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186",
+  "source_size": 122493797
+}

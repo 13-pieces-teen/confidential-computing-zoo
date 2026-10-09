@@ -1,0 +1,80 @@
+Oct 08 16:29:06 Agent-CC systemd[1]: Reloading ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: signal 1 (SIGHUP) received from 429019, reconfiguring
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: reconfiguring
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: using the "epoll" event method
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: start worker processes
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: start worker process 429020
+Oct 08 16:29:06 Agent-CC systemd[1]: Reloaded ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[429020]: 2026/10/08 16:29:06 [info] 429020#429020: *9 client closed connection while waiting for request, client: 127.0.0.1, server: 0.0.0.0:1943
+Oct 08 16:29:06 Agent-CC spiffe-helper[424753]: 2026/10/08 16:29:06 target SVID published serial=34844325955112873006460433210070411819 expires=2026-10-08T08:34:06Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=59912de080fd45048c5854f886e4fd47
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[427799]: 2026/10/08 16:29:06 [notice] 427799#427799: gracefully shutting down
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[427799]: 2026/10/08 16:29:06 [notice] 427799#427799: exiting
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[427799]: 2026/10/08 16:29:06 [notice] 427799#427799: exit
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: signal 17 (SIGCHLD) received from 427799
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: worker process 427799 exited with code 0
+Oct 08 16:29:06 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:29:06 [notice] 424912#424912: signal 29 (SIGIO) received
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:30:01 [notice] 424912#424912: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[429020]: 2026/10/08 16:30:01 [notice] 429020#429020: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[429020]: 2026/10/08 16:30:01 [notice] 429020#429020: exiting
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[429020]: 2026/10/08 16:30:01 [notice] 429020#429020: exit
+Oct 08 16:30:01 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:30:01 [notice] 424912#424912: signal 17 (SIGCHLD) received from 429020
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:30:01 [notice] 424912#424912: worker process 429020 exited with code 0
+Oct 08 16:30:01 Agent-CC nginx-hook.sh[424912]: 2026/10/08 16:30:01 [notice] 424912#424912: exit
+Oct 08 16:30:01 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 16:30:01 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 16:30:01 Agent-CC spiffe-helper[424753]: 2026/10/08 16:30:01 workload subscription ended launch_id=launch-8708838 subscription_id=59912de080fd45048c5854f886e4fd47
+Oct 08 16:30:01 Agent-CC systemd[1]: Stopping ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 16:30:01 Agent-CC spiffe-helper[424753]: time="2026-10-08T16:30:01+08:00" level=error msg="Error starting spiffe-helper" error="context canceled\ncontext canceled\ncontext canceled" system=spiffe-helper
+Oct 08 16:30:01 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=exited, status=1/FAILURE
+Oct 08 16:30:01 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'exit-code'.
+Oct 08 16:30:01 Agent-CC systemd[1]: Stopped ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 16:30:01 Agent-CC systemd[1]: Starting ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking...
+Oct 08 16:30:01 Agent-CC argus-workload[429873]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 16:30:01 Agent-CC systemd[1]: Started ax-paper02-full-helper.service - Argus SPIFFE Helper Broker for OpenViking.
+Oct 08 16:30:01 Agent-CC spiffe-helper[429879]: time="2026-10-08T16:30:01+08:00" level=info msg="Using configuration file: \"/run/argus-e2-r4-publish-hold/helper.conf\"" system=spiffe-helper
+Oct 08 16:30:01 Agent-CC spiffe-helper[429879]: 2026/10/08 16:30:01 workload subscription launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=e4346eab785b4ce9ab9edf85021d10f2
+Oct 08 16:30:08 Agent-CC spiffe-helper[429879]: 2026/10/08 16:30:08 target SVID published serial=34844325955112873006460433210070411819 expires=2026-10-08T08:34:06Z launch_id=launch-8708838 container_id=bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c pid=248534 start_time=120971181 policy=argus-workload-openviking-paper02-20261004-01 subscription_id=e4346eab785b4ce9ab9edf85021d10f2
+Oct 08 16:30:08 Agent-CC systemd[1]: Starting ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 16:30:08 Agent-CC argus-workload[430025]: {"agent_id":"spiffe://argus.local/spire/agent/argus_tdx/openviking-node","boot_id":"c379b316-287e-4c6b-821b-63ae5a51c45e","config_digest":"sha256:316ad51d8f7cc7f436b3d222551e4082d9b8c6dcc434929641459c9a0a07d8d1","config_path":"/etc/openviking/ov.conf","container_id":"bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c","executable":"/usr/local/bin/python3.13","image_config_digest":"sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3","launch_id":"launch-8708838","listen_port":"1933","net_namespace":"net:[4026532656]","pid":"248534","pid_namespace":"pid:[4026532655]","policy_id":"argus-workload-openviking-paper02-20261004-01","rootfs_read_only":"true","start_time":"120971181","workload_id":"openviking-cmem"}
+Oct 08 16:30:08 Agent-CC systemd[1]: Started ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 16:30:08 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:08 [notice] 430031#430031: using the "epoll" event method
+Oct 08 16:30:08 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:08 [notice] 430031#430031: nginx/1.22.1
+Oct 08 16:30:08 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:08 [notice] 430031#430031: OS: Linux 5.15.120.ve.6-tdxg.3-amd64
+Oct 08 16:30:08 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:08 [notice] 430031#430031: getrlimit(RLIMIT_NOFILE): 1024:524288
+Oct 08 16:30:08 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:08 [notice] 430031#430031: start worker processes
+Oct 08 16:30:08 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:08 [notice] 430031#430031: start worker process 430040
+Oct 08 16:30:11 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:11 [info] 430040#430040: *3 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:12 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:12 [info] 430040#430040: *12 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:13 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:13 [info] 430040#430040: *17 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:14 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:14 [info] 430040#430040: *22 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:14 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:14 [info] 430040#430040: *29 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:15 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:15 [info] 430040#430040: *34 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:16 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:16 [info] 430040#430040: *41 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:16 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:16 [info] 430040#430040: *46 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:17 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:17 [info] 430040#430040: *51 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:18 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:18 [info] 430040#430040: *58 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:18 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:18 [info] 430040#430040: *63 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:19 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:19 [info] 430040#430040: *70 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:20 Agent-CC systemd[1]: ax-paper02-full-helper.service: Sent signal SIGSTOP to main process 429879 (spiffe-helper) on client request.
+Oct 08 16:30:20 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:20 [info] 430040#430040: *75 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:21 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:21 [info] 430040#430040: *82 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:22 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:22 [info] 430040#430040: *87 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:22 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:22 [info] 430040#430040: *94 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:23 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:23 [info] 430040#430040: *101 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:24 [info] 430040#430040: *106 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:24 [info] 430040#430040: *113 client 172.31.28.53 closed keepalive connection
+Oct 08 16:30:24 Agent-CC systemd[1]: ax-paper02-full-helper.service: Watchdog timeout (limit 5s)!
+Oct 08 16:30:24 Agent-CC systemd[1]: ax-paper02-full-helper.service: Killing process 429879 (spiffe-helper) with signal SIGKILL.
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:24 [notice] 430031#430031: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 16:30:24 Agent-CC systemd[1]: Stopping ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress...
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:24 [notice] 430040#430040: signal 15 (SIGTERM) received from 1, exiting
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:24 [notice] 430040#430040: exiting
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430040]: 2026/10/08 16:30:24 [notice] 430040#430040: exit
+Oct 08 16:30:24 Agent-CC systemd[1]: ax-paper02-full-helper.service: Main process exited, code=killed, status=9/KILL
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:24 [notice] 430031#430031: signal 17 (SIGCHLD) received from 430040
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:24 [notice] 430031#430031: worker process 430040 exited with code 0
+Oct 08 16:30:24 Agent-CC nginx-hook.sh[430031]: 2026/10/08 16:30:24 [notice] 430031#430031: exit
+Oct 08 16:30:24 Agent-CC systemd[1]: ax-paper02-full-nginx.service: Deactivated successfully.
+Oct 08 16:30:24 Agent-CC systemd[1]: Stopped ax-paper02-full-nginx.service - Attested OpenViking NGINX mTLS ingress.
+Oct 08 16:30:24 Agent-CC systemd[1]: ax-paper02-full-helper.service: Failed with result 'watchdog'.

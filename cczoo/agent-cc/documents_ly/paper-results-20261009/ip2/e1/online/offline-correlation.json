@@ -1,0 +1,60 @@
+{
+  "accepted_nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+  "all_business_legs_200": true,
+  "attempt_complete": true,
+  "attempt_result": "ADMITTED",
+  "business_legs": 54,
+  "business_rounds": 18,
+  "client_generations": [
+    "generation-1169070641",
+    "generation-1684771195",
+    "generation-3381910135"
+  ],
+  "client_serials": [
+    "3C98D8E35DCE6EFADAEC417B89ECC862",
+    "C69DFC954D4ABBD3F60DD7168D2522D3",
+    "DF86CE35187AE6A57A7C3E58B7B0DD4F"
+  ],
+  "errors": [],
+  "evidence_boundary": "Business observation follows admission; no requirement that it fall inside attempt execution window.",
+  "helper_invocation_id": "664f18cca38e4171af0c9426d05add78",
+  "legal_client_business_access_established": true,
+  "max_time_delta_ms": 610,
+  "new_admission_established": true,
+  "nginx_lines": 54,
+  "normal_mid_round_client_rotation_observed": [
+    41,
+    50
+  ],
+  "publication_delivered_by_new_invocation": true,
+  "publication_has_issuance": true,
+  "publication_serial_hex": "4307E916AF2F7D010E660553AEDC5D2C",
+  "schema": "argus.e1-a3-offline-correlation.v1",
+  "server_serials": [
+    "2EF3AF7CCFBDE8447E16984BF598115A",
+    "4307E916AF2F7D010E660553AEDC5D2C",
+    "D531C2649ACF4DE7D557E0446E075A8E"
+  ],
+  "source_attempt_id": "41aaef740d1944f4a8718931b38e2783",
+  "target": {
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "config_digest": "sha256:57c7281184e104a54198b18bc3b3dce5c1c2bbfa0e3506b2555bc816c613549a",
+    "config_path": "/etc/openviking/ov.conf",
+    "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+    "executable": "/usr/local/bin/python3.13",
+    "image_config_digest": "sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3",
+    "launch_id": "launch-9295b78",
+    "listen_port": "1933",
+    "net_namespace": "net:[4026532656]",
+    "pid": "1716593",
+    "pid_namespace": "pid:[4026532655]",
+    "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+    "rootfs_read_only": "true",
+    "start_time": "81187400",
+    "workload_id": "openviking-cmem"
+  },
+  "transport_request_ids": 36,
+  "transport_request_ids_unique": true,
+  "two_host_a3_closed": true
+}

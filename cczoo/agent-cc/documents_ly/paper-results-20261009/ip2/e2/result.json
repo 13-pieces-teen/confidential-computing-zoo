@@ -1,0 +1,169 @@
+{
+  "backend_availability": {
+    "after_entry_stop_samples": 163,
+    "after_fault_samples": 180,
+    "last_observed": {
+      "completed_relative_ms": {
+        "clock": "wall_with_uncertainty",
+        "lower_ms": 54606,
+        "upper_ms": 54646
+      },
+      "started_relative_ms": {
+        "clock": "wall_with_uncertainty",
+        "lower_ms": 54557,
+        "upper_ms": 54597
+      }
+    },
+    "live_after_entry_stop": "OBSERVED",
+    "result": "OBSERVED",
+    "scope": "original backend answered fixed local /health at sampled times; not uninterrupted memory availability",
+    "unknown_samples": 0
+  },
+  "bound_ms": 10000,
+  "client_response_ambiguous_bytes": 0,
+  "client_response_delivery": "PASS",
+  "client_response_non_success_observed_bytes": 0,
+  "client_response_post_bound_bytes": 0,
+  "client_response_scope": "successful business response or synthetic marker at client HTTP reads; error responses counted separately",
+  "clock_uncertainty_ms": 20,
+  "fact_receipts": {
+    "coverage": {
+      "record_sequence_complete": true,
+      "result": "UNKNOWN",
+      "sources": [
+        {
+          "fact_matching": false,
+          "instance_id": "bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c",
+          "result": "UNKNOWN",
+          "source_id": "062ee1d478ee46e6a9da7d7663e34666",
+          "unknown_intervals_ms": []
+        }
+      ],
+      "unobserved_instances": []
+    },
+    "path": "collection-1791449011297925174/fact-receipts.json",
+    "post_bound": {
+      "complete_fact_reads": 0,
+      "duplicate_complete_fact_reads": 0,
+      "forbidden_complete_fact_reads": 0,
+      "last_body_read": null,
+      "last_complete_fact_read": null,
+      "last_stop_window_body_read": null,
+      "last_stop_window_fact_read": null,
+      "observed_body_bytes": 0,
+      "partial_frame_candidate_bytes": 0,
+      "partial_frame_candidates": 0,
+      "post_stop_condition_body_bytes": 0,
+      "post_stop_condition_complete_fact_reads": 0,
+      "post_stop_condition_unique_facts": 0,
+      "release_classification": {
+        "boundary_or_missing_release": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        },
+        "post_fault_first_released": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        },
+        "pre_fault_read": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        },
+        "pre_fault_released_late": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        }
+      },
+      "unestablished_admission_complete_fact_reads": 0,
+      "unique_facts": 0
+    },
+    "result": "UNKNOWN",
+    "sha256": "cd2dd34de20dba4f69247e593038f34790b865dddd5812a406b54d2d119ed21c",
+    "unadmitted_replacement": {
+      "complete_fact_reads": null,
+      "eligibility_input_status": "NOT_PROVIDED",
+      "positive_admission_association": {
+        "result": "UNKNOWN",
+        "unassociated_complete_fact_reads": null
+      },
+      "reason": "existing archives prove observed admission, not an independent policy DENIED/invalid interval; eligibility is UNKNOWN",
+      "result": "UNKNOWN",
+      "scope": "independent policy eligibility of receiving instances; hand-written eligible flags are not evidence",
+      "unestablished_admission_candidate_reads": 0,
+      "unestablished_admission_candidate_unique_facts": 0,
+      "unique_facts": null
+    },
+    "whole_window": {
+      "complete_fact_reads": 0,
+      "duplicate_complete_fact_reads": 0,
+      "forbidden_complete_fact_reads": 0,
+      "last_body_read": {
+        "at_ms": 1791448224849,
+        "fact_id": null,
+        "instance_id": "bf089150f38ad2298a1bb88ac6161ec1ba2842156ce73b90c7c48923d43e533c",
+        "relative_time": {
+          "clock": "same_host_monotonic",
+          "lower_ms": 4837.673502,
+          "upper_ms": 4837.673502
+        },
+        "request_id": "56561dc1-9eef-4c8d-9767-930e02901fa4",
+        "result": "UNKNOWN",
+        "scope": "admission_unestablished"
+      },
+      "last_complete_fact_read": null,
+      "last_stop_window_body_read": null,
+      "last_stop_window_fact_read": null,
+      "observed_body_bytes": 13645,
+      "partial_frame_candidate_bytes": 0,
+      "partial_frame_candidates": 0,
+      "post_stop_condition_body_bytes": 0,
+      "post_stop_condition_complete_fact_reads": 0,
+      "post_stop_condition_unique_facts": 0,
+      "release_classification": {
+        "boundary_or_missing_release": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        },
+        "post_fault_first_released": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        },
+        "pre_fault_read": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        },
+        "pre_fault_released_late": {
+          "complete_fact_reads": 0,
+          "post_stop_condition_complete_fact_reads": 0,
+          "unique_facts": 0
+        }
+      },
+      "unestablished_admission_complete_fact_reads": 0,
+      "unique_facts": 0
+    }
+  },
+  "inflight_delivery": "PASS",
+  "lifecycle_observation": "COMPLETE",
+  "operation_id": "76966865cb2d5b688ad4d8cc",
+  "receiver_delivery": "PASS",
+  "result": "PASS",
+  "run_id": "paper-20261004t145835z",
+  "scope": "observed application reads after the stop bound; in-flight coverage is reported separately",
+  "source_directory": "collection-1791449011297925174",
+  "sources_sha256": {
+    "fault.jsonl": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63",
+    "lifecycle.jsonl": "9b83b38ceae9806090de243fdef8c02410055eb12ff4883ed9464252bf37c4a8",
+    "receiver.jsonl": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186",
+    "trace.jsonl": "eb5ccb264e32beeee5d55a4da23624805d631d62ba09a9a25fb1d3510024605e"
+  },
+  "timeline_path": "timeline-1791449128603733714.json",
+  "timeline_sha256": "4dc1ad53e67843c203afbf7926bfc1d23497522a14b3ea59cd268e2955cf1cfc",
+  "traffic": "PASS"
+}

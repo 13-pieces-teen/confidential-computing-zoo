@@ -1,0 +1,337 @@
+{
+  "schema": "argus.e4.public-joint-results.v1",
+  "sample_unit": "paired seed",
+  "independent_pairs": 3,
+  "runs": [
+    {
+      "run": 1,
+      "seed": 101,
+      "condition": "fault",
+      "run_id": "e4p1-eeacfeaf71560d84a0c8168b7a2c20b2",
+      "operation_id": "d2f6dfcef50045d0a8067c6cf418074f",
+      "window": {
+        "started_at": "2026-10-08T17:56:00.976Z",
+        "duration_s": 630
+      },
+      "actual_controls": {
+        "fault": {
+          "planned_at": "2026-10-08T17:59:00.976Z",
+          "started_at": "2026-10-08T17:59:01.020Z",
+          "completed_at": "2026-10-08T17:59:02.292Z",
+          "returncode": 0,
+          "status": "completed",
+          "argv_sha256": "b0f4d271bdce19b39a31251af24304e1f24477805c0ba6278c8dff1edad01030",
+          "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json"
+        },
+        "recovery": {
+          "planned_at": "2026-10-08T18:02:00.976Z",
+          "started_at": "2026-10-08T18:02:00.994Z",
+          "completed_at": "2026-10-08T18:02:09.136Z",
+          "returncode": 0,
+          "status": "completed",
+          "argv_sha256": "06123d651d427888a43a844e773034d3424f5561dce46509a9ced31e901cd415",
+          "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json"
+        }
+      },
+      "admission_and_binding": {
+        "normal_exact_run_ready": true,
+        "binding_file": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/binding.json",
+        "deployment_receipt_file": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/deployment.jsonl"
+      },
+      "receiver": {
+        "file": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/receiver.jsonl",
+        "sha256": "59aef087f4a872609c078390011c6145c76f0f6efbe3b28d9c9a57f31941cf75",
+        "correlation_file": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/window-correlation.json",
+        "requests": 34,
+        "request_end": 34,
+        "complete_intervals": 2507,
+        "all_coverage_complete": true
+      },
+      "task": {
+        "runner_result": "PASS",
+        "exit_code": 0,
+        "measurement_complete": true,
+        "receipt_result": "UNKNOWN",
+        "outcomes": "FAIL5/UNKNOWN1/NOT_RUN0",
+        "complete_correct_task": false
+      },
+      "legal_recovery": true,
+      "healthy_control_integrity": false
+    },
+    {
+      "run": 2,
+      "seed": 101,
+      "condition": "healthy",
+      "run_id": "e4p1-861c0d0a872e0831d93271cd6292aa98",
+      "operation_id": "1bc02bd37f4e4b4c94ea6ba9b6c28d0f",
+      "window": {
+        "started_at": "2026-10-08T18:31:26.970Z",
+        "duration_s": 630
+      },
+      "actual_controls": {
+        "fault": {
+          "planned_at": "2026-10-08T18:34:26.970Z",
+          "started_at": "2026-10-08T18:34:26.998Z",
+          "completed_at": "2026-10-08T18:34:27.000Z",
+          "returncode": 0,
+          "status": "no_fault",
+          "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tail": null
+        },
+        "recovery": {
+          "planned_at": "2026-10-08T18:37:26.970Z",
+          "started_at": "2026-10-08T18:37:27.005Z",
+          "completed_at": "2026-10-08T18:37:27.007Z",
+          "returncode": 0,
+          "status": "no_fault",
+          "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tail": null
+        }
+      },
+      "admission_and_binding": {
+        "normal_exact_run_ready": true,
+        "binding_file": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/binding.json",
+        "deployment_receipt_file": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/deployment.jsonl"
+      },
+      "receiver": {
+        "file": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/receiver.jsonl",
+        "sha256": "24038b5a80418801afcb4c15fe3f7e80db96af81ff29dd0501629f3b1fa5f64a",
+        "correlation_file": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/window-correlation.json",
+        "requests": 38,
+        "request_end": 38,
+        "complete_intervals": 2507,
+        "all_coverage_complete": true
+      },
+      "task": {
+        "runner_result": "PASS",
+        "exit_code": 0,
+        "measurement_complete": true,
+        "receipt_result": "UNKNOWN",
+        "outcomes": "FAIL5/UNKNOWN1/NOT_RUN0",
+        "complete_correct_task": false
+      },
+      "legal_recovery": false,
+      "healthy_control_integrity": true
+    },
+    {
+      "run": 3,
+      "seed": 102,
+      "condition": "healthy",
+      "run_id": "e4p1-94e9cd04e6e58ab00041228fadf8da5c",
+      "operation_id": "863256d8999147af80164615591b7e29",
+      "window": {
+        "started_at": "2026-10-08T19:05:20.925Z",
+        "duration_s": 630
+      },
+      "actual_controls": {
+        "fault": {
+          "planned_at": "2026-10-08T19:08:20.925Z",
+          "started_at": "2026-10-08T19:08:20.938Z",
+          "completed_at": "2026-10-08T19:08:20.941Z",
+          "returncode": 0,
+          "status": "no_fault",
+          "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tail": null
+        },
+        "recovery": {
+          "planned_at": "2026-10-08T19:11:20.925Z",
+          "started_at": "2026-10-08T19:11:20.949Z",
+          "completed_at": "2026-10-08T19:11:20.951Z",
+          "returncode": 0,
+          "status": "no_fault",
+          "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tail": null
+        }
+      },
+      "admission_and_binding": {
+        "normal_exact_run_ready": true,
+        "binding_file": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/binding.json",
+        "deployment_receipt_file": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/deployment.jsonl"
+      },
+      "receiver": {
+        "file": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/receiver.jsonl",
+        "sha256": "867e7bd1a800e84c8eece4d0f51ee3db13fc693f217152063f430a34ad168dbb",
+        "correlation_file": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/window-correlation.json",
+        "requests": 39,
+        "request_end": 39,
+        "complete_intervals": 2507,
+        "all_coverage_complete": true
+      },
+      "task": {
+        "runner_result": "PASS",
+        "exit_code": 0,
+        "measurement_complete": true,
+        "receipt_result": "UNKNOWN",
+        "outcomes": "FAIL5/UNKNOWN1/NOT_RUN0",
+        "complete_correct_task": false
+      },
+      "legal_recovery": false,
+      "healthy_control_integrity": true
+    },
+    {
+      "run": 4,
+      "seed": 102,
+      "condition": "fault",
+      "run_id": "e4p1-cd119c89ea1d8995ffb995b87b6ed3dc",
+      "operation_id": "9854e9fac72d40e597e14190fca4c9b1",
+      "window": {
+        "started_at": "2026-10-08T19:27:38.325Z",
+        "duration_s": 630
+      },
+      "actual_controls": {
+        "fault": {
+          "planned_at": "2026-10-08T19:30:38.325Z",
+          "started_at": "2026-10-08T19:30:38.359Z",
+          "completed_at": "2026-10-08T19:30:39.531Z",
+          "returncode": 0,
+          "status": "completed",
+          "argv_sha256": "b0f4d271bdce19b39a31251af24304e1f24477805c0ba6278c8dff1edad01030",
+          "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json"
+        },
+        "recovery": {
+          "planned_at": "2026-10-08T19:33:38.325Z",
+          "started_at": "2026-10-08T19:33:38.374Z",
+          "completed_at": "2026-10-08T19:34:00.453Z",
+          "returncode": 0,
+          "status": "completed",
+          "argv_sha256": "06123d651d427888a43a844e773034d3424f5561dce46509a9ced31e901cd415",
+          "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json"
+        }
+      },
+      "admission_and_binding": {
+        "normal_exact_run_ready": true,
+        "binding_file": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/binding.json",
+        "deployment_receipt_file": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/deployment.jsonl"
+      },
+      "receiver": {
+        "file": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/receiver.jsonl",
+        "sha256": "da9c11806ad3503bb145a8d5cd307611779ffa2e5d401ac4af1ef736d1890d2d",
+        "correlation_file": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/window-correlation.json",
+        "requests": 34,
+        "request_end": 34,
+        "complete_intervals": 2507,
+        "all_coverage_complete": true
+      },
+      "task": {
+        "runner_result": "PASS",
+        "exit_code": 0,
+        "measurement_complete": true,
+        "receipt_result": "UNKNOWN",
+        "outcomes": "FAIL5/UNKNOWN1/NOT_RUN0",
+        "complete_correct_task": false
+      },
+      "legal_recovery": true,
+      "healthy_control_integrity": false
+    },
+    {
+      "run": 5,
+      "seed": 103,
+      "condition": "fault",
+      "run_id": "e4p1-7998d97419ea05161cc33525d2b1b3c3",
+      "operation_id": "6bd58b2c32524239922cf4c50e0c46af",
+      "window": {
+        "started_at": "2026-10-08T20:00:08.747Z",
+        "duration_s": 630
+      },
+      "actual_controls": {
+        "fault": {
+          "planned_at": "2026-10-08T20:03:08.747Z",
+          "started_at": "2026-10-08T20:03:08.791Z",
+          "completed_at": "2026-10-08T20:03:09.914Z",
+          "returncode": 0,
+          "status": "completed",
+          "argv_sha256": "b0f4d271bdce19b39a31251af24304e1f24477805c0ba6278c8dff1edad01030",
+          "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/remote_acceptance.py fault --config /etc/argus-experiments/paper02/full_argus/environment.json"
+        },
+        "recovery": {
+          "planned_at": "2026-10-08T20:06:08.747Z",
+          "started_at": "2026-10-08T20:06:08.766Z",
+          "completed_at": "2026-10-08T20:06:21.121Z",
+          "returncode": 0,
+          "status": "completed",
+          "argv_sha256": "06123d651d427888a43a844e773034d3424f5561dce46509a9ced31e901cd415",
+          "tail": "python3 /opt/argus-experiments/paper02/full_argus/payload/scripts/e4_owner_recovery.py --config /etc/argus-experiments/paper02/full_argus/environment.json"
+        }
+      },
+      "admission_and_binding": {
+        "normal_exact_run_ready": true,
+        "binding_file": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/binding.json",
+        "deployment_receipt_file": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/deployment.jsonl"
+      },
+      "receiver": {
+        "file": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/receiver.jsonl",
+        "sha256": "857aa06202f848788368ebd435936dcf2ac615d445352052893ae6eb41e793a6",
+        "correlation_file": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/window-correlation.json",
+        "requests": 34,
+        "request_end": 34,
+        "complete_intervals": 2507,
+        "all_coverage_complete": true
+      },
+      "task": {
+        "runner_result": "PASS",
+        "exit_code": 0,
+        "measurement_complete": true,
+        "receipt_result": "UNKNOWN",
+        "outcomes": "FAIL5/UNKNOWN1/NOT_RUN0",
+        "complete_correct_task": false
+      },
+      "legal_recovery": true,
+      "healthy_control_integrity": false
+    },
+    {
+      "run": 6,
+      "seed": 103,
+      "condition": "healthy",
+      "run_id": "e4p1-a719364175d67653b560bf1b386f8539",
+      "operation_id": "96e5c2cf2d59452b87a0a7e43387971f",
+      "window": {
+        "started_at": "2026-10-09T01:39:03.536Z",
+        "duration_s": 630
+      },
+      "actual_controls": {
+        "fault": {
+          "planned_at": "2026-10-09T01:42:03.536Z",
+          "started_at": "2026-10-09T01:42:03.556Z",
+          "completed_at": "2026-10-09T01:42:03.559Z",
+          "returncode": 0,
+          "status": "no_fault",
+          "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tail": null
+        },
+        "recovery": {
+          "planned_at": "2026-10-09T01:45:03.536Z",
+          "started_at": "2026-10-09T01:45:03.576Z",
+          "completed_at": "2026-10-09T01:45:03.578Z",
+          "returncode": 0,
+          "status": "no_fault",
+          "argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tail": null
+        }
+      },
+      "admission_and_binding": {
+        "normal_exact_run_ready": true,
+        "binding_file": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/binding.json",
+        "deployment_receipt_file": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/deployment.jsonl"
+      },
+      "receiver": {
+        "file": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/receiver.jsonl",
+        "sha256": "eb72e57098de5bedd719fe64ca328393c4a2ec4fb0c5dc8c37a00b6855570062",
+        "correlation_file": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/window-correlation.json",
+        "requests": 37,
+        "request_end": 37,
+        "complete_intervals": 2507,
+        "all_coverage_complete": true
+      },
+      "task": {
+        "runner_result": "PASS",
+        "exit_code": 0,
+        "measurement_complete": true,
+        "receipt_result": "UNKNOWN",
+        "outcomes": "FAIL5/UNKNOWN1/NOT_RUN0",
+        "complete_correct_task": false
+      },
+      "legal_recovery": false,
+      "healthy_control_integrity": true
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "argus.paper02.public-runtime.v1",
+  "environment": {
+    "host_class": "original IP2 TDX guest",
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "paper_profile": "paper02 Full Argus",
+    "spire_version": "1.15.3",
+    "trust_domain": "argus.local",
+    "controlled_v2_backend": "NOT_DEPLOYED_NOT_USED"
+  },
+  "workload": {
+    "name": "OpenViking",
+    "image_config_digest": "sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3",
+    "policy_id": "argus-workload-openviking-paper02-20261004-01",
+    "rtmr2_baseline": "f1ac9de13b499990dbf5ee38aad6309f050fdf20a633e09f2620f21604a24c4f1b6658ddd14fcd611d9d206c0d374f6a",
+    "helper_payload_sha256": "c62a4495140e85353d14417fffc0c9ee3c9b2e9633877d3a03aa539e397adefe"
+  },
+  "e1": {
+    "installed_source_revision": "5a8e39eadcb5617dc50638242323aa6ed41f4ae4",
+    "online_legal_admission": "COMPLETE",
+    "online_abnormal_controls": "NOT_RUN",
+    "offline_analyzer": "production LogVerifier via admission_cases.py",
+    "offline_boundary": "log sub-verifier only; Quote, REPORTDATA, freshness, current process, and configuration policy remain outside"
+  },
+  "e4": {
+    "profile": "argus-recovery-work-item-v1",
+    "model": "siliconflow/deepseek-ai/DeepSeek-V3.2",
+    "protocol_digest": "4cab0d439051372c047611128be007234c8faa122e2cfbcbbaa0294bdfd49e89",
+    "paired_seeds": [101, 102, 103],
+    "sample_unit": "paired seed",
+    "release_interval_s": 90,
+    "deadline_s": 180,
+    "qa_timeout_s": 180,
+    "fault_at_s": 180,
+    "recovery_at_s": 360,
+    "window_s": 630,
+    "fault_argv_sha256": "b0f4d271bdce19b39a31251af24304e1f24477805c0ba6278c8dff1edad01030",
+    "recovery_argv_sha256": "06123d651d427888a43a844e773034d3424f5561dce46509a9ced31e901cd415",
+    "empty_argv_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "missing_value_policy": "UNKNOWN and NOT_RUN are categorical and must not be converted to zero"
+}

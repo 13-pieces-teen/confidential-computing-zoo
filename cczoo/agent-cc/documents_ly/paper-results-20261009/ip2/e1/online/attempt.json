@@ -1,0 +1,331 @@
+{
+  "accepted_nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+  "attempt_id": "41aaef740d1944f4a8718931b38e2783",
+  "command": [
+    "systemctl",
+    "restart",
+    "ax-paper01-full-helper.service"
+  ],
+  "command_exit_code": 0,
+  "complete": true,
+  "completed_at_ms": 1791056694666,
+  "configuration_sha256": "b09e45065ac09fa1be21d4f8c2c0a0af4afbd1725fc3e89851f7ad5cdd5e0583",
+  "deployment_sha256": "85d57b8d715c826b57b2d43b71383d947b5f8d6407b48e6b9342a57a826c2c04",
+  "group": "full_argus",
+  "helper_invocation_id": "664f18cca38e4171af0c9426d05add78",
+  "journal_exit_code": 0,
+  "journal_sha256": "393e303ea64072939f4de9d431c9e30792513b739b64eb8e1da4311bd81a4440",
+  "new_subscription_requested": true,
+  "previous_helper_invocation_id": "6d7f43d675b34d6093653545832900e2",
+  "provider_timings": [
+    {
+      "at_ms": 1791056688822.665,
+      "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+      "component": "provider",
+      "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+      "reason_code": "EVIDENCE_COLLECTED",
+      "schema": "argus.admission-stage.v1",
+      "stage": "provider",
+      "status": "ALLOW",
+      "target": {
+        "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+        "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+        "launch_id": "launch-9295b78",
+        "pid": "1716593",
+        "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+        "start_time": "81187400"
+      },
+      "timings": {
+        "history_entries": 10,
+        "history_snapshot_ms": 6.338805,
+        "quote_attempts": 1,
+        "quote_ms": 1034.7783829999998,
+        "total_ms": 1086.1750299999999
+      }
+    }
+  ],
+  "ready_elapsed_ms": 7171.385087072849,
+  "result": "ADMITTED",
+  "run_id": "e1-full-20261004",
+  "schema": "argus.e1-attempt.v1",
+  "stages": {
+    "accepted_nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+    "association": "same guest boot, target, bounded time window and new Helper invocation; local operational evidence",
+    "attempts": [
+      {
+        "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "classification": "SELECTORS_RETURNED",
+        "explicit_rejection_stage": null,
+        "first_rejection_stage": null,
+        "stages": [
+          {
+            "at_ms": 1791056687736.114,
+            "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "component": "plugin",
+            "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "reason_code": "CURRENT_TARGET_MATCHED",
+            "schema": "argus.admission-stage.v1",
+            "stage": "common_target",
+            "status": "ALLOW",
+            "target": {
+              "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+              "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+              "launch_id": "launch-9295b78",
+              "pid": "1716593",
+              "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+              "start_time": "81187400"
+            }
+          },
+          {
+            "at_ms": 1791056688822.665,
+            "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "component": "provider",
+            "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "reason_code": "EVIDENCE_COLLECTED",
+            "schema": "argus.admission-stage.v1",
+            "stage": "provider",
+            "status": "ALLOW",
+            "target": {
+              "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+              "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+              "launch_id": "launch-9295b78",
+              "pid": "1716593",
+              "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+              "start_time": "81187400"
+            },
+            "timings": {
+              "history_entries": 10,
+              "history_snapshot_ms": 6.338805,
+              "quote_attempts": 1,
+              "quote_ms": 1034.7783829999998,
+              "total_ms": 1086.1750299999999
+            }
+          },
+          {
+            "at_ms": 1791056688823.299,
+            "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "component": "plugin",
+            "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "reason_code": "EVIDENCE_BOUND",
+            "schema": "argus.admission-stage.v1",
+            "stage": "evidence_binding",
+            "status": "ALLOW",
+            "target": {
+              "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+              "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+              "launch_id": "launch-9295b78",
+              "pid": "1716593",
+              "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+              "start_time": "81187400"
+            }
+          },
+          {
+            "at_ms": 1791056694282.023,
+            "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "component": "plugin",
+            "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "reason_code": "SIGNED_APPRAISAL_ACCEPTED",
+            "schema": "argus.admission-stage.v1",
+            "stage": "remote_appraisal",
+            "status": "ALLOW",
+            "target": {
+              "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+              "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+              "launch_id": "launch-9295b78",
+              "pid": "1716593",
+              "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+              "start_time": "81187400"
+            }
+          },
+          {
+            "at_ms": 1791056694283.903,
+            "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "component": "plugin",
+            "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+            "reason_code": "SELECTORS_RETURNED",
+            "schema": "argus.admission-stage.v1",
+            "stage": "final_target",
+            "status": "ALLOW",
+            "target": {
+              "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+              "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+              "launch_id": "launch-9295b78",
+              "pid": "1716593",
+              "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+              "start_time": "81187400"
+            }
+          }
+        ]
+      }
+    ],
+    "first_rejection_stage": null,
+    "hardware_provenance": "NOT_ESTABLISHED_BY_THIS_TOOL",
+    "identity_delivery": "ALLOW",
+    "ingress_ready": "ALLOW",
+    "malformed_records": 0,
+    "new_admission": "ADMITTED",
+    "publications": [
+      {
+        "at_ms": 1791056694494.853,
+        "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+        "expires": "2026-10-03T19:48:39Z",
+        "launch_id": "launch-9295b78",
+        "pid": "1716593",
+        "policy": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+        "serial": "89099349394273619978530893279142894892",
+        "start_time": "81187400",
+        "subscription_id": "664f18cca38e4171af0c9426d05add78"
+      }
+    ],
+    "schema": "argus.admission-stages.v1",
+    "stage_receipts": [
+      {
+        "at_ms": 1791056687736.114,
+        "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "component": "plugin",
+        "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "reason_code": "CURRENT_TARGET_MATCHED",
+        "schema": "argus.admission-stage.v1",
+        "stage": "common_target",
+        "status": "ALLOW",
+        "target": {
+          "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+          "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+          "launch_id": "launch-9295b78",
+          "pid": "1716593",
+          "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+          "start_time": "81187400"
+        }
+      },
+      {
+        "at_ms": 1791056688822.665,
+        "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "component": "provider",
+        "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "reason_code": "EVIDENCE_COLLECTED",
+        "schema": "argus.admission-stage.v1",
+        "stage": "provider",
+        "status": "ALLOW",
+        "target": {
+          "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+          "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+          "launch_id": "launch-9295b78",
+          "pid": "1716593",
+          "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+          "start_time": "81187400"
+        },
+        "timings": {
+          "history_entries": 10,
+          "history_snapshot_ms": 6.338805,
+          "quote_attempts": 1,
+          "quote_ms": 1034.7783829999998,
+          "total_ms": 1086.1750299999999
+        }
+      },
+      {
+        "at_ms": 1791056688823.299,
+        "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "component": "plugin",
+        "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "reason_code": "EVIDENCE_BOUND",
+        "schema": "argus.admission-stage.v1",
+        "stage": "evidence_binding",
+        "status": "ALLOW",
+        "target": {
+          "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+          "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+          "launch_id": "launch-9295b78",
+          "pid": "1716593",
+          "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+          "start_time": "81187400"
+        }
+      },
+      {
+        "at_ms": 1791056694282.023,
+        "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "component": "plugin",
+        "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "reason_code": "SIGNED_APPRAISAL_ACCEPTED",
+        "schema": "argus.admission-stage.v1",
+        "stage": "remote_appraisal",
+        "status": "ALLOW",
+        "target": {
+          "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+          "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+          "launch_id": "launch-9295b78",
+          "pid": "1716593",
+          "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+          "start_time": "81187400"
+        }
+      },
+      {
+        "at_ms": 1791056694283.903,
+        "attempt_id": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "component": "plugin",
+        "nonce": "VAlcCOENN1fWQTUfqoFt-iR8fdUNt4sJjNDJAvm2YzE",
+        "reason_code": "SELECTORS_RETURNED",
+        "schema": "argus.admission-stage.v1",
+        "stage": "final_target",
+        "status": "ALLOW",
+        "target": {
+          "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+          "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+          "launch_id": "launch-9295b78",
+          "pid": "1716593",
+          "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+          "start_time": "81187400"
+        }
+      }
+    ],
+    "subscriptions": [
+      {
+        "at_ms": 1791056687731.357,
+        "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+        "launch_id": "launch-9295b78",
+        "pid": "1716593",
+        "policy": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+        "start_time": "81187400",
+        "subscription_id": "664f18cca38e4171af0c9426d05add78"
+      }
+    ]
+  },
+  "started_at_ms": 1791056687493,
+  "status_after": {
+    "helper_invocation_id": "664f18cca38e4171af0c9426d05add78",
+    "readiness_error": null,
+    "ready": true,
+    "target_serial": "89099349394273619978530893279142894892",
+    "units": {
+      "ax-paper01-full-agent": "active",
+      "ax-paper01-full-authz": "active",
+      "ax-paper01-full-helper": "active",
+      "ax-paper01-full-nginx": "active",
+      "ax-paper01-full-provider": "active"
+    }
+  },
+  "target": {
+    "agent_id": "spiffe://argus.local/spire/agent/argus_tdx/openviking-node",
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "config_digest": "sha256:57c7281184e104a54198b18bc3b3dce5c1c2bbfa0e3506b2555bc816c613549a",
+    "config_path": "/etc/openviking/ov.conf",
+    "container_id": "6fe3c315ab87e6c6f05817fe44e06db78749b8a34a3adb1c6656a21dbd2142ab",
+    "executable": "/usr/local/bin/python3.13",
+    "image_config_digest": "sha256:321458f051d5048dfbaa8f4a54d8d10d8b3cf6592087571d38ec4fb071c403e3",
+    "launch_id": "launch-9295b78",
+    "listen_port": "1933",
+    "net_namespace": "net:[4026532656]",
+    "pid": "1716593",
+    "pid_namespace": "pid:[4026532655]",
+    "policy_id": "argus-workload-openviking-v2-trucon-poc-ignore-tcb-20260924-01-audit-20261002-01",
+    "rootfs_read_only": "true",
+    "start_time": "81187400",
+    "workload_id": "openviking-cmem"
+  },
+  "target_unchanged": true,
+  "timeout_seconds": 180,
+  "units": {
+    "agent": "ax-paper01-full-agent.service",
+    "helper": "ax-paper01-full-helper.service",
+    "provider": "ax-paper01-full-provider.service"
+  }
+}

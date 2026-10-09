@@ -1,0 +1,42 @@
+{
+  "case": "instance_mismatch",
+  "evidence_class": "synthetic signed cryptographic fixture; production log sub-verifier",
+  "expected_log_decision": "DENY",
+  "fixture_result": "PASS",
+  "full_admission": "NOT_RUN",
+  "live_admission": "NOT_RUN",
+  "outer_checks_required": [],
+  "quote_and_freshness": "not re-evaluated by this log-only tool",
+  "request_sha256": "9476946a69e99441b70a8d190dee106cbc4500c7dcd2100e29a655aaaee5113a",
+  "rules": {
+    "fixed_accumulated_measurement": {
+      "decision": "DENY",
+      "missing": [
+        "event meaning",
+        "current instance binding",
+        "tolerance of unrelated measured activity"
+      ]
+    },
+    "full_history_current_instance": {
+      "decision": "DENY",
+      "implementation": "production LogVerifier.verify",
+      "not_checked_here": [
+        "TDX Quote",
+        "REPORTDATA",
+        "challenge freshness",
+        "current PID/starttime",
+        "configuration admission policy"
+      ],
+      "reason": "launch record does not match current container/image"
+    },
+    "target_launch_only": {
+      "decision": "DENY",
+      "missing": [
+        "history completeness",
+        "subsequent stop/removal",
+        "full RTMR reproduction"
+      ]
+    }
+  },
+  "schema": "argus.history-diagnostics.v1"
+}

@@ -1,0 +1,79 @@
+{
+  "all_coverage_complete": true,
+  "condition": "no_fault",
+  "controls": {
+    "fault_argv": [],
+    "no_control_sent": true,
+    "recovery_argv": []
+  },
+  "operation_id": "1bc02bd37f4e4b4c94ea6ba9b6c28d0f",
+  "phases": {
+    "between_control_slots": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 717
+      },
+      "end_ms": 1791484647005,
+      "request_end": 10,
+      "request_enter": 10,
+      "start_ms": 1791484466998,
+      "type_counts": {
+        "coverage_interval": 717,
+        "received": 10,
+        "request_end": 10,
+        "source_watermark": 717
+      },
+      "unique_request_ids": 10
+    },
+    "post_control_slots": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 1074
+      },
+      "end_ms": 1791484916970,
+      "request_end": 20,
+      "request_enter": 20,
+      "start_ms": 1791484647005,
+      "type_counts": {
+        "coverage_interval": 1074,
+        "received": 20,
+        "request_end": 20,
+        "source_watermark": 1074
+      },
+      "unique_request_ids": 20
+    },
+    "pre_control_slot": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 716
+      },
+      "end_ms": 1791484466998,
+      "request_end": 8,
+      "request_enter": 8,
+      "start_ms": 1791484286970,
+      "type_counts": {
+        "coverage_interval": 716,
+        "received": 8,
+        "request_end": 8,
+        "source_watermark": 716
+      },
+      "unique_request_ids": 8
+    }
+  },
+  "receiver_file": "/var/lib/argus-receiver/e4p1-861c0d0a872e0831d93271cd6292aa98/receiver.jsonl",
+  "receiver_sha256": "24038b5a80418801afcb4c15fe3f7e80db96af81ff29dd0501629f3b1fa5f64a",
+  "run_id": "e4p1-861c0d0a872e0831d93271cd6292aa98",
+  "schema": "argus.e4.receiver-window-correlation.v1",
+  "target_binding": {
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "instance_id": "cda857bb1fb14360f7eeecdeb54f249e450e9b6f52ebda32dd1d3be2da843923",
+    "launch_id": "launch-4566a09",
+    "pid": 803170
+  },
+  "window_totals": {
+    "coverage_intervals": 2507,
+    "request_end": 38,
+    "request_enter": 38,
+    "unique_request_ids": 38
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "all_coverage_complete": true,
+  "condition": "fault",
+  "fault_sha256": "f7e8d6378e0743c145eef4e3659d4e28f4791d8bceccd73aee9448abf1820ca4",
+  "operation_id": "9854e9fac72d40e597e14190fca4c9b1",
+  "phases": {
+    "fault_hold": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 711
+      },
+      "end_ms": 1791488018374,
+      "first_request_at_ms": 1791487843658,
+      "last_request_at_ms": 1791488015346,
+      "request_end": 7,
+      "request_enter": 7,
+      "start_ms": 1791487839531,
+      "type_counts": {
+        "coverage_interval": 711,
+        "received": 7,
+        "request_end": 7,
+        "source_watermark": 711
+      },
+      "unique_request_ids": 7
+    },
+    "post_recovery": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 987
+      },
+      "end_ms": 1791488288325,
+      "first_request_at_ms": 1791488045391,
+      "last_request_at_ms": 1791488285772,
+      "request_end": 19,
+      "request_enter": 19,
+      "start_ms": 1791488040453,
+      "type_counts": {
+        "coverage_interval": 987,
+        "received": 19,
+        "request_end": 19,
+        "source_watermark": 987
+      },
+      "unique_request_ids": 19
+    },
+    "pre_fault": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 721
+      },
+      "end_ms": 1791487839531,
+      "first_request_at_ms": 1791487684753,
+      "last_request_at_ms": 1791487835053,
+      "request_end": 8,
+      "request_enter": 8,
+      "start_ms": 1791487658325,
+      "type_counts": {
+        "coverage_interval": 721,
+        "received": 8,
+        "request_end": 8,
+        "source_watermark": 721
+      },
+      "unique_request_ids": 8
+    },
+    "recovery_transition": {
+      "body_read": 0,
+      "coverage_status": {
+        "COMPLETE": 88
+      },
+      "end_ms": 1791488040453,
+      "first_request_at_ms": null,
+      "last_request_at_ms": null,
+      "request_end": 0,
+      "request_enter": 0,
+      "start_ms": 1791488018374,
+      "type_counts": {
+        "coverage_interval": 88,
+        "source_watermark": 88
+      },
+      "unique_request_ids": 0
+    }
+  },
+  "receiver_file": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/receiver.jsonl",
+  "receiver_sha256": "da9c11806ad3503bb145a8d5cd307611779ffa2e5d401ac4af1ef736d1890d2d",
+  "recovery_sha256": "941c45b076d502e870fbb2e1206b9cfb7e42f0bbf9465747ad1829c1104fc4ae",
+  "run_id": "e4p1-cd119c89ea1d8995ffb995b87b6ed3dc",
+  "schema": "argus.e4.receiver-window-correlation.v1",
+  "target_binding": {
+    "boot_id": "c379b316-287e-4c6b-821b-63ae5a51c45e",
+    "instance_id": "c3ccc41d2f1e99f7498bdbf1f7165e6c1c298813cbbdbc21ce961463841e5513",
+    "launch_id": "launch-bc91767",
+    "pid": 852501
+  },
+  "window_totals": {
+    "coverage_intervals": 2507,
+    "request_end": 34,
+    "request_enter": 34,
+    "unique_request_ids": 34
+  }
+}

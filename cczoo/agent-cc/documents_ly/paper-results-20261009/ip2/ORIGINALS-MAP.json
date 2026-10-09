@@ -1,0 +1,797 @@
+{
+  "schema": "argus.public-originals-map.v1",
+  "entries": [
+    {
+      "export_path": "tables/E1-E5-STATUS.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/E1-E5-STATUS.md",
+      "source_sha256": "20eeb0ebfdb9a6f9a249bd3c74c3e7958fa8baf8c5d1b3d1563d6e8258d11c6f",
+      "export_sha256": "20eeb0ebfdb9a6f9a249bd3c74c3e7958fa8baf8c5d1b3d1563d6e8258d11c6f",
+      "byte_identical": true
+    },
+    {
+      "export_path": "tables/E1-RESULTS-AND-COVERAGE.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/E1-RESULTS-AND-COVERAGE.md",
+      "source_sha256": "73fe4221a4081826c7fe807bf058f4595972915c2847746e1e83b4b29d2b802c",
+      "export_sha256": "73fe4221a4081826c7fe807bf058f4595972915c2847746e1e83b4b29d2b802c",
+      "byte_identical": true
+    },
+    {
+      "export_path": "tables/E4-COMPONENT-RESULTS.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/E4-COMPONENT-RESULTS.md",
+      "source_sha256": "6958e32e1f2076bcf4a9e2ca4c4a18eb6c0d83ea41381f0c6647e22e624f83ae",
+      "export_sha256": "6958e32e1f2076bcf4a9e2ca4c4a18eb6c0d83ea41381f0c6647e22e624f83ae",
+      "byte_identical": true
+    },
+    {
+      "export_path": "tables/FIGURE-DATA.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/FIGURE-DATA.json",
+      "source_sha256": "ca4dabc70887fc7267deaf7cce3620e83d6f3eca00cb11e0376810932603d16c",
+      "export_sha256": "ca4dabc70887fc7267deaf7cce3620e83d6f3eca00cb11e0376810932603d16c",
+      "byte_identical": true
+    },
+    {
+      "export_path": "tables/FIGURES.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/FIGURES.md",
+      "source_sha256": "98d4a13411316e9375eec02cb524599e06a415af3101268d326f6a8d477d599a",
+      "export_sha256": "98d4a13411316e9375eec02cb524599e06a415af3101268d326f6a8d477d599a",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e4-paired-first-answer.svg",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e4-paired-first-answer.svg",
+      "source_sha256": "0207efe2b273a0dfd60e6f4895780f5d727cc9de436d19176002347b2f1dca32",
+      "export_sha256": "0207efe2b273a0dfd60e6f4895780f5d727cc9de436d19176002347b2f1dca32",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e2-receiver-boundaries.pdf",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e2-receiver-boundaries.pdf",
+      "source_sha256": "ba9aeeb64039894089252100838fd452ddd8b5ac4bf6a647f55a36f7c221fc82",
+      "export_sha256": "ba9aeeb64039894089252100838fd452ddd8b5ac4bf6a647f55a36f7c221fc82",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e4-paired-first-answer.pdf",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e4-paired-first-answer.pdf",
+      "source_sha256": "a2cefca8cf2c4d944c24c79c01de584608197d89d458ce874eb46c94270675c0",
+      "export_sha256": "a2cefca8cf2c4d944c24c79c01de584608197d89d458ce874eb46c94270675c0",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e1-admission-stages.svg",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e1-admission-stages.svg",
+      "source_sha256": "7848234c2f8008f9a424affada235bb1cd8bea4332b47f9ca9f85d0bcb9221a4",
+      "export_sha256": "7848234c2f8008f9a424affada235bb1cd8bea4332b47f9ca9f85d0bcb9221a4",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e1-admission-stages.pdf",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e1-admission-stages.pdf",
+      "source_sha256": "00bfddcc1a750305a32f677d48d1a2595ec320ad74a148c7ce979a82848cb83e",
+      "export_sha256": "00bfddcc1a750305a32f677d48d1a2595ec320ad74a148c7ce979a82848cb83e",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e2-receiver-boundaries.svg",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e2-receiver-boundaries.svg",
+      "source_sha256": "200506594ecc87157e259cd2d5e558c5d31d667e209891de61c6c67cfcfb0749",
+      "export_sha256": "200506594ecc87157e259cd2d5e558c5d31d667e209891de61c6c67cfcfb0749",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e1-admission-cost.pdf",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e1-admission-cost.pdf",
+      "source_sha256": "b160602713a551eb9b2be1ad65b8f8a1742029c20b8ab8def329ee0c9c6255f0",
+      "export_sha256": "b160602713a551eb9b2be1ad65b8f8a1742029c20b8ab8def329ee0c9c6255f0",
+      "byte_identical": true
+    },
+    {
+      "export_path": "figures/e1-admission-cost.svg",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/paper02-e1-e5-merge-20261009/ip2-handoff/figures/e1-admission-cost.svg",
+      "source_sha256": "1760cecc7bd6f34d69186dc53c4a330e7be0526e91aee6c9d380c41cfacaf1a7",
+      "export_sha256": "1760cecc7bd6f34d69186dc53c4a330e7be0526e91aee6c9d380c41cfacaf1a7",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/attempt.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-full-20261004/full-attempt-003/stage-a-normal/attempt/attempt.json",
+      "source_sha256": "93869bf834d9eb0b51e6c04462af449487aaf9cc0d3b95de18eb61486ca4caba",
+      "export_sha256": "93869bf834d9eb0b51e6c04462af449487aaf9cc0d3b95de18eb61486ca4caba",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/observation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-full-20261004/full-attempt-003/stage-a-normal/observe/observation.json",
+      "source_sha256": "34d65af504c32cd0b974d55d6981883968e4ee59d4f265187aa02efa13f17525",
+      "export_sha256": "34d65af504c32cd0b974d55d6981883968e4ee59d4f265187aa02efa13f17525",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/A3-CLOSURE-RECEIPT.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/A3-CLOSURE-RECEIPT.md",
+      "source_sha256": "c5f109bb9b9bfabc8c53d71a378078e0fd2264d22ab24dde8e3c6ea0dd8d1584",
+      "export_sha256": "c5f109bb9b9bfabc8c53d71a378078e0fd2264d22ab24dde8e3c6ea0dd8d1584",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/A3_FINAL_STATUS.txt",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/A3_FINAL_STATUS.txt",
+      "source_sha256": "a7db975d512cfe659f663b0acd386cf041d1b005c6cfe7ff2dc95328c176ac85",
+      "export_sha256": "a7db975d512cfe659f663b0acd386cf041d1b005c6cfe7ff2dc95328c176ac85",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/evidence-references.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/evidence-references.json",
+      "source_sha256": "38422905c9e74a4847257e6ac3353ea9dfeec9b4e1aeb0bdf6e4b2439bfe4c01",
+      "export_sha256": "38422905c9e74a4847257e6ac3353ea9dfeec9b4e1aeb0bdf6e4b2439bfe4c01",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/IP2-summary.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/IP2-summary.md",
+      "source_sha256": "0e3fe0785e6ba88032953cdbb5c2959f87cc2780423e39043009eac3bf43f3e3",
+      "export_sha256": "0e3fe0785e6ba88032953cdbb5c2959f87cc2780423e39043009eac3bf43f3e3",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/leg-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/leg-correlation.json",
+      "source_sha256": "22e418e02876480f8700ed4202aa1a2cbfd6c0a40a90772b2766ba1ab604e46d",
+      "export_sha256": "22e418e02876480f8700ed4202aa1a2cbfd6c0a40a90772b2766ba1ab604e46d",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/offline-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/offline-correlation.json",
+      "source_sha256": "eb8a50b3fb981295cd80a903cf0e4ffd531b307d1f5ef56c34ecf3a914865176",
+      "export_sha256": "eb8a50b3fb981295cd80a903cf0e4ffd531b307d1f5ef56c34ecf3a914865176",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/readiness-snapshot.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/readiness-snapshot.json",
+      "source_sha256": "d9cc08211cdc3085d776915e0a8c7681d74be97c63834b91fd9b5fa0cb4829f6",
+      "export_sha256": "d9cc08211cdc3085d776915e0a8c7681d74be97c63834b91fd9b5fa0cb4829f6",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/SOURCE-VERIFICATION.txt",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-closure/ip2-handoff/SOURCE-VERIFICATION.txt",
+      "source_sha256": "ad371bfd7a4df634f56d97d7cac7be98d287ae204d347eca78e2a769d93c8531",
+      "export_sha256": "ad371bfd7a4df634f56d97d7cac7be98d287ae204d347eca78e2a769d93c8531",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/IP1_E1_FULL_A3_CORRELATION.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-correlation/ip1-handoff/IP1_E1_FULL_A3_CORRELATION.md",
+      "source_sha256": "933ebf3aadf99589dffde88c714f9f237fa72470e966ae0fd486cb93b4059526",
+      "export_sha256": "933ebf3aadf99589dffde88c714f9f237fa72470e966ae0fd486cb93b4059526",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/probe-a3-full.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-correlation/ip1-handoff/ip1-client-originals/probe-a3-full.jsonl",
+      "source_sha256": "47b107d1e58b34642d808752ffa4a434c98226934506a757140dae65e9e5f003",
+      "export_sha256": "47b107d1e58b34642d808752ffa4a434c98226934506a757140dae65e9e5f003",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/online/rounds-a3-full.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e1-20261004-full-a3-correlation/ip1-handoff/ip1-client-originals/rounds-a3-full.jsonl",
+      "source_sha256": "6c530cadd054d0cbe178b1264d70c9276c510380abf20008876b051264c28052",
+      "export_sha256": "6c530cadd054d0cbe178b1264d70c9276c510380abf20008876b051264c28052",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/summary.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/summary.json",
+      "source_sha256": "7b209bdd8f4362d260e329abc955e2b614f4da1a652a6fe4abec4025362527a4",
+      "export_sha256": "7b209bdd8f4362d260e329abc955e2b614f4da1a652a6fe4abec4025362527a4",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/legal/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/legal/result.json",
+      "source_sha256": "eec971c86ad6983bed2ca90d97f5997b8ffaa64f54af58aa9c5ebf4d80551253",
+      "export_sha256": "eec971c86ad6983bed2ca90d97f5997b8ffaa64f54af58aa9c5ebf4d80551253",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/unrelated_activity/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/unrelated_activity/result.json",
+      "source_sha256": "6e0ab8ce3d68f2a429597020acd65b516a61019120ec0c3da0052d6b4c0d0519",
+      "export_sha256": "6e0ab8ce3d68f2a429597020acd65b516a61019120ec0c3da0052d6b4c0d0519",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/same_image_new_instance/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/same_image_new_instance/result.json",
+      "source_sha256": "3c2192ef07849629d7e9dcfb8caeae355cdf7fb75e763177c89e7a4f41d9e553",
+      "export_sha256": "3c2192ef07849629d7e9dcfb8caeae355cdf7fb75e763177c89e7a4f41d9e553",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/hidden_stop/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/hidden_stop/result.json",
+      "source_sha256": "8bb7376a9c8055f37995015b9acb43dcabe8be47493eb17e4556a7379fd0bdb2",
+      "export_sha256": "8bb7376a9c8055f37995015b9acb43dcabe8be47493eb17e4556a7379fd0bdb2",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/config_mismatch/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/config_mismatch/result.json",
+      "source_sha256": "8b77e1f20815f260c9875445e3565fcd2d6a18e3da6ec53014fb6e89c094d3cc",
+      "export_sha256": "8b77e1f20815f260c9875445e3565fcd2d6a18e3da6ec53014fb6e89c094d3cc",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/old_evidence/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/old_evidence/result.json",
+      "source_sha256": "cc8ebcf85e5932309bcb429644265e12747131db94a7821853b2f11c367a0911",
+      "export_sha256": "cc8ebcf85e5932309bcb429644265e12747131db94a7821853b2f11c367a0911",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e1/offline-rules/instance_mismatch/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-evidence/e1-offline-signed-fixtures-20261009/instance_mismatch/result.json",
+      "source_sha256": "7052d9dee1a53d5859152a158b5bf9ca6de7b2898818a9bcf0eff03141791167",
+      "export_sha256": "7052d9dee1a53d5859152a158b5bf9ca6de7b2898818a9bcf0eff03141791167",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/assessment.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/assessment.json",
+      "source_sha256": "8d7855cf2eb14a0f02dd312a6860c05daa0f62402f2a793ed840330f7060feca",
+      "export_sha256": "8d7855cf2eb14a0f02dd312a6860c05daa0f62402f2a793ed840330f7060feca",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/fault.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/fault.jsonl",
+      "source_sha256": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63",
+      "export_sha256": "3c9caf27a0a2d089be7d7408195953808e0cee4c23dd288541c49dd4de589f63",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/journal-fault-cascade-20261008.txt",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/journal-fault-cascade-20261008.txt",
+      "source_sha256": "af7599256d39c315b853baf1b9aa5dea1ddac569e1a4607f537eb451ba45e2a0",
+      "export_sha256": "af7599256d39c315b853baf1b9aa5dea1ddac569e1a4607f537eb451ba45e2a0",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/result.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/result.json",
+      "source_sha256": "48efff32ed194cc9a924cadda4e92bbca946dbda16e7546aadf1b9b6cb5600af",
+      "export_sha256": "48efff32ed194cc9a924cadda4e92bbca946dbda16e7546aadf1b9b6cb5600af",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/state.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/state.json",
+      "source_sha256": "e1dc3503723aef734fe06257bd91d4475cbedcc56e020a8b9befd53508934a3e",
+      "export_sha256": "e1dc3503723aef734fe06257bd91d4475cbedcc56e020a8b9befd53508934a3e",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/timeline.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-result-pass-20261008/ip1-handoff/evidence/timeline.json",
+      "source_sha256": "4dc1ad53e67843c203afbf7926bfc1d23497522a14b3ea59cd268e2955cf1cfc",
+      "export_sha256": "4dc1ad53e67843c203afbf7926bfc1d23497522a14b3ea59cd268e2955cf1cfc",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/E2-R4-FINAL-CLOSURE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-final-closure-20261008/ip2-handoff/E2-R4-FINAL-CLOSURE.json",
+      "source_sha256": "7f174fe10a4e475ab93cbe87f135837b1d772e8f3a9e5455f2b632b59216ab63",
+      "export_sha256": "7f174fe10a4e475ab93cbe87f135837b1d772e8f3a9e5455f2b632b59216ab63",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e2/IP2-E2-R4-FINAL-CLOSURE.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e2-r4-final-closure-20261008/ip2-handoff/IP2-E2-R4-FINAL-CLOSURE.md",
+      "source_sha256": "187245a1c2b00f1abb76330ec8d74451fe98de59d1f2f2558af8debebdc72fae",
+      "export_sha256": "187245a1c2b00f1abb76330ec8d74451fe98de59d1f2f2558af8debebdc72fae",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e3-e5/PROBE-RERUN-ARGUS-HEADERS-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/probe-rerun-argus-headers-20261008/ip1-handoff/PROBE-RERUN-ARGUS-HEADERS-20261008.md",
+      "source_sha256": "d24d589365bb09155a9a530e4a5325cd1d1dea47445e94f6d70e4a027bf7cd36",
+      "export_sha256": "d24d589365bb09155a9a530e4a5325cd1d1dea47445e94f6d70e4a027bf7cd36",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e3-e5/IP2-E5-E3-RECEIVER-CLOSURE-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/probe-rerun-argus-headers-20261008/ip2-handoff/IP2-E5-E3-RECEIVER-CLOSURE-20261008.md",
+      "source_sha256": "3e1a4d332b19e96c9a4fd9cf535da7f9c9e61f9662e05d5be9bc8885ae75d1b8",
+      "export_sha256": "3e1a4d332b19e96c9a4fd9cf535da7f9c9e61f9662e05d5be9bc8885ae75d1b8",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/closure/IP2-E4-FORMAL-CLOSURE.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-closure-20261009/ip2-handoff/IP2-E4-FORMAL-CLOSURE.md",
+      "source_sha256": "ea30e2add18d16ef07dd90d4f10b66c38bfcc26bbecb29696fa9d06aaa8e7ef9",
+      "export_sha256": "ea30e2add18d16ef07dd90d4f10b66c38bfcc26bbecb29696fa9d06aaa8e7ef9",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/closure/IP2-E4-FORMAL-RUN6-CLOSURE.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-closure-20261009/ip2-handoff/IP2-E4-FORMAL-RUN6-CLOSURE.md",
+      "source_sha256": "7b19ee728055669f89c06d02cebff6e4f195f0d9dbec7d7b06ffe4368237b0ec",
+      "export_sha256": "7b19ee728055669f89c06d02cebff6e4f195f0d9dbec7d7b06ffe4368237b0ec",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/manifest/CONFIG-SUMMARIES.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-manifest-20261008/ip1-handoff/CONFIG-SUMMARIES.json",
+      "source_sha256": "9bcdd30d77a2dc81c38ba1ffdb245882e2c46b49ffdc1049ce207a2c0df5ff8e",
+      "export_sha256": "9bcdd30d77a2dc81c38ba1ffdb245882e2c46b49ffdc1049ce207a2c0df5ff8e",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/manifest/IP2-E4-FORMAL-MANIFEST-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-manifest-20261008/ip1-handoff/IP2-E4-FORMAL-MANIFEST-20261008.md",
+      "source_sha256": "d01d1f2e8b5616d8e0624dcbc79e7441f5d1514ba2a5a855c72a6e8393b1ce3a",
+      "export_sha256": "d01d1f2e8b5616d8e0624dcbc79e7441f5d1514ba2a5a855c72a6e8393b1ce3a",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/manifest/run-order.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-manifest-20261008/ip1-handoff/run-order.json",
+      "source_sha256": "34c1db67e775668f9335330f4e794d6cc0a5686989df6786c0b6e05721f5625b",
+      "export_sha256": "34c1db67e775668f9335330f4e794d6cc0a5686989df6786c0b6e05721f5625b",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/manifest/suite.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-manifest-20261008/ip1-handoff/suite.json",
+      "source_sha256": "1830d98c18eb2f824ab76c1364ce78b305f6abf4172e7315d227e5cd740b8675",
+      "export_sha256": "1830d98c18eb2f824ab76c1364ce78b305f6abf4172e7315d227e5cd740b8675",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/E4-FORMAL-RUN1-EVIDENCE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run1-result-20261008/ip1-handoff/E4-FORMAL-RUN1-EVIDENCE.json",
+      "source_sha256": "ea4d2e1ac3980aac3b98ac97dcd02edeb89e1f553d42c6d2059261321d7f9c82",
+      "export_sha256": "ea4d2e1ac3980aac3b98ac97dcd02edeb89e1f553d42c6d2059261321d7f9c82",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/IP2-E4-FORMAL-RUN1-RESULT-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run1-result-20261008/ip1-handoff/IP2-E4-FORMAL-RUN1-RESULT-20261008.md",
+      "source_sha256": "a83c9e474a912417ff02753fe6eb7a44f094846f338aaf595eedcd004206fd16",
+      "export_sha256": "a83c9e474a912417ff02753fe6eb7a44f094846f338aaf595eedcd004206fd16",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/SHA256SUMS",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run1-result-20261008/ip1-handoff/SHA256SUMS",
+      "source_sha256": "a45efdcafec83d09bad7f6b00aa02597bdcf42dc43762768ef8f7b3eb22b2cd4",
+      "export_sha256": "a45efdcafec83d09bad7f6b00aa02597bdcf42dc43762768ef8f7b3eb22b2cd4",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/binding.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/binding.json",
+      "source_sha256": "f1575b100dba3f568b0e7e3d48438733b9947feb5e1ee56f0339f43b5f7df6f1",
+      "export_sha256": "f1575b100dba3f568b0e7e3d48438733b9947feb5e1ee56f0339f43b5f7df6f1",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/deployment.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/deployment.jsonl",
+      "source_sha256": "ac7e41416c7e651c4fe7d5ed038abe9d6cbb3864a31a351f60e7614e108d1dcc",
+      "export_sha256": "ac7e41416c7e651c4fe7d5ed038abe9d6cbb3864a31a351f60e7614e108d1dcc",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/receiver.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/receiver.jsonl",
+      "source_sha256": "59aef087f4a872609c078390011c6145c76f0f6efbe3b28d9c9a57f31941cf75",
+      "export_sha256": "59aef087f4a872609c078390011c6145c76f0f6efbe3b28d9c9a57f31941cf75",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/window-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/window-correlation.json",
+      "source_sha256": "ddfdd1ad99eb75e252e9c8b59ede90798d111593c4dd8a5f47196b37250181f7",
+      "export_sha256": "ddfdd1ad99eb75e252e9c8b59ede90798d111593c4dd8a5f47196b37250181f7",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/fault.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/fault.jsonl",
+      "source_sha256": "779fc3924a96438bef6c013560f9baa31e7a53a817ba0f1a81a36209a9691910",
+      "export_sha256": "779fc3924a96438bef6c013560f9baa31e7a53a817ba0f1a81a36209a9691910",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run1-e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/recovery.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-eeacfeaf71560d84a0c8168b7a2c20b2/recovery.jsonl",
+      "source_sha256": "7b47e78ccb5d5381203d6dce92d53c35098d98895ad0070bd3faa8284652b051",
+      "export_sha256": "7b47e78ccb5d5381203d6dce92d53c35098d98895ad0070bd3faa8284652b051",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/E4-FORMAL-RUN2-EVIDENCE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run2-result-20261008/ip1-handoff/E4-FORMAL-RUN2-EVIDENCE.json",
+      "source_sha256": "ec897f56afd856e1befbabdb68ffec43d6235b7a569c4db7e2c08a9f335298b4",
+      "export_sha256": "ec897f56afd856e1befbabdb68ffec43d6235b7a569c4db7e2c08a9f335298b4",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/IP2-E4-FORMAL-RUN2-RESULT-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run2-result-20261008/ip1-handoff/IP2-E4-FORMAL-RUN2-RESULT-20261008.md",
+      "source_sha256": "77c7b388bb5c60c64c0b1e05f1e7c6645be5bab9530503e4e6f2316fd992efe4",
+      "export_sha256": "77c7b388bb5c60c64c0b1e05f1e7c6645be5bab9530503e4e6f2316fd992efe4",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/SHA256SUMS",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run2-result-20261008/ip1-handoff/SHA256SUMS",
+      "source_sha256": "4cb5ba058577c190fda6e3924a51a729ade59749adce56471e092981916c455d",
+      "export_sha256": "4cb5ba058577c190fda6e3924a51a729ade59749adce56471e092981916c455d",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/binding.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-861c0d0a872e0831d93271cd6292aa98/binding.json",
+      "source_sha256": "346f73dffd0a7a354b453829e34f824bd22b0258a5865d2b0e340df562a0c564",
+      "export_sha256": "346f73dffd0a7a354b453829e34f824bd22b0258a5865d2b0e340df562a0c564",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/deployment.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-861c0d0a872e0831d93271cd6292aa98/deployment.jsonl",
+      "source_sha256": "6f8499dd6befeddf69aea9de4a212af089ebecafd4449f3e9bbaf11cc2812158",
+      "export_sha256": "6f8499dd6befeddf69aea9de4a212af089ebecafd4449f3e9bbaf11cc2812158",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/receiver.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-861c0d0a872e0831d93271cd6292aa98/receiver.jsonl",
+      "source_sha256": "24038b5a80418801afcb4c15fe3f7e80db96af81ff29dd0501629f3b1fa5f64a",
+      "export_sha256": "24038b5a80418801afcb4c15fe3f7e80db96af81ff29dd0501629f3b1fa5f64a",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run2-e4p1-861c0d0a872e0831d93271cd6292aa98/window-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-861c0d0a872e0831d93271cd6292aa98/window-correlation.json",
+      "source_sha256": "e4d98575a6a3bd622a3760bb336cdd21c5009dfde9eb4f9a53d2bc13e8efabfb",
+      "export_sha256": "e4d98575a6a3bd622a3760bb336cdd21c5009dfde9eb4f9a53d2bc13e8efabfb",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/E4-FORMAL-RUN3-EVIDENCE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run3-result-20261008/ip1-handoff/E4-FORMAL-RUN3-EVIDENCE.json",
+      "source_sha256": "811c9fced60d377c5388d8df4afbf2086ee00111ad879853fcae32627dbd0ddd",
+      "export_sha256": "811c9fced60d377c5388d8df4afbf2086ee00111ad879853fcae32627dbd0ddd",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/IP2-E4-FORMAL-RUN3-RESULT-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run3-result-20261008/ip1-handoff/IP2-E4-FORMAL-RUN3-RESULT-20261008.md",
+      "source_sha256": "db29a9b8beb0157cdb283eae1315a6a2412379180d1cd8aa7ff346374a4eac46",
+      "export_sha256": "db29a9b8beb0157cdb283eae1315a6a2412379180d1cd8aa7ff346374a4eac46",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/SHA256SUMS",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run3-result-20261008/ip1-handoff/SHA256SUMS",
+      "source_sha256": "89f9460d398ed5ba879bf8460224ce620884412d6471447bc0d15fa0b01e02e6",
+      "export_sha256": "89f9460d398ed5ba879bf8460224ce620884412d6471447bc0d15fa0b01e02e6",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/binding.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-94e9cd04e6e58ab00041228fadf8da5c/binding.json",
+      "source_sha256": "5dff6a814e4a68abf6a04805ac85a9304ee1388fe7761df78bbdc6885e462b6f",
+      "export_sha256": "5dff6a814e4a68abf6a04805ac85a9304ee1388fe7761df78bbdc6885e462b6f",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/deployment.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-94e9cd04e6e58ab00041228fadf8da5c/deployment.jsonl",
+      "source_sha256": "b885f3f92c2d993531905ccc09df6f5a769b341697979952e5c9cbcf19ff51e9",
+      "export_sha256": "b885f3f92c2d993531905ccc09df6f5a769b341697979952e5c9cbcf19ff51e9",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/receiver.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-94e9cd04e6e58ab00041228fadf8da5c/receiver.jsonl",
+      "source_sha256": "867e7bd1a800e84c8eece4d0f51ee3db13fc693f217152063f430a34ad168dbb",
+      "export_sha256": "867e7bd1a800e84c8eece4d0f51ee3db13fc693f217152063f430a34ad168dbb",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run3-e4p1-94e9cd04e6e58ab00041228fadf8da5c/window-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-94e9cd04e6e58ab00041228fadf8da5c/window-correlation.json",
+      "source_sha256": "e050dc6f3499271af1b8d227ce3e33f274fbfb12fb1a6584780f0fdde05ce5ad",
+      "export_sha256": "e050dc6f3499271af1b8d227ce3e33f274fbfb12fb1a6584780f0fdde05ce5ad",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/E4-FORMAL-RUN4-EVIDENCE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run4-result-20261008/ip1-handoff/E4-FORMAL-RUN4-EVIDENCE.json",
+      "source_sha256": "32d1675e9083a3a9b642077a43f419df3d2797b63a8b8bd53ca6ae492d7dd22c",
+      "export_sha256": "32d1675e9083a3a9b642077a43f419df3d2797b63a8b8bd53ca6ae492d7dd22c",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/IP2-E4-FORMAL-RUN4-RESULT-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run4-result-20261008/ip1-handoff/IP2-E4-FORMAL-RUN4-RESULT-20261008.md",
+      "source_sha256": "3e4d897c7b1f877ff8ef5d75d04ab92ccf4807be81c363a68358d9af921eeebb",
+      "export_sha256": "3e4d897c7b1f877ff8ef5d75d04ab92ccf4807be81c363a68358d9af921eeebb",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/SHA256SUMS",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run4-result-20261008/ip1-handoff/SHA256SUMS",
+      "source_sha256": "20e235058431da5a993270ea0683029b452c6c964a3facf4e0410fc800363071",
+      "export_sha256": "20e235058431da5a993270ea0683029b452c6c964a3facf4e0410fc800363071",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/binding.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/binding.json",
+      "source_sha256": "d3506df352caec7f6be9374184d5580f3e1e053468c611a53c12db1477824691",
+      "export_sha256": "d3506df352caec7f6be9374184d5580f3e1e053468c611a53c12db1477824691",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/deployment.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/deployment.jsonl",
+      "source_sha256": "ac754c42e24dc299e575da1711ca79ef0c1c33a36edf0adf63fad489d38cc6a5",
+      "export_sha256": "ac754c42e24dc299e575da1711ca79ef0c1c33a36edf0adf63fad489d38cc6a5",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/receiver.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/receiver.jsonl",
+      "source_sha256": "da9c11806ad3503bb145a8d5cd307611779ffa2e5d401ac4af1ef736d1890d2d",
+      "export_sha256": "da9c11806ad3503bb145a8d5cd307611779ffa2e5d401ac4af1ef736d1890d2d",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/window-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/window-correlation.json",
+      "source_sha256": "d28e82f4d66b01d79aa5bc9754ecfa269aaa0cb483f34268eb5518308cc747bc",
+      "export_sha256": "d28e82f4d66b01d79aa5bc9754ecfa269aaa0cb483f34268eb5518308cc747bc",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/fault.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/fault.jsonl",
+      "source_sha256": "f7e8d6378e0743c145eef4e3659d4e28f4791d8bceccd73aee9448abf1820ca4",
+      "export_sha256": "f7e8d6378e0743c145eef4e3659d4e28f4791d8bceccd73aee9448abf1820ca4",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run4-e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/recovery.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-cd119c89ea1d8995ffb995b87b6ed3dc/recovery.jsonl",
+      "source_sha256": "941c45b076d502e870fbb2e1206b9cfb7e42f0bbf9465747ad1829c1104fc4ae",
+      "export_sha256": "941c45b076d502e870fbb2e1206b9cfb7e42f0bbf9465747ad1829c1104fc4ae",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/E4-FORMAL-RUN5-EVIDENCE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run5-result-20261008/ip1-handoff/E4-FORMAL-RUN5-EVIDENCE.json",
+      "source_sha256": "26365ed62a7d98aed55dd73f71bf85bcbf732722e374568f70a1ea8f502aad9c",
+      "export_sha256": "26365ed62a7d98aed55dd73f71bf85bcbf732722e374568f70a1ea8f502aad9c",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/IP2-E4-FORMAL-RUN5-RESULT-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run5-result-20261008/ip1-handoff/IP2-E4-FORMAL-RUN5-RESULT-20261008.md",
+      "source_sha256": "cf29d082599b0cd5b9739138997c166543bb73b2ae86600071086e3f0049f973",
+      "export_sha256": "cf29d082599b0cd5b9739138997c166543bb73b2ae86600071086e3f0049f973",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/SHA256SUMS",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run5-result-20261008/ip1-handoff/SHA256SUMS",
+      "source_sha256": "a43d5e56df00734334d2b8f9907929878f218cab82bbb495f8d2b6bef33e89a9",
+      "export_sha256": "a43d5e56df00734334d2b8f9907929878f218cab82bbb495f8d2b6bef33e89a9",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/binding.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-7998d97419ea05161cc33525d2b1b3c3/binding.json",
+      "source_sha256": "af2283dcded57e424958fd9d6ea7509d1af061e97cd5f2e7b1e78cece893b2a2",
+      "export_sha256": "af2283dcded57e424958fd9d6ea7509d1af061e97cd5f2e7b1e78cece893b2a2",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/deployment.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-7998d97419ea05161cc33525d2b1b3c3/deployment.jsonl",
+      "source_sha256": "8b7850b5a5282fdc30d98d4365bb0f2137ce7f699d15371a9cbf83b22b666722",
+      "export_sha256": "8b7850b5a5282fdc30d98d4365bb0f2137ce7f699d15371a9cbf83b22b666722",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/receiver.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-7998d97419ea05161cc33525d2b1b3c3/receiver.jsonl",
+      "source_sha256": "857aa06202f848788368ebd435936dcf2ac615d445352052893ae6eb41e793a6",
+      "export_sha256": "857aa06202f848788368ebd435936dcf2ac615d445352052893ae6eb41e793a6",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/window-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-7998d97419ea05161cc33525d2b1b3c3/window-correlation.json",
+      "source_sha256": "5e4bda26171139cadeedf90ea6e47494b75443f07bc2f3334b4fe1e350f4062a",
+      "export_sha256": "5e4bda26171139cadeedf90ea6e47494b75443f07bc2f3334b4fe1e350f4062a",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/fault.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-7998d97419ea05161cc33525d2b1b3c3/fault.jsonl",
+      "source_sha256": "50352064e46c2360ee3f1bf0cac1aa038ff3dc072202ea74f9c3a6c00dcc3ce9",
+      "export_sha256": "50352064e46c2360ee3f1bf0cac1aa038ff3dc072202ea74f9c3a6c00dcc3ce9",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run5-e4p1-7998d97419ea05161cc33525d2b1b3c3/recovery.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-7998d97419ea05161cc33525d2b1b3c3/recovery.jsonl",
+      "source_sha256": "07deee03465bcd08b690f36bed1d0ff6df2ee591f0937dd1a5d5b694809ebfe9",
+      "export_sha256": "07deee03465bcd08b690f36bed1d0ff6df2ee591f0937dd1a5d5b694809ebfe9",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/E4-FORMAL-RUN6-EVIDENCE.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run6-result-20261008/ip1-handoff/E4-FORMAL-RUN6-EVIDENCE.json",
+      "source_sha256": "7c7344697d4238a1f427ab4c49812f768c28ea929bc776244507cc569d577434",
+      "export_sha256": "7c7344697d4238a1f427ab4c49812f768c28ea929bc776244507cc569d577434",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/IP2-E4-FORMAL-RUN6-RESULT-20261008.md",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run6-result-20261008/ip1-handoff/IP2-E4-FORMAL-RUN6-RESULT-20261008.md",
+      "source_sha256": "48e1dedac6a904d68354d52db51622457bed3588d0f9724e794746b9adb6cbe8",
+      "export_sha256": "48e1dedac6a904d68354d52db51622457bed3588d0f9724e794746b9adb6cbe8",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/SHA256SUMS",
+      "classification": "byte-for-byte original",
+      "source_path": "/root/argus-ip1-handoff/e4-formal-run6-result-20261008/ip1-handoff/SHA256SUMS",
+      "source_sha256": "bca60b8ee4ae9b52d07e213dedbeefbf9208fd5f69eeab80e8fdc580e39bd90f",
+      "export_sha256": "bca60b8ee4ae9b52d07e213dedbeefbf9208fd5f69eeab80e8fdc580e39bd90f",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/binding.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-a719364175d67653b560bf1b386f8539/binding.json",
+      "source_sha256": "46d9444ec144108d6105ffb7bd93876afd1de2f044e2567d0739ce90cf9fe60a",
+      "export_sha256": "46d9444ec144108d6105ffb7bd93876afd1de2f044e2567d0739ce90cf9fe60a",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/deployment.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-a719364175d67653b560bf1b386f8539/deployment.jsonl",
+      "source_sha256": "998ebdb6884b66a2f271f618573821e2181467000f5d3dc0e1e6d36a8e4e5044",
+      "export_sha256": "998ebdb6884b66a2f271f618573821e2181467000f5d3dc0e1e6d36a8e4e5044",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/receiver.jsonl",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-a719364175d67653b560bf1b386f8539/receiver.jsonl",
+      "source_sha256": "eb72e57098de5bedd719fe64ca328393c4a2ec4fb0c5dc8c37a00b6855570062",
+      "export_sha256": "eb72e57098de5bedd719fe64ca328393c4a2ec4fb0c5dc8c37a00b6855570062",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e4/runs/run6-e4p1-a719364175d67653b560bf1b386f8539/window-correlation.json",
+      "classification": "byte-for-byte original",
+      "source_path": "/var/lib/argus-receiver/e4p1-a719364175d67653b560bf1b386f8539/window-correlation.json",
+      "source_sha256": "07ca026944c2f50dbf854da5adba4c5bcefadc129534d698e104904ede12db56",
+      "export_sha256": "07ca026944c2f50dbf854da5adba4c5bcefadc129534d698e104904ede12db56",
+      "byte_identical": true
+    },
+    {
+      "export_path": "e3-e5/receiver-request-excerpt.jsonl",
+      "classification": "derived canonical JSON excerpt",
+      "source_path": "/var/lib/argus-receiver/paper-20261004t145835z/receiver.jsonl",
+      "source_sha256": "142d0e1d5cca9f3ca7a357da6507437367c7e9ac6294e2d2c2cba4db677f2186",
+      "export_sha256": "f148d17c218da4548201c8301bbd24f8317a06a1275d10f45b3da5e85e6f81f9",
+      "byte_identical": false
+    }
+  ]
+}
