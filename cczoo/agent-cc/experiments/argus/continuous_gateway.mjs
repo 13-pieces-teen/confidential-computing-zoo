@@ -26,7 +26,14 @@ try {
     throw new Error('TYPED_PROPOSAL_AUDIT_MISSING');
   }
   const {memoryOpenVikingConfigSchema} = await import(pathToFileURL(path.join(base,'dist/config.js')));
-  const raw = get('plugins.entries.openviking.config'), cfg = memoryOpenVikingConfigSchema.parse(raw), toolConfig = get('tools');
+  const raw = get('plugins.entries.openviking.config'), toolConfig = get('tools');
+  // openclaw >= 2026.7.1 masks secret fields (apiKey) in `config get` output.
+  // The live key lives in the Gateway config file this adapter is pointed at;
+  // keep every non-secret field exactly as the CLI resolved it.
+  const fileEntry = JSON.parse(fs.readFileSync(process.env.OPENCLAW_CONFIG_PATH || '/home/node/.openclaw/openclaw.json', 'utf8'))
+      .plugins?.entries?.openviking?.config;
+  if (fileEntry?.apiKey && fileEntry.apiKey !== raw.apiKey) raw.apiKey = fileEntry.apiKey;
+  const cfg = memoryOpenVikingConfigSchema.parse(raw);
   const {createSpiffeTransport} = await import(pathToFileURL(path.join(base,'dist/argus-spiffe/transport.mjs')));
   const {OpenVikingClient} = await import(pathToFileURL(path.join(base,'dist/client.js')));
   const {createOpenVikingSessionRoutingRuntime} = await import(pathToFileURL(path.join(base,'dist/plugin/openviking-session-routing-runtime.js')));
@@ -76,6 +83,17 @@ try {
       sampling_observation:samplingObservation,
       adapter_sha256:hash(fs.readFileSync(path.join(base,'dist/argus-spiffe/task-audit.mjs')))};
   } else if (spec.action === 'seed') {
+    if (spec.memory_policy) {
+      const headers = {'X-API-Key':cfg.apiKey,'X-OpenViking-Account':cfg.accountId,
+        'X-OpenViking-User':cfg.userId,'X-OpenViking-Actor-Peer':actor,'Content-Type':'application/json'};
+      const response = await transport(new URL('/api/v1/sessions',cfg.baseUrl),{
+        method:'POST',headers,body:JSON.stringify({session_id:spec.ov_session_id,memory_policy:spec.memory_policy})
+      });
+      const created = await response.json();
+      if (!response.ok || created.status !== 'ok' || created.result?.session_id !== spec.ov_session_id) {
+        throw new Error('SESSION_CREATE_FAILED');
+      }
+    }
     await client.addSessionMessage(spec.ov_session_id,'user',[{type:'text',text:spec.text}],actor);
     const commit = await client.commitSession(spec.ov_session_id,{wait:true,agentId:actor,keepRecentCount:0});
     result = {commit,ov_session_id:spec.ov_session_id};
@@ -114,7 +132,7 @@ try {
   // These spawn errors mean the CLI never received its input. A running CLI's
   // timeout/failure retains submission evidence; an outer Docker loss does not.
   if (['ENOENT','EACCES'].includes(error.code)) inputRelease = undefined;
-  const known = ['PINNED_PLUGIN_AMBIGUOUS','TASK_AUDIT_MISSING','TYPED_PROPOSAL_AUDIT_MISSING','CONTINUOUS_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','MODEL_CONFIGURATION_MISMATCH','GATEWAY_RESULT_INVALID','INVALID_ACTION'];
+  const known = ['PINNED_PLUGIN_AMBIGUOUS','TASK_AUDIT_MISSING','TYPED_PROPOSAL_AUDIT_MISSING','CONTINUOUS_PROTOCOL_MISMATCH','BUSINESS_IDENTITY_MISMATCH','MODEL_CONFIGURATION_MISMATCH','SESSION_CREATE_FAILED','GATEWAY_RESULT_INVALID','INVALID_ACTION'];
   console.log(JSON.stringify({result:'UNKNOWN',code:known.includes(error.message) ? error.message : 'GATEWAY_IO_FAILED',
     ...(inputRelease ? {input_release:inputRelease} : {})}));
   process.exitCode = 1;

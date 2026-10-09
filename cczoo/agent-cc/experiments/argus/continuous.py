@@ -32,6 +32,15 @@ ROOT = Path(__file__).resolve().parent
 BINDING_FIELDS = {'client_id', 'container', 'docker_user', 'config_path', 'agent_id',
                   'account_id', 'user_id', 'client_spiffe_id', 'server_spiffe_id'}
 PHASES = ('normal', 'pause', 'recovery')
+# A committed seed's Phase-2 extraction can outlive the plugin's client-side wait
+# poll (the poll bails with status 'timeout' on one transient read failure), so a
+# reconcile may observe the archive before it is servable. Re-query the same seed
+# session (never add or commit messages) until the task is terminal, within budget.
+INIT_RECONCILE_BUDGET_S = 600
+INIT_RECONCILE_INTERVAL_S = 15
+# The plugin's commit wait-poll runs up to 300 s; give the seed's docker exec
+# subprocess room for it plus overhead (the Gateway adds 90 s to this value).
+SEED_COMMIT_TIMEOUT_S = 330
 
 
 def now_ms():
@@ -95,6 +104,9 @@ def configuration(path):
         elif c.get('mode', 'pilot') == 'formal':
             require(item['argv'], 'formal fault runs need explicit fault and recovery commands')
     c.setdefault('structure_seed', 0)
+    c.setdefault('initialization_generation', 0)
+    require(type(c['initialization_generation']) is int and c['initialization_generation'] >= 0,
+            'initialization_generation must be a nonnegative integer')
     c.setdefault('model_settings', {})
     require(isinstance(c['model_settings'],dict) and set(c['model_settings']) <= {'model'},
             'model_settings supports the configured model only; sampling parameters are not verified')
@@ -412,7 +424,8 @@ def reconcile_initialization(gateway, binding, rule, previous):
     archive = (commit.get('archive_uri') or '').rstrip('/').split('/')[-1] or None
     inspection = gateway.call(binding,'inspect',ov_session_id=rule['ov_session_id'],
                               extraction_task_id=commit.get('task_id'),archive_id=archive)
-    found = gateway.call(binding,'find',query='Private project '+rule['project_id'])
+    found = gateway.call(binding,'find',query=rule.get('initialization_query') or
+                         'Private project '+rule['project_id'])
     task = inspection.get('task') or {}
     counts = (task.get('result') or {}).get('memories_extracted') or commit.get('memories_extracted') or {}
     extracted = isinstance(counts,dict) and bool(counts) and all(type(v) is int and v>=0 for v in counts.values()) and sum(counts.values())>0
@@ -593,9 +606,16 @@ def execute(config_path, output, action='run', gateway=None):
             if not previous:
                 previous = {'status':'submission_unknown','ov_session_id':rule['ov_session_id']}
                 state['initialization'][key] = previous; save()
-                observed = gateway.call(binding,'seed',ov_session_id=rule['ov_session_id'],text=rule['text'])
+                observed = gateway.call(binding,'seed',ov_session_id=rule['ov_session_id'],text=rule['text'],
+                                        memory_policy=rule.get('memory_policy'),
+                                        timeout_seconds=SEED_COMMIT_TIMEOUT_S)
                 previous['observation'] = observed; save()
             confirmed = reconcile_initialization(gateway,binding,rule,previous); save()
+            terminal = lambda prev: (prev.get('inspection',{}).get('task') or {}).get('status') in ('completed','failed')
+            deadline = time.monotonic() + INIT_RECONCILE_BUDGET_S
+            while not confirmed and not terminal(previous) and time.monotonic() < deadline:
+                time.sleep(INIT_RECONCILE_INTERVAL_S)
+                confirmed = reconcile_initialization(gateway,binding,rule,previous); save()
             if not confirmed:
                 event('initialization_unconfirmed',client_id=rule['client_id'],project_id=rule['project_id'])
                 return result_for(c,manifest,fixture,state,output)

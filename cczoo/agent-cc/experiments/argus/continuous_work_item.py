@@ -81,10 +81,16 @@ def make_fixture(c, secret_seed):
                       {'route_code': token(client + '/indoor', 12), 'cost_cents': 12000,
                        'walk_minutes': 20, 'travel_minutes': 60, 'indoor_stops': 2,
                        'stops': ['博物馆', '美术馆']}]}
+        generation = c.get('initialization_generation', 0)
+        seed_name = client + '/trip/seed' + (f'/retry-{generation}' if generation else '')
         rule = {'client_id': client, 'project_id': project, 'work_item_id': work_item,
                 'normal_code': policy['routes'][0]['route_code'],
                 'review_code': policy['unavailable_code'], 'threshold_cents': 30000,
-                'ov_session_id': str(uuid.UUID(token(client + '/trip/seed', 32)))}
+                'ov_session_id': str(uuid.UUID(token(seed_name, 32))),
+                'memory_policy': {'self': {'enabled': True}, 'peer': {'enabled': True},
+                                  'memory_types': ['events'], 'working_memory': {'enabled': True}},
+                'initialization_query': ('Private project ' + project + ' work_item_id=' + work_item +
+                                         ' 行程规则 routes initial_constraints')}
         rule['text'] = ('Private project ' + project + ': 此行程工作项按步骤顺序应用所有已确认提案；'
                         '未确认的写入不能当作已生效，也不能重发。以全部有效约束选择最低成本可行路线；'
                         '没有满足全部约束的候选时报告 NO_FEASIBLE_ITINERARY。完整保留每条 ARGUS_PROPOSAL_V1 '
